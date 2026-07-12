@@ -8,6 +8,10 @@ func productIdentityUsesCanonicalMacValues() {
     #expect(ProductIdentity.slug == "openwhisper")
     #expect(ProductIdentity.defaultBundleIdentifier == "app.openwhisper.mac")
     #expect(ProductIdentity.keychainService == "app.openwhisper.mac.ChatGPTSession")
+    #expect(
+        ProductIdentity.recoveryAPIKeychainService
+            == "app.openwhisper.mac.OpenAICompatibleAPIKey"
+    )
     #expect(ProductIdentity.installedAppURL.path == "/Applications/OpenWhisper.app")
     #expect(ProductIdentity.userAgent.hasPrefix("OpenWhisper/"))
 }

@@ -30,6 +30,20 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Provider Safety"] == "服务安全策略")
     #expect(strings["Refresh Safety Policy"] == "刷新安全策略")
     #expect(strings["Managed ChatGPT transcription"] == "ChatGPT 托管转写")
+    #expect(strings["Endpoint"] == "端点")
+    #expect(strings["Model"] == "模型")
+    #expect(strings["API Key"] == "API 密钥")
+    #expect(strings["Save API Key"] == "保存 API 密钥")
+    #expect(strings["Remove API Key"] == "移除 API 密钥")
+    #expect(strings["Use Paid API"] == "使用付费 API")
+    #expect(
+        strings["Switch Back to ChatGPT Account"]
+            == "切回 ChatGPT 账户"
+    )
+    #expect(
+        strings["API key stored in Keychain"]
+            == "API 密钥已存入钥匙串"
+    )
 }
 
 @Test

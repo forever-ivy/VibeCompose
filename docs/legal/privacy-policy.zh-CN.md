@@ -14,6 +14,8 @@
 
 开始听写后，OpenWhisper 会在 Mac 上录制一段短音频。默认路径会使用你在 OpenWhisper 中连接的 ChatGPT 会话，把音频和转写指令发送到 ChatGPT 服务。如果选择高级 OpenAI-Compatible 恢复路径，音频会通过 HTTPS 发送到你配置的端点，并使用你自己的凭据。
 
+高级设置中的连接测试只发送自动生成的 0.1 秒静音 WAV、所配置的模型和 Recovery 凭据，不会读取或发送你的录音、转写文本或术语。所配置的服务商仍可能对此请求计费。
+
 OpenWhisper 是独立项目，与 OpenAI 不存在隶属、赞助或官方背书关系。第三方处理受你所选服务的条款和隐私政策约束：
 
 - OpenAI 隐私政策：`https://openai.com/policies/privacy-policy/`
@@ -34,9 +36,9 @@ OpenWhisper 可能在 `~/Library/Application Support/OpenWhisper/` 保存：
 
 已知密码管理器、钥匙串访问和 macOS“密码”默认不写入转写历史或失败音频 Recovery。你也可以添加其他敏感应用。
 
-### ChatGPT 会话
+### Keychain 凭据
 
-OpenWhisper 连接的 ChatGPT 会话保存在 macOS Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。OpenWhisper 不会有意把访问令牌、刷新令牌、API 密钥、Cookie 或 Authorization Header 写入转写历史或诊断。
+OpenWhisper 连接的 ChatGPT 会话保存在 macOS Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible Recovery API 密钥独立保存在 `app.openwhisper.mac.OpenAICompatibleAPIKey`。OpenWhisper 不会从 `OPENAI_API_KEY` 读取该密钥，也不会有意把访问令牌、刷新令牌、API 密钥、Cookie 或 Authorization Header 写入 `config.json`、转写历史、诊断、截图或日志。
 
 ## 2. 诊断与支持归档
 
@@ -65,7 +67,8 @@ OpenWhisper 会先把完成的转写写入 macOS 剪贴板。只有在辅助功�
 - 添加禁止生成历史或 Recovery 的敏感应用；
 - 删除单条历史或 Recovery；
 - 退出 ChatGPT；
-- 使用“删除全部数据”删除本地设置、术语、历史、失败录音、诊断、Retry 文件和已保存的 ChatGPT 会话。
+- 单独移除 OpenAI-Compatible Recovery 密钥；
+- 使用“删除全部数据”删除本地设置、术语、历史、失败录音、诊断、Retry 文件、已保存的 ChatGPT 会话和 Recovery API 密钥。
 
 删除 OpenWhisper 本地数据不会删除已经发送到第三方服务或由第三方保留的数据。第三方数据需要通过对应服务的账户和隐私控制处理。
 
@@ -75,7 +78,7 @@ OpenWhisper 目前不出售个人信息、不展示广告，也不会向 OpenWhi
 
 ## 6. 安全
 
-OpenWhisper 使用 macOS Keychain、系统支持范围内的仅用户可读写文件权限、有限留存、HTTPS 端点校验和保守粘贴策略。任何安全措施都无法保证绝对安全。请保持 macOS 更新，并在分享诊断归档前自行检查。
+OpenWhisper 使用独立的 macOS Keychain 项保存 ChatGPT 会话和可选 Recovery API 密钥，并采用系统支持范围内的仅用户可读写文件权限、有限留存、HTTPS 端点校验、拒绝重定向和保守粘贴策略。任何安全措施都无法保证绝对安全。请保持 macOS 更新，并在分享诊断归档前自行检查。
 
 ## 7. 未成年人
 

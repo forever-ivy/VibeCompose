@@ -4,7 +4,8 @@ enum RuntimePreflightIssue: Equatable, Sendable {
     case chatGPTLoginRequired
     case chatGPTSessionExpired
     case chatGPTSessionUnavailable(String)
-    case missingTranscriptionAuthToken(String)
+    case missingOpenAICompatibleAPIKey
+    case openAICompatibleCredentialUnavailable(String)
 
     var message: String {
         switch self {
@@ -14,8 +15,15 @@ enum RuntimePreflightIssue: Equatable, Sendable {
             return L10n.text("OpenWhisper saved a ChatGPT session, but it has expired. Refresh or sign in again.")
         case .chatGPTSessionUnavailable(let detail):
             return detail
-        case .missingTranscriptionAuthToken(let envName):
-            return L10n.format("Set environment variable %@ before recording.", envName)
+        case .missingOpenAICompatibleAPIKey:
+            return L10n.text(
+                "Save an OpenAI-Compatible API key in Keychain before recording."
+            )
+        case .openAICompatibleCredentialUnavailable(let detail):
+            return L10n.format(
+                "OpenWhisper could not access the OpenAI-Compatible API key in Keychain: %@",
+                detail
+            )
         }
     }
 }
@@ -23,19 +31,27 @@ enum RuntimePreflightIssue: Equatable, Sendable {
 enum RuntimePreflight {
     static func issues(
         for config: AppConfig,
-        environment: [String: String],
-        authSnapshotProvider: (() -> ChatGPTAuthSnapshot)? = nil
+        authSnapshotProvider: (() -> ChatGPTAuthSnapshot)? = nil,
+        recoveryCredentialAvailable: (() throws -> Bool)? = nil
     ) -> [RuntimePreflightIssue] {
         var issues: [RuntimePreflightIssue] = []
         let provider = authSnapshotProvider ?? defaultAuthSnapshotProvider
+        let credentialAvailable = recoveryCredentialAvailable
+            ?? defaultRecoveryCredentialAvailability
 
         if config.transcription.provider == .chatGPTManagedAuth {
             appendChatGPTAuthIssues(into: &issues, authSnapshotProvider: provider)
         } else if config.transcription.provider == .openAICompatible {
-            let envName = normalizedEnvName(config.transcription.openAIAuthTokenEnv)
-            let token = environment[envName]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if token.isEmpty {
-                issues.append(.missingTranscriptionAuthToken(envName))
+            do {
+                if try !credentialAvailable() {
+                    issues.append(.missingOpenAICompatibleAPIKey)
+                }
+            } catch {
+                issues.append(
+                    .openAICompatibleCredentialUnavailable(
+                        error.localizedDescription
+                    )
+                )
             }
         }
 
@@ -56,11 +72,6 @@ enum RuntimePreflight {
             firstIssue.message,
             issues.count - 1
         )
-    }
-
-    private static func normalizedEnvName(_ value: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "OPENAI_API_KEY" : trimmed
     }
 
     private static func appendChatGPTAuthIssues(
@@ -90,5 +101,9 @@ enum RuntimePreflight {
 
     private static func defaultAuthSnapshotProvider() -> ChatGPTAuthSnapshot {
         ChatGPTAuthManager().authSnapshot()
+    }
+
+    private static func defaultRecoveryCredentialAvailability() throws -> Bool {
+        try KeychainOpenAICompatibleCredentialStore().hasAPIKey()
     }
 }

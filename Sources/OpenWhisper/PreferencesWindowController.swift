@@ -36,6 +36,7 @@ final class PreferencesWindowController: NSWindowController {
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
+        recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
@@ -56,6 +57,7 @@ final class PreferencesWindowController: NSWindowController {
             onOpenConfigFolder: onOpenConfigFolder,
             onExportSupportDiagnostics: onExportSupportDiagnostics,
             providerCapabilityPolicy: providerCapabilityPolicy,
+            recoveryCredentialStore: recoveryCredentialStore,
             softwareUpdateSnapshot: softwareUpdateSnapshot,
             onCheckForUpdates: onCheckForUpdates,
             onSetAutomaticallyChecksForUpdates: onSetAutomaticallyChecksForUpdates,
@@ -244,6 +246,11 @@ private struct PreferencesView: View {
     @State private var privacyMessageIsError = false
     @State private var diagnosticsExportMessage: String?
     @State private var diagnosticsExportMessageIsError = false
+    @State private var recoveryAPIKeyInput = ""
+    @State private var recoveryAPIKeyStored: Bool
+    @State private var recoveryMessage: String?
+    @State private var recoveryMessageIsError = false
+    @State private var isTestingRecoveryConnection = false
     @State private var providerPolicySnapshot: ProviderCapabilityPolicySnapshot
     @State private var softwareUpdateSnapshot: SoftwareUpdateSnapshot
     @State private var softwareUpdateMessage: String?
@@ -260,6 +267,7 @@ private struct PreferencesView: View {
     let onOpenConfigFolder: () -> Void
     let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
     let providerCapabilityPolicy: any ProviderCapabilityChecking
+    let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
     let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
@@ -279,6 +287,7 @@ private struct PreferencesView: View {
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
+        recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
@@ -287,8 +296,11 @@ private struct PreferencesView: View {
         focusPane: SettingsPane? = nil
     ) {
         let windowStateStore = SettingsWindowStateStore()
+        let recoveryCredentialState: Result<Bool, any Error> = Result {
+            try recoveryCredentialStore.hasAPIKey()
+        }
         _config = State(initialValue: initialConfig)
-        _showsAdvancedRecovery = State(initialValue: initialConfig.transcription.provider == .openAICompatible)
+        _showsAdvancedRecovery = State(initialValue: false)
         _permissionStatusMonitor = StateObject(wrappedValue: PermissionStatusMonitor())
         _terminologyImportMessage = State(initialValue: Self.terminologyStatusMessage(for: initialConfig))
         _authSnapshot = State(initialValue: authManager.authSnapshot())
@@ -296,6 +308,16 @@ private struct PreferencesView: View {
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
         _providerPolicySnapshot = State(initialValue: .loading)
         _softwareUpdateSnapshot = State(initialValue: softwareUpdateSnapshot)
+        switch recoveryCredentialState {
+        case .success(let isStored):
+            _recoveryAPIKeyStored = State(initialValue: isStored)
+            _recoveryMessage = State(initialValue: nil)
+            _recoveryMessageIsError = State(initialValue: false)
+        case .failure(let error):
+            _recoveryAPIKeyStored = State(initialValue: false)
+            _recoveryMessage = State(initialValue: error.localizedDescription)
+            _recoveryMessageIsError = State(initialValue: true)
+        }
         _selectedSection = State(
             initialValue: windowStateStore.initialPane(
                 focusedPane: focusPane
@@ -312,6 +334,7 @@ private struct PreferencesView: View {
         self.onOpenConfigFolder = onOpenConfigFolder
         self.onExportSupportDiagnostics = onExportSupportDiagnostics
         self.providerCapabilityPolicy = providerCapabilityPolicy
+        self.recoveryCredentialStore = recoveryCredentialStore
         self.onCheckForUpdates = onCheckForUpdates
         self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
         self.onDeleteAllData = onDeleteAllData
@@ -322,8 +345,10 @@ private struct PreferencesView: View {
     private var runtimeIssues: [RuntimePreflightIssue] {
         RuntimePreflight.issues(
             for: config,
-            environment: ProcessInfo.processInfo.environment,
-            authSnapshotProvider: { authSnapshot }
+            authSnapshotProvider: { authSnapshot },
+            recoveryCredentialAvailable: {
+                try recoveryCredentialStore.hasAPIKey()
+            }
         )
     }
 
@@ -331,7 +356,9 @@ private struct PreferencesView: View {
         if config.transcription.provider == .openAICompatible {
             return SetupStatus(
                 title: L10n.text("Advanced recovery route selected"),
-                subtitle: L10n.text("ChatGPT account checks are bypassed while you use your own compatible API.")
+                subtitle: L10n.text(
+                    "Dictation ASR uses your compatible API. AI Polish still requires a connected ChatGPT account."
+                )
             )
         }
 
@@ -476,6 +503,7 @@ private struct PreferencesView: View {
             refreshTextPolishStatus()
             refreshRecentHistory()
             refreshRecoveryHistory()
+            refreshRecoveryCredentialState()
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatGPTAuthStateDidChange)) { _ in
             authSnapshot = authManager.authSnapshot()
@@ -487,6 +515,7 @@ private struct PreferencesView: View {
             refreshTextPolishStatus()
             refreshRecentHistory()
             refreshRecoveryHistory()
+            refreshRecoveryCredentialState()
         }
         .task {
             providerPolicySnapshot = await providerCapabilityPolicy.refresh(
@@ -511,7 +540,22 @@ private struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, terminology, settings, and the saved ChatGPT session from this Mac. This action cannot be undone."
+                    "This removes transcripts, failed recordings, diagnostics, terminology, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
+                )
+            )
+        }
+        .alert(
+            L10n.text("Use OpenAI-Compatible Recovery?"),
+            isPresented: $showsAdvancedRecovery
+        ) {
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Use Paid API")) {
+                activateAdvancedRecovery()
+            }
+        } message: {
+            Text(
+                L10n.text(
+                    "Future dictation audio will be sent to the configured endpoint with the API key stored in Keychain. Your API provider may charge for transcription. AI Polish will still use your ChatGPT account."
                 )
             )
         }
@@ -972,7 +1016,7 @@ private struct PreferencesView: View {
                             .font(.system(size: 12, weight: .semibold))
                         Text(
                             L10n.text(
-                                "Deletes settings, terminology, history, failed recordings, diagnostics, retry files, and the saved ChatGPT session."
+                                "Deletes settings, terminology, history, failed recordings, diagnostics, retry files, the saved ChatGPT session, and the OpenAI-Compatible API key."
                             )
                         )
                         .font(.system(size: 11))
@@ -1003,6 +1047,10 @@ private struct PreferencesView: View {
             recentRecoveryRecords = []
             textPolishUsage = [:]
             copiedHistoryItemID = nil
+            recoveryAPIKeyInput = ""
+            recoveryAPIKeyStored = false
+            recoveryMessage = nil
+            recoveryMessageIsError = false
             authSnapshot = authManager.authSnapshot()
             browserBridgeSnapshot = authManager.browserBridgeSnapshot()
             privacyMessage = L10n.text("All OpenWhisper data was deleted from this Mac.")
@@ -1023,8 +1071,10 @@ private struct PreferencesView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     routeRow(
                         title: "Dictation",
-                        value: "ChatGPT Account",
-                        detail: ManagedEndpointPolicy.transcriptionURL.absoluteString
+                        value: config.transcription.provider.title,
+                        detail: config.transcription.provider == .openAICompatible
+                            ? config.transcription.openAITranscriptionURL
+                            : ManagedEndpointPolicy.transcriptionURL.absoluteString
                     )
                     routeRow(
                         title: "AI Polish",
@@ -1037,11 +1087,164 @@ private struct PreferencesView: View {
                     )
                 }
 
-                if config.transcription.provider == .openAICompatible {
-                    Divider()
-                    Text(L10n.text("Advanced transcription recovery is selected. It uses the configured OpenAI-compatible ASR environment variable, but OpenWhisper no longer ships a provider-key fallback matrix or text-polish provider key UI."))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.orange)
+                Text(
+                    L10n.text(
+                        "OpenAI-Compatible Recovery changes dictation ASR only. AI Polish remains on the ChatGPT-authenticated route and still requires a connected ChatGPT account."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.text("OpenAI-Compatible Recovery"))
+                        .font(.system(size: 13, weight: .semibold))
+
+                    LabeledContent(L10n.text("Endpoint")) {
+                        TextField(
+                            "",
+                            text: $config.transcription.openAITranscriptionURL,
+                            prompt: Text(
+                                "https://api.example.com/v1/audio/transcriptions"
+                            )
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .frame(minWidth: 360)
+                    }
+
+                    LabeledContent(L10n.text("Model")) {
+                        TextField(
+                            "",
+                            text: $config.transcription.openAIModel,
+                            prompt: Text("gpt-4o-mini-transcribe")
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .frame(minWidth: 260)
+                    }
+
+                    LabeledContent(L10n.text("API Key")) {
+                        HStack(spacing: 8) {
+                            SecureField(
+                                "",
+                                text: $recoveryAPIKeyInput,
+                                prompt: Text(
+                                    L10n.text(
+                                        "Enter a replacement API key"
+                                    )
+                                )
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            .labelsHidden()
+                            .frame(minWidth: 260)
+
+                            Button(L10n.text("Save API Key")) {
+                                saveRecoveryAPIKey()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(
+                                recoveryAPIKeyInput
+                                    .trimmingCharacters(
+                                        in: .whitespacesAndNewlines
+                                    )
+                                    .isEmpty
+                            )
+
+                            Button(
+                                L10n.text("Remove API Key"),
+                                role: .destructive
+                            ) {
+                                removeRecoveryAPIKey()
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!recoveryAPIKeyStored)
+                        }
+                    }
+
+                    Label(
+                        L10n.text(
+                            recoveryAPIKeyStored
+                                ? "API key stored in Keychain"
+                                : "API key not configured"
+                        ),
+                        systemImage: recoveryAPIKeyStored
+                            ? "checkmark.shield.fill"
+                            : "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(
+                        recoveryAPIKeyStored ? .green : .orange
+                    )
+                    .font(.system(size: 11, weight: .medium))
+
+                    HStack(spacing: 10) {
+                        Button(
+                            L10n.text(
+                                isTestingRecoveryConnection
+                                    ? "Testing Connection…"
+                                    : "Test Connection"
+                            )
+                        ) {
+                            testRecoveryConnection()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(
+                            isTestingRecoveryConnection
+                                || !recoveryAPIKeyStored
+                        )
+
+                        if config.transcription.provider
+                            == .openAICompatible
+                        {
+                            Button(
+                                L10n.text("Switch Back to ChatGPT Account")
+                            ) {
+                                switchBackToChatGPT()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        } else {
+                            Button(
+                                L10n.text(
+                                    "Use OpenAI-Compatible Recovery…"
+                                )
+                            ) {
+                                showsAdvancedRecovery = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(
+                                !recoveryAPIKeyStored
+                                    || config.transcription
+                                        .openAITranscriptionURL
+                                        .trimmingCharacters(
+                                            in: .whitespacesAndNewlines
+                                        )
+                                        .isEmpty
+                                    || config.transcription.openAIModel
+                                        .trimmingCharacters(
+                                            in: .whitespacesAndNewlines
+                                        )
+                                        .isEmpty
+                            )
+                        }
+                    }
+
+                    Text(
+                        L10n.text(
+                            "Connection testing sends a generated 0.1-second silent WAV—not your recordings or transcript text. The configured provider may still charge for the request."
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+
+                    if let recoveryMessage {
+                        Text(recoveryMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(
+                                recoveryMessageIsError ? .red : .secondary
+                            )
+                            .textSelection(.enabled)
+                    }
                 }
 
                 Divider()
@@ -1176,6 +1379,126 @@ private struct PreferencesView: View {
                 }
             }
         }
+    }
+
+    private func refreshRecoveryCredentialState() {
+        do {
+            recoveryAPIKeyStored = try recoveryCredentialStore.hasAPIKey()
+            if recoveryMessageIsError {
+                recoveryMessage = nil
+                recoveryMessageIsError = false
+            }
+        } catch {
+            recoveryAPIKeyStored = false
+            recoveryMessage = error.localizedDescription
+            recoveryMessageIsError = true
+        }
+    }
+
+    private func saveRecoveryAPIKey() {
+        do {
+            try recoveryCredentialStore.saveAPIKey(recoveryAPIKeyInput)
+            recoveryAPIKeyInput = ""
+            recoveryAPIKeyStored = true
+            recoveryMessage = L10n.text(
+                "OpenAI-Compatible API key saved in Keychain."
+            )
+            recoveryMessageIsError = false
+        } catch {
+            recoveryAPIKeyStored =
+                (try? recoveryCredentialStore.hasAPIKey()) ?? false
+            recoveryMessage = error.localizedDescription
+            recoveryMessageIsError = true
+        }
+    }
+
+    private func removeRecoveryAPIKey() {
+        do {
+            try recoveryCredentialStore.deleteAPIKey()
+            recoveryAPIKeyInput = ""
+            recoveryAPIKeyStored = false
+            if config.transcription.provider == .openAICompatible {
+                config.transcription.provider = .chatGPTManagedAuth
+                recoveryMessage = L10n.text(
+                    "API key removed. Dictation switched back to the ChatGPT account route."
+                )
+            } else {
+                recoveryMessage = L10n.text(
+                    "OpenAI-Compatible API key removed from Keychain."
+                )
+            }
+            recoveryMessageIsError = false
+        } catch {
+            recoveryMessage = error.localizedDescription
+            recoveryMessageIsError = true
+        }
+    }
+
+    private func testRecoveryConnection() {
+        isTestingRecoveryConnection = true
+        recoveryMessage = L10n.text(
+            "Testing the configured endpoint with generated silence…"
+        )
+        recoveryMessageIsError = false
+        let tester = OpenAICompatibleConnectionTester(
+            credentialStore: recoveryCredentialStore
+        )
+        let transcriptionConfig = config.transcription
+
+        Task { @MainActor in
+            do {
+                try await tester.test(config: transcriptionConfig)
+                recoveryAPIKeyStored = true
+                recoveryMessage = L10n.text(
+                    "Connection succeeded. The endpoint accepted the Keychain credential and synthetic audio."
+                )
+                recoveryMessageIsError = false
+            } catch {
+                recoveryMessage = error.localizedDescription
+                recoveryMessageIsError = true
+                recoveryAPIKeyStored =
+                    (try? recoveryCredentialStore.hasAPIKey()) ?? false
+            }
+            isTestingRecoveryConnection = false
+        }
+    }
+
+    private func activateAdvancedRecovery() {
+        do {
+            guard try recoveryCredentialStore.hasAPIKey() else {
+                throw OpenAICompatibleConnectionTestError.missingAPIKey
+            }
+            _ = try ManagedEndpointPolicy.validatedUserOwnedURL(
+                config.transcription.openAITranscriptionURL
+            )
+            guard
+                !config.transcription.openAIModel
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+            else {
+                throw OpenAICompatibleConnectionTestError.missingModel
+            }
+
+            recoveryAPIKeyStored = true
+            config.transcription.provider = .openAICompatible
+            recoveryMessage = L10n.text(
+                "OpenAI-Compatible Recovery is active for dictation ASR. AI Polish still uses ChatGPT Auth."
+            )
+            recoveryMessageIsError = false
+        } catch {
+            recoveryMessage = error.localizedDescription
+            recoveryMessageIsError = true
+            recoveryAPIKeyStored =
+                (try? recoveryCredentialStore.hasAPIKey()) ?? false
+        }
+    }
+
+    private func switchBackToChatGPT() {
+        config.transcription.provider = .chatGPTManagedAuth
+        recoveryMessage = L10n.text(
+            "Dictation switched back to the ChatGPT account route. The Recovery API key remains stored in Keychain until you remove it."
+        )
+        recoveryMessageIsError = false
     }
 
     private var providerPolicyStatusColor: Color {

@@ -124,7 +124,6 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
     config.transcription.provider = .openAICompatible
     config.transcription.openAITranscriptionURL =
         "https://secret.example.invalid/private"
-    config.transcription.openAIAuthTokenEnv = "PRIVATE_API_KEY"
     config.transcription.hintTerms = ["PRIVATE TERMINOLOGY"]
     config.transcription.terminology.entries = [
         TerminologyEntry(

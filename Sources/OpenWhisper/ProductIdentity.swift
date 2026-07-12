@@ -5,6 +5,8 @@ enum ProductIdentity {
     static let slug = "openwhisper"
     static let defaultBundleIdentifier = "app.openwhisper.mac"
     static let keychainService = "\(defaultBundleIdentifier).ChatGPTSession"
+    static let recoveryAPIKeychainService =
+        "\(defaultBundleIdentifier).OpenAICompatibleAPIKey"
     static let oauthCallbackQueueLabel = "\(defaultBundleIdentifier).oauth-callback"
 
     static let installedAppURL = URL(fileURLWithPath: "/Applications/\(name).app")

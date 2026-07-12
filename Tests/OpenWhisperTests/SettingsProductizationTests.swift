@@ -88,6 +88,18 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(source.contains("Provider Safety"))
     #expect(source.contains("Refresh Safety Policy"))
     #expect(source.contains("providerCapabilityPolicy.refresh"))
+    #expect(source.contains("SecureField("))
+    #expect(source.contains("Save API Key"))
+    #expect(source.contains("Remove API Key"))
+    #expect(source.contains("API key stored in Keychain"))
+    #expect(source.contains("OpenAICompatibleConnectionTester("))
+    #expect(source.contains("generated 0.1-second silent WAV"))
+    #expect(source.contains("Use OpenAI-Compatible Recovery?"))
+    #expect(source.contains("Use Paid API"))
+    #expect(source.contains("Switch Back to ChatGPT Account"))
+    #expect(source.contains("AI Polish remains on the ChatGPT-authenticated route"))
+    #expect(!source.contains("ASR environment variable"))
+    #expect(!source.contains("OPENAI_API_KEY"))
 
     let configFolderButtonCount = source
         .components(separatedBy: "Button(L10n.text(\"Open Config Folder\")")

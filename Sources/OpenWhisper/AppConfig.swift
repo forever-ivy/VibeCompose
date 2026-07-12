@@ -269,7 +269,6 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     var hotkeyKeyCode: UInt32 = 96
     var openAITranscriptionURL: String = "https://api.openai.com/v1/audio/transcriptions"
     var openAIModel: String = "gpt-4o-mini-transcribe"
-    var openAIAuthTokenEnv: String = "OPENAI_API_KEY"
     var sampleRateHz: Int = 24_000
     var maxDurationSeconds: Int = 120
     var hintTerms: [String] = []
@@ -292,7 +291,6 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         hotkeyKeyCode = try container.decodeIfPresent(UInt32.self, forKey: .hotkeyKeyCode) ?? 96
         openAITranscriptionURL = try container.decodeIfPresent(String.self, forKey: .openAITranscriptionURL) ?? "https://api.openai.com/v1/audio/transcriptions"
         openAIModel = try container.decodeIfPresent(String.self, forKey: .openAIModel) ?? "gpt-4o-mini-transcribe"
-        openAIAuthTokenEnv = try container.decodeIfPresent(String.self, forKey: .openAIAuthTokenEnv) ?? "OPENAI_API_KEY"
         sampleRateHz = try container.decodeIfPresent(Int.self, forKey: .sampleRateHz) ?? 24_000
         maxDurationSeconds = try container.decodeIfPresent(Int.self, forKey: .maxDurationSeconds) ?? 120
         hintTerms = try container.decodeIfPresent([String].self, forKey: .hintTerms) ?? []

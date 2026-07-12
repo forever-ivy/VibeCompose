@@ -106,7 +106,9 @@ F5 开始录音
 - 默认 ASR 路径不依赖 `OPENAI_API_KEY`；
 - ASR 使用 ChatGPT 账号 Bearer Token；
 - AI Polish 使用同一 ChatGPT 账号会话；
-- `OpenAI-Compatible` 保留为高级恢复路径；
+- `OpenAI-Compatible` 保留为高级恢复路径，其 API Key 独立保存在 macOS Keychain，不读取 shell 环境变量；
+- Advanced Settings 可管理 Recovery endpoint/model/Keychain 凭据，发送合成静音执行真实连接测试，并在切换到可能计费的 API 前要求用户确认；
+- Recovery 只替换听写 ASR，AI Polish 继续使用 ChatGPT 登录授权；
 - F5、录音、转写、术语处理、回填和剪贴板恢复已形成完整闭环。
 
 关键实现：
@@ -116,6 +118,8 @@ F5 开始录音
 | 浏览器登录 | `Sources/OpenWhisper/BrowserAuthBridge.swift` |
 | ChatGPT 会话管理 | `Sources/OpenWhisper/ChatGPTAuthManager.swift` |
 | Keychain 会话存储 | `Sources/OpenWhisper/ChatGPTSessionStore.swift` |
+| Recovery Keychain 存储 | `Sources/OpenWhisper/OpenAICompatibleCredentialStore.swift` |
+| Recovery 连接测试 | `Sources/OpenWhisper/OpenAICompatibleConnectionTester.swift` |
 | ChatGPT ASR | `Sources/OpenWhisper/ChatGPTTranscriber.swift` |
 | AI Polish | `Sources/OpenWhisper/TextPolisher.swift` |
 | 听写流水线 | `Sources/OpenWhisper/DictationPipeline.swift` |
@@ -530,17 +534,23 @@ StorageCleanupService
 
 ### 6.6 Advanced Recovery 完整化
 
-当前 OpenAI-Compatible 路径仍不适合普通 GUI 用户恢复使用。
+状态：**macOS Alpha 实现已完成，安装版可用性与无障碍矩阵仍属于发布验收。**
 
-需要：
+已完成：
 
-- Advanced 页显示 Provider、Endpoint 和 Model；
-- API Key 保存到 Keychain；
-- 不依赖 shell environment；
-- 提供真实网络连接测试；
-- 允许用户从 Recovery 切回 ChatGPT 账号路径；
-- 明确 Recovery 是否启用 AI Polish；
-- 任何从免费路径切换到计费 API 的行为必须先获得用户确认。
+- Advanced 页显示当前 Dictation/AI Polish 路径，并可原生编辑 Endpoint 和 Model；
+- API Key 使用 `app.openwhisper.mac.OpenAICompatibleAPIKey` 独立保存在 macOS Keychain；
+- 旧 `openAIAuthTokenEnv` 仅为兼容旧配置而被忽略，重新编码时会删除；`OPENAI_API_KEY` 不再启用 Recovery；
+- 真实连接测试通过 `SecureHTTPClient` 向用户配置的 HTTPS endpoint 发送生成的 0.1 秒静音 WAV，不发送用户录音、转写或术语；
+- 用户可以删除 Recovery Key、切回 ChatGPT 账户路径，Delete All Data 也会删除该 Key；
+- Recovery 只切换 Dictation ASR，AI Polish 继续依赖 ChatGPT Auth；
+- 从默认 ChatGPT 路径切换到可能计费的 API 前会显示费用与数据流向确认。
+
+持续验收：
+
+- 使用至少两个公开兼容服务和一个自托管测试 endpoint 验证 multipart 兼容性与错误文案；
+- 在安装版中完成全键盘、VoiceOver、高对比度和窄窗口布局检查；
+- 不把第三方 API 费用、可用性、额度或隐私承诺归属于 OpenWhisper。
 
 ---
 

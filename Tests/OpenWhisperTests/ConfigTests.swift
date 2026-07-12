@@ -9,7 +9,6 @@ func defaultConfigUsesChatGPTAccountDefaults() throws {
     #expect(config.transcription.provider == .chatGPTManagedAuth)
     #expect(config.transcription.openAITranscriptionURL == "https://api.openai.com/v1/audio/transcriptions")
     #expect(config.transcription.openAIModel == "gpt-4o-mini-transcribe")
-    #expect(config.transcription.openAIAuthTokenEnv == "OPENAI_API_KEY")
     #expect(config.transcription.hintTerms.isEmpty)
     #expect(config.transcription.speechCleanupEnabled == true)
     #expect(config.transcription.feedbackSoundsEnabled == true)
@@ -33,7 +32,36 @@ func configDoesNotEncodeRemovedProviderFallbackMatrix() throws {
     #expect(json.contains("gemini") == false)
     #expect(json.contains("anthropic") == false)
     #expect(json.contains("apiKey") == false)
+    #expect(json.contains("openAIAuthTokenEnv") == false)
+    #expect(json.contains("OPENAI_API_KEY") == false)
     #expect(json.contains("sk-") == false)
+}
+
+@Test
+func legacyRecoveryEnvironmentFieldDecodesAndIsDroppedOnEncode() throws {
+    let json = """
+    {
+      "transcription": {
+        "provider": "openAICompatible",
+        "openAIAuthTokenEnv": "PRIVATE_API_KEY",
+        "openAITranscriptionURL": "https://api.example.com/v1/audio/transcriptions",
+        "openAIModel": "example-transcriber"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: json)
+    let encoded = try JSONEncoder().encode(decoded)
+    let encodedJSON = String(data: encoded, encoding: .utf8) ?? ""
+
+    #expect(decoded.transcription.provider == .openAICompatible)
+    #expect(
+        decoded.transcription.openAITranscriptionURL
+            == "https://api.example.com/v1/audio/transcriptions"
+    )
+    #expect(decoded.transcription.openAIModel == "example-transcriber")
+    #expect(encodedJSON.contains("openAIAuthTokenEnv") == false)
+    #expect(encodedJSON.contains("PRIVATE_API_KEY") == false)
 }
 
 @Test

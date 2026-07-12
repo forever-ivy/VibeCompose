@@ -112,6 +112,17 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - applies timeout/cancellation cleanup to the local listener.
 - `ChatGPTSessionStore`
   - persists the managed session in macOS Keychain under `app.openwhisper.mac.ChatGPTSession`.
+- `KeychainOpenAICompatibleCredentialStore`
+  - persists the user-owned Recovery API key in a separate generic-password
+    item under `app.openwhisper.mac.OpenAICompatibleAPIKey`;
+  - trims and bounds the credential, uses
+    `AfterFirstUnlockThisDeviceOnly`, and never writes the key or an
+    environment-variable name into `config.json`.
+- `OpenAICompatibleConnectionTester`
+  - validates the user-owned HTTPS endpoint and model;
+  - sends only a generated 0.1-second silent WAV with the Keychain credential;
+  - never reads user audio or transcript text and redacts credentials from
+    provider error messages.
 - `ManagedEndpointPolicy`
   - fixes managed transcription and responses endpoints to approved `https://chatgpt.com` paths;
   - rejects credentials, query strings, fragments, non-HTTPS schemes, and unapproved ports;
@@ -119,7 +130,9 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `SecureHTTPClient`
   - uses an ephemeral session and rejects HTTP redirects.
 
-Managed credentials and user-owned API credentials are separate trust domains. The advanced OpenAI-compatible endpoint never receives the managed ChatGPT token.
+Managed credentials and user-owned API credentials are separate trust domains.
+The advanced OpenAI-compatible endpoint never receives the managed ChatGPT
+token. The shell environment is not a Recovery credential source.
 
 ### Signed provider capability policy
 
@@ -191,7 +204,11 @@ Privacy behavior:
 
 The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `openwhisper-<UUID>.wav` and `openwhisper-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
 
-`StorageCleanupService.deleteAllData()` validates the application-support boundary, refuses symbolic-link deletion, removes the complete local data root, recreates a secure empty directory, signs out of ChatGPT, and saves a fresh default configuration.
+`AppCoordinator.deleteAllUserData()` deletes both Keychain trust domains,
+then `StorageCleanupService.deleteAllData()` validates the
+application-support boundary, refuses symbolic-link deletion, removes the
+complete local data root, recreates a secure empty directory, and saves a
+fresh default configuration.
 
 ## 7. Recovery Containment
 
@@ -219,11 +236,20 @@ The current Settings window exposes:
 - terminology entry points;
 - paste behavior;
 - Privacy & Data;
-- advanced recovery configuration.
+- Advanced Recovery endpoint/model editing, Keychain API-key save/remove,
+  synthetic-silence connection testing, explicit paid-API confirmation, and
+  one-click return to the ChatGPT account route.
+
+Advanced Recovery changes dictation ASR only. AI Polish remains on the
+ChatGPT-authenticated Responses route and continues to require a usable
+ChatGPT session.
 
 History and Terminology now use separate native management windows. History supports filtering, details, copy/retry, audio actions, deletion, and automatic refresh. Terminology uses stable entry identifiers and supports search, sorting, editing, enable/disable, deletion, CSV import/export, import conflict preview, and a global Quick Add panel.
 
-Privacy controls currently use the existing explicit Save flow. Remaining productization work includes a native resizable `NavigationSplitView` with immediate persistence plus full keyboard/VoiceOver coverage across Settings and the management windows.
+Settings uses a native resizable `NavigationSplitView` and immediately
+persists configuration changes. Remaining productization work is full
+keyboard/VoiceOver/high-contrast acceptance across Settings and the
+management windows.
 
 ## 9. Benchmarking and Diagnostics
 
@@ -275,7 +301,6 @@ The current alpha must not be described as commercially release-ready while thes
 - paste success is event-dispatch success, not destination insertion confirmation;
 - Settings and Onboarding are not yet at the target native product architecture; History, Terminology, and Quick Add still require full keyboard/VoiceOver interaction acceptance;
 - HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
-- the advanced recovery API key is still environment-variable based rather than Keychain-backed;
 - a real Developer ID/notarized artifact and installed Sparkle update/rollback proof are not complete;
 - permanent capability-policy hosting, a separate production Ed25519 key, and
   an installed incident disable/restore drill are not complete;

@@ -43,7 +43,7 @@ macOS 首发策略：
 - 麦克风录音、HUD 状态、取消和 Retry。
 - 浏览器连接 ChatGPT，Keychain 保存会话。
 - 默认账户转写路径。
-- OpenAI-Compatible 高级恢复路径。
+- OpenAI-Compatible 高级恢复路径，支持原生 endpoint/model 配置、独立 Keychain API Key、合成静音连接测试、付费确认和切回 ChatGPT。
 - 本地术语、确定性纠错和文本导入。
 - 可选 AI Polish。
 - 自动粘贴与剪贴板兜底。
@@ -87,6 +87,15 @@ macOS 首发策略：
 - Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
 - Provider Capability Policy 使用独立 Ed25519 公钥、HTTPS 固定地址、31 天硬到期、build 范围和单调 revision；在读取音频/Token/文本前阻断受影响能力；
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
+
+2026-07-13 Advanced Recovery 进展：
+
+- OpenAI-Compatible API Key 已迁入独立 macOS Keychain 服务，不再读取 `OPENAI_API_KEY`，也不会进入 `config.json`、诊断或日志；
+- Advanced Settings 已提供 endpoint、model、SecureField、Keychain 保存/删除、凭据状态和真实连接测试；
+- 连接测试只发送生成的 0.1 秒静音 WAV，不读取用户录音或转写文本，并会脱敏服务商错误中的凭据；
+- 从默认路径切换到可能计费的 API 前必须显式确认，且可以一键切回 ChatGPT；
+- Recovery 只改变听写 ASR，AI Polish 继续使用 ChatGPT 登录授权；
+- Delete All Data 同时删除 ChatGPT 会话和 Recovery API Key。
 
 仍未完成：有效 Developer ID、公证实证、生产 Sparkle feed/密钥、真实签名 appcast、自动更新/回滚实机证明、生产 Capability Policy 托管/密钥/事故演练，以及永久商业运营主体和联系方式。
 
@@ -152,7 +161,8 @@ UI 调研确认的主要问题：
 - 可执行文件：`OpenWhisper`
 - 安装路径：`/Applications/OpenWhisper.app`
 - 数据目录：`~/Library/Application Support/OpenWhisper/`
-- Keychain：`app.openwhisper.mac.ChatGPTSession`
+- ChatGPT Keychain：`app.openwhisper.mac.ChatGPTSession`
+- Recovery API Keychain：`app.openwhisper.mac.OpenAICompatibleAPIKey`
 - 环境变量：`OPENWHISPER_*`
 - Release：`OpenWhisper-<version>-macos-<arch>`
 

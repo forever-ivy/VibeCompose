@@ -23,7 +23,9 @@ The current implementation already includes:
 - redacted support-diagnostics ZIP export
 - signed provider-safety policy enforcement for managed transcription and AI
   Polish incidents
-- OpenAI-compatible transcription as an advanced recovery route
+- OpenAI-compatible transcription as an advanced recovery route, with native
+  endpoint/model controls, a Keychain-backed API key, explicit paid-API
+  confirmation, and a synthetic-silence connection test
 
 ## Product Boundary
 
@@ -91,7 +93,19 @@ Diagnostics contain timing, byte counts, provider labels, and error categories. 
 
 **Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
 
-The ChatGPT session is stored in Keychain under `app.openwhisper.mac.ChatGPTSession`. **Settings → Privacy → Delete All Data** removes settings, terminology, transcript history, failed recordings, diagnostics, retry files, and the saved ChatGPT session, then returns OpenWhisper to its signed-out defaults.
+The ChatGPT session is stored in Keychain under
+`app.openwhisper.mac.ChatGPTSession`. The optional OpenAI-Compatible Recovery
+API key is stored separately under
+`app.openwhisper.mac.OpenAICompatibleAPIKey`; it is never read from
+`OPENAI_API_KEY` or written to `config.json`. **Settings → Advanced** manages
+the endpoint, model, Keychain credential, real connection test, paid-route
+confirmation, and switch back to the ChatGPT account route. Recovery changes
+dictation ASR only; AI Polish remains ChatGPT-authenticated.
+
+**Settings → Privacy → Delete All Data** removes settings, terminology,
+transcript history, failed recordings, diagnostics, retry files, the saved
+ChatGPT session, and the Recovery API key, then returns OpenWhisper to its
+signed-out defaults.
 
 ## Repository Layout
 

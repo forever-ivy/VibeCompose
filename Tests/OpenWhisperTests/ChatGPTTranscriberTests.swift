@@ -342,16 +342,25 @@ func rejectsSymlinkedAudioBeforeBuildingMultipartUpload() async throws {
 func openAICompatibleRouteIncludesPromptField() async throws {
     var config = AppConfig().transcription
     config.provider = .openAICompatible
-    config.openAIAuthTokenEnv = "OPENWHISPER_TEST_OPENAI_KEY"
     config.hintTerms = ["budget v2.xlsx", "OpenWhisper"]
 
     let capture = RequestCapture()
+    let credentialStore = InMemoryOpenAICompatibleCredentialStore(
+        apiKey: "  keychain-test-key  "
+    )
     let transcriber = ChatGPTTranscriber(
         authManager: FakeChatGPTAuthManager(),
         config: config,
+        recoveryCredentialStore: credentialStore,
         uploadLoader: { request, bodyFileURL in
             let body = try uploadBodyString(at: bodyFileURL)
-            capture.append(request, body: body)
+            capture.append(
+                request,
+                body: body,
+                authorizationHeader: request.value(
+                    forHTTPHeaderField: "Authorization"
+                )
+            )
             let response = HTTPURLResponse(
                 url: request.url!,
                 statusCode: 200,
@@ -362,16 +371,6 @@ func openAICompatibleRouteIncludesPromptField() async throws {
         }
     )
 
-    let originalEnvironment = ProcessInfo.processInfo.environment
-    setenv(config.openAIAuthTokenEnv, "test-key", 1)
-    defer {
-        if let existing = originalEnvironment[config.openAIAuthTokenEnv] {
-            setenv(config.openAIAuthTokenEnv, existing, 1)
-        } else {
-            unsetenv(config.openAIAuthTokenEnv)
-        }
-    }
-
     let audio = try makeAudioFixture()
     let result = try await transcriber.transcribe(audio)
 
@@ -379,6 +378,94 @@ func openAICompatibleRouteIncludesPromptField() async throws {
     #expect(capture.bodies().count == 1)
     #expect(capture.bodies()[0].contains("name=\"prompt\""))
     #expect(capture.bodies()[0].contains("budget v2.xlsx"))
+    #expect(capture.authorizations() == ["Bearer keychain-test-key"])
+}
+
+@Test
+func openAICompatibleRouteRejectsEnvironmentOnlyCredential() async throws {
+    var config = AppConfig().transcription
+    config.provider = .openAICompatible
+    let originalEnvironmentKey = getenv("OPENAI_API_KEY").map {
+        String(cString: $0)
+    }
+    setenv("OPENAI_API_KEY", "environment-only-key", 1)
+    defer {
+        if let originalEnvironmentKey {
+            setenv("OPENAI_API_KEY", originalEnvironmentKey, 1)
+        } else {
+            unsetenv("OPENAI_API_KEY")
+        }
+    }
+
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        recoveryCredentialStore:
+            InMemoryOpenAICompatibleCredentialStore(),
+        uploadLoader: { _, _ in
+            Issue.record(
+                "Environment-only credentials must not reach the network"
+            )
+            throw URLError(.badServerResponse)
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    var caughtError: Error?
+    do {
+        _ = try await transcriber.transcribe(audio)
+    } catch {
+        caughtError = error
+    }
+
+    if case .missingRecoveryAPIKey = caughtError as? TranscriptionError {
+        // Expected: the shell environment is no longer a credential source.
+    } else {
+        Issue.record(
+            "Expected missingRecoveryAPIKey, got \(String(describing: caughtError))"
+        )
+    }
+}
+
+@Test
+func openAICompatibleRouteRedactsKeyFromProviderError() async throws {
+    let secret = "sk-recovery-provider-secret"
+    var config = AppConfig().transcription
+    config.provider = .openAICompatible
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        recoveryCredentialStore:
+            InMemoryOpenAICompatibleCredentialStore(apiKey: secret),
+        uploadLoader: { request, _ in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 401,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (
+                Data(
+                    """
+                    {"error":{"message":"Rejected Bearer \(secret)"}}
+                    """.utf8
+                ),
+                response
+            )
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    var caughtError: Error?
+    do {
+        _ = try await transcriber.transcribe(audio)
+    } catch {
+        caughtError = error
+    }
+
+    let message = caughtError?.localizedDescription ?? ""
+    #expect(message.contains(secret) == false)
+    #expect(message.contains("[REDACTED]"))
 }
 
 @Test
@@ -484,8 +571,6 @@ func managedAuthReportsRetryableErrorAfterThreeCloudflareChallenges() async thro
     var config = AppConfig().transcription
     config.provider = .chatGPTManagedAuth
     config.hintTerms = ["OpenWhisper"]
-    config.openAIAuthTokenEnv = "OPENWHISPER_TEST_MISSING_RECOVERY_KEY"
-    unsetenv(config.openAIAuthTokenEnv)
 
     let capture = RequestCapture()
     let authManager = FakeChatGPTAuthManager()

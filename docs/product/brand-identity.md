@@ -12,7 +12,8 @@
 | Bundle identifier | `app.openwhisper.mac` |
 | LaunchAgent label | `app.openwhisper.mac` |
 | Application Support | `~/Library/Application Support/OpenWhisper/` |
-| Keychain service | `app.openwhisper.mac.ChatGPTSession` |
+| ChatGPT Keychain service | `app.openwhisper.mac.ChatGPTSession` |
+| Recovery API Keychain service | `app.openwhisper.mac.OpenAICompatibleAPIKey` |
 | Environment prefix | `OPENWHISPER_` |
 | Release artifact prefix | `OpenWhisper-<version>-macos-<arch>` |
 | Homebrew Cask | `openwhisper` |

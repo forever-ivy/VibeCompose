@@ -251,7 +251,8 @@ enum TranscriptionError: LocalizedError {
     case payloadTooLarge
     case transcriptionFailed(String)
     case invalidResponse
-    case missingAuthTokenEnv(String)
+    case missingRecoveryAPIKey
+    case recoveryCredentialUnavailable(String)
     case retryableCloudflareChallenge(attempts: Int)
     case invalidEndpoint(String)
 
@@ -268,8 +269,15 @@ enum TranscriptionError: LocalizedError {
             return L10n.format("ChatGPT transcription failed: %@", message)
         case .invalidResponse:
             return L10n.text("ChatGPT transcription returned empty text.")
-        case .missingAuthTokenEnv(let envName):
-            return L10n.format("Missing transcription API key. Set environment variable %@.", envName)
+        case .missingRecoveryAPIKey:
+            return L10n.text(
+                "OpenAI-Compatible Recovery needs an API key saved in Keychain."
+            )
+        case .recoveryCredentialUnavailable(let detail):
+            return L10n.format(
+                "OpenWhisper could not read the OpenAI-Compatible API key from Keychain: %@",
+                detail
+            )
         case .retryableCloudflareChallenge(let attempts):
             return L10n.format(
                 "ChatGPT transcription encountered Cloudflare 403 %ld times. This is usually a temporary network issue. The recording was kept; click Retry to try once more.",
@@ -376,6 +384,7 @@ struct ChatGPTTranscriber: Sendable {
     let promptBuilder: TranscriptionPromptBuilder
     let bridgePromptCapability: BridgePromptCapabilityStore
     let providerCapabilityPolicy: any ProviderCapabilityChecking
+    let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
     let cloudflareChallengeMaxAttempts: Int
     let multipartTemporaryDirectoryURL: URL
     let uploadLoader: UploadLoader
@@ -386,6 +395,7 @@ struct ChatGPTTranscriber: Sendable {
         promptBuilder: TranscriptionPromptBuilder = .init(),
         bridgePromptCapability: BridgePromptCapabilityStore = .shared,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
+        recoveryCredentialStore: any OpenAICompatibleCredentialPersisting = KeychainOpenAICompatibleCredentialStore(),
         cloudflareChallengeMaxAttempts: Int = 3,
         multipartTemporaryDirectoryURL: URL = FileManager.default.temporaryDirectory,
         uploadLoader: @escaping UploadLoader = { request, bodyFileURL in
@@ -397,6 +407,7 @@ struct ChatGPTTranscriber: Sendable {
         self.promptBuilder = promptBuilder
         self.bridgePromptCapability = bridgePromptCapability
         self.providerCapabilityPolicy = providerCapabilityPolicy
+        self.recoveryCredentialStore = recoveryCredentialStore
         self.cloudflareChallengeMaxAttempts = max(1, cloudflareChallengeMaxAttempts)
         self.multipartTemporaryDirectoryURL = multipartTemporaryDirectoryURL
         self.uploadLoader = uploadLoader
@@ -603,9 +614,7 @@ struct ChatGPTTranscriber: Sendable {
         audioMetadata: AudioUploadMetadata,
         prompt: String
     ) async throws -> String {
-        guard let token = openAICompatibleAuthToken() else {
-            throw TranscriptionError.missingAuthTokenEnv(config.openAIAuthTokenEnv)
-        }
+        let token = try openAICompatibleAuthToken()
 
         let boundary = makeBoundary()
         let endpoint: URL
@@ -636,10 +645,19 @@ struct ChatGPTTranscriber: Sendable {
         )
     }
 
-    private func openAICompatibleAuthToken() -> String? {
-        let token = ProcessInfo.processInfo.environment[config.openAIAuthTokenEnv] ?? ""
-        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmedToken.isEmpty ? nil : trimmedToken
+    private func openAICompatibleAuthToken() throws -> String {
+        do {
+            guard let token = try recoveryCredentialStore.loadAPIKey() else {
+                throw TranscriptionError.missingRecoveryAPIKey
+            }
+            return token
+        } catch let error as TranscriptionError {
+            throw error
+        } catch {
+            throw TranscriptionError.recoveryCredentialUnavailable(
+                error.localizedDescription
+            )
+        }
     }
 
     private func executeTranscriptionRequest(
@@ -666,7 +684,12 @@ struct ChatGPTTranscriber: Sendable {
         )
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let providerMessage = decodeProviderMessage(from: responseData) ?? "status \(httpResponse.statusCode)"
+            let providerMessage = decodeProviderMessage(
+                from: responseData,
+                authorizationHeader: request.value(
+                    forHTTPHeaderField: "Authorization"
+                )
+            ) ?? "status \(httpResponse.statusCode)"
             Self.logger.error(
                 "\(providerLabel, privacy: .public) transcription failed status=\(httpResponse.statusCode, privacy: .public) contentType=\(httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "unknown", privacy: .public) server=\(httpResponse.value(forHTTPHeaderField: "Server") ?? "unknown", privacy: .public)"
             )
@@ -706,17 +729,56 @@ struct ChatGPTTranscriber: Sendable {
         }
     }
 
-    private func decodeProviderMessage(from data: Data) -> String? {
+    private func decodeProviderMessage(
+        from data: Data,
+        authorizationHeader: String?
+    ) -> String? {
         guard
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
             return nil
         }
 
+        let rawMessage: String?
         if let error = object["error"] as? [String: Any], let message = error["message"] as? String {
-            return message
+            rawMessage = message
+        } else {
+            rawMessage = object["message"] as? String
         }
-        return object["message"] as? String
+        guard var sanitized = rawMessage else {
+            return nil
+        }
+
+        if let authorizationHeader {
+            sanitized = sanitized.replacingOccurrences(
+                of: authorizationHeader,
+                with: "Bearer [REDACTED]"
+            )
+            if authorizationHeader.hasPrefix("Bearer ") {
+                sanitized = sanitized.replacingOccurrences(
+                    of: String(authorizationHeader.dropFirst("Bearer ".count)),
+                    with: "[REDACTED]"
+                )
+            }
+        }
+        sanitized = sanitized.replacingOccurrences(
+            of: #"(?i)\bbearer\s+[^\s"']+"#,
+            with: "Bearer [REDACTED]",
+            options: .regularExpression
+        )
+        sanitized = sanitized.replacingOccurrences(
+            of: #"(?i)\b(?:sk|token|key)-[A-Za-z0-9._-]{8,}\b"#,
+            with: "[REDACTED]",
+            options: .regularExpression
+        )
+        sanitized = sanitized
+            .components(separatedBy: .newlines)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !sanitized.isEmpty else {
+            return nil
+        }
+        return String(sanitized.prefix(400))
     }
 
     private func elapsedMilliseconds(since start: UInt64) -> Int {

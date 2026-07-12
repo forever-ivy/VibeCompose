@@ -23,8 +23,13 @@ OpenWhisper's default account route depends on upstream ChatGPT behavior that is
 2. Keep the failed recording only when the user has enabled failed-audio recovery.
 3. Reconnect ChatGPT after an authentication failure.
 4. Use clipboard-only output when automatic paste cannot be proven safe.
-5. Advanced users may switch transcription to their own HTTPS OpenAI-compatible endpoint.
-6. Delete failed audio or all local data when recovery is no longer needed.
+5. Advanced users may save their own API key in Keychain, configure an HTTPS
+   OpenAI-compatible endpoint/model, run the synthetic-silence connection
+   test, acknowledge possible provider charges, and switch transcription ASR
+   to that route.
+6. Switch back to the ChatGPT account route when the incident ends.
+7. Delete the Recovery key, failed audio, or all local data when recovery is
+   no longer needed.
 
 ## Operator Response
 

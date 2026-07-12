@@ -22,7 +22,7 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 敏感应用排除与“删除全部数据”
 - 脱敏支持诊断 ZIP 导出
 - 面向托管转写和 AI 润色事故的签名服务安全策略
-- 作为高级恢复路径的 OpenAI-Compatible 转写
+- 作为高级恢复路径的 OpenAI-Compatible 转写，包括原生端点/模型配置、Keychain API 密钥、付费 API 显式确认和合成静音连接测试
 
 ## 产品边界
 
@@ -83,7 +83,9 @@ OpenWhisper 的本地应用数据位于：
 
 通过 **设置 → 高级 → 导出诊断**，可以创建一个由用户自行检查的本地 ZIP，其中包含脱敏运行状态、权限、延迟和崩溃摘要；不包含音频、转写正文、剪贴板文本、账户邮箱、凭据、术语、自定义端点、原始崩溃报告、历史、Recovery 元数据或 `config.json`。
 
-ChatGPT 会话保存在 Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。通过 **设置 → 隐私 → 删除全部数据**，可以删除设置、术语、转写历史、失败录音、诊断、Retry 文件和已保存的 ChatGPT 会话，并恢复为退出登录后的默认状态。
+ChatGPT 会话保存在 Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible 恢复路径 API 密钥独立保存在 `app.openwhisper.mac.OpenAICompatibleAPIKey`，不会再从 `OPENAI_API_KEY` 读取，也不会写入 `config.json`。通过 **设置 → 高级** 可以管理端点、模型和钥匙串凭据，执行真实连接测试，在确认可能产生 API 费用后启用恢复路径，并随时切回 ChatGPT 账户。恢复路径只改变听写 ASR；AI 润色仍使用 ChatGPT 登录授权。
+
+通过 **设置 → 隐私 → 删除全部数据**，可以删除设置、术语、转写历史、失败录音、诊断、Retry 文件、已保存的 ChatGPT 会话和恢复路径 API 密钥，并恢复为退出登录后的默认状态。
 
 ## 仓库结构
 

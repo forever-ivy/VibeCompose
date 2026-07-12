@@ -31,7 +31,8 @@ final class AppCoordinator {
         TranscriptionConfig,
         any ChatGPTAuthProviding,
         TranscriptionAttemptPolicy,
-        any ProviderCapabilityChecking
+        any ProviderCapabilityChecking,
+        any OpenAICompatibleCredentialPersisting
     ) -> any DictationPreparing
     typealias LaunchAppContextProvider = @MainActor () -> LaunchAppContext?
 
@@ -46,6 +47,7 @@ final class AppCoordinator {
     let soundFeedback: any SoundFeedbackPlaying
     let softwareUpdater: any SoftwareUpdating
     let providerCapabilityPolicy: any ProviderCapabilityChecking
+    let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -104,6 +106,8 @@ final class AppCoordinator {
         historyRecorder: (any TranscriptionHistoryRecording)? = nil,
         recoveryRecorder: (any RecoveryRecording)? = nil,
         soundFeedback: any SoundFeedbackPlaying = SoundFeedbackService(),
+        recoveryCredentialStore: any OpenAICompatibleCredentialPersisting =
+            KeychainOpenAICompatibleCredentialStore(),
         recorderFactory: @escaping RecorderFactory = { AudioRecorder(sampleRateHz: $0) },
         statusMenuFactory: @escaping StatusMenuFactory = {
             openHistory,
@@ -127,12 +131,14 @@ final class AppCoordinator {
             transcriptionConfig,
             authManager,
             attemptPolicy,
-            providerCapabilityPolicy in
+            providerCapabilityPolicy,
+            recoveryCredentialStore in
             DictationPipeline(
                 transcriber: ChatGPTTranscriber(
                     authManager: authManager,
                     config: transcriptionConfig,
                     providerCapabilityPolicy: providerCapabilityPolicy,
+                    recoveryCredentialStore: recoveryCredentialStore,
                     cloudflareChallengeMaxAttempts: attemptPolicy.cloudflareChallengeMaxAttempts
                 ),
                 normalizer: TerminologyNormalizer(
@@ -166,6 +172,7 @@ final class AppCoordinator {
         self.soundFeedback = soundFeedback
         self.softwareUpdater = softwareUpdater ?? SparkleSoftwareUpdater()
         self.providerCapabilityPolicy = providerCapabilityPolicy
+        self.recoveryCredentialStore = recoveryCredentialStore
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -432,8 +439,10 @@ final class AppCoordinator {
 
                 let issues = RuntimePreflight.issues(
                     for: self.config,
-                    environment: ProcessInfo.processInfo.environment,
-                    authSnapshotProvider: { self.authManager.authSnapshot() }
+                    authSnapshotProvider: { self.authManager.authSnapshot() },
+                    recoveryCredentialAvailable: {
+                        try self.recoveryCredentialStore.hasAPIKey()
+                    }
                 )
                 if let message = RuntimePreflight.summary(for: issues) {
                     logger.error("Runtime preflight blocked recording with \(issues.count, privacy: .public) issue(s): \(message, privacy: .public)")
@@ -608,7 +617,8 @@ final class AppCoordinator {
                 transcriptionConfig,
                 self.authManager,
                 attemptPolicy,
-                self.providerCapabilityPolicy
+                self.providerCapabilityPolicy,
+                self.recoveryCredentialStore
             )
 
             do {
@@ -878,6 +888,7 @@ final class AppCoordinator {
                     }
                 },
                 providerCapabilityPolicy: providerCapabilityPolicy,
+                recoveryCredentialStore: recoveryCredentialStore,
                 softwareUpdateSnapshot: softwareUpdater.snapshot(),
                 onCheckForUpdates: { [weak self] in
                     guard let self else {
@@ -1752,7 +1763,7 @@ final class AppCoordinator {
         }
     }
 
-    private func deleteAllUserData() -> Result<AppConfig, any Error> {
+    func deleteAllUserData() -> Result<AppConfig, any Error> {
         if state != .idle || activeSessionID != nil || processingTask != nil || startRecordingTask != nil {
             cancelCurrentSession()
         } else {
@@ -1764,6 +1775,14 @@ final class AppCoordinator {
             try authManager.signOut()
         } catch {
             firstError = error
+        }
+
+        do {
+            try recoveryCredentialStore.deleteAPIKey()
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
         }
 
         do {
@@ -1824,8 +1843,10 @@ final class AppCoordinator {
     private func refreshReadyState(detailOverride: String? = nil, state: StatusMenuVisualState = .ready) {
         let issues = RuntimePreflight.issues(
             for: config,
-            environment: ProcessInfo.processInfo.environment,
-            authSnapshotProvider: { self.authManager.authSnapshot() }
+            authSnapshotProvider: { self.authManager.authSnapshot() },
+            recoveryCredentialAvailable: {
+                try self.recoveryCredentialStore.hasAPIKey()
+            }
         )
         if let detailOverride {
             statusMenu?.update(state: state, detail: detailOverride)

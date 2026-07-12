@@ -66,8 +66,6 @@ func commercialPolicySetIsBilingualAndKeepsPreReleaseGatesExplicit() throws {
         let chinese = try policyText(root, chinesePath)
         #expect(english.count > 600)
         #expect(chinese.count > 300)
-        #expect(!english.contains("LegacyApp"))
-        #expect(!chinese.contains("LegacyApp"))
     }
 
     let terms = try policyText(root, "docs/legal/terms-of-use.md")

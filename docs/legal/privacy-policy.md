@@ -14,6 +14,11 @@ This policy describes the current OpenWhisper macOS application. OpenWhisper doe
 
 When you start dictation, OpenWhisper records a short audio clip on your Mac. On the default route, the clip and transcription instructions are sent to the ChatGPT service using the ChatGPT session you connected in OpenWhisper. If you select the advanced OpenAI-compatible recovery route, the clip is sent to the HTTPS endpoint you configured using your own credential.
 
+The Advanced Settings connection test sends only a generated 0.1-second
+silent WAV, the configured model, and your Recovery credential. It does not
+read or send your recordings, transcripts, or terminology. Your configured
+provider may still charge for that request.
+
 OpenWhisper is an independent project and is not affiliated with, sponsored by, or endorsed by OpenAI. Third-party processing is governed by the terms and privacy policy of the service you choose:
 
 - OpenAI Privacy Policy: `https://openai.com/policies/privacy-policy/`
@@ -34,9 +39,15 @@ OpenWhisper may store the following data under `~/Library/Application Support/Op
 
 Known password managers, Keychain Access, and macOS Passwords are excluded from transcript history and failed-audio recovery by default. You can add more sensitive applications.
 
-### ChatGPT session
+### Keychain credentials
 
-The ChatGPT session connected in OpenWhisper is stored in macOS Keychain under `app.openwhisper.mac.ChatGPTSession`. OpenWhisper does not intentionally write access tokens, refresh tokens, API keys, cookies, or authorization headers to transcript history or diagnostics.
+The ChatGPT session connected in OpenWhisper is stored in macOS Keychain under
+`app.openwhisper.mac.ChatGPTSession`. An optional OpenAI-Compatible Recovery
+API key is stored separately under
+`app.openwhisper.mac.OpenAICompatibleAPIKey`. OpenWhisper does not read that
+key from `OPENAI_API_KEY` and does not intentionally write access tokens,
+refresh tokens, API keys, cookies, or authorization headers to `config.json`,
+transcript history, diagnostics, screenshots, or logs.
 
 ## 2. Diagnostics and Support Archives
 
@@ -65,7 +76,8 @@ You can:
 - add sensitive applications that must not create history or Recovery records;
 - delete individual history or Recovery records;
 - sign out of ChatGPT;
-- use **Delete All Data** to remove local settings, terminology, history, failed recordings, diagnostics, Retry files, and the saved ChatGPT session.
+- remove the OpenAI-Compatible Recovery key without deleting other data;
+- use **Delete All Data** to remove local settings, terminology, history, failed recordings, diagnostics, Retry files, the saved ChatGPT session, and the Recovery API key.
 
 Deleting local OpenWhisper data does not delete information already sent to or retained by a third-party service. Use that service's account and privacy controls for third-party data.
 
@@ -75,7 +87,12 @@ OpenWhisper does not currently sell personal information, serve advertising, or 
 
 ## 6. Security
 
-OpenWhisper uses macOS Keychain for the connected ChatGPT session, owner-only local file permissions where supported, bounded retention, HTTPS endpoint validation, and conservative paste behavior. No security measure can guarantee absolute security. Keep macOS updated and do not share diagnostic archives without reviewing them.
+OpenWhisper uses separate macOS Keychain items for the connected ChatGPT
+session and optional Recovery API key, owner-only local file permissions where
+supported, bounded retention, HTTPS endpoint validation, redirect rejection,
+and conservative paste behavior. No security measure can guarantee absolute
+security. Keep macOS updated and do not share diagnostic archives without
+reviewing them.
 
 ## 7. Children
 
