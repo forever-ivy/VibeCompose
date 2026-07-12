@@ -35,6 +35,7 @@ final class PreferencesWindowController: NSWindowController {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
+        providerCapabilityPolicy: any ProviderCapabilityChecking,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
@@ -54,6 +55,7 @@ final class PreferencesWindowController: NSWindowController {
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onOpenConfigFolder: onOpenConfigFolder,
             onExportSupportDiagnostics: onExportSupportDiagnostics,
+            providerCapabilityPolicy: providerCapabilityPolicy,
             softwareUpdateSnapshot: softwareUpdateSnapshot,
             onCheckForUpdates: onCheckForUpdates,
             onSetAutomaticallyChecksForUpdates: onSetAutomaticallyChecksForUpdates,
@@ -242,6 +244,7 @@ private struct PreferencesView: View {
     @State private var privacyMessageIsError = false
     @State private var diagnosticsExportMessage: String?
     @State private var diagnosticsExportMessageIsError = false
+    @State private var providerPolicySnapshot: ProviderCapabilityPolicySnapshot
     @State private var softwareUpdateSnapshot: SoftwareUpdateSnapshot
     @State private var softwareUpdateMessage: String?
     @State private var softwareUpdateMessageIsError = false
@@ -256,6 +259,7 @@ private struct PreferencesView: View {
     let onRequestMicrophoneAccess: () -> Void
     let onOpenConfigFolder: () -> Void
     let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
+    let providerCapabilityPolicy: any ProviderCapabilityChecking
     let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
@@ -274,6 +278,7 @@ private struct PreferencesView: View {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
+        providerCapabilityPolicy: any ProviderCapabilityChecking,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
@@ -289,6 +294,7 @@ private struct PreferencesView: View {
         _authSnapshot = State(initialValue: authManager.authSnapshot())
         _browserBridgeSnapshot = State(initialValue: authManager.browserBridgeSnapshot())
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
+        _providerPolicySnapshot = State(initialValue: .loading)
         _softwareUpdateSnapshot = State(initialValue: softwareUpdateSnapshot)
         _selectedSection = State(
             initialValue: windowStateStore.initialPane(
@@ -305,6 +311,7 @@ private struct PreferencesView: View {
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onOpenConfigFolder = onOpenConfigFolder
         self.onExportSupportDiagnostics = onExportSupportDiagnostics
+        self.providerCapabilityPolicy = providerCapabilityPolicy
         self.onCheckForUpdates = onCheckForUpdates
         self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
         self.onDeleteAllData = onDeleteAllData
@@ -482,6 +489,9 @@ private struct PreferencesView: View {
             refreshRecoveryHistory()
         }
         .task {
+            providerPolicySnapshot = await providerCapabilityPolicy.refresh(
+                force: false
+            )
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else {
@@ -1050,6 +1060,47 @@ private struct PreferencesView: View {
 
                 Divider()
 
+                LabeledContent(L10n.text("Provider Safety")) {
+                    Button(L10n.text("Refresh Safety Policy")) {
+                        Task {
+                            providerPolicySnapshot =
+                                await providerCapabilityPolicy.refresh(force: true)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!providerPolicySnapshot.isConfigured)
+                }
+
+                Text(providerPolicySnapshot.detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(providerPolicyStatusColor)
+
+                if !providerPolicySnapshot.disabledCapabilities.isEmpty {
+                    Text(
+                        providerPolicySnapshot.disabledCapabilities
+                            .map(\.title)
+                            .joined(separator: " · ")
+                    )
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.red)
+                }
+
+                if let expiresAt = providerPolicySnapshot.expiresAt {
+                    Text(
+                        L10n.format(
+                            "Safety policy expires: %@",
+                            expiresAt.formatted(
+                                date: .abbreviated,
+                                time: .shortened
+                            )
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
                 LabeledContent(L10n.text("Software Updates")) {
                     Button(L10n.text("Check for Updates…")) {
                         checkForSoftwareUpdates()
@@ -1124,6 +1175,17 @@ private struct PreferencesView: View {
                         )
                 }
             }
+        }
+    }
+
+    private var providerPolicyStatusColor: Color {
+        switch providerPolicySnapshot.state {
+        case .disabled:
+            return .red
+        case .refreshFailed:
+            return .orange
+        case .unconfigured, .ready:
+            return .secondary
         }
     }
 

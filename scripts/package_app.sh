@@ -37,6 +37,8 @@ NOTARIZE="${OPENWHISPER_NOTARIZE:-0}"
 NOTARY_PROFILE="${OPENWHISPER_NOTARY_PROFILE:-}"
 SPARKLE_FEED_URL="${OPENWHISPER_SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${OPENWHISPER_SPARKLE_PUBLIC_ED_KEY:-}"
+CAPABILITY_POLICY_URL="${OPENWHISPER_CAPABILITY_POLICY_URL:-}"
+CAPABILITY_PUBLIC_ED_KEY="${OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}"
 ADHOC_DESIGNATED_REQUIREMENT="=designated => identifier \"$OPENWHISPER_BUNDLE_ID\""
 
 resolve_signing_identity() {
@@ -169,6 +171,33 @@ fi
 if [[ "$REQUIRE_DEVELOPER_ID" == "1" \
   && ( -z "$SPARKLE_FEED_URL" || -z "$SPARKLE_PUBLIC_ED_KEY" ) ]]; then
   echo "Developer ID release packaging requires Sparkle feed and public-key configuration." >&2
+  exit 1
+fi
+
+if [[ -n "$CAPABILITY_POLICY_URL" || -n "$CAPABILITY_PUBLIC_ED_KEY" ]]; then
+  if [[ -z "$CAPABILITY_POLICY_URL" || -z "$CAPABILITY_PUBLIC_ED_KEY" ]]; then
+    echo "Provider capability policy URL and public Ed25519 key must be configured together." >&2
+    exit 1
+  fi
+  if [[ "$CAPABILITY_POLICY_URL" != https://* \
+    || "$CAPABILITY_POLICY_URL" == *"@"* \
+    || "$CAPABILITY_POLICY_URL" == *"?"* \
+    || "$CAPABILITY_POLICY_URL" == *"#"* \
+    || "$CAPABILITY_POLICY_URL" == *[[:space:]\<\>\"\'\\]* ]]; then
+    echo "OPENWHISPER_CAPABILITY_POLICY_URL must be a credential-free HTTPS URL without query or fragment." >&2
+    exit 1
+  fi
+  if [[ ! "$CAPABILITY_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+    echo "OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
+    exit 1
+  fi
+  /usr/bin/plutil -insert OWCapabilityPolicyURL -string "$CAPABILITY_POLICY_URL" "$PLIST"
+  /usr/bin/plutil -insert OWCapabilityPublicEDKey -string "$CAPABILITY_PUBLIC_ED_KEY" "$PLIST"
+fi
+
+if [[ "$REQUIRE_DEVELOPER_ID" == "1" \
+  && ( -z "$CAPABILITY_POLICY_URL" || -z "$CAPABILITY_PUBLIC_ED_KEY" ) ]]; then
+  echo "Developer ID release packaging requires signed provider capability policy configuration." >&2
   exit 1
 fi
 

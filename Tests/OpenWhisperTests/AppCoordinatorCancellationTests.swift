@@ -5,6 +5,7 @@ import Testing
 
 @MainActor
 private final class FakeCoordinatorRecorder: RecordingControlling {
+    private(set) var startRecordingCallCount = 0
     private(set) var cancelRecordingCallCount = 0
     private(set) var stopRecordingCallCount = 0
     var onStartRecording: (@Sendable () async -> Void)?
@@ -15,6 +16,7 @@ private final class FakeCoordinatorRecorder: RecordingControlling {
     )
 
     func startRecording() async throws {
+        startRecordingCallCount += 1
         await onStartRecording?()
         if let startRecordingError {
             throw startRecordingError
@@ -32,6 +34,37 @@ private final class FakeCoordinatorRecorder: RecordingControlling {
 
     func currentLevel() -> CGFloat? {
         0.25
+    }
+}
+
+private struct BlockingCoordinatorCapabilityPolicy:
+    ProviderCapabilityChecking
+{
+    func require(_ capability: ProviderCapability) async throws {
+        guard capability == .managedTranscription else {
+            return
+        }
+        throw ProviderCapabilityPolicyError.disabled(
+            capability: capability,
+            incidentID: "OW-INC-COORDINATOR-TEST",
+            expiresAt: Date(timeIntervalSince1970: 1_900_000_000)
+        )
+    }
+
+    func refresh(force: Bool) async -> ProviderCapabilityPolicySnapshot {
+        await snapshot()
+    }
+
+    func snapshot() async -> ProviderCapabilityPolicySnapshot {
+        ProviderCapabilityPolicySnapshot(
+            state: .disabled,
+            isConfigured: true,
+            disabledCapabilities: [.managedTranscription],
+            incidentID: "OW-INC-COORDINATOR-TEST",
+            expiresAt: Date(timeIntervalSince1970: 1_900_000_000),
+            lastCheckedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            detail: "disabled"
+        )
     }
 }
 
@@ -304,6 +337,45 @@ private func waitForCondition(
 @MainActor
 struct AppCoordinatorCancellationTests {
     @Test
+    func signedProviderDisableStopsBeforeMicrophoneRecordingStarts() async {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            providerCapabilityPolicy: BlockingCoordinatorCapabilityPolicy(),
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCondition {
+            statusMenu.updates.contains {
+                $0.1.contains("OW-INC-COORDINATOR-TEST")
+            }
+        }
+
+        #expect(coordinator.state == .idle)
+        #expect(recorder.startRecordingCallCount == 0)
+        #expect(recorder.stopRecordingCallCount == 0)
+        #expect(overlay.recordingElapsedTexts.isEmpty)
+        #expect(
+            statusMenu.updates.last?.1.contains(
+                "OW-INC-COORDINATOR-TEST"
+            ) == true
+        )
+    }
+
+    @Test
     func cancelCurrentSessionDiscardsActiveRecordingAndResetsState() throws {
         let recorder = FakeCoordinatorRecorder()
         let overlay = FakeCoordinatorOverlay()
@@ -317,7 +389,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
 
         coordinator.recorder = recorder
@@ -353,7 +425,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
 
         let processingTask = Task<Void, Never> {
@@ -405,7 +477,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: FakeSoundFeedback(),
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
         coordinator.recorder = recorder
         coordinator.statusMenu = statusMenu
@@ -448,7 +520,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: FakeSoundFeedback(),
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in BlockingCoordinatorPipeline(gate: gate) }
+            pipelineFactory: { _, _, _, _ in BlockingCoordinatorPipeline(gate: gate) }
         )
         coordinator.recorder = recorder
         coordinator.statusMenu = statusMenu
@@ -492,7 +564,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() },
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() },
             launchAppContextProvider: { capturedContext }
         )
         overlay.onShowProcessing = {
@@ -529,7 +601,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
+            pipelineFactory: { _, _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
         )
 
         coordinator.recorder = recorder
@@ -566,7 +638,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
 
         coordinator.recorder = recorder
@@ -600,7 +672,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
 
         coordinator.recorder = recorder
@@ -630,7 +702,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
+            pipelineFactory: { _, _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
         )
 
         coordinator.recorder = recorder
@@ -661,7 +733,7 @@ struct AppCoordinatorCancellationTests {
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
 
         coordinator.recorder = recorder
@@ -706,7 +778,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: latencyRecorder,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, policy in script.makePipeline(policy: policy) },
+            pipelineFactory: { _, _, policy, _ in script.makePipeline(policy: policy) },
             launchAppContextProvider: { capturedContext }
         )
 
@@ -773,7 +845,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, policy in script.makePipeline(policy: policy) }
+            pipelineFactory: { _, _, policy, _ in script.makePipeline(policy: policy) }
         )
 
         coordinator.recorder = recorder
@@ -816,7 +888,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, policy in script.makePipeline(policy: policy) }
+            pipelineFactory: { _, _, policy, _ in script.makePipeline(policy: policy) }
         )
 
         coordinator.recorder = recorder
@@ -855,7 +927,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in FakeCoordinatorRecorder() },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
-            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+            pipelineFactory: { _, _, _, _ in FakeCoordinatorPipeline() }
         )
         coordinator.statusMenu = statusMenu
 

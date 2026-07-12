@@ -27,7 +27,12 @@ final class AppCoordinator {
         @escaping () -> Void,
         @escaping () -> Void
     ) -> any StatusMenuUpdating
-    typealias PipelineFactory = @Sendable (TranscriptionConfig, any ChatGPTAuthProviding, TranscriptionAttemptPolicy) -> any DictationPreparing
+    typealias PipelineFactory = @Sendable (
+        TranscriptionConfig,
+        any ChatGPTAuthProviding,
+        TranscriptionAttemptPolicy,
+        any ProviderCapabilityChecking
+    ) -> any DictationPreparing
     typealias LaunchAppContextProvider = @MainActor () -> LaunchAppContext?
 
     let configStore: ConfigStore
@@ -40,6 +45,7 @@ final class AppCoordinator {
     let recoveryRecorder: any RecoveryRecording
     let soundFeedback: any SoundFeedbackPlaying
     let softwareUpdater: any SoftwareUpdating
+    let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -116,11 +122,17 @@ final class AppCoordinator {
             )
         },
         softwareUpdater: (any SoftwareUpdating)? = nil,
-        pipelineFactory: @escaping PipelineFactory = { transcriptionConfig, authManager, attemptPolicy in
+        providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
+        pipelineFactory: @escaping PipelineFactory = {
+            transcriptionConfig,
+            authManager,
+            attemptPolicy,
+            providerCapabilityPolicy in
             DictationPipeline(
                 transcriber: ChatGPTTranscriber(
                     authManager: authManager,
                     config: transcriptionConfig,
+                    providerCapabilityPolicy: providerCapabilityPolicy,
                     cloudflareChallengeMaxAttempts: attemptPolicy.cloudflareChallengeMaxAttempts
                 ),
                 normalizer: TerminologyNormalizer(
@@ -132,7 +144,8 @@ final class AppCoordinator {
                 textPolisher: OpenAICompatibleTextPolisher(
                     config: transcriptionConfig.textPolish,
                     chatGPTAuthProvider: authManager,
-                    chatGPTAuthAvailable: authManager.authSnapshot().state == .ready
+                    chatGPTAuthAvailable: authManager.authSnapshot().state == .ready,
+                    providerCapabilityPolicy: providerCapabilityPolicy
                 )
             )
         },
@@ -152,6 +165,7 @@ final class AppCoordinator {
         )
         self.soundFeedback = soundFeedback
         self.softwareUpdater = softwareUpdater ?? SparkleSoftwareUpdater()
+        self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -205,6 +219,9 @@ final class AppCoordinator {
                  .quickAdd:
                 config = try configStore.load()
                 enforceStoragePolicies()
+                Task { [providerCapabilityPolicy] in
+                    _ = await providerCapabilityPolicy.refresh(force: false)
+                }
                 recorder = recorderFactory(config.transcription.sampleRateHz)
                 recorder?.configure(maxDurationSeconds: config.transcription.maxDurationSeconds)
                 refreshReadyState()
@@ -394,6 +411,21 @@ final class AppCoordinator {
             guard let self else { return }
 
             do {
+                if self.config.transcription.provider == .chatGPTManagedAuth {
+                    self.statusMenu?.update(
+                        state: .processing,
+                        detail: L10n.text("Checking provider safety")
+                    )
+                    try await self.providerCapabilityPolicy.require(
+                        .managedTranscription
+                    )
+                    guard self.shouldContinue(sessionID: sessionID) else { return }
+                }
+
+                self.statusMenu?.update(
+                    state: .processing,
+                    detail: L10n.text("Requesting microphone")
+                )
                 try await self.requestMicrophoneAccess()
                 guard self.shouldContinue(sessionID: sessionID) else { return }
                 logger.info("Microphone access stage completed")
@@ -572,7 +604,12 @@ final class AppCoordinator {
                 }
             }
 
-            let pipeline = self.pipelineFactory(transcriptionConfig, self.authManager, attemptPolicy)
+            let pipeline = self.pipelineFactory(
+                transcriptionConfig,
+                self.authManager,
+                attemptPolicy,
+                self.providerCapabilityPolicy
+            )
 
             do {
                 self.logger.info("Submitting recording to dictation pipeline")
@@ -840,6 +877,7 @@ final class AppCoordinator {
                         )
                     }
                 },
+                providerCapabilityPolicy: providerCapabilityPolicy,
                 softwareUpdateSnapshot: softwareUpdater.snapshot(),
                 onCheckForUpdates: { [weak self] in
                     guard let self else {

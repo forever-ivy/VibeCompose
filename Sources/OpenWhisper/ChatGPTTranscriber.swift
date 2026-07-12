@@ -375,6 +375,7 @@ struct ChatGPTTranscriber: Sendable {
     let config: TranscriptionConfig
     let promptBuilder: TranscriptionPromptBuilder
     let bridgePromptCapability: BridgePromptCapabilityStore
+    let providerCapabilityPolicy: any ProviderCapabilityChecking
     let cloudflareChallengeMaxAttempts: Int
     let multipartTemporaryDirectoryURL: URL
     let uploadLoader: UploadLoader
@@ -384,6 +385,7 @@ struct ChatGPTTranscriber: Sendable {
         config: TranscriptionConfig,
         promptBuilder: TranscriptionPromptBuilder = .init(),
         bridgePromptCapability: BridgePromptCapabilityStore = .shared,
+        providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
         cloudflareChallengeMaxAttempts: Int = 3,
         multipartTemporaryDirectoryURL: URL = FileManager.default.temporaryDirectory,
         uploadLoader: @escaping UploadLoader = { request, bodyFileURL in
@@ -394,12 +396,17 @@ struct ChatGPTTranscriber: Sendable {
         self.config = config
         self.promptBuilder = promptBuilder
         self.bridgePromptCapability = bridgePromptCapability
+        self.providerCapabilityPolicy = providerCapabilityPolicy
         self.cloudflareChallengeMaxAttempts = max(1, cloudflareChallengeMaxAttempts)
         self.multipartTemporaryDirectoryURL = multipartTemporaryDirectoryURL
         self.uploadLoader = uploadLoader
     }
 
     func transcribe(_ audio: RecordedAudio) async throws -> TranscriptionResult {
+        if config.provider == .chatGPTManagedAuth {
+            try await providerCapabilityPolicy.require(.managedTranscription)
+        }
+
         let audioMetadata = try await inspectAudioFile(at: audio.fileURL)
         Self.logger.info(
             "Transcription requested provider=\(config.provider.rawValue, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(audioMetadata.byteCount, privacy: .public)"

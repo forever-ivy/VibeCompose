@@ -87,8 +87,13 @@ func commercialPolicySetIsBilingualAndKeepsPreReleaseGatesExplicit() throws {
         root,
         "docs/support/upstream-incident-playbook.md"
     )
-    #expect(incident.contains("does **not** yet have a remotely signed capability kill switch"))
-    #expect(incident.contains("commercial release blocker"))
+    #expect(
+        incident.contains(
+            "implements a remotely signed capability kill-switch foundation"
+        )
+    )
+    #expect(incident.contains("monotonic revision"))
+    #expect(incident.contains("production signing key"))
 
     let security = try policyText(root, "SECURITY.md")
     #expect(security.contains("private GitHub Security Advisory"))

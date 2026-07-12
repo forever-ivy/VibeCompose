@@ -60,6 +60,22 @@ if [[ -n "$FEED_URL" || -n "$PUBLIC_KEY" ]]; then
   }
 fi
 
+CAPABILITY_POLICY_URL="$(/usr/bin/plutil -extract OWCapabilityPolicyURL raw -o - "$PLIST" 2>/dev/null || true)"
+CAPABILITY_PUBLIC_KEY="$(/usr/bin/plutil -extract OWCapabilityPublicEDKey raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ -n "$CAPABILITY_POLICY_URL" || -n "$CAPABILITY_PUBLIC_KEY" ]]; then
+  [[ "$CAPABILITY_POLICY_URL" == https://* \
+    && "$CAPABILITY_POLICY_URL" != *"@"* \
+    && "$CAPABILITY_POLICY_URL" != *"?"* \
+    && "$CAPABILITY_POLICY_URL" != *"#"* ]] || {
+    echo "Packaged provider capability policy must use credential-free HTTPS without query or fragment." >&2
+    exit 1
+  }
+  [[ "$CAPABILITY_PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || {
+    echo "Packaged provider capability public key is not a 32-byte base64 Ed25519 key." >&2
+    exit 1
+  }
+fi
+
 if /usr/bin/plutil -extract LSUIElement raw -o - "$PLIST" >/dev/null 2>&1; then
   echo "Packaged app must not declare LSUIElement in Info.plist; runtime should switch to accessory mode explicitly." >&2
   exit 1

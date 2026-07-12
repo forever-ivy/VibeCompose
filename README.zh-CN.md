@@ -21,13 +21,14 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 有限留存的本地历史、失败音频恢复、隐私控制和性能基准工具
 - 敏感应用排除与“删除全部数据”
 - 脱敏支持诊断 ZIP 导出
+- 面向托管转写和 AI 润色事故的签名服务安全策略
 - 作为高级恢复路径的 OpenAI-Compatible 转写
 
 ## 产品边界
 
 默认 ChatGPT 账户路径依赖未公开的上游行为，不应被描述为稳定公开 API、OpenAI 官方合作或企业 SLA。
 
-当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。Sparkle 2.9.4 已完成技术集成，但商业发布仍受 Developer ID 签名、公证、生产更新托管/密钥和实机更新证明、完整安装版 Onboarding/交互验收，以及永久商业运营主体和联系方式约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
+当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。Sparkle 2.9.4 与签名 Provider Capability Policy 客户端已完成技术集成，但商业发布仍受 Developer ID 签名、公证、生产更新与能力策略托管/密钥、实机更新与事故演练、完整安装版 Onboarding/交互验收，以及永久商业运营主体和联系方式约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
 
 ## 系统要求
 

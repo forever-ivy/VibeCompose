@@ -121,6 +121,29 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 
 Managed credentials and user-owned API credentials are separate trust domains. The advanced OpenAI-compatible endpoint never receives the managed ChatGPT token.
 
+### Signed provider capability policy
+
+`ProviderCapabilityPolicyController` is a separate safety boundary for broad
+upstream or security incidents:
+
+- production configuration is a paired credential-free HTTPS policy URL and a
+  separate 32-byte Ed25519 public key embedded in the signed app;
+- the signed envelope contains base64 payload bytes plus their signature, so
+  verification does not depend on JSON re-serialization;
+- policies can only disable `managedTranscription` or `chatGPTTextPolish`;
+- managed transcription checks the policy before reading audio or resolving a
+  token, and AI Polish checks before resolving a token or sending text;
+- policies expire after at most 31 days, may target a build range, and use a
+  monotonic revision; older or conflicting revisions cannot replace an active
+  cached policy;
+- the accepted envelope is cached as `0600` under Application Support;
+- refresh sends no account, audio, transcript, clipboard, terminology, or
+  endpoint data.
+
+Private-alpha packages omit this production configuration. Developer ID
+packaging and the commercial release gate require the URL, public key, and a
+matching locally verified signed policy before release.
+
 ## 5. Safe Output and Retry
 
 `TextInjector` first writes the final text to the pasteboard, then selects one of:
@@ -239,6 +262,9 @@ Release metadata and distribution guards currently include:
 - a Homebrew Cask that uses an impossible all-zero checksum until the release preparation script records the exact notarized ZIP hash;
 - installer validation of bundle ID, version, build, architecture, signature, and—when release enforcement is enabled—the expected Developer ID Team ID;
 - a commercial release gate that requires Developer ID, stapling, Gatekeeper success, manifest/Cask consistency, and signed-updater `SUFeedURL`/`SUPublicEDKey` configuration.
+- a separate signed provider capability policy gate requiring
+  `OWCapabilityPolicyURL`, `OWCapabilityPublicEDKey`, and a verified,
+  non-expired policy covering the release build.
 
 Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the status menu and Advanced Settings. Packaging accepts only paired HTTPS feed and Ed25519 public-key configuration, and release tooling can generate a signed channel appcast without storing the private key in the repository. The commercial release gate intentionally remains closed until production hosting/keys, a real signed appcast, Developer ID notarization, and installed update/rollback proof exist.
 
@@ -251,4 +277,6 @@ The current alpha must not be described as commercially release-ready while thes
 - HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
 - the advanced recovery API key is still environment-variable based rather than Keychain-backed;
 - a real Developer ID/notarized artifact and installed Sparkle update/rollback proof are not complete;
+- permanent capability-policy hosting, a separate production Ed25519 key, and
+  an installed incident disable/restore drill are not complete;
 - clean-TCC microphone/accessibility ordering and the full installed-app F5/ESC/inline-close/Retry/paste-or-copy matrix still require trusted native GUI evidence.

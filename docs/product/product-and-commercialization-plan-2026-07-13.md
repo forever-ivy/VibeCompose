@@ -477,7 +477,12 @@ Sources/OpenWhisper/DictationContext.swift
 
 ### 6.4 错误分类和熔断
 
-建议新增：
+当前已落地签名 `ProviderCapabilityPolicyController`：通过 App 内固定的 HTTPS
+地址和独立 Ed25519 公钥获取策略，在读取音频、解析 Token 或发送转写文本前停用
+`managedTranscription` / `chatGPTTextPolish`，并使用 31 天硬到期、build 范围和
+单调 revision 拒绝重放。生产托管、密钥和事故演练仍未完成。
+
+后续仍需新增：
 
 ```text
 ProviderHealthMonitor

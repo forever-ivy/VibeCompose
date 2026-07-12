@@ -85,6 +85,9 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(source.contains("Button(L10n.text(\"Check for Updates…\")"))
     #expect(source.contains("Automatically check for updates"))
     #expect(source.contains("onSetAutomaticallyChecksForUpdates"))
+    #expect(source.contains("Provider Safety"))
+    #expect(source.contains("Refresh Safety Policy"))
+    #expect(source.contains("providerCapabilityPolicy.refresh"))
 
     let configFolderButtonCount = source
         .components(separatedBy: "Button(L10n.text(\"Open Config Folder\")")

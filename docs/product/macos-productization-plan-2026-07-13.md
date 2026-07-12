@@ -73,6 +73,7 @@ macOS 首发策略：
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
 - Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与高对比度验收未完成；
 - 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
+- 远程签名能力 Kill Switch 的客户端、缓存、反重放、生成/验签脚本和发布门禁已完成；生产 URL、独立密钥、首份签名策略和事故演练未完成；
 - 当前自动化全绿仍只属于 precheck，不能替代 `/Applications/OpenWhisper.app` 的真实交互证据。
 
 2026-07-13 Phase 4 进展：
@@ -84,9 +85,10 @@ macOS 首发策略：
 - Homebrew Cask 从 `sha256 :no_check` 改为未发布时全零 fail-closed，并由发布脚本写入精确 ZIP 哈希；
 - 安装器新增 build 与 Developer ID Team ID 校验；
 - Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
+- Provider Capability Policy 使用独立 Ed25519 公钥、HTTPS 固定地址、31 天硬到期、build 范围和单调 revision；在读取音频/Token/文本前阻断受影响能力；
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
 
-仍未完成：有效 Developer ID、公证实证、生产 Sparkle feed/密钥、真实签名 appcast、自动更新/回滚实机证明，以及永久商业运营主体和联系方式。
+仍未完成：有效 Developer ID、公证实证、生产 Sparkle feed/密钥、真实签名 appcast、自动更新/回滚实机证明、生产 Capability Policy 托管/密钥/事故演练，以及永久商业运营主体和联系方式。
 
 UI 调研确认的主要问题：
 
@@ -550,6 +552,12 @@ Application Support/OpenWhisper
 - 5xx/网络错误：有限指数退避和抖动。
 - 大范围故障：远程或本地 kill switch 停止继续发送。
 
+2026-07-13 已落地签名 Kill Switch 基础：策略只能停用
+`managedTranscription` 或 `chatGPTTextPolish`，不能改变 endpoint 或注入凭据；
+客户端在读取音频、解析 Token 或发送转写文本前检查；无效签名、旧 revision
+或冲突 revision 不能覆盖已生效停用策略。生产托管、独立密钥和安装版事故演练仍是
+Phase 4 出口项。
+
 ## 9. 隐私、数据和遥测
 
 ### 9.1 用户控制
@@ -821,6 +829,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-022 | P1 | 技术字面量与语言/标点偏好（已实现） | Normalizer/Polish | literal round-trip，token 破坏时安全回退 |
 | OW-MAC-023 | P1 | 异步粘贴等待与 HUD generation（已实现） | Session lifecycle | MainActor 可继续调度，取消后无迟到状态 |
 | OW-MAC-024 | P1 | 临时文件故障清理（已实现） | Audio/Upload lifecycle | partial、失败上传、退出和启动 orphan 均可验证清理 |
+| OW-MAC-025 | P1 | 签名 Provider Capability Kill Switch（客户端与工具已实现，待生产运营） | Provider boundary/Release | 音频、Token、文本发送前阻断；无效/旧策略不能清除停用 |
 
 ## 14. 第一执行 Sprint（10 个工作日）
 

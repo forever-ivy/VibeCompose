@@ -176,6 +176,7 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
     let config: TextPolishConfig
     let chatGPTAuthProvider: (any ChatGPTAuthProviding)?
     let chatGPTAuthAvailable: Bool
+    let providerCapabilityPolicy: any ProviderCapabilityChecking
     let promptBuilder: TextPolishPromptBuilder
     let selector: TextPolishProviderSelector
     let dataLoader: @Sendable (URLRequest) async throws -> (Data, URLResponse)
@@ -184,6 +185,7 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         config: TextPolishConfig,
         chatGPTAuthProvider: (any ChatGPTAuthProviding)? = nil,
         chatGPTAuthAvailable: Bool,
+        providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
         promptBuilder: TextPolishPromptBuilder = .init(),
         selector: TextPolishProviderSelector = .init(),
         dataLoader: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = { request in
@@ -193,6 +195,7 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         self.config = config
         self.chatGPTAuthProvider = chatGPTAuthProvider
         self.chatGPTAuthAvailable = chatGPTAuthAvailable
+        self.providerCapabilityPolicy = providerCapabilityPolicy
         self.promptBuilder = promptBuilder
         self.selector = selector
         self.dataLoader = dataLoader
@@ -223,6 +226,7 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
             throw TextPolishError.providerUnavailable
         }
 
+        try await providerCapabilityPolicy.require(.chatGPTTextPolish)
         let token = try await chatGPTAuthProvider.bestAvailableAccessToken()
         let polished = try await executeChatGPTResponsesRequest(
             token: token,

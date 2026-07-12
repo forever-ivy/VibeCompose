@@ -32,14 +32,51 @@ OpenWhisper's default account route depends on upstream ChatGPT behavior that is
 2. Classify whether the incident affects authentication, transcription, AI Polish, or paste.
 3. Stop release promotion and update public status/release notes.
 4. Avoid increasing retry counts as an outage workaround.
-5. Prepare a hotfix that disables or repairs the affected capability.
-6. Verify the hotfix against the installed-app workflow and rollback path.
-7. Publish recovery steps and whether any local data needs user action.
-8. Complete a post-incident review without storing user audio or transcripts.
+5. Publish a higher-revision signed capability policy that disables only the
+   affected managed capability.
+6. Verify the policy signature, build range, expiry, and installed-app block
+   before changing public status.
+7. Prepare a signed app hotfix when the upstream contract or client behavior
+   also needs code changes.
+8. Verify the hotfix against the installed-app workflow and rollback path.
+9. Publish recovery steps and whether any local data needs user action.
+10. Complete a post-incident review without storing user audio or transcripts.
 
 ## Kill-Switch Status
 
-The alpha currently has bounded retries, session invalidation, local feature controls, preserved failed audio, and an advanced user-owned recovery route. It does **not** yet have a remotely signed capability kill switch. Until a signed updater and signed update manifest are operating, disabling a broken managed route requires a new signed app release. This remains a commercial release blocker.
+The app now implements a remotely signed capability kill-switch foundation for
+managed transcription and ChatGPT AI Polish. A policy:
+
+- is fetched only from the credential-free HTTPS URL pinned in the signed app;
+- is verified with the separate Ed25519 public key pinned in the app;
+- can only disable a named managed capability, never redirect requests or
+  supply credentials;
+- is checked before reading recording audio, resolving a managed token, or
+  sending transcript text;
+- has a maximum 31-day lifetime, an explicit build range, and a monotonic revision
+  that rejects rollback/replay;
+- is cached owner-only, and an invalid or older response cannot replace a
+  previously accepted active disable.
+
+The private alpha intentionally omits the production URL/key. Commercial release
+remains blocked until a separate production signing key, permanent HTTPS policy
+host, initial signed policy, and installed-app incident drill are operating.
+
+Generate and verify a policy without placing the private key in the repository:
+
+```bash
+OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/openwhisper-capability.key \
+scripts/generate_provider_capability_policy.swift \
+  --revision 1 \
+  --incident-id OW-INC-2026-001 \
+  --expires-at 2026-07-14T12:00:00Z \
+  --disable managedTranscription
+
+scripts/verify_provider_capability_policy.swift \
+  --policy dist/provider-capabilities.json \
+  --public-key BASE64_PUBLIC_KEY \
+  --build 1
+```
 
 ## Communication Rules
 

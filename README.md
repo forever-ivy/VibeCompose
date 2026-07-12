@@ -21,13 +21,22 @@ The current implementation already includes:
 - bounded local history, failed-audio recovery, privacy controls, and benchmark tooling
 - sensitive-app exclusions and a Delete All Data action
 - redacted support-diagnostics ZIP export
+- signed provider-safety policy enforcement for managed transcription and AI
+  Polish incidents
 - OpenAI-compatible transcription as an advanced recovery route
 
 ## Product Boundary
 
 The default ChatGPT account route depends on undocumented upstream behavior. It is not presented as a stable public API, an OpenAI partnership, or an enterprise SLA.
 
-The current alpha closes the original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Sparkle 2.9.4 is integrated, but commercial distribution is still gated by Developer ID signing, notarization, production update hosting/keys and installed update proof, full installed-app onboarding/interaction acceptance, and final commercial operator/contact details. See the [current security baseline](docs/audits/security-baseline-2026-07-13.md).
+The current alpha closes the original managed-endpoint, recovery-path,
+auth-refresh, and unsafe-context-paste findings. Sparkle 2.9.4 and the signed
+provider capability-policy client are integrated, but commercial distribution
+is still gated by Developer ID signing, notarization, production update and
+capability-policy hosting/keys, installed update/incident proof, full
+installed-app onboarding/interaction acceptance, and final commercial
+operator/contact details. See the
+[current security baseline](docs/audits/security-baseline-2026-07-13.md).
 
 ## Requirements
 

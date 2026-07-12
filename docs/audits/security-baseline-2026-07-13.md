@@ -33,7 +33,7 @@
 - 粘贴目标等待改为可取消异步时钟，不再用同步 sleep 阻塞 MainActor；
 - 录音、处理中音频和 multipart 在初始化失败、启动失败、上传失败、取消、退出和下次启动时均有归属明确的清理路径。
 
-**仍不能公开声明为可商业发布。** 真实 Developer ID/公证证据、完整原生首次体验、生产 Updater 托管/密钥及更新回滚实证、永久商业运营/联系方式以及若干残余可靠性问题尚未关闭。
+**仍不能公开声明为可商业发布。** 真实 Developer ID/公证证据、完整原生首次体验、生产 Updater 与 Capability Policy 托管/密钥及更新回滚/事故演练实证、永久商业运营/联系方式以及若干残余可靠性问题尚未关闭。
 
 ## 2. 基线状态
 
@@ -127,6 +127,7 @@ excludeSensitiveApps = true
 | 脱敏支持诊断 ZIP、崩溃白名单摘要和校验和 | `SupportDiagnosticsTests.swift`, `SettingsProductizationTests.swift` |
 | 双语隐私/条款/退款/支持文档契约 | `PolicyDocumentationTests.swift` |
 | Release manifest、Cask fail-closed 与 updater gate | `ReleaseIntegrityScriptTests.swift` |
+| 签名 Provider Capability Policy、反重放、build/expiry 与发送前阻断 | `ProviderCapabilityPolicyTests.swift`, `ReleaseIntegrityScriptTests.swift` |
 | 数据留存、权限、敏感 App、Delete All 路径 | `StoragePrivacyTests.swift` |
 | 诊断轮转 | `LatencyRecorderTests.swift` |
 
@@ -170,13 +171,13 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 - 四步 Onboarding；
 - Settings/History/Terminology 原生产品表面；
 - 永久商业运营主体、法律/隐私/支持联系方式与结账条款；
-- 上游故障 kill switch 和恢复说明；
+- 生产上游故障 kill switch URL/密钥、首份签名策略和安装版事故演练；
 - 完整 installed-app 用户流验收；
 - 所有 P0/P1 release blocker 的复核证据。
 
 ## 8. 下一安全工作序列
 
-1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID 和生产 Sparkle 密钥/托管地址，完成真实签名、公证、签名 appcast 与更新回滚；
+1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID、生产 Sparkle 与 Capability Policy 独立密钥/托管地址，完成真实签名、公证、签名 appcast、首份能力策略、更新回滚与事故演练；
 2. 区分 paste 事件发送与目标应用确认插入，并完成真实 Notes/TextEdit/Terminal 等矩阵；
 3. 完成 clean TCC Onboarding、键盘和 VoiceOver 安装版验收；
 4. 把私有 Alpha 双语政策定稿为带永久运营主体、联系方式和结账条款的公开版本；

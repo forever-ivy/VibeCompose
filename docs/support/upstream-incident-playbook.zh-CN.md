@@ -32,14 +32,43 @@ OpenWhisper 默认账户路径依赖未公开为稳定公共 API 的 ChatGPT 上
 2. 判断事故影响认证、转写、AI Polish 还是粘贴；
 3. 停止发布推广并更新状态/发布说明；
 4. 不通过提高重试次数掩盖故障；
-5. 准备禁用或修复受影响能力的 Hotfix；
-6. 使用安装版流程和回滚路径验证 Hotfix；
-7. 公布恢复步骤以及用户是否需要处理本地数据；
-8. 完成事故复盘，但不保存用户音频或转写正文。
+5. 发布更高 revision、仅停用受影响托管能力的签名能力策略；
+6. 在更新公开状态前，验证策略签名、build 范围、到期时间和安装版阻断行为；
+7. 如果上游契约或客户端行为需要代码修改，再准备签名 Hotfix；
+8. 使用安装版流程和回滚路径验证 Hotfix；
+9. 公布恢复步骤以及用户是否需要处理本地数据；
+10. 完成事故复盘，但不保存用户音频或转写正文。
 
 ## Kill Switch 状态
 
-当前 Alpha 已具备有限重试、会话失效、本地功能控制、失败音频恢复和用户自有高级恢复路径，但尚无远程签名的能力 Kill Switch。在签名更新器和签名更新清单投入运行前，禁用损坏的 Managed Route 仍需要发布新的签名 App，因此该项仍是商业发布阻断项。
+当前应用已经实现面向托管转写和 ChatGPT AI Polish 的远程签名能力 Kill
+Switch 基础：
+
+- 只从已签名 App 内固定的无凭据 HTTPS 地址获取策略；
+- 使用 App 内固定、与更新签名分离的 Ed25519 公钥验签；
+- 策略只能停用指定托管能力，不能重定向请求或提供凭据；
+- 在读取录音、解析托管 Token 或发送转写文本前检查；
+- 最长有效期 31 天，可限定 build 范围，并通过单调 revision 拒绝回滚和重放；
+- 以仅当前用户可读写方式缓存；无效或旧策略不能替换已接受且仍生效的停用策略。
+
+私有 Alpha 仍刻意不写入生产 URL 和公钥。商业发布继续受独立生产签名密钥、永久
+HTTPS 策略托管、初始签名策略及安装版事故演练约束。
+
+生成和验证策略时，私钥不得进入仓库：
+
+```bash
+OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/openwhisper-capability.key \
+scripts/generate_provider_capability_policy.swift \
+  --revision 1 \
+  --incident-id OW-INC-2026-001 \
+  --expires-at 2026-07-14T12:00:00Z \
+  --disable managedTranscription
+
+scripts/verify_provider_capability_policy.swift \
+  --policy dist/provider-capabilities.json \
+  --public-key BASE64_PUBLIC_KEY \
+  --build 1
+```
 
 ## 沟通规则
 

@@ -27,6 +27,9 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Software Updates"] == "软件更新")
     #expect(strings["Check for Updates…"] == "检查更新…")
     #expect(strings["Automatically check for updates"] == "自动检查更新")
+    #expect(strings["Provider Safety"] == "服务安全策略")
+    #expect(strings["Refresh Safety Policy"] == "刷新安全策略")
+    #expect(strings["Managed ChatGPT transcription"] == "ChatGPT 托管转写")
 }
 
 @Test

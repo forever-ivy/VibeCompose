@@ -76,7 +76,10 @@ Current fail-closed foundations:
 - Sparkle 2.9.4 is pinned, embedded, linked through the app Frameworks rpath, and exposed through the menu and Advanced Settings.
 - Ad-hoc local builds use a library-validation exception so the no-Team-ID app can load the no-Team-ID framework; Developer ID releases must retain library validation and the release gate rejects this entitlement.
 - `scripts/generate_sparkle_appcast.sh` creates channel-specific signed appcasts without storing a private signing key in the repository.
-- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper, manifest/Cask consistency, updater feed/key configuration, the pinned embedded framework, and a matching signed appcast.
+- `scripts/generate_provider_capability_policy.swift` creates a short-lived,
+  build-scoped capability disable/restore policy using a private key outside the
+  repository.
+- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper, manifest/Cask consistency, updater feed/key configuration, the pinned embedded framework, a matching signed appcast, capability-policy URL/key configuration, and a valid signed policy covering the release build.
 - Private-alpha packages omit production feed/key values; the commercial release gate intentionally fails until permanent update hosting and signing-key material are supplied.
 
 ### Product and Support
@@ -98,7 +101,8 @@ Do not reuse historical version claims that were not issued under the OpenWhispe
 
 ## Commercial Release Command
 
-After obtaining a valid Developer ID certificate, Team ID, notary profile, Sparkle feed, and EdDSA key pair:
+After obtaining a valid Developer ID certificate, Team ID, notary profile,
+Sparkle feed/key pair, and a separate capability-policy host/key pair:
 
 ```bash
 OPENWHISPER_REQUIRE_DEVELOPER_ID=1 \
@@ -107,11 +111,20 @@ OPENWHISPER_NOTARIZE=1 \
 OPENWHISPER_NOTARY_PROFILE=YOUR_NOTARY_PROFILE \
 OPENWHISPER_SPARKLE_FEED_URL=https://updates.example/stable/appcast.xml \
 OPENWHISPER_SPARKLE_PUBLIC_ED_KEY=BASE64_PUBLIC_KEY \
+OPENWHISPER_CAPABILITY_POLICY_URL=https://updates.example/provider-capabilities.json \
+OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY=BASE64_CAPABILITY_PUBLIC_KEY \
 ./scripts/package_app.sh
 
 ./scripts/generate_release_metadata.sh
 OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE=/secure/path/openwhisper-ed25519.key \
 ./scripts/generate_sparkle_appcast.sh
+OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/path/openwhisper-capability-ed25519.key \
+./scripts/generate_provider_capability_policy.swift \
+  --revision NEXT_REVISION \
+  --incident-id OW-RELEASE-BASELINE \
+  --expires-at FUTURE_ISO8601 \
+  --enable-all \
+  --minimum-build YOUR_BUILD_NUMBER
 ./scripts/update_homebrew_cask.sh
 OPENWHISPER_TEAM_ID=YOUR_TEAM_ID ./scripts/verify_release_gate.sh
 ```

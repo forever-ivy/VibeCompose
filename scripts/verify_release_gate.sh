@@ -13,6 +13,7 @@ MANIFEST="${OPENWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}
 CASK="$ROOT/packaging/homebrew/Casks/openwhisper.rb"
 EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
 APPCAST="${OPENWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
+CAPABILITY_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
 
 [[ -n "$EXPECTED_TEAM_ID" ]] || {
   echo "OPENWHISPER_TEAM_ID is required for the commercial release gate." >&2
@@ -114,6 +115,34 @@ fi
   echo "Signed updater public key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
+
+if ! CAPABILITY_POLICY_URL="$(/usr/bin/plutil -extract OWCapabilityPolicyURL raw -o - "$PLIST" 2>/dev/null)"; then
+  echo "Signed provider capability policy is not configured (missing OWCapabilityPolicyURL)." >&2
+  exit 1
+fi
+if ! CAPABILITY_PUBLIC_KEY="$(/usr/bin/plutil -extract OWCapabilityPublicEDKey raw -o - "$PLIST" 2>/dev/null)"; then
+  echo "Signed provider capability policy key is not configured (missing OWCapabilityPublicEDKey)." >&2
+  exit 1
+fi
+[[ "$CAPABILITY_POLICY_URL" == https://* \
+  && "$CAPABILITY_POLICY_URL" != *"@"* \
+  && "$CAPABILITY_POLICY_URL" != *"?"* \
+  && "$CAPABILITY_POLICY_URL" != *"#"* ]] || {
+  echo "Signed provider capability policy must use credential-free HTTPS without query or fragment." >&2
+  exit 1
+}
+[[ "$CAPABILITY_PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || {
+  echo "Signed provider capability policy key is not a 32-byte base64 Ed25519 key." >&2
+  exit 1
+}
+[[ -f "$CAPABILITY_POLICY" && ! -L "$CAPABILITY_POLICY" ]] || {
+  echo "Missing regular signed provider capability policy: $CAPABILITY_POLICY" >&2
+  exit 1
+}
+"$ROOT/scripts/verify_provider_capability_policy.swift" \
+  --policy "$CAPABILITY_POLICY" \
+  --public-key "$CAPABILITY_PUBLIC_KEY" \
+  --build "$OPENWHISPER_BUILD"
 
 [[ -f "$APPCAST" && ! -L "$APPCAST" ]] || {
   echo "Missing regular signed Sparkle appcast: $APPCAST" >&2

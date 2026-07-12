@@ -75,6 +75,10 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("@executable_path/../Frameworks"))
     #expect(packageScript.contains("OPENWHISPER_SPARKLE_FEED_URL"))
     #expect(packageScript.contains("OPENWHISPER_SPARKLE_PUBLIC_ED_KEY"))
+    #expect(packageScript.contains("OPENWHISPER_CAPABILITY_POLICY_URL"))
+    #expect(packageScript.contains("OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY"))
+    #expect(packageScript.contains("OWCapabilityPolicyURL"))
+    #expect(packageScript.contains("OWCapabilityPublicEDKey"))
     #expect(packageScript.contains("sign_sparkle_components"))
     #expect(packageScript.contains("enable_adhoc_library_validation_exception"))
     #expect(
@@ -347,6 +351,18 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
         ),
         encoding: .utf8
     )
+    let capabilityPolicyGenerator = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/generate_provider_capability_policy.swift"
+        ),
+        encoding: .utf8
+    )
+    let capabilityPolicyVerifier = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_provider_capability_policy.swift"
+        ),
+        encoding: .utf8
+    )
     let packageManifest = try String(
         contentsOf: root.appendingPathComponent("Package.swift"),
         encoding: .utf8
@@ -373,6 +389,10 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(releaseGate.contains("Sparkle.framework"))
     #expect(releaseGate.contains("sparkle:edSignature"))
     #expect(releaseGate.contains("OPENWHISPER_SPARKLE_APPCAST_PATH"))
+    #expect(releaseGate.contains("OWCapabilityPolicyURL"))
+    #expect(releaseGate.contains("OWCapabilityPublicEDKey"))
+    #expect(releaseGate.contains("OPENWHISPER_CAPABILITY_POLICY_PATH"))
+    #expect(releaseGate.contains("verify_provider_capability_policy.swift"))
     #expect(
         releaseGate.contains(
             "Commercial release must not disable hardened-runtime library validation."
@@ -384,6 +404,16 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(appcastScript.contains("sparkle:edSignature"))
     #expect(appcastScript.contains("verify_sparkle_appcast.swift"))
     #expect(releaseGate.contains("verify_sparkle_appcast.swift"))
+    #expect(
+        capabilityPolicyGenerator.contains(
+            "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE"
+        )
+    )
+    #expect(capabilityPolicyGenerator.contains("Curve25519.Signing.PrivateKey"))
+    #expect(capabilityPolicyGenerator.contains("31 * 24 * 60 * 60"))
+    #expect(capabilityPolicyVerifier.contains("isValidSignature"))
+    #expect(capabilityPolicyVerifier.contains("managedTranscription"))
+    #expect(capabilityPolicyVerifier.contains("chatGPTTextPolish"))
     #expect(packageManifest.contains("exact: \"2.9.4\""))
     #expect(packageManifest.contains(".product(name: \"Sparkle\""))
     #expect(packageResolution.contains("\"version\" : \"2.9.4\""))
