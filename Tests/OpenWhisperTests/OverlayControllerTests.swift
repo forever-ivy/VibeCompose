@@ -149,6 +149,17 @@ func reducedMotionProcessingProfileIsStaticCenteredAndVisible() {
     #expect(abs(levels[0] - levels[8]) < 0.0001)
 }
 
+@Test
+func overlayPresentationGenerationRejectsStaleCompletions() {
+    var generation = OverlayPresentationGeneration()
+    let first = generation.beginPresentation()
+    let second = generation.beginPresentation()
+
+    #expect(first != second)
+    #expect(generation.isCurrent(first) == false)
+    #expect(generation.isCurrent(second))
+}
+
 @MainActor
 @Test
 func overlayPanelPlacementStaysNearBottomEdge() {
@@ -197,11 +208,16 @@ func overlayControllerOnlyShowsInlineCancelControlForActiveSessionStates() {
 @Test
 func overlayControllerRetryableErrorShowsRetryControlOnly() {
     let overlay = OverlayController()
+    defer { overlay.hide() }
 
+    overlay.showResult(text: "Done", outcome: .pasted)
+    let resultGeneration = overlay.debugSnapshot.presentationGeneration
     overlay.showRetryableError("Cloudflare 403")
 
     #expect(overlay.debugSnapshot.isCancelControlVisible == false)
     #expect(overlay.debugSnapshot.isRetryControlVisible == true)
+    #expect(overlay.debugSnapshot.presentationGeneration > resultGeneration)
+    #expect(overlay.debugSnapshot.panelIsVisible)
 }
 
 @MainActor

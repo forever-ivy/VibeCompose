@@ -290,3 +290,62 @@ func clipboardRestoreRequiresOpenWhisperToStillOwnThePasteboard() {
     #expect(TextInjector.shouldRestoreClipboard(currentChangeCount: 42, ownedChangeCount: 42))
     #expect(!TextInjector.shouldRestoreClipboard(currentChangeCount: 43, ownedChangeCount: 42))
 }
+
+@MainActor
+@Test
+func asyncPasteTargetWaiterYieldsMainActorBetweenChecks() async throws {
+    var checks = 0
+    var reactivations = 0
+    var heartbeatRan = false
+    let waiter = AsyncPasteTargetWaiter(
+        timeout: .seconds(5),
+        pollInterval: .milliseconds(1)
+    )
+
+    let heartbeat = Task { @MainActor in
+        await Task.yield()
+        heartbeatRan = true
+    }
+    let becameReady = try await waiter.wait(
+        isReady: {
+            checks += 1
+            return checks >= 2
+        },
+        reactivate: {
+            reactivations += 1
+        }
+    )
+    await heartbeat.value
+
+    #expect(becameReady)
+    #expect(checks == 2)
+    #expect(reactivations == 1)
+    #expect(heartbeatRan)
+}
+
+@MainActor
+@Test
+func asyncPasteTargetWaiterIsCancellationAware() async {
+    let waiter = AsyncPasteTargetWaiter(
+        timeout: .seconds(5),
+        pollInterval: .milliseconds(20)
+    )
+    let task = Task {
+        try await waiter.wait(
+            isReady: { false },
+            reactivate: {}
+        )
+    }
+
+    try? await Task.sleep(for: .milliseconds(30))
+    task.cancel()
+
+    do {
+        _ = try await task.value
+        Issue.record("Cancelled paste-target wait should throw CancellationError")
+    } catch is CancellationError {
+        // Expected.
+    } catch {
+        Issue.record("Unexpected cancellation error: \(error)")
+    }
+}

@@ -25,10 +25,14 @@ protocol RecordingControlling: AnyObject {
     func cancelRecording() throws
     func currentLevel() -> CGFloat?
     func configure(maxDurationSeconds: Int)
+    func recordingPermissionState() -> MicrophonePermissionState
+    func ensureRecordingPermission() async throws
 }
 
 extension RecordingControlling {
     func configure(maxDurationSeconds _: Int) {}
+    func recordingPermissionState() -> MicrophonePermissionState { .granted }
+    func ensureRecordingPermission() async throws {}
 }
 
 enum MicrophonePermissionState: Sendable, Equatable {
@@ -268,6 +272,17 @@ final class AudioRecorder: RecordingControlling {
         }
         Self.logger.info(
             "Recorder started sampleRateHz=\(self.sampleRateHz, privacy: .public) file=\(tempURL.lastPathComponent, privacy: .public)"
+        )
+    }
+
+    func recordingPermissionState() -> MicrophonePermissionState {
+        permissionProvider()
+    }
+
+    func ensureRecordingPermission() async throws {
+        try await Self.ensureMicrophoneAccess(
+            permissionProvider: permissionProvider,
+            requestPermission: permissionRequester
         )
     }
 

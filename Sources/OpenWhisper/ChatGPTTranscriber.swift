@@ -1,9 +1,249 @@
 import Foundation
 import OSLog
+import Darwin
 
 private enum TranscriptionUploadLimit {
     static let maxBytes = 25_000_000
     static let label = "25 MB"
+}
+
+private struct AudioUploadMetadata: Sendable, Equatable {
+    let byteCount: Int
+    let device: UInt64
+    let inode: UInt64
+
+    static func inspect(_ fileURL: URL) throws -> AudioUploadMetadata {
+        let descriptor = try openAudioFile(fileURL)
+        defer { Darwin.close(descriptor) }
+        return try inspect(descriptor)
+    }
+
+    static func inspect(_ descriptor: Int32) throws -> AudioUploadMetadata {
+        var fileStatus = stat()
+        guard Darwin.fstat(descriptor, &fileStatus) == 0 else {
+            throw TranscriptionError.invalidAudio
+        }
+        guard (fileStatus.st_mode & S_IFMT) == S_IFREG else {
+            throw TranscriptionError.invalidAudio
+        }
+        guard fileStatus.st_size > 0 else {
+            throw TranscriptionError.invalidAudio
+        }
+        guard fileStatus.st_size <= off_t(TranscriptionUploadLimit.maxBytes) else {
+            throw TranscriptionError.payloadTooLarge
+        }
+
+        return AudioUploadMetadata(
+            byteCount: Int(fileStatus.st_size),
+            device: UInt64(fileStatus.st_dev),
+            inode: UInt64(fileStatus.st_ino)
+        )
+    }
+
+    private static func openAudioFile(_ fileURL: URL) throws -> Int32 {
+        let descriptor = fileURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return Int32(-1) }
+            return Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        }
+        guard descriptor >= 0 else {
+            throw TranscriptionError.invalidAudio
+        }
+        return descriptor
+    }
+}
+
+private struct MultipartBodyFile: Sendable {
+    let fileURL: URL
+    let byteCount: Int
+
+    static func create(
+        audioFileURL: URL,
+        expectedAudioMetadata: AudioUploadMetadata,
+        boundary: String,
+        extraFields: [String: String],
+        temporaryDirectoryURL: URL
+    ) async throws -> MultipartBodyFile {
+        let worker = Task.detached(priority: .utility) {
+            try createSynchronously(
+                audioFileURL: audioFileURL,
+                expectedAudioMetadata: expectedAudioMetadata,
+                boundary: boundary,
+                extraFields: extraFields,
+                temporaryDirectoryURL: temporaryDirectoryURL
+            )
+        }
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
+
+    private static func createSynchronously(
+        audioFileURL: URL,
+        expectedAudioMetadata: AudioUploadMetadata,
+        boundary: String,
+        extraFields: [String: String],
+        temporaryDirectoryURL: URL
+    ) throws -> MultipartBodyFile {
+        let inputDescriptor = try openAudioFile(audioFileURL)
+        defer { Darwin.close(inputDescriptor) }
+
+        let currentMetadata = try AudioUploadMetadata.inspect(inputDescriptor)
+        guard currentMetadata == expectedAudioMetadata else {
+            throw TranscriptionError.invalidAudio
+        }
+
+        let bodyFileURL = temporaryDirectoryURL
+            .appendingPathComponent("openwhisper-upload-\(UUID().uuidString).multipart")
+        let outputDescriptor = try createPrivateOutputFile(bodyFileURL)
+        var shouldDeleteOutput = true
+        defer {
+            Darwin.close(outputDescriptor)
+            if shouldDeleteOutput {
+                try? FileManager.default.removeItem(at: bodyFileURL)
+            }
+        }
+
+        for (name, value) in extraFields.sorted(by: { $0.key < $1.key }) {
+            try write(
+                Data(
+                    (
+                        "--\(boundary)\r\n"
+                            + "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n"
+                            + "\(value)\r\n"
+                    ).utf8
+                ),
+                to: outputDescriptor
+            )
+        }
+        try write(
+            Data(
+                (
+                    "--\(boundary)\r\n"
+                        + "Content-Disposition: form-data; name=\"file\"; filename=\"voice.wav\"\r\n"
+                        + "Content-Type: audio/wav\r\n\r\n"
+                ).utf8
+            ),
+            to: outputDescriptor
+        )
+        try copyAudio(
+            from: inputDescriptor,
+            to: outputDescriptor,
+            byteCount: expectedAudioMetadata.byteCount
+        )
+        try write(Data("\r\n--\(boundary)--\r\n".utf8), to: outputDescriptor)
+
+        var outputStatus = stat()
+        guard Darwin.fstat(outputDescriptor, &outputStatus) == 0, outputStatus.st_size > 0 else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        shouldDeleteOutput = false
+        return MultipartBodyFile(
+            fileURL: bodyFileURL,
+            byteCount: Int(outputStatus.st_size)
+        )
+    }
+
+    private static func openAudioFile(_ fileURL: URL) throws -> Int32 {
+        let descriptor = fileURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return Int32(-1) }
+            return Darwin.open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        }
+        guard descriptor >= 0 else {
+            throw TranscriptionError.invalidAudio
+        }
+        return descriptor
+    }
+
+    private static func createPrivateOutputFile(_ fileURL: URL) throws -> Int32 {
+        let descriptor = fileURL.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return Int32(-1) }
+            return Darwin.open(
+                path,
+                O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+                S_IRUSR | S_IWUSR
+            )
+        }
+        guard descriptor >= 0 else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return descriptor
+    }
+
+    private static func copyAudio(
+        from inputDescriptor: Int32,
+        to outputDescriptor: Int32,
+        byteCount: Int
+    ) throws {
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        var remaining = byteCount
+
+        while remaining > 0 {
+            try Task.checkCancellation()
+            let requested = min(remaining, buffer.count)
+            let readCount = buffer.withUnsafeMutableBytes { rawBuffer in
+                Darwin.read(inputDescriptor, rawBuffer.baseAddress, requested)
+            }
+            if readCount < 0, errno == EINTR {
+                continue
+            }
+            guard readCount > 0 else {
+                throw TranscriptionError.invalidAudio
+            }
+            try buffer.withUnsafeBytes { rawBuffer in
+                guard let baseAddress = rawBuffer.baseAddress else {
+                    throw TranscriptionError.invalidAudio
+                }
+                try write(
+                    baseAddress: baseAddress,
+                    byteCount: readCount,
+                    to: outputDescriptor
+                )
+            }
+            remaining -= readCount
+        }
+    }
+
+    private static func write(_ data: Data, to descriptor: Int32) throws {
+        try data.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else { return }
+            try write(
+                baseAddress: baseAddress,
+                byteCount: rawBuffer.count,
+                to: descriptor
+            )
+        }
+    }
+
+    private static func write(
+        baseAddress: UnsafeRawPointer,
+        byteCount: Int,
+        to descriptor: Int32
+    ) throws {
+        var offset = 0
+        while offset < byteCount {
+            try Task.checkCancellation()
+            let written = Darwin.write(
+                descriptor,
+                baseAddress.advanced(by: offset),
+                byteCount - offset
+            )
+            if written < 0, errno == EINTR {
+                continue
+            }
+            guard written > 0 else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            offset += written
+        }
+    }
+}
+
+private struct MultipartUpload: Sendable {
+    let request: URLRequest
+    let body: MultipartBodyFile
 }
 
 enum TranscriptionError: LocalizedError {
@@ -121,6 +361,11 @@ final class BridgePromptCapabilityStore: @unchecked Sendable {
 }
 
 struct ChatGPTTranscriber: Sendable {
+    typealias UploadLoader = @Sendable (
+        URLRequest,
+        URL
+    ) async throws -> (Data, URLResponse)
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? ProductIdentity.defaultBundleIdentifier,
         category: "Transcription"
@@ -131,7 +376,8 @@ struct ChatGPTTranscriber: Sendable {
     let promptBuilder: TranscriptionPromptBuilder
     let bridgePromptCapability: BridgePromptCapabilityStore
     let cloudflareChallengeMaxAttempts: Int
-    let dataLoader: @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    let multipartTemporaryDirectoryURL: URL
+    let uploadLoader: UploadLoader
 
     init(
         authManager: any ChatGPTAuthProviding,
@@ -139,8 +385,9 @@ struct ChatGPTTranscriber: Sendable {
         promptBuilder: TranscriptionPromptBuilder = .init(),
         bridgePromptCapability: BridgePromptCapabilityStore = .shared,
         cloudflareChallengeMaxAttempts: Int = 3,
-        dataLoader: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = { request in
-            try await SecureHTTPClient.data(for: request)
+        multipartTemporaryDirectoryURL: URL = FileManager.default.temporaryDirectory,
+        uploadLoader: @escaping UploadLoader = { request, bodyFileURL in
+            try await SecureHTTPClient.upload(for: request, fromFile: bodyFileURL)
         }
     ) {
         self.authManager = authManager
@@ -148,26 +395,21 @@ struct ChatGPTTranscriber: Sendable {
         self.promptBuilder = promptBuilder
         self.bridgePromptCapability = bridgePromptCapability
         self.cloudflareChallengeMaxAttempts = max(1, cloudflareChallengeMaxAttempts)
-        self.dataLoader = dataLoader
+        self.multipartTemporaryDirectoryURL = multipartTemporaryDirectoryURL
+        self.uploadLoader = uploadLoader
     }
 
     func transcribe(_ audio: RecordedAudio) async throws -> TranscriptionResult {
-        let data = try Data(contentsOf: audio.fileURL)
+        let audioMetadata = try await inspectAudioFile(at: audio.fileURL)
         Self.logger.info(
-            "Transcription requested provider=\(config.provider.rawValue, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(data.count, privacy: .public)"
+            "Transcription requested provider=\(config.provider.rawValue, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(audioMetadata.byteCount, privacy: .public)"
         )
-        guard !data.isEmpty else {
-            Self.logger.error("Transcription rejected because the audio file was empty")
-            throw TranscriptionError.invalidAudio
-        }
-        guard data.count <= TranscriptionUploadLimit.maxBytes else {
-            Self.logger.error("Transcription rejected because audioBytes=\(data.count, privacy: .public) exceeded upload limit")
-            throw TranscriptionError.payloadTooLarge
-        }
 
         let prompt = promptBuilder.buildPrompt(
             hintTerms: config.promptHintTerms,
-            speechCleanupEnabled: config.speechCleanupEnabled
+            speechCleanupEnabled: config.speechCleanupEnabled,
+            languagePreference: config.languagePreference,
+            punctuationPreference: config.punctuationPreference
         )
 
         switch config.provider {
@@ -180,7 +422,8 @@ struct ChatGPTTranscriber: Sendable {
             let response: (text: String, promptIncluded: Bool)
             do {
                 response = try await transcribeViaChatGPTBridgeWithCloudflareRetries(
-                    audioData: data,
+                    audioFileURL: audio.fileURL,
+                    audioMetadata: audioMetadata,
                     token: token,
                     prompt: prompt
                 )
@@ -190,7 +433,8 @@ struct ChatGPTTranscriber: Sendable {
                 token = try await authManager.refreshAccessToken()
                 authMs += elapsedMilliseconds(since: refreshStarted)
                 response = try await transcribeViaChatGPTBridgeWithCloudflareRetries(
-                    audioData: data,
+                    audioFileURL: audio.fileURL,
+                    audioMetadata: audioMetadata,
                     token: token,
                     prompt: prompt
                 )
@@ -204,7 +448,7 @@ struct ChatGPTTranscriber: Sendable {
                 metrics: TranscriptionMetrics(
                     provider: .chatGPTManagedAuth,
                     audioDurationMs: audio.durationMs,
-                    audioBytes: data.count,
+                    audioBytes: audioMetadata.byteCount,
                     authMs: authMs,
                     transcribeMs: transcribeMs,
                     promptIncluded: response.promptIncluded
@@ -213,7 +457,8 @@ struct ChatGPTTranscriber: Sendable {
         case .openAICompatible:
             let transcribeStarted = DispatchTime.now().uptimeNanoseconds
             let text = try await transcribeViaOpenAICompatible(
-                audioData: data,
+                audioFileURL: audio.fileURL,
+                audioMetadata: audioMetadata,
                 prompt: prompt
             )
             let transcribeMs = elapsedMilliseconds(since: transcribeStarted)
@@ -225,7 +470,7 @@ struct ChatGPTTranscriber: Sendable {
                 metrics: TranscriptionMetrics(
                     provider: .openAICompatible,
                     audioDurationMs: audio.durationMs,
-                    audioBytes: data.count,
+                    audioBytes: audioMetadata.byteCount,
                     authMs: 0,
                     transcribeMs: transcribeMs,
                     promptIncluded: true
@@ -235,7 +480,8 @@ struct ChatGPTTranscriber: Sendable {
     }
 
     private func transcribeViaChatGPTBridgeWithCloudflareRetries(
-        audioData: Data,
+        audioFileURL: URL,
+        audioMetadata: AudioUploadMetadata,
         token: String,
         prompt: String
     ) async throws -> (text: String, promptIncluded: Bool) {
@@ -245,7 +491,8 @@ struct ChatGPTTranscriber: Sendable {
                     "ChatGPT transcription HTTP attempt \(attempt, privacy: .public)/\(cloudflareChallengeMaxAttempts, privacy: .public)"
                 )
                 return try await transcribeViaChatGPTBridge(
-                    audioData: audioData,
+                    audioFileURL: audioFileURL,
+                    audioMetadata: audioMetadata,
                     token: token,
                     prompt: prompt
                 )
@@ -268,15 +515,17 @@ struct ChatGPTTranscriber: Sendable {
     }
 
     private func transcribeViaChatGPTBridge(
-        audioData: Data,
+        audioFileURL: URL,
+        audioMetadata: AudioUploadMetadata,
         token: String,
         prompt: String
     ) async throws -> (text: String, promptIncluded: Bool) {
         let capability = bridgePromptCapability.value()
         if capability == false {
             let text = try await executeTranscriptionRequest(
-                try makeChatGPTBridgeRequest(
-                    audioData: audioData,
+                try await makeChatGPTBridgeUpload(
+                    audioFileURL: audioFileURL,
+                    audioMetadata: audioMetadata,
                     token: token,
                     prompt: nil
                 ),
@@ -287,8 +536,9 @@ struct ChatGPTTranscriber: Sendable {
 
         do {
             let text = try await executeTranscriptionRequest(
-                try makeChatGPTBridgeRequest(
-                    audioData: audioData,
+                try await makeChatGPTBridgeUpload(
+                    audioFileURL: audioFileURL,
+                    audioMetadata: audioMetadata,
                     token: token,
                     prompt: prompt
                 ),
@@ -302,8 +552,9 @@ struct ChatGPTTranscriber: Sendable {
             throw error
         } catch {
             let fallbackText = try await executeTranscriptionRequest(
-                try makeChatGPTBridgeRequest(
-                    audioData: audioData,
+                try await makeChatGPTBridgeUpload(
+                    audioFileURL: audioFileURL,
+                    audioMetadata: audioMetadata,
                     token: token,
                     prompt: nil
                 ),
@@ -314,29 +565,37 @@ struct ChatGPTTranscriber: Sendable {
         }
     }
 
-    private func makeChatGPTBridgeRequest(
-        audioData: Data,
+    private func makeChatGPTBridgeUpload(
+        audioFileURL: URL,
+        audioMetadata: AudioUploadMetadata,
         token: String,
         prompt: String?
-    ) throws -> URLRequest {
+    ) async throws -> MultipartUpload {
         let url = try ManagedEndpointPolicy.validatedURL(
             ManagedEndpointPolicy.transcriptionURL,
             for: .transcription
         )
+        let boundary = makeBoundary()
+        let body = try await MultipartBodyFile.create(
+            audioFileURL: audioFileURL,
+            expectedAudioMetadata: audioMetadata,
+            boundary: boundary,
+            extraFields: prompt.map { ["prompt": $0] } ?? [:],
+            temporaryDirectoryURL: multipartTemporaryDirectoryURL
+        )
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("multipart/form-data; boundary=\(makeBoundary())", forHTTPHeaderField: "Content-Type")
-        let boundary = request.value(forHTTPHeaderField: "Content-Type")!.split(separator: "=").last.map(String.init) ?? makeBoundary()
-        request.httpBody = makeMultipartBody(
-            boundary: boundary,
-            audioData: audioData,
-            extraFields: prompt.map { ["prompt": $0] } ?? [:]
-        )
-        return request
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue(String(body.byteCount), forHTTPHeaderField: "Content-Length")
+        return MultipartUpload(request: request, body: body)
     }
 
-    private func transcribeViaOpenAICompatible(audioData: Data, prompt: String) async throws -> String {
+    private func transcribeViaOpenAICompatible(
+        audioFileURL: URL,
+        audioMetadata: AudioUploadMetadata,
+        prompt: String
+    ) async throws -> String {
         guard let token = openAICompatibleAuthToken() else {
             throw TranscriptionError.missingAuthTokenEnv(config.openAIAuthTokenEnv)
         }
@@ -348,20 +607,26 @@ struct ChatGPTTranscriber: Sendable {
         } catch {
             throw TranscriptionError.invalidEndpoint(error.localizedDescription)
         }
+        let body = try await MultipartBodyFile.create(
+            audioFileURL: audioFileURL,
+            expectedAudioMetadata: audioMetadata,
+            boundary: boundary,
+            extraFields: [
+                "model": config.openAIModel,
+                "prompt": prompt,
+            ],
+            temporaryDirectoryURL: multipartTemporaryDirectoryURL
+        )
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = makeMultipartBody(
-            boundary: boundary,
-            audioData: audioData,
-            extraFields: [
-                "model": config.openAIModel,
-                "prompt": prompt,
-            ]
-        )
+        request.setValue(String(body.byteCount), forHTTPHeaderField: "Content-Length")
 
-        return try await executeTranscriptionRequest(request, providerLabel: "OpenAI-compatible")
+        return try await executeTranscriptionRequest(
+            MultipartUpload(request: request, body: body),
+            providerLabel: "OpenAI-compatible"
+        )
     }
 
     private func openAICompatibleAuthToken() -> String? {
@@ -370,11 +635,21 @@ struct ChatGPTTranscriber: Sendable {
         return trimmedToken.isEmpty ? nil : trimmedToken
     }
 
-    private func executeTranscriptionRequest(_ request: URLRequest, providerLabel: String) async throws -> String {
+    private func executeTranscriptionRequest(
+        _ upload: MultipartUpload,
+        providerLabel: String
+    ) async throws -> String {
+        defer {
+            try? FileManager.default.removeItem(at: upload.body.fileURL)
+        }
+        let request = upload.request
         Self.logger.info(
-            "Sending \(providerLabel, privacy: .public) transcription request host=\(request.url?.host ?? "unknown", privacy: .public) path=\(request.url?.path ?? "unknown", privacy: .public) bodyBytes=\(request.httpBody?.count ?? 0, privacy: .public)"
+            "Sending \(providerLabel, privacy: .public) transcription request host=\(request.url?.host ?? "unknown", privacy: .public) path=\(request.url?.path ?? "unknown", privacy: .public) bodyBytes=\(upload.body.byteCount, privacy: .public)"
         )
-        let (responseData, response) = try await dataLoader(request)
+        let (responseData, response) = try await uploadLoader(
+            request,
+            upload.body.fileURL
+        )
         guard let httpResponse = response as? HTTPURLResponse else {
             Self.logger.error("\(providerLabel, privacy: .public) transcription response was not HTTP")
             throw TranscriptionError.transcriptionFailed("\(providerLabel) missing HTTP response")
@@ -413,19 +688,15 @@ struct ChatGPTTranscriber: Sendable {
         "OpenWhisper-\(UUID().uuidString)"
     }
 
-    private func makeMultipartBody(boundary: String, audioData: Data, extraFields: [String: String]) -> Data {
-        var body = Data()
-        for (name, value) in extraFields.sorted(by: { $0.key < $1.key }) {
-            body.append(contentsOf: "--\(boundary)\r\n".utf8)
-            body.append(contentsOf: "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8)
-            body.append(contentsOf: "\(value)\r\n".utf8)
+    private func inspectAudioFile(at fileURL: URL) async throws -> AudioUploadMetadata {
+        let worker = Task.detached(priority: .utility) {
+            try AudioUploadMetadata.inspect(fileURL)
         }
-        body.append(contentsOf: "--\(boundary)\r\n".utf8)
-        body.append(contentsOf: "Content-Disposition: form-data; name=\"file\"; filename=\"voice.wav\"\r\n".utf8)
-        body.append(contentsOf: "Content-Type: audio/wav\r\n\r\n".utf8)
-        body.append(audioData)
-        body.append(contentsOf: "\r\n--\(boundary)--\r\n".utf8)
-        return body
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 
     private func decodeProviderMessage(from data: Data) -> String? {

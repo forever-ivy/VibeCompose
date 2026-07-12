@@ -69,7 +69,8 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `HotkeyMonitor`
   - registers the global `F5` shortcut.
 - `OverlayController`
-  - renders recording, processing, pasted, copied, error, and retryable-error HUD states.
+  - renders recording, processing, pasted, copied, error, and retryable-error HUD states;
+  - uses a presentation generation so stale auto-hide tasks and animation completions cannot hide a newer state.
 - `PreferencesWindowController`
   - hosts the current workflow-sidebar Settings surface, including Privacy & Data.
 
@@ -82,13 +83,19 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `ChatGPTTranscriber`
   - executes the managed ChatGPT or user-owned OpenAI-compatible transcription route;
   - records timing and response-category metrics;
-  - currently loads the complete audio file into memory before building multipart data.
+  - opens source audio with `O_NOFOLLOW`, validates regular-file metadata and the 25 MB limit before reading content, then re-checks device/inode/size;
+  - builds a private `0600` multipart file in 64 KB chunks and uploads it with `URLSession.upload(fromFile:)`;
+  - removes multipart files after success, HTTP failure, transport failure, or cancellation.
 - `DictationPipeline`
   - sequences ASR, terminology normalization, optional polish, and final normalization.
 - `TranscriptionPromptBuilder`
   - creates the fixed direct-output prompt and exact preservation hints.
 - `TerminologyNormalizer`
-  - applies deterministic terminology alignment.
+  - applies deterministic terminology alignment plus explicit simplified/traditional/preserve language and automatic/full-width/half-width/preserve punctuation preferences.
+- `TechnicalLiteralTokenizer`
+  - protects URLs, email addresses, paths, filenames, versions, addresses/identifiers, command flags, environment variables, and code spans;
+  - uses private-use tokens for local normalization and explicit model-safe tokens for AI Polish;
+  - requires each model-safe token to survive exactly once before restoring original literals.
 - `OpenAICompatibleTextPolisher`
   - performs the optional post-ASR rewrite through the managed ChatGPT responses route and fails open to usable ASR.
 
@@ -125,7 +132,9 @@ Managed credentials and user-owned API credentials are separate trust domains. T
 
 The original clipboard is restored only when the pasteboard change count still proves OpenWhisper owns the current contents. Retry output intentionally remains in the clipboard.
 
-Current limitation: `.pasted` means OpenWhisper sent the paste key event after its checks; it does not prove that the destination application accepted and inserted the text. The target-wait loop also still uses a short synchronous sleep on the main actor and must be moved to cancellable async coordination.
+Current limitation: `.pasted` means OpenWhisper sent the paste key event after its checks; it does not prove that the destination application accepted and inserted the text.
+
+Paste-target waiting is implemented by `AsyncPasteTargetWaiter` with `ContinuousClock` and cancellation-aware `Task.sleep`. Focus checks and application activation briefly execute on MainActor, while the wait itself no longer blocks it. Cancelling the active dictation session also cancels pending insertion and prevents a late outcome from updating HUD or history.
 
 ## 6. Storage and Privacy
 
@@ -156,6 +165,8 @@ Privacy behavior:
 - storage directories use `0700` and data files use `0600` where supported;
 - bounded JSONL tail reads avoid synchronously loading an unlimited history file;
 - startup pruning enforces time and count limits.
+
+The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `openwhisper-<UUID>.wav` and `openwhisper-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
 
 `StorageCleanupService.deleteAllData()` validates the application-support boundary, refuses symbolic-link deletion, removes the complete local data root, recreates a secure empty directory, signs out of ChatGPT, and saves a fresh default configuration.
 
@@ -224,10 +235,9 @@ Ad-hoc signing is allowed only for local development. Commercial distribution st
 
 The current alpha must not be described as commercially release-ready while these remain:
 
-- complete audio is read into memory before the 25 MB upload limit is evaluated;
 - paste success is event-dispatch success, not destination insertion confirmation;
-- target waiting blocks the main actor briefly;
 - Settings and Onboarding are not yet at the target native product architecture; History, Terminology, and Quick Add still require full keyboard/VoiceOver interaction acceptance;
 - HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
 - the advanced recovery API key is still environment-variable based rather than Keychain-backed;
-- notarization, updater, crash diagnostics export, and rollback-safe release infrastructure are not complete.
+- notarization, updater, crash diagnostics export, and rollback-safe release infrastructure are not complete;
+- clean-TCC microphone/accessibility ordering and the full installed-app F5/ESC/inline-close/Retry/paste-or-copy matrix still require trusted native GUI evidence.

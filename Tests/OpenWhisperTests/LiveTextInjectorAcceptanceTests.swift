@@ -53,7 +53,7 @@ func liveTextInjectorPastesIntoLaunchAppEditorAfterFocusMovesAway() async throws
     delay 0.5
     """)
 
-    let outcome = try TextInjector().inject(
+    let outcome = try await TextInjector().inject(
         text: phrase,
         preserveClipboard: false,
         restoreDelayMilliseconds: 50,
@@ -106,7 +106,7 @@ func liveTextInjectorPastesIntoCodexComposerAfterFocusMovesAway() async throws {
     delay 0.5
     """)
 
-    let outcome = try TextInjector().inject(
+    let outcome = try await TextInjector().inject(
         text: phrase,
         preserveClipboard: false,
         restoreDelayMilliseconds: 50,

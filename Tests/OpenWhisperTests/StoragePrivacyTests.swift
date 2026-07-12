@@ -308,6 +308,52 @@ func storageCleanupDeletesOnlyTheOpenWhisperContainer() throws {
     #expect(FileManager.default.fileExists(atPath: sibling.path))
 }
 
+@Test
+func temporaryArtifactCleanupRemovesOnlyOwnedCrashOrphans() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let recordingName = "openwhisper-\(UUID().uuidString).wav"
+    let uploadName = "openwhisper-upload-\(UUID().uuidString).multipart"
+    let symlinkName = "openwhisper-\(UUID().uuidString).wav"
+    let recordingURL = root.appendingPathComponent(recordingName)
+    let uploadURL = root.appendingPathComponent(uploadName)
+    let symlinkURL = root.appendingPathComponent(symlinkName)
+    let lookalikeURL = root.appendingPathComponent("openwhisper-not-a-uuid.wav")
+    let directoryLookalike = root.appendingPathComponent(
+        "openwhisper-\(UUID().uuidString).wav",
+        isDirectory: true
+    )
+    let outsideTarget = root.deletingLastPathComponent()
+        .appendingPathComponent("openwhisper-cleanup-sentinel-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: outsideTarget) }
+
+    try Data("recording".utf8).write(to: recordingURL)
+    try Data("multipart".utf8).write(to: uploadURL)
+    try Data("keep".utf8).write(to: lookalikeURL)
+    try Data("outside".utf8).write(to: outsideTarget)
+    try FileManager.default.createDirectory(at: directoryLookalike, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(
+        at: symlinkURL,
+        withDestinationURL: outsideTarget
+    )
+
+    let report = TemporaryArtifactCleanupService(
+        temporaryDirectoryURL: root
+    ).cleanupOrphans()
+
+    #expect(report.removedFileNames == [recordingName, symlinkName, uploadName].sorted())
+    #expect(report.failedFileNames.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: recordingURL.path))
+    #expect(!FileManager.default.fileExists(atPath: uploadURL.path))
+    #expect(!FileManager.default.fileExists(atPath: symlinkURL.path))
+    #expect(FileManager.default.fileExists(atPath: outsideTarget.path))
+    #expect(FileManager.default.fileExists(atPath: lookalikeURL.path))
+    #expect(FileManager.default.fileExists(atPath: directoryLookalike.path))
+}
+
 private func temporaryOpenWhisperDirectory() -> URL {
     FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)

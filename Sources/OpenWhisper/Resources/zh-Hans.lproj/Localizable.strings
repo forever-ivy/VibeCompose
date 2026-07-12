@@ -416,3 +416,16 @@
 "%@ transcription failed: %@" = "%@ 转写失败：%@";
 "Transcription prompt returned empty text." = "转写提示词返回了空文本。";
 "AI Polish output looked truncated; OpenWhisper used the normalized transcript instead." = "AI 润色结果似乎被截断，OpenWhisper 已改用规范化后的转写文本。";
+"AI Polish changed a protected technical literal; OpenWhisper used the normalized transcript instead." = "AI 润色改动了受保护的技术字面量，OpenWhisper 已改用规范化后的转写文本。";
+
+/* Language and punctuation */
+"Chinese output" = "中文输出";
+"Punctuation" = "标点样式";
+"Simplified Chinese" = "简体中文";
+"Traditional Chinese" = "繁体中文";
+"Preserve transcript language" = "保留转写语言";
+"Automatic" = "自动";
+"Chinese full-width" = "中文全角";
+"ASCII half-width" = "ASCII 半角";
+"Preserve punctuation" = "保留原标点";
+"Technical literals such as paths, URLs, filenames, versions, commands, flags, and code spans are preserved byte-for-byte." = "路径、URL、文件名、版本号、命令、参数和代码片段等技术字面量会逐字保留。";

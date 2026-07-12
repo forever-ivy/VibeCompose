@@ -69,6 +69,7 @@ final class AppCoordinator {
     private var pendingRetry: PendingRetry?
     private var pendingRetryExpiryTask: Task<Void, Never>?
     private var authStateObserver: NSObjectProtocol?
+    private var activeProcessingAudio: ActiveProcessingAudio?
 
     private struct PendingRetry {
         let id: UUID
@@ -77,6 +78,11 @@ final class AppCoordinator {
         let transcriptionConfig: TranscriptionConfig
         let injectionConfig: InjectionConfig
         let expiresAt: Date
+    }
+
+    private struct ActiveProcessingAudio {
+        let fileURL: URL
+        let deleteWhenFinished: Bool
     }
 
     init(
@@ -112,7 +118,10 @@ final class AppCoordinator {
                     config: transcriptionConfig,
                     cloudflareChallengeMaxAttempts: attemptPolicy.cloudflareChallengeMaxAttempts
                 ),
-                normalizer: TerminologyNormalizer(),
+                normalizer: TerminologyNormalizer(
+                    languagePreference: transcriptionConfig.languagePreference,
+                    punctuationPreference: transcriptionConfig.punctuationPreference
+                ),
                 importedEntries: transcriptionConfig.activeDictionaryEntries,
                 hintTerms: transcriptionConfig.hintTerms,
                 textPolisher: OpenAICompatibleTextPolisher(
@@ -325,6 +334,31 @@ final class AppCoordinator {
         logger.info("Cancellation completed; state returned to idle")
     }
 
+    func shutdown() {
+        startRecordingTask?.cancel()
+        startRecordingTask = nil
+        processingTask?.cancel()
+        processingTask = nil
+        pendingRetryExpiryTask?.cancel()
+        pendingRetryExpiryTask = nil
+        stopRecordingLevelUpdates()
+
+        if state == .recording {
+            try? recorder?.cancelRecording()
+        }
+        if let activeProcessingAudio, activeProcessingAudio.deleteWhenFinished {
+            try? FileManager.default.removeItem(at: activeProcessingAudio.fileURL)
+        }
+        activeProcessingAudio = nil
+        clearPendingRetry()
+        _ = TemporaryArtifactCleanupService().cleanupOrphans()
+        state = .idle
+        activeSessionID = nil
+        recordingStartedAt = nil
+        launchAppContext = nil
+        overlay.hide()
+    }
+
     private func startRecording() {
         guard let recorder else { return }
 
@@ -499,6 +533,10 @@ final class AppCoordinator {
         )
 
         processingTask?.cancel()
+        activeProcessingAudio = ActiveProcessingAudio(
+            fileURL: audio.fileURL,
+            deleteWhenFinished: deleteAudioWhenFinished
+        )
         processingTask = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -508,6 +546,9 @@ final class AppCoordinator {
                 }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
+                    if self.activeProcessingAudio?.fileURL == audio.fileURL {
+                        self.activeProcessingAudio = nil
+                    }
                     if self.activeSessionID == sessionID || self.activeSessionID == nil {
                         self.processingTask = nil
                     }
@@ -524,46 +565,27 @@ final class AppCoordinator {
                     "Dictation pipeline completed transcriptCharacters=\(prepared.rawText.count, privacy: .public) finalCharacters=\(prepared.finalText.count, privacy: .public) authMs=\(prepared.metrics.transcription.authMs, privacy: .public) transcribeMs=\(prepared.metrics.transcription.transcribeMs, privacy: .public)"
                 )
 
-                await MainActor.run {
-                    guard self.shouldContinue(sessionID: sessionID) else { return }
+                let canInject = await MainActor.run {
+                    self.shouldContinue(sessionID: sessionID)
+                }
+                guard canInject else { return }
 
-                    do {
-                        let injectStarted = DispatchTime.now().uptimeNanoseconds
-                        let outcome = try self.injector.inject(
-                            text: prepared.finalText,
-                            preserveClipboard: injectionConfig.preserveClipboard,
-                            restoreDelayMilliseconds: injectionConfig.restoreDelayMilliseconds,
-                            launchAppContext: launchAppContext,
-                            automaticPasteAllowed: automaticPasteAllowed
-                        )
-                        let injectMs = self.elapsedMilliseconds(since: injectStarted)
-                        let totalProcessingMs = self.elapsedMilliseconds(since: processingStarted)
-                        self.recordLatency(
-                            prepared: prepared,
-                            outcome: outcome,
-                            injectMs: injectMs,
-                            totalProcessingMs: totalProcessingMs,
-                            errorCategory: nil
-                        )
-                        self.recordHistory(
-                            prepared: prepared,
-                            outcome: outcome,
-                            launchAppContext: launchAppContext
-                        )
-                        self.clearPendingRetry()
-                        self.state = .idle
-                        self.activeSessionID = nil
-                        self.statusMenu?.update(
-                            state: .ready,
-                            detail: self.statusDetail(for: outcome)
-                        )
-                        self.overlay.showResult(text: prepared.finalText, outcome: outcome)
-                        self.launchAppContext = nil
-                        self.logger.info(
-                            "Dictation session \(sessionID.uuidString, privacy: .public) completed outcome=\(self.latencyResultStatus(for: outcome), privacy: .public)"
-                        )
-                    } catch {
-                        self.logger.error("Transcript injection failed: \(error.localizedDescription, privacy: .public)")
+                let injectStarted = DispatchTime.now().uptimeNanoseconds
+                let outcome: InjectionOutcome
+                do {
+                    outcome = try await self.injector.inject(
+                        text: prepared.finalText,
+                        preserveClipboard: injectionConfig.preserveClipboard,
+                        restoreDelayMilliseconds: injectionConfig.restoreDelayMilliseconds,
+                        launchAppContext: launchAppContext,
+                        automaticPasteAllowed: automaticPasteAllowed
+                    )
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    self.logger.error("Transcript injection failed: \(error.localizedDescription, privacy: .public)")
+                    await MainActor.run {
+                        guard self.shouldContinue(sessionID: sessionID) else { return }
                         let totalProcessingMs = self.elapsedMilliseconds(since: processingStarted)
                         self.recordLatency(
                             prepared: prepared,
@@ -580,6 +602,38 @@ final class AppCoordinator {
                         self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
                         self.launchAppContext = nil
                     }
+                    return
+                }
+
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard self.shouldContinue(sessionID: sessionID) else { return }
+                    let injectMs = self.elapsedMilliseconds(since: injectStarted)
+                    let totalProcessingMs = self.elapsedMilliseconds(since: processingStarted)
+                    self.recordLatency(
+                        prepared: prepared,
+                        outcome: outcome,
+                        injectMs: injectMs,
+                        totalProcessingMs: totalProcessingMs,
+                        errorCategory: nil
+                    )
+                    self.recordHistory(
+                        prepared: prepared,
+                        outcome: outcome,
+                        launchAppContext: launchAppContext
+                    )
+                    self.clearPendingRetry()
+                    self.state = .idle
+                    self.activeSessionID = nil
+                    self.statusMenu?.update(
+                        state: .ready,
+                        detail: self.statusDetail(for: outcome)
+                    )
+                    self.overlay.showResult(text: prepared.finalText, outcome: outcome)
+                    self.launchAppContext = nil
+                    self.logger.info(
+                        "Dictation session \(sessionID.uuidString, privacy: .public) completed outcome=\(self.latencyResultStatus(for: outcome), privacy: .public)"
+                    )
                 }
             } catch is CancellationError {
                 self.logger.info("Dictation processing task was cancelled")
@@ -1159,7 +1213,10 @@ final class AppCoordinator {
     }
 
     private func requestMicrophoneAccess(showExplanation: Bool = true) async throws {
-        let status = AudioRecorder.microphonePermissionState()
+        guard let recorder else {
+            throw RecorderError.noActiveRecording
+        }
+        let status = recorder.recordingPermissionState()
         let app = NSApplication.shared
         let previousActivationPolicy = app.activationPolicy()
 
@@ -1197,7 +1254,7 @@ final class AppCoordinator {
         }
 
         logger.info("Calling microphone access request helper")
-        try await AudioRecorder.ensureMicrophoneAccess()
+        try await recorder.ensureRecordingPermission()
     }
 
     private func requestMicrophoneAccessFromSettings() {
@@ -1563,6 +1620,12 @@ final class AppCoordinator {
             try latencyRecorder.prune(retention: config.privacy.diagnosticsRetentionPolicy())
         } catch {
             logger.error("Storage retention cleanup failed: \(error.localizedDescription, privacy: .public)")
+        }
+        let temporaryCleanup = TemporaryArtifactCleanupService().cleanupOrphans()
+        if !temporaryCleanup.failedFileNames.isEmpty {
+            logger.error(
+                "Temporary artifact cleanup failed for \(temporaryCleanup.failedFileNames.count, privacy: .public) item(s)"
+            )
         }
     }
 

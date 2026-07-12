@@ -108,6 +108,31 @@ enum InjectionOutcome: Sendable, Equatable {
     case copiedToClipboard(reason: ClipboardFallbackReason)
 }
 
+struct AsyncPasteTargetWaiter: Sendable {
+    var timeout: Duration = .seconds(1)
+    var pollInterval: Duration = .milliseconds(25)
+
+    func wait(
+        isReady: @escaping @MainActor @Sendable () -> Bool,
+        reactivate: @escaping @MainActor @Sendable () -> Void
+    ) async throws -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+
+        while clock.now < deadline {
+            try Task.checkCancellation()
+            if await isReady() {
+                return true
+            }
+            await reactivate()
+            try await Task.sleep(for: pollInterval)
+        }
+
+        try Task.checkCancellation()
+        return await isReady()
+    }
+}
+
 @MainActor
 protocol TextInjecting: AnyObject {
     func inject(
@@ -116,7 +141,7 @@ protocol TextInjecting: AnyObject {
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
         automaticPasteAllowed: Bool
-    ) throws -> InjectionOutcome
+    ) async throws -> InjectionOutcome
 }
 
 @MainActor
@@ -126,6 +151,11 @@ final class TextInjector: TextInjecting {
         category: "TextInjector"
     )
     private var clipboardRestoreTask: Task<Void, Never>?
+    private let pasteTargetWaiter: AsyncPasteTargetWaiter
+
+    init(pasteTargetWaiter: AsyncPasteTargetWaiter = .init()) {
+        self.pasteTargetWaiter = pasteTargetWaiter
+    }
 
     nonisolated static func injectionOutcome(
         hasEditableTextFocus: Bool,
@@ -170,7 +200,7 @@ final class TextInjector: TextInjecting {
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
         automaticPasteAllowed: Bool
-    ) throws -> InjectionOutcome {
+    ) async throws -> InjectionOutcome {
         clipboardRestoreTask?.cancel()
         clipboardRestoreTask = nil
 
@@ -202,7 +232,7 @@ final class TextInjector: TextInjecting {
             copyToPasteboard(text)
             return .copiedToClipboard(reason: reason)
         case .keyPressPaste:
-            return try pasteUsingClipboard(
+            return try await pasteUsingClipboard(
                 text: text,
                 preserveClipboard: preserveClipboard,
                 restoreDelayMilliseconds: restoreDelayMilliseconds,
@@ -216,19 +246,19 @@ final class TextInjector: TextInjecting {
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?
-    ) throws -> InjectionOutcome {
+    ) async throws -> InjectionOutcome {
         let pasteboard = NSPasteboard.general
         let snapshot = preserveClipboard ? PasteboardSnapshot.capture(from: pasteboard) : nil
 
         restoreLaunchAppIfNeeded(launchAppContext)
-        guard waitForPasteTarget(launchAppContext: launchAppContext) else {
+        guard try await waitForPasteTarget(launchAppContext: launchAppContext) else {
             logger.error("Paste target did not become frontmost before timeout; leaving transcript in clipboard")
             copyToPasteboard(text)
             return .copiedToClipboard(reason: .noEditableTarget)
         }
 
         let ownedChangeCount = copyToPasteboard(text)
-        usleep(60_000)
+        try await Task.sleep(for: .milliseconds(60))
         guard isPasteTargetReady(launchAppContext: launchAppContext) else {
             logger.error("Paste target changed after clipboard write; leaving transcript in clipboard")
             return .copiedToClipboard(reason: .noEditableTarget)
@@ -278,17 +308,17 @@ final class TextInjector: TextInjecting {
         return .pasted
     }
 
-    private func waitForPasteTarget(launchAppContext: LaunchAppContext?) -> Bool {
-        let deadline = DispatchTime.now().uptimeNanoseconds + 1_000_000_000
-        while DispatchTime.now().uptimeNanoseconds < deadline {
-            if isPasteTargetReady(launchAppContext: launchAppContext) {
-                return true
+    private func waitForPasteTarget(
+        launchAppContext: LaunchAppContext?
+    ) async throws -> Bool {
+        try await pasteTargetWaiter.wait(
+            isReady: { @MainActor [weak self] in
+                self?.isPasteTargetReady(launchAppContext: launchAppContext) ?? false
+            },
+            reactivate: { @MainActor [weak self] in
+                self?.restoreLaunchAppIfNeeded(launchAppContext)
             }
-            restoreLaunchAppIfNeeded(launchAppContext)
-            usleep(25_000)
-        }
-
-        return isPasteTargetReady(launchAppContext: launchAppContext)
+        )
     }
 
     private func isPasteTargetReady(launchAppContext: LaunchAppContext?) -> Bool {
@@ -325,7 +355,6 @@ final class TextInjector: TextInjecting {
             "Reactivating launch app before paste: pid=\(launchAppContext.processIdentifier, privacy: .public) bundleID=\(bundleIdentifier, privacy: .public)"
         )
         app.activate(options: [.activateIgnoringOtherApps])
-        usleep(120_000)
     }
 
     @discardableResult

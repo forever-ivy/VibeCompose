@@ -43,53 +43,144 @@ private extension Character {
 }
 
 struct TerminologyNormalizer: TranscriptNormalizing {
+    let languagePreference: TranscriptLanguagePreference
+    let punctuationPreference: TranscriptPunctuationPreference
+    private let literalTokenizer: TechnicalLiteralTokenizer
+
+    init(
+        languagePreference: TranscriptLanguagePreference = .simplifiedChinese,
+        punctuationPreference: TranscriptPunctuationPreference = .automatic,
+        literalTokenizer: TechnicalLiteralTokenizer = .init()
+    ) {
+        self.languagePreference = languagePreference
+        self.punctuationPreference = punctuationPreference
+        self.literalTokenizer = literalTokenizer
+    }
+
     func normalize(
         text: String,
         importedEntries: [TerminologyEntry],
         hintTerms: [String]
     ) -> NormalizationResult {
         let artifactStrippedText = stripKnownTrailingArtifacts(from: text)
-        let simplifiedText = simplifiedChineseText(from: artifactStrippedText)
-        var output = simplifiedText
-        var applied = artifactStrippedText != text || simplifiedText != artifactStrippedText
+        let correctionRules = correctionRules(from: importedEntries)
+        let terminologyRules = exactRules(
+            importedEntries: importedEntries,
+            hintTerms: hintTerms
+        )
+        let protectedCorrectionReplacementKeys = protectedCorrectionReplacementKeys(
+            from: importedEntries
+        )
+        let protectedCorrectionPass = applyExactRulesCoveringProtectedComponents(
+            to: artifactStrippedText,
+            rules: correctionRules
+        )
+        let protectedTerminologyPass = applyExactRulesCoveringProtectedComponents(
+            to: protectedCorrectionPass.text,
+            rules: terminologyRules,
+            protectedCanonicalKeys: protectedCorrectionReplacementKeys
+        )
+        let literalTokenization = literalTokenizer.tokenize(protectedTerminologyPass.text)
+        let languageAdjustedText = languageAdjustedText(
+            from: literalTokenization.maskedText
+        )
+        var output = languageAdjustedText
 
         let correctionPass = applyExactRules(
             to: output,
-            rules: correctionRules(from: importedEntries)
+            rules: correctionRules
         )
         output = correctionPass.text
-        applied = applied || correctionPass.replacementCount > 0
-        let correctionReplacementKeys = protectedCorrectionReplacementKeys(from: importedEntries)
-
         let exactPass = applyExactRules(
             to: output,
-            rules: exactRules(
-                importedEntries: importedEntries,
-                hintTerms: hintTerms
-            ),
-            protectedCanonicalKeys: correctionReplacementKeys
+            rules: terminologyRules,
+            protectedCanonicalKeys: protectedCorrectionReplacementKeys
         )
         output = exactPass.text
-        applied = applied || exactPass.replacementCount > 0
 
         let fuzzyPass = applyFuzzyRules(
             to: output,
             rules: fuzzyRules(from: importedEntries),
-            protectedCanonicalKeys: correctionReplacementKeys
+            protectedCanonicalKeys: protectedCorrectionReplacementKeys
         )
         output = fuzzyPass.text
-        applied = applied || fuzzyPass.replacementCount > 0
 
-        let punctuatedText = fullWidthPunctuationText(from: output)
-        applied = applied || punctuatedText != output
-        output = punctuatedText
+        output = punctuationAdjustedText(from: output)
+
+        guard let restoredText = literalTokenization.restoringLiterals(in: output) else {
+            return NormalizationResult(
+                text: artifactStrippedText,
+                applied: artifactStrippedText != text,
+                exactReplacementCount: 0,
+                fuzzyReplacementCount: 0
+            )
+        }
 
         return NormalizationResult(
-            text: output,
-            applied: applied,
-            exactReplacementCount: correctionPass.replacementCount + exactPass.replacementCount,
+            text: restoredText,
+            applied: restoredText != text,
+            exactReplacementCount: protectedCorrectionPass.replacementCount
+                + protectedTerminologyPass.replacementCount
+                + correctionPass.replacementCount
+                + exactPass.replacementCount,
             fuzzyReplacementCount: fuzzyPass.replacementCount
         )
+    }
+
+    private func applyExactRulesCoveringProtectedComponents(
+        to text: String,
+        rules: [ExactRule],
+        protectedCanonicalKeys: Set<String> = []
+    ) -> (text: String, replacementCount: Int) {
+        var output = text
+        var replacementCount = 0
+        for rule in rules.sorted(by: { lhs, rhs in
+            if lhs.sortKey != rhs.sortKey {
+                return lhs.sortKey > rhs.sortKey
+            }
+            return lhs.priority > rhs.priority
+        }) {
+            let protectedRanges = literalTokenizer.protectedRanges(in: output)
+            let matches = rule.regex.matches(
+                in: output,
+                options: [],
+                range: NSRange(output.startIndex..., in: output)
+            )
+
+            for match in matches.reversed() {
+                let overlappingProtectedRanges = protectedRanges.filter {
+                    NSIntersectionRange($0, match.range).length > 0
+                }
+                guard !overlappingProtectedRanges.isEmpty else {
+                    continue
+                }
+                guard overlappingProtectedRanges.allSatisfy({
+                    NSIntersectionRange($0, match.range) == $0
+                }) else {
+                    continue
+                }
+                guard let range = Range(match.range, in: output) else {
+                    continue
+                }
+
+                let matchedText = String(output[range])
+                guard !protectedCanonicalKeys.contains(canonicalKey(for: matchedText)) else {
+                    continue
+                }
+                guard matchedText != rule.canonical else {
+                    continue
+                }
+                guard !rule.preserveMixedCaseFromLowercaseCanonical
+                    || !wouldDowncaseMixedCaseLatin(matchedText, to: rule.canonical) else {
+                    continue
+                }
+
+                output.replaceSubrange(range, with: rule.canonical)
+                replacementCount += 1
+            }
+        }
+
+        return (output, replacementCount)
     }
 
     private func applyExactRules(
@@ -539,8 +630,24 @@ struct TerminologyNormalizer: TranscriptNormalizing {
         }
     }
 
-    private func fullWidthPunctuationText(from text: String) -> String {
-        guard containsHanCharacters(text) else {
+    private func punctuationAdjustedText(from text: String) -> String {
+        switch punctuationPreference {
+        case .automatic:
+            return fullWidthPunctuationText(from: text, requiresHan: true)
+        case .fullWidth:
+            return fullWidthPunctuationText(from: text, requiresHan: false)
+        case .halfWidth:
+            return halfWidthPunctuationText(from: text)
+        case .preserve:
+            return text
+        }
+    }
+
+    private func fullWidthPunctuationText(
+        from text: String,
+        requiresHan: Bool
+    ) -> String {
+        guard !requiresHan || containsHanCharacters(text) else {
             return text
         }
 
@@ -569,6 +676,22 @@ struct TerminologyNormalizer: TranscriptNormalizing {
         }
 
         return output
+    }
+
+    private func halfWidthPunctuationText(from text: String) -> String {
+        let replacements: [Character: Character] = [
+            "，": ",",
+            "。": ".",
+            "？": "?",
+            "！": "!",
+            "：": ":",
+            "；": ";",
+            "（": "(",
+            "）": ")",
+            "【": "[",
+            "】": "]",
+        ]
+        return String(text.map { replacements[$0] ?? $0 })
     }
 
     private func fullWidthPunctuation(
@@ -617,12 +740,32 @@ struct TerminologyNormalizer: TranscriptNormalizing {
         }
     }
 
-    private func simplifiedChineseText(from text: String) -> String {
+    private func languageAdjustedText(from text: String) -> String {
+        switch languagePreference {
+        case .simplifiedChinese:
+            return transformedChineseText(
+                from: text,
+                transform: "Traditional-Simplified"
+            )
+        case .traditionalChinese:
+            return transformedChineseText(
+                from: text,
+                transform: "Simplified-Traditional"
+            )
+        case .preserve:
+            return text
+        }
+    }
+
+    private func transformedChineseText(
+        from text: String,
+        transform: String
+    ) -> String {
         let mutableText = NSMutableString(string: text)
         let didTransform = CFStringTransform(
             mutableText,
             nil,
-            "Traditional-Simplified" as CFString,
+            transform as CFString,
             false
         )
 

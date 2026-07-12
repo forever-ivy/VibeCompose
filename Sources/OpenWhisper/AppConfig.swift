@@ -162,6 +162,47 @@ enum TextPolishMode: String, Codable, Sendable, Equatable, CaseIterable {
     case always
 }
 
+enum TranscriptLanguagePreference: String, Codable, Sendable, Equatable, CaseIterable, Identifiable {
+    case simplifiedChinese
+    case traditionalChinese
+    case preserve
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .simplifiedChinese:
+            return L10n.text("Simplified Chinese")
+        case .traditionalChinese:
+            return L10n.text("Traditional Chinese")
+        case .preserve:
+            return L10n.text("Preserve transcript language")
+        }
+    }
+}
+
+enum TranscriptPunctuationPreference: String, Codable, Sendable, Equatable, CaseIterable, Identifiable {
+    case automatic
+    case fullWidth
+    case halfWidth
+    case preserve
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic:
+            return L10n.text("Automatic")
+        case .fullWidth:
+            return L10n.text("Chinese full-width")
+        case .halfWidth:
+            return L10n.text("ASCII half-width")
+        case .preserve:
+            return L10n.text("Preserve punctuation")
+        }
+    }
+}
+
 enum TextPolishProviderID: String, Codable, Sendable, Equatable, Hashable, CaseIterable, Identifiable {
     case chatGPTAuth
 
@@ -234,6 +275,8 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     var hintTerms: [String] = []
     var speechCleanupEnabled: Bool = true
     var feedbackSoundsEnabled: Bool = true
+    var languagePreference: TranscriptLanguagePreference = .simplifiedChinese
+    var punctuationPreference: TranscriptPunctuationPreference = .automatic
     var terminology: TerminologyConfig = .init()
     var textPolish: TextPolishConfig = .init()
 
@@ -255,6 +298,14 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         hintTerms = try container.decodeIfPresent([String].self, forKey: .hintTerms) ?? []
         speechCleanupEnabled = try container.decodeIfPresent(Bool.self, forKey: .speechCleanupEnabled) ?? true
         feedbackSoundsEnabled = try container.decodeIfPresent(Bool.self, forKey: .feedbackSoundsEnabled) ?? true
+        languagePreference = try container.decodeIfPresent(
+            TranscriptLanguagePreference.self,
+            forKey: .languagePreference
+        ) ?? .simplifiedChinese
+        punctuationPreference = try container.decodeIfPresent(
+            TranscriptPunctuationPreference.self,
+            forKey: .punctuationPreference
+        ) ?? .automatic
         terminology = try container.decodeIfPresent(TerminologyConfig.self, forKey: .terminology) ?? .init()
         textPolish = try container.decodeIfPresent(TextPolishConfig.self, forKey: .textPolish) ?? .init()
     }

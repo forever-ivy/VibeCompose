@@ -71,6 +71,9 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(!source.contains("editingTerminologyIndex"))
     #expect(!source.contains("prefix(5)"))
     #expect(!source.contains("edit config.json for bulk changes"))
+    #expect(source.contains("$config.transcription.languagePreference"))
+    #expect(source.contains("$config.transcription.punctuationPreference"))
+    #expect(source.contains("Technical literals such as paths"))
 
     let configFolderButtonCount = source
         .components(separatedBy: "Button(L10n.text(\"Open Config Folder\")")

@@ -98,7 +98,7 @@ func textPolishPromptRequestsAgentPlanStyleAndLaterIntentWins() {
     let prompt = TextPolishPromptBuilder().buildMessages(
         transcript: "呃先做一个登录页面，然后不对，改成先做设置页，最后发布 v0.1。",
         terminologyEntries: [
-            TerminologyEntry(canonical: "OpenWhisper", aliases: ["chat type"]),
+            TerminologyEntry(canonical: "OpenWhisper", aliases: ["open whisper"]),
             TerminologyEntry(canonical: "ExampleSDK", aliases: ["Example SDK"]),
         ],
         config: TextPolishConfig(),
@@ -113,6 +113,8 @@ func textPolishPromptRequestsAgentPlanStyleAndLaterIntentWins() {
     #expect(joined.contains("ExampleSDK"))
     #expect(joined.contains("口头禅"))
     #expect(joined.contains("Do not summarize away requirements"))
+    #expect(joined.contains("⟪OW_LITERAL_0000⟫"))
+    #expect(joined.contains("immutable placeholders"))
 }
 
 @Test
@@ -139,7 +141,7 @@ func textPolishTokenEstimatorClassifiesLongDictationCost() {
     let estimate = TextPolishTokenEstimator().estimate(
         transcript: String(repeating: "这是一个需要整理成长句计划的语音输入。", count: 80),
         terminologyEntries: [
-            TerminologyEntry(canonical: "OpenWhisper", aliases: ["chat type"]),
+            TerminologyEntry(canonical: "OpenWhisper", aliases: ["open whisper"]),
         ],
         config: TextPolishConfig()
     )
@@ -177,8 +179,8 @@ func chatGPTAuthTextPolisherUsesResponsesEndpointWithLoginToken() async throws {
     )
 
     let result = try await polisher.polish(
-        text: "呃发布 chat type v0.1",
-        terminologyEntries: [TerminologyEntry(canonical: "OpenWhisper", aliases: ["chat type"])],
+        text: "呃发布 open whisper v0.1",
+        terminologyEntries: [TerminologyEntry(canonical: "OpenWhisper", aliases: ["open whisper"])],
         hintTerms: []
     )
 

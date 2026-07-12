@@ -62,7 +62,10 @@ struct BenchmarkRunner {
                         authManager: coldAuthManager,
                         config: config.transcription
                     ),
-                    normalizer: TerminologyNormalizer(),
+                    normalizer: TerminologyNormalizer(
+                        languagePreference: config.transcription.languagePreference,
+                        punctuationPreference: config.transcription.punctuationPreference
+                    ),
                     importedEntries: config.transcription.activeDictionaryEntries,
                     hintTerms: config.transcription.hintTerms
                 )
@@ -102,7 +105,10 @@ struct BenchmarkRunner {
                         authManager: authManager,
                         config: config.transcription
                     ),
-                    normalizer: TerminologyNormalizer(),
+                    normalizer: TerminologyNormalizer(
+                        languagePreference: config.transcription.languagePreference,
+                        punctuationPreference: config.transcription.punctuationPreference
+                    ),
                     importedEntries: config.transcription.activeDictionaryEntries,
                     hintTerms: config.transcription.hintTerms
                 )

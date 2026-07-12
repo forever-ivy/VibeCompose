@@ -62,6 +62,7 @@ struct DictationPipeline: DictationPreparing {
     let importedEntries: [TerminologyEntry]
     let hintTerms: [String]
     var textPolisher: (any TextPolishing)?
+    var literalTokenizer: TechnicalLiteralTokenizer = .init()
 
     func prepare(audio: RecordedAudio) async throws -> PreparedDictation {
         let transcription = try await transcriber.transcribe(audio)
@@ -85,8 +86,12 @@ struct DictationPipeline: DictationPreparing {
             textPolishAttempted = true
             let polishStarted = DispatchTime.now().uptimeNanoseconds
             do {
+                let literalTokenization = literalTokenizer.tokenize(
+                    prePolish.text,
+                    style: .modelSafe
+                )
                 let polished = try await textPolisher.polish(
-                    text: prePolish.text,
+                    text: literalTokenization.maskedText,
                     terminologyEntries: importedEntries,
                     hintTerms: hintTerms
                 )
@@ -94,26 +99,38 @@ struct DictationPipeline: DictationPreparing {
                 estimatedPolishInputTokens = polished.estimatedInputTokens
                 estimatedPolishOutputTokens = polished.estimatedOutputTokens
 
-                guard !isSuspiciousPolishTruncation(original: prePolish.text, polished: polished.text) else {
+                guard let literalSafePolishedText = literalTokenization.restoringLiterals(
+                    in: polished.text
+                ) else {
+                    textPolishErrorMessage = L10n.text(
+                        "AI Polish changed a protected technical literal; OpenWhisper used the normalized transcript instead."
+                    )
+                    return fallbackPreparedDictation(
+                        transcription: transcription,
+                        prePolish: prePolish,
+                        normalizationMs: normalizationMs,
+                        polishMs: polishMs,
+                        textPolishErrorMessage: textPolishErrorMessage,
+                        estimatedPolishInputTokens: estimatedPolishInputTokens,
+                        estimatedPolishOutputTokens: estimatedPolishOutputTokens
+                    )
+                }
+
+                guard !isSuspiciousPolishTruncation(
+                    original: prePolish.text,
+                    polished: literalSafePolishedText
+                ) else {
                     textPolishErrorMessage = L10n.text(
                         "AI Polish output looked truncated; OpenWhisper used the normalized transcript instead."
                     )
-                    return PreparedDictation(
-                        rawText: transcription.text,
-                        finalText: prePolish.text,
-                        normalizationApplied: prePolish.applied,
-                        exactReplacementCount: prePolish.exactReplacementCount,
-                        fuzzyReplacementCount: prePolish.fuzzyReplacementCount,
-                        metrics: DictationMetrics(
-                            transcription: transcription.metrics,
-                            normalizationMs: normalizationMs,
-                            polishMs: polishMs,
-                            textPolishAttempted: textPolishAttempted,
-                            textPolishProvider: nil,
-                            textPolishErrorMessage: textPolishErrorMessage,
-                            estimatedPolishInputTokens: estimatedPolishInputTokens,
-                            estimatedPolishOutputTokens: estimatedPolishOutputTokens
-                        )
+                    return fallbackPreparedDictation(
+                        transcription: transcription,
+                        prePolish: prePolish,
+                        normalizationMs: normalizationMs,
+                        polishMs: polishMs,
+                        textPolishErrorMessage: textPolishErrorMessage,
+                        estimatedPolishInputTokens: estimatedPolishInputTokens,
+                        estimatedPolishOutputTokens: estimatedPolishOutputTokens
                     )
                 }
 
@@ -121,7 +138,7 @@ struct DictationPipeline: DictationPreparing {
 
                 let postPolishStarted = DispatchTime.now().uptimeNanoseconds
                 let postPolish = normalizer.normalize(
-                    text: polished.text,
+                    text: literalSafePolishedText,
                     importedEntries: importedEntries,
                     hintTerms: hintTerms
                 )
@@ -145,6 +162,34 @@ struct DictationPipeline: DictationPreparing {
                 polishMs: polishMs,
                 textPolishAttempted: textPolishAttempted,
                 textPolishProvider: textPolishProvider,
+                textPolishErrorMessage: textPolishErrorMessage,
+                estimatedPolishInputTokens: estimatedPolishInputTokens,
+                estimatedPolishOutputTokens: estimatedPolishOutputTokens
+            )
+        )
+    }
+
+    private func fallbackPreparedDictation(
+        transcription: TranscriptionResult,
+        prePolish: NormalizationResult,
+        normalizationMs: Int,
+        polishMs: Int,
+        textPolishErrorMessage: String?,
+        estimatedPolishInputTokens: Int,
+        estimatedPolishOutputTokens: Int
+    ) -> PreparedDictation {
+        PreparedDictation(
+            rawText: transcription.text,
+            finalText: prePolish.text,
+            normalizationApplied: prePolish.applied,
+            exactReplacementCount: prePolish.exactReplacementCount,
+            fuzzyReplacementCount: prePolish.fuzzyReplacementCount,
+            metrics: DictationMetrics(
+                transcription: transcription.metrics,
+                normalizationMs: normalizationMs,
+                polishMs: polishMs,
+                textPolishAttempted: true,
+                textPolishProvider: nil,
                 textPolishErrorMessage: textPolishErrorMessage,
                 estimatedPolishInputTokens: estimatedPolishInputTokens,
                 estimatedPolishOutputTokens: estimatedPolishOutputTokens

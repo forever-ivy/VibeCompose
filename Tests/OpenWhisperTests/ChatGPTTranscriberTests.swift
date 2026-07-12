@@ -45,6 +45,69 @@ private final class AttemptCounter: @unchecked Sendable {
         value += 1
         return value
     }
+
+    func current() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
+private final class UploadObservation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bodyFileURL: URL?
+    private var requestHadInMemoryBody = false
+    private var declaredContentLength: Int?
+    private var observedBodyBytes: Int?
+    private var observedPermissions: Int?
+
+    func record(request: URLRequest, bodyFileURL: URL) throws {
+        let attributes = try FileManager.default.attributesOfItem(atPath: bodyFileURL.path)
+        lock.lock()
+        self.bodyFileURL = bodyFileURL
+        requestHadInMemoryBody = request.httpBody != nil || request.httpBodyStream != nil
+        declaredContentLength = request
+            .value(forHTTPHeaderField: "Content-Length")
+            .flatMap(Int.init)
+        observedBodyBytes = (attributes[.size] as? NSNumber)?.intValue
+        observedPermissions = (attributes[.posixPermissions] as? NSNumber)?.intValue
+        lock.unlock()
+    }
+
+    func snapshot() -> (
+        bodyFileURL: URL?,
+        requestHadInMemoryBody: Bool,
+        declaredContentLength: Int?,
+        observedBodyBytes: Int?,
+        observedPermissions: Int?
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (
+            bodyFileURL,
+            requestHadInMemoryBody,
+            declaredContentLength,
+            observedBodyBytes,
+            observedPermissions
+        )
+    }
+}
+
+private final class UploadURLCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [URL] = []
+
+    func append(_ url: URL) {
+        lock.lock()
+        values.append(url)
+        lock.unlock()
+    }
+
+    func urls() -> [URL] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
 }
 
 private func makeAudioFixture(
@@ -60,6 +123,20 @@ private func makeAudioFixture(
     return RecordedAudio(fileURL: url, durationMs: 1_000)
 }
 
+private func makeSparseAudioFixture(byteCount: UInt64) throws -> RecordedAudio {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(UUID().uuidString).wav")
+    FileManager.default.createFile(atPath: url.path, contents: Data([0x2A]))
+    let handle = try FileHandle(forWritingTo: url)
+    try handle.truncate(atOffset: byteCount)
+    try handle.close()
+    return RecordedAudio(fileURL: url, durationMs: 1_000)
+}
+
+private func uploadBodyString(at fileURL: URL) throws -> String {
+    String(data: try Data(contentsOf: fileURL), encoding: .utf8) ?? ""
+}
+
 @Test
 func managedAuthSendsAudioAboveLegacyTenMegabyteLimit() async throws {
     var config = AppConfig().transcription
@@ -70,8 +147,8 @@ func managedAuthSendsAudioAboveLegacyTenMegabyteLimit() async throws {
         authManager: FakeChatGPTAuthManager(),
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
-        dataLoader: { request in
-            let body = String(data: request.httpBody ?? Data(), encoding: .utf8) ?? ""
+        uploadLoader: { request, bodyFileURL in
+            let body = try uploadBodyString(at: bodyFileURL)
             capture.append(request, body: body)
             let response = HTTPURLResponse(
                 url: request.url!,
@@ -101,13 +178,13 @@ func rejectsAudioAboveOfficialTwentyFiveMegabyteLimit() async throws {
         authManager: FakeChatGPTAuthManager(),
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
-        dataLoader: { _ in
+        uploadLoader: { _, _ in
             Issue.record("Oversized audio should be rejected before a network request")
             throw URLError(.badServerResponse)
         }
     )
 
-    let audio = try makeAudioFixture(byteCount: 25_000_001)
+    let audio = try makeSparseAudioFixture(byteCount: 25_000_001)
     var caughtError: Error?
     do {
         _ = try await transcriber.transcribe(audio)
@@ -116,6 +193,149 @@ func rejectsAudioAboveOfficialTwentyFiveMegabyteLimit() async throws {
     }
 
     #expect(caughtError?.localizedDescription.contains("25 MB") == true)
+}
+
+@Test
+func transcriptionStreamsPrivateMultipartFileAndRemovesItAfterUpload() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+    config.hintTerms = ["OpenWhisper"]
+
+    let observation = UploadObservation()
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: BridgePromptCapabilityStore(),
+        uploadLoader: { request, bodyFileURL in
+            try observation.record(request: request, bodyFileURL: bodyFileURL)
+            let body = try uploadBodyString(at: bodyFileURL)
+            #expect(body.contains("name=\"prompt\""))
+            #expect(body.contains("name=\"file\""))
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (Data(#"{"text":"streamed"}"#.utf8), response)
+        }
+    )
+
+    let result = try await transcriber.transcribe(makeAudioFixture())
+    let snapshot = observation.snapshot()
+
+    #expect(result.text == "streamed")
+    #expect(snapshot.requestHadInMemoryBody == false)
+    #expect(snapshot.declaredContentLength == snapshot.observedBodyBytes)
+    #expect(snapshot.observedPermissions == 0o600)
+    #expect(snapshot.bodyFileURL.map { !FileManager.default.fileExists(atPath: $0.path) } == true)
+}
+
+@Test
+func multipartCreationFailureDoesNotSendNetworkRequestOrLeavePartialFile() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let missingDirectory = root.appendingPathComponent("missing", isDirectory: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let capability = BridgePromptCapabilityStore()
+    capability.mark(false)
+    let uploadAttempts = AttemptCounter()
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: capability,
+        multipartTemporaryDirectoryURL: missingDirectory,
+        uploadLoader: { _, _ in
+            _ = uploadAttempts.next()
+            Issue.record("Multipart creation failure should happen before network upload")
+            throw URLError(.badServerResponse)
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
+
+    await #expect(throws: CocoaError.self) {
+        _ = try await transcriber.transcribe(audio)
+    }
+
+    #expect(uploadAttempts.current() == 0)
+    #expect(!FileManager.default.fileExists(atPath: missingDirectory.path))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).isEmpty)
+}
+
+@Test
+func uploadFailureRemovesMultipartTemporaryFile() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+
+    let capability = BridgePromptCapabilityStore()
+    capability.mark(false)
+    let capture = UploadURLCapture()
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: capability,
+        uploadLoader: { _, bodyFileURL in
+            capture.append(bodyFileURL)
+            #expect(FileManager.default.fileExists(atPath: bodyFileURL.path))
+            throw URLError(.networkConnectionLost)
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
+
+    await #expect(throws: URLError.self) {
+        _ = try await transcriber.transcribe(audio)
+    }
+
+    let uploadedFiles = capture.urls()
+    #expect(uploadedFiles.count == 1)
+    #expect(uploadedFiles.allSatisfy {
+        !FileManager.default.fileExists(atPath: $0.path)
+    })
+}
+
+@Test
+func rejectsSymlinkedAudioBeforeBuildingMultipartUpload() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+
+    let target = try makeAudioFixture()
+    let symlinkURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(UUID().uuidString).wav")
+    try FileManager.default.createSymbolicLink(
+        at: symlinkURL,
+        withDestinationURL: target.fileURL
+    )
+    defer { try? FileManager.default.removeItem(at: symlinkURL) }
+
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: BridgePromptCapabilityStore(),
+        uploadLoader: { _, _ in
+            Issue.record("Symlinked audio should be rejected before upload")
+            throw URLError(.badServerResponse)
+        }
+    )
+
+    var caughtError: Error?
+    do {
+        _ = try await transcriber.transcribe(
+            RecordedAudio(fileURL: symlinkURL, durationMs: 1_000)
+        )
+    } catch {
+        caughtError = error
+    }
+
+    #expect(caughtError?.localizedDescription.contains("invalid") == true)
 }
 
 @Test
@@ -129,8 +349,8 @@ func openAICompatibleRouteIncludesPromptField() async throws {
     let transcriber = ChatGPTTranscriber(
         authManager: FakeChatGPTAuthManager(),
         config: config,
-        dataLoader: { request in
-            let body = String(data: request.httpBody ?? Data(), encoding: .utf8) ?? ""
+        uploadLoader: { request, bodyFileURL in
+            let body = try uploadBodyString(at: bodyFileURL)
             capture.append(request, body: body)
             let response = HTTPURLResponse(
                 url: request.url!,
@@ -175,9 +395,9 @@ func managedAuthFallsBackWhenPromptFieldIsRejected() async throws {
         authManager: authManager,
         config: config,
         bridgePromptCapability: capability,
-        dataLoader: { request in
+        uploadLoader: { request, bodyFileURL in
             let attempt = attempts.next()
-            capture.append(request, body: String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "")
+            capture.append(request, body: try uploadBodyString(at: bodyFileURL))
 
             if attempt == 1 {
                 let response = HTTPURLResponse(
@@ -224,11 +444,11 @@ func managedAuthRefreshesAccessTokenAfterForbidden() async throws {
         authManager: authManager,
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
-        dataLoader: { request in
+        uploadLoader: { request, bodyFileURL in
             let attempt = attempts.next()
             capture.append(
                 request,
-                body: String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "",
+                body: try uploadBodyString(at: bodyFileURL),
                 authorizationHeader: request.value(forHTTPHeaderField: "Authorization")
             )
 
@@ -273,10 +493,10 @@ func managedAuthReportsRetryableErrorAfterThreeCloudflareChallenges() async thro
         authManager: authManager,
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
-        dataLoader: { request in
+        uploadLoader: { request, bodyFileURL in
             capture.append(
                 request,
-                body: String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "",
+                body: try uploadBodyString(at: bodyFileURL),
                 authorizationHeader: request.value(forHTTPHeaderField: "Authorization")
             )
 
@@ -318,10 +538,10 @@ func managedAuthManualRetryPolicyAttemptsCloudflareChallengeOnlyOnce() async thr
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
         cloudflareChallengeMaxAttempts: 1,
-        dataLoader: { request in
+        uploadLoader: { request, bodyFileURL in
             capture.append(
                 request,
-                body: String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "",
+                body: try uploadBodyString(at: bodyFileURL),
                 authorizationHeader: request.value(forHTTPHeaderField: "Authorization")
             )
 

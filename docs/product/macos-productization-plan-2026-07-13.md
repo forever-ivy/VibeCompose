@@ -51,21 +51,29 @@ macOS 首发策略：
 - 英文和简体中文 UI。
 - Swift 单元测试、打包脚本和安装版验收脚本。
 
-### 2.2 当前阻断项
+### 2.2 原始阻断项与当前状态
 
-安全审计确认的主要问题：
+安全审计最初确认的主要问题中，以下路径已经由实现和回归测试关闭：
 
-- 旧启动上下文可以放宽粘贴条件。
-- Managed Token 可以被配置发送到任意 URL。
-- Recovery 元数据存在路径逃逸风险。
-- Token refresh 存在竞态和注销后会话复活风险。
-- 录音时长上限未真正执行。
-- 音频、全文和日志缺少合理默认留存策略。
-- OAuth callback 存在崩溃、取消和超时生命周期问题。
-- 签名、Gatekeeper、Cask 哈希和安装链不闭环。
-- 技术字面量可能被归一化破坏。
-- MainActor、旧异步任务和 HUD 回调存在跨会话污染风险。
-- 当前测试可能在未完成真实 TCC/GUI 验收时仍显示全绿。
+- 旧启动上下文不再作为可编辑证明，Retry 默认 copy-only；
+- Managed Token 只能访问内置 HTTPS origin/path，重定向被拒绝；
+- Recovery 使用 opaque UUID、路径包含关系、symlink、大小与 RIFF/WAVE 校验；
+- refresh single-flight、generation 和 sign-out invalidation 已落地；
+- Recorder 硬上限、数据留存、敏感应用排除、Delete All Data 已落地；
+- OAuth callback 的 method/path/state、重复参数、取消与超时生命周期已加固；
+- 音频上传已改为 metadata-first、64 KB 分块 multipart 文件和 file upload；
+- 技术字面量 tokenizer、简繁与标点偏好、AI token 完整性回退已落地；
+- 粘贴等待已移出同步 MainActor sleep，HUD 使用 presentation generation；
+- Recorder partial、上传 multipart、退出处理中音频和下次启动 orphan cleanup 已覆盖。
+
+当前仍阻断商业发布的事项：
+
+- Developer ID、固定 Team ID、notarization/staple、signed updater 和 rollback 未完成；
+- `.pasted` 尚不能证明目标应用实际接收文本，真实多应用焦点矩阵未完成；
+- clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
+- Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与高对比度验收未完成；
+- 隐私政策、服务条款、退款、支持和诊断导出文档未完成；
+- 当前自动化全绿仍只属于 precheck，不能替代 `/Applications/OpenWhisper.app` 的真实交互证据。
 
 UI 调研确认的主要问题：
 
@@ -391,6 +399,22 @@ Application Support/OpenWhisper
 - 安装使用 staging、原子替换和失败回滚。
 - Cask 使用固定 SHA-256。
 
+### 6.3 2026-07-13 安全与生命周期进度
+
+本阶段新增并通过自动化门禁：
+
+- 25 MB 音频限制在读取内容前通过 metadata 检查执行，拒绝 symlink、空文件和非普通文件；
+- multipart 临时文件权限为 `0600`，请求不携带内存 `httpBody/httpBodyStream`，成功、失败和取消后均删除；
+- Recorder 初始化写入失败、启动失败会删除 partial WAV；
+- `shutdown()` 取消会话并同步清理处理中自有音频，启动时只清理严格 UUID 命名的 OpenWhisper orphan；
+- `TechnicalLiteralTokenizer` 覆盖 URL、邮箱、路径、文件名、版本、IP、UUID、hash、CLI、环境变量和代码；
+- AI Polish 必须原样返回每一个 model-safe token，否则回退到本地规范化文本；
+- Settings 已接入简体、繁体、原样语言偏好和自动、全角、半角、原样标点偏好；
+- `AsyncPasteTargetWaiter` 可取消且不阻塞 MainActor，取消后不发生迟到注入完成；
+- HUD apply/hide 使用 generation，旧 auto-hide 或动画 completion 不能隐藏新状态。
+
+这些结果关闭安全基线中的 OW-AUD-005、OW-AUD-009、OW-AUD-010 和 OW-AUD-015；安装版 TCC、焦点和可访问性验收仍独立保留为发布门禁。
+
 ## 7. 原生 UI 与交互改造
 
 ### 7.1 Settings
@@ -499,7 +523,7 @@ Application Support/OpenWhisper
 
 - 短句默认直接输出；
 - 长段、Agent Plan、Email 等模式按规则润色；
-- 技术字面量先标记保护；
+- 技术字面量先转换为 model-safe token，每个 token 必须恰好保留一次；
 - 润色失败永远回退到可用 ASR；
 - 记录 decision reason、耗时和 fallback 原因；
 - 不记录完整敏感文本到分析事件。
@@ -780,6 +804,10 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
 | OW-MAC-019 | P2 | App compatibility matrix | Closed Beta | 目标 App 成功/降级明确 |
 | OW-MAC-020 | P2 | Support diagnostics bundle | Redaction | 导出包无 Token/正文/音频 |
+| OW-MAC-021 | P1 | 音频 metadata-first 与流式 multipart（已实现） | Provider boundary | 25 MB/symlink 在网络前拒绝，上传不构造内存 body |
+| OW-MAC-022 | P1 | 技术字面量与语言/标点偏好（已实现） | Normalizer/Polish | literal round-trip，token 破坏时安全回退 |
+| OW-MAC-023 | P1 | 异步粘贴等待与 HUD generation（已实现） | Session lifecycle | MainActor 可继续调度，取消后无迟到状态 |
+| OW-MAC-024 | P1 | 临时文件故障清理（已实现） | Audio/Upload lifecycle | partial、失败上传、退出和启动 orphan 均可验证清理 |
 
 ## 14. 第一执行 Sprint（10 个工作日）
 

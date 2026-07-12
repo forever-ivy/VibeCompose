@@ -119,6 +119,55 @@ struct AudioRecorderTests {
 
     @MainActor
     @Test
+    func recorderInitializationWriteFailureRemovesPartialTemporaryFile() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-write-failure-\(UUID().uuidString).wav")
+        let recorder = AudioRecorder(
+            sampleRateHz: 16_000,
+            permissionProvider: { .granted },
+            permissionRequester: { true },
+            sessionFactory: { url, _ in
+                try Data("partial".utf8).write(to: url)
+                throw CocoaError(.fileWriteOutOfSpace)
+            },
+            temporaryFileURLFactory: { fileURL },
+            fileManager: .default
+        )
+
+        await #expect(throws: CocoaError.self) {
+            try await recorder.startRecording()
+        }
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @MainActor
+    @Test
+    func recorderStartFailureRemovesCreatedTemporaryFile() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recorder-start-failure-\(UUID().uuidString).wav")
+        let session = FakeRecordingSession()
+        session.recordResult = false
+        let recorder = AudioRecorder(
+            sampleRateHz: 16_000,
+            permissionProvider: { .granted },
+            permissionRequester: { true },
+            sessionFactory: { url, _ in
+                try Data("partial".utf8).write(to: url)
+                return session
+            },
+            temporaryFileURLFactory: { fileURL },
+            fileManager: .default
+        )
+
+        await #expect(throws: RecorderError.recorderStartFailed) {
+            try await recorder.startRecording()
+        }
+        #expect(session.stopCallCount == 1)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @MainActor
+    @Test
     func cancelRecordingDiscardsActiveSessionAndDeletesTempFile() async throws {
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("cancel-recording-test.wav")
         try Data("wave".utf8).write(to: fileURL)

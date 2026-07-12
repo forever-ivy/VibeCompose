@@ -104,4 +104,11 @@ enum SecureHTTPClient {
     static func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         try await session.data(for: request)
     }
+
+    static func upload(
+        for request: URLRequest,
+        fromFile bodyFileURL: URL
+    ) async throws -> (Data, URLResponse) {
+        try await session.upload(for: request, fromFile: bodyFileURL)
+    }
 }

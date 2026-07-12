@@ -429,6 +429,21 @@ func transcriptionPromptBuilderRequestsSimplifiedChineseByDefault() {
 
     #expect(prompt.contains("简体中文"))
     #expect(prompt.contains("不要输出繁体中文"))
+    #expect(prompt.contains("标点随语言自动选择"))
+}
+
+@Test
+func transcriptionPromptBuilderHonorsLanguageAndPunctuationPreferences() {
+    let prompt = TranscriptionPromptBuilder().buildPrompt(
+        hintTerms: [],
+        languagePreference: .traditionalChinese,
+        punctuationPreference: .halfWidth,
+        locale: "zh-TW"
+    )
+
+    #expect(prompt.contains("輸出繁體中文"))
+    #expect(prompt.contains("ASCII 半角标点"))
+    #expect(prompt.contains("Locale: zh-TW"))
 }
 
 @Test
@@ -718,7 +733,7 @@ func dictationPipelineRunsTextPolishBetweenNormalizationPasses() async throws {
         textPolisher: FakeTextPolisher(
             result: .success(
                 TextPolishResult(
-                    text: "- 目标：完成 openwhisper v0.1 润色计划\n- 验收：长句输出分点。",
+                    text: "- 目标：完成 openwhisper ⟪OW_LITERAL_0000⟫ 润色计划\n- 验收：长句输出分点。",
                     provider: .chatGPTAuth,
                     applied: true,
                     estimatedInputTokens: 1_200,
@@ -778,6 +793,51 @@ func dictationPipelineFallsBackToNormalizedTextWhenTextPolishFails() async throw
     #expect(result.metrics.textPolishProvider == nil)
     #expect(result.metrics.textPolishErrorMessage?.isEmpty == false)
     #expect(result.metrics.polishMs >= 0)
+}
+
+@Test
+func dictationPipelineFallsBackWhenTextPolishChangesProtectedLiteralToken() async throws {
+    let originalPath = "/Users/小龍/專案/config.json"
+    let pipeline = DictationPipeline(
+        transcriber: FakeTranscriber(
+            result: TranscriptionResult(
+                text: "請把 \(originalPath) 發給我。",
+                metrics: .init(
+                    provider: .chatGPTManagedAuth,
+                    audioDurationMs: 2_000,
+                    audioBytes: 128_000,
+                    authMs: 50,
+                    transcribeMs: 400,
+                    promptIncluded: false
+                )
+            )
+        ),
+        normalizer: TerminologyNormalizer(),
+        importedEntries: [],
+        hintTerms: [],
+        textPolisher: FakeTextPolisher(
+            result: .success(
+                TextPolishResult(
+                    text: "请把 /Users/小龙/项目/config.json 发给我。",
+                    provider: .chatGPTAuth,
+                    applied: true,
+                    estimatedInputTokens: 120,
+                    estimatedOutputTokens: 40
+                )
+            )
+        )
+    )
+
+    let audio = RecordedAudio(
+        fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("fake-polish-literal.wav"),
+        durationMs: 2_000
+    )
+    let result = try await pipeline.prepare(audio: audio)
+
+    #expect(result.finalText == "请把 \(originalPath) 发给我。")
+    #expect(result.metrics.textPolishProvider == nil)
+    #expect(result.metrics.textPolishErrorMessage?.contains("technical literal") == true)
 }
 
 @Test

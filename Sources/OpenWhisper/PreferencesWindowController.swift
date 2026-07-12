@@ -755,6 +755,44 @@ private struct PreferencesView: View {
                 Toggle(L10n.text("Feedback sounds"), isOn: $config.transcription.feedbackSoundsEnabled)
                 Toggle(L10n.text("ASR prompt cleanup"), isOn: $config.transcription.speechCleanupEnabled)
 
+                Divider()
+
+                LabeledContent(L10n.text("Chinese output")) {
+                    Picker(
+                        L10n.text("Chinese output"),
+                        selection: $config.transcription.languagePreference
+                    ) {
+                        ForEach(TranscriptLanguagePreference.allCases) { preference in
+                            Text(preference.title).tag(preference)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 230)
+                }
+
+                LabeledContent(L10n.text("Punctuation")) {
+                    Picker(
+                        L10n.text("Punctuation"),
+                        selection: $config.transcription.punctuationPreference
+                    ) {
+                        ForEach(TranscriptPunctuationPreference.allCases) { preference in
+                            Text(preference.title).tag(preference)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 230)
+                }
+
+                Text(
+                    L10n.text(
+                        "Technical literals such as paths, URLs, filenames, versions, commands, flags, and code spans are preserved byte-for-byte."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+                Divider()
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L10n.text("Default ASR route"))
                         .font(.system(size: 12, weight: .medium))

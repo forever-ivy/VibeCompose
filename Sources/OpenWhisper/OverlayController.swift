@@ -43,6 +43,20 @@ protocol OverlaySnapshotCapturing: AnyObject {
     func writeSnapshot(to url: URL) throws
 }
 
+struct OverlayPresentationGeneration: Sendable, Equatable {
+    private(set) var value: UInt64 = 0
+
+    @discardableResult
+    mutating func beginPresentation() -> UInt64 {
+        value &+= 1
+        return value
+    }
+
+    func isCurrent(_ candidate: UInt64) -> Bool {
+        candidate == value
+    }
+}
+
 @MainActor
 final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private let style = OverlayStylePreset.dictationHUD
@@ -65,6 +79,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private var processingFrameIndex = 0
     private var displayedLevels: [CGFloat]
     private var currentState: OverlayVisualState
+    private var presentationGeneration = OverlayPresentationGeneration()
     private var escapeHotkeyMonitor: HotkeyMonitor?
     var onCancel: (@MainActor (OverlayCancelSource) -> Void)?
     var onRetry: (@MainActor () -> Void)?
@@ -169,6 +184,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     func hide() {
+        presentationGeneration.beginPresentation()
         hideTask?.cancel()
         stopProcessingAnimation()
         hideSessionControls()
@@ -200,6 +216,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     private func apply(state: OverlayVisualState) {
+        presentationGeneration.beginPresentation()
         hideTask?.cancel()
         currentState = state
         positionPanel(size: panelSize(for: state))
@@ -310,15 +327,22 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
                 panel.animator().alphaValue = 1
             }
         } else {
+            panel.alphaValue = 1
             panel.orderFrontRegardless()
         }
     }
 
     private func scheduleHide(afterSeconds: Double) {
         hideTask?.cancel()
+        let scheduledGeneration = presentationGeneration.value
         hideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(afterSeconds * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard
+                !Task.isCancelled,
+                self.presentationGeneration.isCurrent(scheduledGeneration)
+            else {
+                return
+            }
             if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 self.hide()
                 return
@@ -328,6 +352,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
                 panel.animator().alphaValue = 0
             }, completionHandler: {
                 Task { @MainActor in
+                    guard self.presentationGeneration.isCurrent(scheduledGeneration) else {
+                        return
+                    }
                     self.hide()
                 }
             })
@@ -667,7 +694,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             panelIgnoresMouseEvents: panel.ignoresMouseEvents,
             isCancelControlVisible: !closeButton.isHidden,
             isRetryControlVisible: !retryButton.isHidden,
-            isTimerVisible: !trailingTimerLabel.isHidden
+            isTimerVisible: !trailingTimerLabel.isHidden,
+            presentationGeneration: presentationGeneration.value,
+            panelIsVisible: panel.isVisible
         )
     }
 }
@@ -679,6 +708,8 @@ struct OverlayDebugSnapshot: Sendable, Equatable {
     let isCancelControlVisible: Bool
     let isRetryControlVisible: Bool
     let isTimerVisible: Bool
+    let presentationGeneration: UInt64
+    let panelIsVisible: Bool
 }
 
 private final class OverlayPassthroughView: NSView {

@@ -182,7 +182,7 @@ func configRoundTripPreservesTerminologyEntries() throws {
     config.transcription.terminology.entries = [
         TerminologyEntry(
             canonical: "OpenWhisper",
-            aliases: ["Chat Type"]
+            aliases: ["Open Whisper"]
         ),
         TerminologyEntry(
             canonical: "OpenAI Compatible",
@@ -201,7 +201,7 @@ func configRoundTripPreservesTerminologyEntries() throws {
     #expect(decoded.transcription.terminology.enabled == true)
     #expect(decoded.transcription.terminology.entries.count == 2)
     #expect(decoded.transcription.terminology.entries[0].canonical == "OpenWhisper")
-    #expect(decoded.transcription.terminology.entries[0].aliases == ["Chat Type"])
+    #expect(decoded.transcription.terminology.entries[0].aliases == ["Open Whisper"])
     #expect(decoded.transcription.terminology.lastImportedSource == "/Users/test/terms.csv")
     #expect(decoded.transcription.terminology.lastImportedAt == "2026-04-19T10:00:00Z")
 }
@@ -296,6 +296,8 @@ func terminologyImportMetadataIsPreserved() throws {
 @Test
 func configRoundTripPreservesUserDictionaryEntryFields() throws {
     var config = AppConfig()
+    config.transcription.languagePreference = .traditionalChinese
+    config.transcription.punctuationPreference = .halfWidth
     config.transcription.terminology.entries = [
         TerminologyEntry(
             type: .correction,
@@ -327,8 +329,19 @@ func configRoundTripPreservesUserDictionaryEntryFields() throws {
     let entries = try #require(terminology["entries"] as? [[String: Any]])
 
     #expect(decoded.transcription.terminology.entries == config.transcription.terminology.entries)
+    #expect(decoded.transcription.languagePreference == .traditionalChinese)
+    #expect(decoded.transcription.punctuationPreference == .halfWidth)
     #expect(entries.allSatisfy { $0["caseSensitive"] == nil })
     #expect(entries.allSatisfy { ($0["type"] as? String) != "suggestion" })
+}
+
+@Test
+func legacyConfigDefaultsToSimplifiedChineseAndAutomaticPunctuation() throws {
+    let data = Data(#"{"transcription":{"hintTerms":["OpenWhisper"]}}"#.utf8)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(decoded.transcription.languagePreference == .simplifiedChinese)
+    #expect(decoded.transcription.punctuationPreference == .automatic)
 }
 
 @Test

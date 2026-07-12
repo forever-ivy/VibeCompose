@@ -111,6 +111,7 @@ struct TextPolishPromptBuilder: Sendable {
             "Remove Chinese filler words and口头禅 such as 嗯, 呃, 啊, 然后, 就是, 那个, 这个, 怎么说, 反正, basically, like when they add no meaning.",
             "If the speaker corrects themselves or contradicts earlier text, the later intent wins / 后面为主; delete the superseded earlier intent.",
             "Preserve URLs, file paths, commands, flags, version numbers, emails, filenames, code symbols, and exact quoted literals.",
+            "Tokens shaped like ⟪OW_LITERAL_0000⟫ are immutable placeholders: copy every token exactly once and never edit, delete, duplicate, or reorder it.",
             "Respect terminology casing and spelling from the glossary. Maximize recall for likely ASR/accent mistakes.",
             "Output only the final polished text. Locale: \(locale).",
         ]

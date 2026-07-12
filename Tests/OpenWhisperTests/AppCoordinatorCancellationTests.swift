@@ -103,7 +103,7 @@ private final class FakeCoordinatorInjector: TextInjecting {
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
         automaticPasteAllowed: Bool
-    ) throws -> InjectionOutcome {
+    ) async throws -> InjectionOutcome {
         injectCallCount += 1
         launchContexts.append(launchAppContext)
         automaticPastePermissions.append(automaticPasteAllowed)
@@ -111,6 +111,29 @@ private final class FakeCoordinatorInjector: TextInjecting {
             ? .pasted
             : .copiedToClipboard(reason: .retryRequiresManualPaste)
     }
+}
+
+@MainActor
+private final class BlockingCoordinatorInjector: TextInjecting {
+    private(set) var didStart = false
+    private(set) var didComplete = false
+
+    func inject(
+        text: String,
+        preserveClipboard: Bool,
+        restoreDelayMilliseconds: UInt64,
+        launchAppContext: LaunchAppContext?,
+        automaticPasteAllowed: Bool
+    ) async throws -> InjectionOutcome {
+        didStart = true
+        try await Task.sleep(for: .seconds(5))
+        didComplete = true
+        return .pasted
+    }
+}
+
+private func minimalCoordinatorWaveData() -> Data {
+    Data("RIFF".utf8) + Data(repeating: 0, count: 4) + Data("WAVE".utf8)
 }
 
 private struct FakeCoordinatorPipeline: DictationPreparing {
@@ -359,6 +382,91 @@ struct AppCoordinatorCancellationTests {
     }
 
     @Test
+    func cancelCurrentSessionCancelsAsyncPasteWaitBeforeLateCompletion() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let audioURL = root.appendingPathComponent("async-injection.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: audioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let injector = BlockingCoordinatorInjector()
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { injector.didStart }
+
+        coordinator.cancelCurrentSession()
+        try await Task.sleep(for: .milliseconds(30))
+
+        #expect(coordinator.state == .idle)
+        #expect(injector.didStart)
+        #expect(injector.didComplete == false)
+        #expect(overlay.hideCallCount == 1)
+    }
+
+    @Test
+    func shutdownSynchronouslyRemovesOwnedProcessingAudio() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let audioURL = root.appendingPathComponent("processing.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let gate = CoordinatorGate()
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: audioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _ in BlockingCoordinatorPipeline(gate: gate) }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .processing)
+
+        coordinator.shutdown()
+
+        #expect(coordinator.state == .idle)
+        #expect(!FileManager.default.fileExists(atPath: audioURL.path))
+        #expect(overlay.hideCallCount == 1)
+        await gate.resume()
+    }
+
+    @Test
     func startRecordingCapturesLaunchContextBeforeProcessingOverlay() async throws {
         let startGate = CoordinatorGate()
         let recorder = FakeCoordinatorRecorder()
@@ -570,7 +678,7 @@ struct AppCoordinatorCancellationTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let originalAudioURL = root.appendingPathComponent("original.wav")
-        try Data("saved-audio".utf8).write(to: originalAudioURL)
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
 
         let recorder = FakeCoordinatorRecorder()
         recorder.nextAudio = RecordedAudio(fileURL: originalAudioURL, durationMs: 1_000)
@@ -645,7 +753,7 @@ struct AppCoordinatorCancellationTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let originalAudioURL = root.appendingPathComponent("original.wav")
-        try Data("saved-audio".utf8).write(to: originalAudioURL)
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
 
         let recorder = FakeCoordinatorRecorder()
         recorder.nextAudio = RecordedAudio(fileURL: originalAudioURL, durationMs: 1_000)
@@ -690,7 +798,7 @@ struct AppCoordinatorCancellationTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let originalAudioURL = root.appendingPathComponent("original.wav")
-        try Data("saved-audio".utf8).write(to: originalAudioURL)
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
 
         let recorder = FakeCoordinatorRecorder()
         recorder.nextAudio = RecordedAudio(fileURL: originalAudioURL, durationMs: 1_000)
