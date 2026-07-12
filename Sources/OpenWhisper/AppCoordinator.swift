@@ -50,6 +50,7 @@ final class AppCoordinator {
     var recorder: (any RecordingControlling)?
     var statusMenu: (any StatusMenuUpdating)?
     private var preferencesWindowController: PreferencesWindowController?
+    private var onboardingWindowController: OnboardingWindowController?
     private var microphonePermissionWindowController: MicrophonePermissionWindowController?
     var state: State = .idle
     private var recordingLevelTimer: Timer?
@@ -162,7 +163,7 @@ final class AppCoordinator {
             )
 
             switch launchMode {
-            case .normal, .settings, .privacySettings, .accessibilityGuide:
+            case .normal, .settings, .privacySettings, .accessibilityGuide, .onboarding:
                 config = try configStore.load()
                 enforceStoragePolicies()
                 recorder = recorderFactory(config.transcription.sampleRateHz)
@@ -187,6 +188,15 @@ final class AppCoordinator {
                 if launchMode == .accessibilityGuide {
                     DispatchQueue.main.async {
                         AccessibilityPermission.guideAccess()
+                    }
+                }
+                if launchMode == .onboarding {
+                    openOnboarding()
+                    scheduleOnboardingSnapshotIfRequested()
+                }
+                if launchMode == .normal, OnboardingStateStore().shouldPresent() {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.openOnboarding()
                     }
                 }
             case .overlayDemo:
@@ -600,15 +610,37 @@ final class AppCoordinator {
                 config: config,
                 authManager: authManager,
                 onSave: { [weak self] newConfig in
-                    guard let self else { return }
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Preferences",
+                                code: 2,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper settings are no longer available."),
+                                ]
+                            )
+                        )
+                    }
                     do {
+                        let previousConfig = self.config
                         try self.configStore.save(newConfig)
                         self.config = newConfig
-                        self.refreshReadyState(detailOverride: L10n.text("Settings saved"), state: .ready)
-                        self.prewarmAuthIfNeeded()
+                        self.refreshReadyState(
+                            detailOverride: L10n.text("Settings saved automatically"),
+                            state: .ready
+                        )
+                        if previousConfig.privacy != newConfig.privacy {
+                            self.enforceStoragePolicies()
+                        }
+                        if previousConfig.auth != newConfig.auth
+                            || previousConfig.transcription.provider != newConfig.transcription.provider {
+                            self.prewarmAuthIfNeeded()
+                        }
+                        return .success(())
                     } catch {
                         self.overlay.showError(error.localizedDescription)
                         self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+                        return .failure(error)
                     }
                 },
                 onImportTerminologyDictionary: { [weak self] currentConfig, fileURL in
@@ -697,12 +729,52 @@ final class AppCoordinator {
                     }
                     return self.deleteAllUserData()
                 },
+                onOpenOnboarding: { [weak self] in
+                    self?.openOnboarding()
+                },
                 focusRecoveryHistory: focusRecoveryHistory,
                 focusPrivacy: focusPrivacy
             )
         }
 
         preferencesWindowController?.show()
+    }
+
+    private func openOnboarding() {
+        if onboardingWindowController == nil {
+            let authManager: ChatGPTAuthManager
+            if let concrete = self.authManager as? ChatGPTAuthManager {
+                authManager = concrete
+            } else {
+                authManager = ChatGPTAuthManager()
+            }
+            onboardingWindowController = OnboardingWindowController(
+                authManager: authManager,
+                onRequestMicrophoneAccess: { [weak self] in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Onboarding",
+                                code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper setup is no longer available."),
+                                ]
+                            )
+                        )
+                    }
+                    do {
+                        try await self.requestMicrophoneAccess(showExplanation: false)
+                        return .success(())
+                    } catch {
+                        return .failure(error)
+                    }
+                },
+                onCompleted: { [weak self] in
+                    self?.refreshReadyState()
+                }
+            )
+        }
+        onboardingWindowController?.show()
     }
 
     private func scheduleSettingsSnapshotIfRequested() {
@@ -713,7 +785,14 @@ final class AppCoordinator {
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+        if let size = AppLaunchMode.settingsSnapshotSize(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        ) {
+            preferencesWindowController?.resizeForSnapshot(size)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
             guard let self else {
                 return
             }
@@ -725,6 +804,33 @@ final class AppCoordinator {
                 NSApplication.shared.terminate(nil)
             } catch {
                 print("OpenWhisper Settings self-capture failed: \(error.localizedDescription)")
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func scheduleOnboardingSnapshotIfRequested() {
+        guard let outputURL = AppLaunchMode.onboardingSnapshotOutputURL(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        ) else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self else {
+                return
+            }
+            do {
+                guard let onboardingWindowController = self.onboardingWindowController else {
+                    throw PreferencesSnapshotError.missingContentView
+                }
+                try onboardingWindowController.writeSnapshot(to: outputURL)
+                NSApplication.shared.terminate(nil)
+            } catch {
+                print("OpenWhisper Onboarding self-capture failed: \(error.localizedDescription)")
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
@@ -820,7 +926,7 @@ final class AppCoordinator {
         alert.runModal()
     }
 
-    private func requestMicrophoneAccess() async throws {
+    private func requestMicrophoneAccess(showExplanation: Bool = true) async throws {
         let status = AudioRecorder.microphonePermissionState()
         let app = NSApplication.shared
         let previousActivationPolicy = app.activationPolicy()
@@ -835,17 +941,19 @@ final class AppCoordinator {
                 _ = app.setActivationPolicy(.regular)
             }
 
-            let controller = microphonePermissionWindowController ?? MicrophonePermissionWindowController()
-            microphonePermissionWindowController = controller
-            logger.info("Presenting first-run microphone permission window")
-            let shouldContinue = await controller.present()
-            logger.info("First-run microphone permission window returned shouldContinue=\(shouldContinue, privacy: .public)")
-            guard shouldContinue else {
-                if previousActivationPolicy != .regular {
-                    _ = app.setActivationPolicy(previousActivationPolicy)
+            if showExplanation {
+                let controller = microphonePermissionWindowController ?? MicrophonePermissionWindowController()
+                microphonePermissionWindowController = controller
+                logger.info("Presenting first-run microphone permission window")
+                let shouldContinue = await controller.present()
+                logger.info("First-run microphone permission window returned shouldContinue=\(shouldContinue, privacy: .public)")
+                guard shouldContinue else {
+                    if previousActivationPolicy != .regular {
+                        _ = app.setActivationPolicy(previousActivationPolicy)
+                    }
+                    logger.error("User cancelled first-run microphone permission window")
+                    throw RecorderError.microphoneDenied
                 }
-                logger.error("User cancelled first-run microphone permission window")
-                throw RecorderError.microphoneDenied
             }
         }
 
@@ -867,7 +975,7 @@ final class AppCoordinator {
             }
 
             do {
-                try await self.requestMicrophoneAccess()
+                try await self.requestMicrophoneAccess(showExplanation: false)
                 self.refreshReadyState()
             } catch {
                 self.statusMenu?.update(state: .setupRequired, detail: error.localizedDescription)

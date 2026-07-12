@@ -1,6 +1,6 @@
 import Foundation
 
-struct AppConfig: Codable, Sendable {
+struct AppConfig: Codable, Sendable, Equatable {
     var transcription: TranscriptionConfig = .init()
     var injection: InjectionConfig = .init()
     var auth: AuthConfig = .init()
@@ -223,7 +223,7 @@ struct TextPolishConfig: Codable, Sendable, Equatable {
     }
 }
 
-struct TranscriptionConfig: Codable, Sendable {
+struct TranscriptionConfig: Codable, Sendable, Equatable {
     var provider: TranscriptionProvider = .chatGPTManagedAuth
     var hotkeyKeyCode: UInt32 = 96
     var openAITranscriptionURL: String = "https://api.openai.com/v1/audio/transcriptions"
@@ -340,7 +340,8 @@ enum TerminologyEntryType: String, Codable, Sendable, Equatable, CaseIterable {
     }
 }
 
-struct TerminologyEntry: Codable, Sendable, Equatable {
+struct TerminologyEntry: Codable, Sendable, Equatable, Identifiable {
+    var id: UUID
     var type: TerminologyEntryType
     var original: String
     var replacement: String?
@@ -362,6 +363,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable {
     }
 
     init(
+        id: UUID = UUID(),
         type: TerminologyEntryType,
         original: String,
         replacement: String?,
@@ -371,6 +373,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable {
         usageCount: Int,
         createdAt: String
     ) {
+        self.id = id
         self.type = type
         self.original = original
         self.replacement = replacement
@@ -400,6 +403,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         let rawType = try container.decodeIfPresent(String.self, forKey: .type) ?? TerminologyEntryType.term.rawValue
         type = rawType == TerminologyEntryType.correction.rawValue ? .correction : .term
         original = try container.decodeIfPresent(String.self, forKey: .original)
@@ -425,6 +429,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable {
 
     func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
         try container.encode(type, forKey: .type)
         try container.encode(original, forKey: .original)
         try container.encodeIfPresent(replacement, forKey: .replacement)
@@ -436,6 +441,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case id
         case type
         case original
         case replacement
@@ -448,7 +454,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable {
     }
 }
 
-struct InjectionConfig: Codable, Sendable {
+struct InjectionConfig: Codable, Sendable, Equatable {
     var preserveClipboard: Bool = false
     var restoreDelayMilliseconds: UInt64 = 350
 

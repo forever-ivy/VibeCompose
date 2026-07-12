@@ -83,7 +83,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             style: style
         )
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: style.pillWidth, height: style.pillHeight),
+            contentRect: NSRect(
+                origin: .zero,
+                size: style.size(for: .processing)
+            ),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -100,6 +103,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         self.onRetry = onRetry
 
         configureViews()
+        observeAccessibilityDisplayOptions()
     }
 
     func showRecording(elapsedText: String) {
@@ -199,6 +203,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         hideTask?.cancel()
         currentState = state
         positionPanel(size: panelSize(for: state))
+        updateAccessibilityAppearance()
 
         titleLabel.stringValue = state.label
         detailLabel.stringValue = state.supplementaryText ?? ""
@@ -237,6 +242,8 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
                 borderColor: OpenWhisperPalette.error.withAlphaComponent(0.34)
             )
         }
+
+        announce(state)
     }
 
     private func configureBadge(
@@ -262,6 +269,14 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private func startProcessingAnimation() {
         stopProcessingAnimation()
 
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            displayedLevels = WaveformNormalizer.reducedMotionProcessingLevels(
+                barCount: style.waveformBarCount
+            )
+            waveformView.update(levels: displayedLevels)
+            return
+        }
+
         processingTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -286,6 +301,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         if panel.alphaValue == 0 || !panel.isVisible {
             panel.alphaValue = 0
             panel.orderFrontRegardless()
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                panel.alphaValue = 1
+                return
+            }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.14
                 panel.animator().alphaValue = 1
@@ -300,6 +319,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         hideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(afterSeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                self.hide()
+                return
+            }
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.16
                 panel.animator().alphaValue = 0
@@ -378,11 +401,16 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.isBordered = false
         closeButton.bezelStyle = .regularSquare
-        closeButton.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Cancel dictation")
+        closeButton.image = NSImage(
+            systemSymbolName: "xmark.circle.fill",
+            accessibilityDescription: L10n.text("Cancel dictation")
+        )
         closeButton.symbolConfiguration = .init(pointSize: 12, weight: .regular)
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = OpenWhisperPalette.mistMuted.withAlphaComponent(0.78)
-        closeButton.toolTip = "Cancel and discard this recording (Esc)"
+        closeButton.toolTip = L10n.text("Cancel and discard this recording (Esc)")
+        closeButton.setAccessibilityLabel(L10n.text("Cancel dictation"))
+        closeButton.setAccessibilityHelp(L10n.text("Cancel and discard this recording (Esc)"))
         closeButton.target = self
         closeButton.action = #selector(handleCancelControlPressed)
         closeButton.setButtonType(.momentaryChange)
@@ -392,7 +420,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         retryButton.translatesAutoresizingMaskIntoConstraints = false
         retryButton.isBordered = false
         retryButton.bezelStyle = .regularSquare
-        retryButton.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Retry transcription")
+        retryButton.image = NSImage(
+            systemSymbolName: "arrow.clockwise",
+            accessibilityDescription: L10n.text("Retry transcription")
+        )
         retryButton.symbolConfiguration = .init(pointSize: 12, weight: .semibold)
         retryButton.imagePosition = .imageOnly
         retryButton.contentTintColor = OpenWhisperPalette.mistMuted.withAlphaComponent(0.84)
@@ -401,6 +432,8 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         retryButton.setButtonType(.momentaryChange)
         retryButton.focusRingType = .none
         retryButton.isHidden = true
+        retryButton.toolTip = L10n.text("Retry transcription")
+        retryButton.setAccessibilityLabel(L10n.text("Retry transcription"))
 
         trailingAccessoryStack.translatesAutoresizingMaskIntoConstraints = false
         trailingAccessoryStack.orientation = .horizontal
@@ -458,7 +491,67 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     private func panelSize(for state: OverlayVisualState) -> NSSize {
-        NSSize(width: style.width(for: state), height: style.pillHeight)
+        style.size(for: state)
+    }
+
+    private func observeAccessibilityDisplayOptions() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+                self.updateAccessibilityAppearance()
+                if case .processing = self.currentState {
+                    self.startProcessingAnimation()
+                }
+            }
+        }
+    }
+
+    private func updateAccessibilityAppearance() {
+        let increaseContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        backgroundView.layer?.borderWidth = increaseContrast ? 1.5 : 1
+        backgroundView.layer?.borderColor = OpenWhisperPalette.mist
+            .withAlphaComponent(increaseContrast ? 0.34 : 0.08)
+            .cgColor
+        titleLabel.textColor = OpenWhisperPalette.mist
+        detailLabel.textColor = increaseContrast
+            ? OpenWhisperPalette.mist
+            : OpenWhisperPalette.mistMuted
+        trailingTimerLabel.textColor = OpenWhisperPalette.mistMuted.withAlphaComponent(
+            increaseContrast ? 1 : style.timerOpacity
+        )
+        closeButton.contentTintColor = OpenWhisperPalette.mistMuted.withAlphaComponent(
+            increaseContrast ? 1 : 0.78
+        )
+        retryButton.contentTintColor = OpenWhisperPalette.mistMuted.withAlphaComponent(
+            increaseContrast ? 1 : 0.84
+        )
+    }
+
+    private func announce(_ state: OverlayVisualState) {
+        let announcement: String
+        if let supplementaryText = state.supplementaryText, !supplementaryText.isEmpty {
+            announcement = "\(state.label). \(supplementaryText)"
+        } else {
+            announcement = state.label
+        }
+
+        panelRootView.setAccessibilityElement(true)
+        panelRootView.setAccessibilityRole(.group)
+        panelRootView.setAccessibilityLabel(announcement)
+        NSAccessibility.post(
+            element: NSApplication.shared,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: announcement,
+                .priority: NSAccessibilityPriorityLevel.high.rawValue,
+            ]
+        )
     }
 
     private func positionPanel(size: NSSize) {

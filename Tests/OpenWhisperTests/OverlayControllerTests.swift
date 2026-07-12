@@ -7,13 +7,17 @@ import Testing
 func minimalOverlayPresetUsesNineBarVoiceGlyph() {
     let preset = OverlayStylePreset.dictationHUD
 
-    #expect(preset.pillHeight == 44)
-    #expect(preset.cornerRadius == 15)
-    #expect(preset.bottomInset == 8)
+    #expect(preset.primaryPillWidth == 284)
+    #expect(preset.primaryPillHeight == 44)
+    #expect(preset.errorPillWidth == 320)
+    #expect(preset.errorPillHeight == 56)
+    #expect(preset.cornerRadius == 16)
+    #expect(preset.bottomInset == 16)
     #expect(preset.waveformBarCount == 9)
     #expect(preset.showsTranscriptPreview == false)
     #expect(preset.inlineCancelControlSize == 14)
     #expect(preset.timerFontSize == 10)
+    #expect(preset.errorAutoHideDelay == 5)
 }
 
 @Test
@@ -119,15 +123,30 @@ func waveformNormalizerPadsMissingSamplesToTheRequestedWaveCount() {
 }
 
 @Test
-func overlayRecordingWidthExpandsToFitTimer() {
+func overlayPrimaryStatesUseStableGeometryAndErrorsHaveRoomForRecoveryCopy() {
     let preset = OverlayStylePreset.dictationHUD
-
-    #expect(
-        preset.width(for: .recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:07")) >
-            preset.width(for: .processing)
+    let recordingSize = preset.size(
+        for: .recording(
+            levels: Array(repeating: 0.2, count: 9),
+            elapsedText: "00:07"
+        )
     )
-    #expect(preset.width(for: .error("boom")) == preset.errorPillWidth)
-    #expect(preset.width(for: .processing) >= preset.inlineControlReservedWidth)
+
+    #expect(recordingSize == preset.size(for: .processing))
+    #expect(recordingSize == preset.size(for: .success(.pasted)))
+    #expect(preset.size(for: .error("boom")).width == preset.errorPillWidth)
+    #expect(preset.size(for: .error("boom")).height == preset.errorPillHeight)
+    #expect(recordingSize.width >= preset.inlineControlReservedWidth)
+}
+
+@Test
+func reducedMotionProcessingProfileIsStaticCenteredAndVisible() {
+    let levels = WaveformNormalizer.reducedMotionProcessingLevels(barCount: 9)
+
+    #expect(levels.count == 9)
+    #expect(levels.allSatisfy { $0 >= 0.08 && $0 <= 1 })
+    #expect(levels[4] > levels[0])
+    #expect(abs(levels[0] - levels[8]) < 0.0001)
 }
 
 @MainActor
@@ -136,7 +155,7 @@ func overlayPanelPlacementStaysNearBottomEdge() {
     let preset = OverlayStylePreset.dictationHUD
     let visibleFrame = CGRect(x: 40, y: 30, width: 1440, height: 860)
     let frame = OverlayController.panelFrame(
-        for: CGSize(width: preset.width(for: .processing), height: preset.pillHeight),
+        for: preset.size(for: .processing),
         in: visibleFrame,
         bottomInset: preset.bottomInset
     )

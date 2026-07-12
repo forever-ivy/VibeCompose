@@ -1,8 +1,56 @@
 /* Window and menu */
 "OpenWhisper Settings" = "OpenWhisper 设置";
+"Set Up OpenWhisper" = "设置 OpenWhisper";
+"Four short steps to your first F5 dictation." = "只需四步，即可完成第一次 F5 听写。";
+"Step %ld of 4" = "第 %ld 步，共 4 步";
+"Welcome" = "欢迎";
+"Connect" = "连接";
+"Paste & Practice" = "粘贴与练习";
+"Microphone is required. Accessibility is optional and only enables automatic paste." = "麦克风为必需权限；辅助功能为可选权限，仅用于自动粘贴。";
+"Speak anywhere on your Mac" = "在 Mac 任意位置直接口述";
+"Focus a text field, press F5 to start, press F5 again to transcribe." = "聚焦文本输入框，按 F5 开始，再按一次 F5 完成转写。";
+"One global shortcut" = "一个全局快捷键";
+"F5 starts and stops every dictation—no mode switch or floating editor." = "每次听写都用 F5 开始和停止，无需切换模式或打开浮动编辑器。";
+"Technical language stays intact" = "保护技术表达";
+"Terminology and deterministic corrections protect product names, commands, and paths." = "术语与确定性修正规则可保护产品名、命令和路径。";
+"Safe paste or clipboard" = "安全粘贴或剪贴板兜底";
+"OpenWhisper pastes only when it can verify an editable target. Otherwise, your result stays in the clipboard." = "OpenWhisper 仅在确认目标可编辑时自动粘贴，否则结果会保留在剪贴板。";
+"The default route uses your ChatGPT account through a private, undocumented backend. OpenWhisper is independent from OpenAI, and upstream availability or limits may change." = "默认路径通过未公开、无正式文档的后端使用你的 ChatGPT 账户。OpenWhisper 是独立项目，上游可用性和限制可能变化。";
+"Connect your ChatGPT account" = "连接你的 ChatGPT 账户";
+"OpenWhisper stores its own session in Keychain on this Mac." = "OpenWhisper 会将自己的会话安全存储在这台 Mac 的钥匙串中。";
+"ChatGPT connected" = "ChatGPT 已连接";
+"ChatGPT connection required" = "需要连接 ChatGPT";
+"Connect in Browser" = "在浏览器中连接";
+"A browser window opens for sign-in. OpenWhisper never asks for your ChatGPT password." = "系统会打开浏览器完成登录，OpenWhisper 不会要求你输入 ChatGPT 密码。";
+"ChatGPT connected. Continue to microphone access." = "ChatGPT 已连接，请继续设置麦克风权限。";
+"Allow microphone access" = "允许麦克风访问";
+"Microphone access is required only while you record a dictation." = "只有在录制听写时才需要麦克风权限。";
+"Microphone is ready" = "麦克风已就绪";
+"Microphone has not been requested" = "尚未请求麦克风权限";
+"Microphone access is off" = "麦克风权限已关闭";
+"Enable Microphone" = "启用麦克风";
+"Open Microphone Settings" = "打开麦克风设置";
+"OpenWhisper requests permission only after you click Enable Microphone. Successful recordings are deleted after processing." = "只有点击“启用麦克风”后才会请求权限；成功处理的录音会立即删除。";
+"You can record with F5." = "现在可以按 F5 录音。";
+"Click Enable Microphone to show the macOS permission prompt." = "点击“启用麦克风”以显示 macOS 权限提示。";
+"Turn on OpenWhisper in System Settings > Privacy & Security > Microphone." = "请在“系统设置 > 隐私与安全性 > 麦克风”中开启 OpenWhisper。";
+"Try your first dictation" = "尝试第一次听写";
+"Click the practice field, press F5, speak, then press F5 again." = "点击练习输入框，按 F5 后说话，再按一次 F5。";
+"Automatic paste is ready" = "自动粘贴已就绪";
+"Clipboard Mode is ready" = "剪贴板模式已就绪";
+"OpenWhisper can paste into the focused editable field." = "OpenWhisper 可以粘贴到当前聚焦的可编辑输入框。";
+"Accessibility is optional. Without it, the transcript remains in your clipboard for Command-V." = "辅助功能是可选权限；未开启时，转写结果会保留在剪贴板，可按 Command-V 粘贴。";
+"Enable Automatic Paste" = "启用自动粘贴";
+"Dictation practice field" = "听写练习输入框";
+"Your first transcript will appear here—or remain in the clipboard." = "第一次转写结果会显示在这里，或保留在剪贴板中。";
+"Back" = "返回";
+"Finish Setup" = "完成设置";
+"OpenWhisper setup is no longer available." = "OpenWhisper 设置流程已不可用。";
+"Need to revisit the first-run flow or practice F5 again?" = "需要重新查看首次设置流程或再次练习 F5 吗？";
+"Open Setup Guide" = "打开设置指南";
+"Microphone is required for dictation. You can change this later in System Settings." = "听写必须使用麦克风权限，之后可随时在系统设置中更改。";
 "Settings…" = "设置…";
 "Open Config Folder" = "打开配置文件夹";
-"Save Settings" = "保存设置";
 "Quit OpenWhisper" = "退出 OpenWhisper";
 "State: idle" = "状态：空闲";
 "State: %@" = "状态：%@";
@@ -56,6 +104,8 @@
 "All" = "全部";
 "Terms" = "术语";
 "Corrections" = "修正";
+"Search terminology" = "搜索术语";
+"%ld matching entries" = "%ld 条匹配记录";
 "F5 dictation workflow" = "F5 听写工作流";
 "Connect ChatGPT, verify permissions, and keep the first-run flow healthy." = "连接 ChatGPT、检查权限，并确保首次使用流程正常。";
 "Configure the F5 recording route and ASR behavior." = "配置 F5 录音路径和语音识别行为。";
@@ -134,6 +184,10 @@
 "Retrying saved audio" = "正在重试已保存的音频";
 "Pasted transcript" = "转写结果已粘贴";
 "Settings saved" = "设置已保存";
+"Saved automatically" = "已自动保存";
+"Settings saved automatically" = "设置已自动保存";
+"Save failed" = "保存失败";
+"Could not save settings: %@" = "无法保存设置：%@";
 "Imported %ld terminology terms" = "已导入 %ld 个术语";
 "Saved recovery audio is missing." = "找不到已保存的恢复音频。";
 
@@ -143,6 +197,8 @@
 "ChatGPT Auth" = "ChatGPT 登录授权";
 "%@ via %@" = "%@，接口：%@";
 "Advanced transcription recovery is selected. It uses the configured OpenAI-compatible ASR environment variable, but OpenWhisper no longer ships a provider-key fallback matrix or text-polish provider key UI." = "当前已选择高级转写恢复路径。它会使用配置好的 OpenAI 兼容语音识别环境变量；OpenWhisper 不再提供多服务商密钥兜底矩阵或文本润色密钥界面。";
+"Configuration" = "配置";
+"Open the local support folder only for advanced troubleshooting, backup, or manual inspection." = "仅在高级故障排查、备份或手动检查时打开本地支持目录。";
 "Mode" = "模式";
 "Auto" = "自动";
 "Always rewrite" = "始终重写";
@@ -194,7 +250,9 @@
 "Add" = "添加";
 "Save Entry" = "保存条目";
 "No dictionary entries for this filter." = "当前筛选条件下没有词典条目。";
-"Showing 5 of %ld. Use the filter or edit config.json for bulk changes." = "当前显示 %ld 条中的前 5 条。可使用筛选器，或编辑 config.json 进行批量修改。";
+"No terminology entries match your search." = "没有符合搜索条件的术语条目。";
+"That terminology entry changed before it could be edited. Refresh your search and try again." = "该术语条目已发生变化，无法继续编辑。请刷新搜索后重试。";
+"That terminology entry changed before it could be saved. Refresh your search and try again." = "该术语条目已发生变化，无法保存。请刷新搜索后重试。";
 "Edit" = "编辑";
 "Delete" = "删除";
 "Choose a plain text or CSV terminology dictionary." = "请选择纯文本或 CSV 格式的术语词典。";
@@ -250,6 +308,9 @@
 
 /* Overlay and first run */
 "F5 again to transcribe" = "再次按 F5 开始转写";
+"Cancel dictation" = "取消听写";
+"Cancel and discard this recording (Esc)" = "取消并丢弃本次录音（Esc）";
+"Retry transcription" = "重试转写";
 "Enable Microphone Access" = "开启麦克风权限";
 "Allow microphone access" = "允许访问麦克风";
 "OpenWhisper needs microphone access before it can record your first dictation. Click Continue and macOS should show the microphone permission prompt next." = "OpenWhisper 需要麦克风权限才能开始首次听写。点击“继续”后，macOS 将显示麦克风权限请求。";

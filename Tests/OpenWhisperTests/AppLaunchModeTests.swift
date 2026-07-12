@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import OpenWhisper
 
@@ -26,6 +27,26 @@ struct AppLaunchModeTests {
     func settingsModeAcceptsLaunchServicesArgument() {
         #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--settings"]) == .settings)
         #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--open-settings"]) == .settings)
+    }
+
+    @Test
+    func onboardingModeAndSnapshotAcceptLaunchServicesArguments() {
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--onboarding"]
+            ) == .onboarding
+        )
+        #expect(
+            AppLaunchMode.onboardingSnapshotOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--onboarding-snapshot-output",
+                    "/tmp/openwhisper-onboarding.png",
+                ]
+            ) == URL(fileURLWithPath: "/tmp/openwhisper-onboarding.png")
+        )
     }
 
     @Test
@@ -124,6 +145,50 @@ struct AppLaunchModeTests {
                     "/tmp/settings-argument.png",
                 ]
             )?.path == "/tmp/settings-argument.png"
+        )
+    }
+
+    @Test
+    func settingsSnapshotSizeAcceptsBoundedEnvironmentAndArguments() {
+        #expect(
+            AppLaunchMode.settingsSnapshotSize(
+                environment: [
+                    "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "980x720",
+                ]
+            ) == SettingsSnapshotSize(width: 980, height: 720)
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotSize(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--settings-snapshot-size",
+                    "820×560",
+                ]
+            ) == SettingsSnapshotSize(width: 820, height: 560)
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotSize(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--settings-snapshot-size=1200x800",
+                ]
+            ) == SettingsSnapshotSize(width: 1_200, height: 800)
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotSize(
+                environment: [
+                    "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "819x560",
+                ]
+            ) == nil
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotSize(
+                environment: [
+                    "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "not-a-size",
+                ]
+            ) == nil
         )
     }
 

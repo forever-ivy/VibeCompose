@@ -2,10 +2,10 @@ import CoreGraphics
 import Foundation
 
 struct OverlayStylePreset: Sendable, Equatable {
-    let pillWidth: CGFloat
-    let recordingPillWidth: CGFloat
-    let pillHeight: CGFloat
+    let primaryPillWidth: CGFloat
+    let primaryPillHeight: CGFloat
     let errorPillWidth: CGFloat
+    let errorPillHeight: CGFloat
     let bottomInset: CGFloat
     let cornerRadius: CGFloat
     let contentPaddingH: CGFloat
@@ -29,12 +29,12 @@ struct OverlayStylePreset: Sendable, Equatable {
     let timerOpacity: CGFloat
 
     static let dictationHUD = OverlayStylePreset(
-        pillWidth: 196,
-        recordingPillWidth: 300,
-        pillHeight: 44,
-        errorPillWidth: 286,
-        bottomInset: 8,
-        cornerRadius: 15,
+        primaryPillWidth: 284,
+        primaryPillHeight: 44,
+        errorPillWidth: 320,
+        errorPillHeight: 56,
+        bottomInset: 16,
+        cornerRadius: 16,
         contentPaddingH: 10,
         contentPaddingV: 8,
         leadingVisualWidth: 54,
@@ -47,7 +47,7 @@ struct OverlayStylePreset: Sendable, Equatable {
         recordingAutoHideDelay: nil,
         processingAutoHideDelay: nil,
         successAutoHideDelay: 1.2,
-        errorAutoHideDelay: 2.0,
+        errorAutoHideDelay: 5.0,
         inlineCancelControlSize: 14,
         inlineControlGap: 5,
         inlineControlReservedWidth: 20,
@@ -56,14 +56,12 @@ struct OverlayStylePreset: Sendable, Equatable {
         timerOpacity: 0.72
     )
 
-    func width(for state: OverlayVisualState) -> CGFloat {
+    func size(for state: OverlayVisualState) -> CGSize {
         switch state {
-        case .recording:
-            return recordingPillWidth
         case .error, .retryableError:
-            return errorPillWidth
-        default:
-            return pillWidth
+            return CGSize(width: errorPillWidth, height: errorPillHeight)
+        case .recording, .processing, .success:
+            return CGSize(width: primaryPillWidth, height: primaryPillHeight)
         }
     }
 }
@@ -232,6 +230,20 @@ enum WaveformNormalizer {
             let ridge = max(0, 1 - (pulseDistance / 2.2))
             let level = envelope + (ridge * 0.58)
             return min(maximumVisibleLevel, max(minimumVisibleLevel, level))
+        }
+    }
+
+    static func reducedMotionProcessingLevels(barCount: Int) -> [CGFloat] {
+        let center = CGFloat(max(0, barCount - 1)) / 2
+        let radius = max(center, 1)
+
+        return (0..<barCount).map { index in
+            let distanceFromCenter = abs(CGFloat(index) - center) / radius
+            let contour = pow(max(0, 1 - distanceFromCenter), 1.25)
+            return min(
+                maximumVisibleLevel,
+                max(minimumVisibleLevel, minimumVisibleLevel + (contour * 0.48))
+            )
         }
     }
 }

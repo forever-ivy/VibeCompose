@@ -26,7 +26,7 @@ final class PreferencesWindowController: NSWindowController {
     init(
         config: AppConfig,
         authManager: ChatGPTAuthManager,
-        onSave: @escaping (AppConfig) -> Void,
+        onSave: @escaping (AppConfig) -> Result<Void, any Error>,
         onImportTerminologyDictionary: @escaping (AppConfig, URL) -> Result<AppConfig, any Error>,
         onLoadRecentHistory: @escaping () -> [TranscriptionHistoryRecord],
         onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
@@ -35,6 +35,7 @@ final class PreferencesWindowController: NSWindowController {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
+        onOpenOnboarding: @escaping () -> Void,
         focusRecoveryHistory: Bool = false,
         focusPrivacy: Bool = false
     ) {
@@ -50,21 +51,29 @@ final class PreferencesWindowController: NSWindowController {
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onOpenConfigFolder: onOpenConfigFolder,
             onDeleteAllData: onDeleteAllData,
+            onOpenOnboarding: onOpenOnboarding,
             focusRecoveryHistory: focusRecoveryHistory,
             focusPrivacy: focusPrivacy
         )
         let hostingController = NSHostingController(rootView: view)
 
         let window = CommandClosingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 980, height: 720),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 625),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
-        window.title = L10n.text("OpenWhisper Settings")
+        window.title = ProductIdentity.name
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        window.center()
+        window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.SettingsWindow")
+        window.minSize = NSSize(width: 820, height: 560)
+        window.tabbingMode = .disallowed
+        let restoredFrame = window.setFrameUsingName(SettingsWindowStateStore.frameAutosaveName)
+        window.setFrameAutosaveName(SettingsWindowStateStore.frameAutosaveName)
+        if !restoredFrame {
+            window.center()
+        }
         window.contentViewController = hostingController
 
         super.init(window: window)
@@ -81,6 +90,25 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     func writeSnapshot(to url: URL) throws {
+        window?.contentView?.layoutSubtreeIfNeeded()
+        window?.displayIfNeeded()
+
+        if
+            let window,
+            window.windowNumber > 0,
+            let windowImage = CGWindowListCreateImage(
+                .null,
+                .optionIncludingWindow,
+                CGWindowID(window.windowNumber),
+                [.boundsIgnoreFraming, .bestResolution]
+            ),
+            let png = NSBitmapImageRep(cgImage: windowImage)
+                .representation(using: .png, properties: [:])
+        {
+            try png.write(to: url, options: [.atomic])
+            return
+        }
+
         guard let contentView = window?.contentView else {
             throw PreferencesSnapshotError.missingContentView
         }
@@ -102,6 +130,13 @@ final class PreferencesWindowController: NSWindowController {
         }
         try png.write(to: url, options: [.atomic])
     }
+
+    func resizeForSnapshot(_ size: SettingsSnapshotSize) {
+        window?.setContentSize(
+            NSSize(width: CGFloat(size.width), height: CGFloat(size.height))
+        )
+        window?.center()
+    }
 }
 
 private final class CommandClosingWindow: NSWindow {
@@ -116,6 +151,34 @@ private final class CommandClosingWindow: NSWindow {
         }
 
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+private enum SettingsSaveStatus: Equatable {
+    case saved
+    case failed(String)
+}
+
+private extension SettingsPane {
+    var icon: String {
+        switch self {
+        case .account:
+            return "person.crop.circle"
+        case .dictation:
+            return "mic"
+        case .polish:
+            return "wand.and.stars"
+        case .recovery:
+            return "clock.arrow.circlepath"
+        case .terminology:
+            return "text.book.closed"
+        case .paste:
+            return "doc.on.clipboard"
+        case .privacy:
+            return "hand.raised"
+        case .advanced:
+            return "gearshape"
+        }
     }
 }
 
@@ -141,40 +204,6 @@ private struct TextPolishUsage: Equatable {
 }
 
 private struct PreferencesView: View {
-    private enum SettingsSection: String, CaseIterable, Identifiable {
-        case account = "Account"
-        case dictation = "Dictation"
-        case polish = "AI Polish"
-        case recovery = "History"
-        case terminology = "Terminology"
-        case paste = "Paste"
-        case privacy = "Privacy"
-        case advanced = "Advanced"
-
-        var id: String { rawValue }
-
-        var icon: String {
-            switch self {
-            case .account:
-                return "person.crop.circle"
-            case .dictation:
-                return "mic"
-            case .polish:
-                return "wand.and.stars"
-            case .recovery:
-                return "clock.arrow.circlepath"
-            case .terminology:
-                return "text.book.closed"
-            case .paste:
-                return "doc.on.clipboard"
-            case .privacy:
-                return "hand.raised"
-            case .advanced:
-                return "gearshape"
-            }
-        }
-    }
-
     private enum TerminologyFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case terms = "Terms"
@@ -189,14 +218,16 @@ private struct PreferencesView: View {
     @State private var terminologyImportMessage: String?
     @State private var terminologyImportIsError = false
     @State private var terminologyFilter: TerminologyFilter = .all
-    @State private var editingTerminologyIndex: Int?
+    @State private var terminologySearchText = ""
+    @State private var editingTerminologyID: UUID?
     @State private var editingTerminologyType: TerminologyEntryType = .term
     @State private var editingOriginal = ""
     @State private var editingReplacement = ""
     @State private var authSnapshot: ChatGPTAuthSnapshot
     @State private var browserBridgeSnapshot: BrowserBridgeSnapshot
     @State private var isConnectingBrowserLogin = false
-    @State private var selectedSection: SettingsSection = .account
+    @State private var selectedSection: SettingsPane?
+    @State private var saveStatus: SettingsSaveStatus = .saved
     @State private var textPolishUsage: [TextPolishProviderID: TextPolishUsage] = [:]
     @State private var textPolishMessage: String?
     @State private var textPolishMessageIsError = false
@@ -209,7 +240,7 @@ private struct PreferencesView: View {
     @State private var privacyMessageIsError = false
 
     let authManager: ChatGPTAuthManager
-    let onSave: (AppConfig) -> Void
+    let onSave: (AppConfig) -> Result<Void, any Error>
     let onImportTerminologyDictionary: (AppConfig, URL) -> Result<AppConfig, any Error>
     let onLoadRecentHistory: () -> [TranscriptionHistoryRecord]
     let onLoadRecoveryHistory: () -> [RecoveryRecord]
@@ -218,11 +249,13 @@ private struct PreferencesView: View {
     let onRequestMicrophoneAccess: () -> Void
     let onOpenConfigFolder: () -> Void
     let onDeleteAllData: () -> Result<AppConfig, any Error>
+    let onOpenOnboarding: () -> Void
+    let windowStateStore: SettingsWindowStateStore
 
     init(
         initialConfig: AppConfig,
         authManager: ChatGPTAuthManager,
-        onSave: @escaping (AppConfig) -> Void,
+        onSave: @escaping (AppConfig) -> Result<Void, any Error>,
         onImportTerminologyDictionary: @escaping (AppConfig, URL) -> Result<AppConfig, any Error>,
         onLoadRecentHistory: @escaping () -> [TranscriptionHistoryRecord],
         onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
@@ -231,9 +264,11 @@ private struct PreferencesView: View {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
+        onOpenOnboarding: @escaping () -> Void,
         focusRecoveryHistory: Bool = false,
         focusPrivacy: Bool = false
     ) {
+        let windowStateStore = SettingsWindowStateStore()
         _config = State(initialValue: initialConfig)
         _showsAdvancedRecovery = State(initialValue: initialConfig.transcription.provider == .openAICompatible)
         _permissionStatusMonitor = StateObject(wrappedValue: PermissionStatusMonitor())
@@ -242,7 +277,10 @@ private struct PreferencesView: View {
         _browserBridgeSnapshot = State(initialValue: authManager.browserBridgeSnapshot())
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
         _selectedSection = State(
-            initialValue: focusPrivacy ? .privacy : (focusRecoveryHistory ? .recovery : .account)
+            initialValue: windowStateStore.initialPane(
+                focusRecoveryHistory: focusRecoveryHistory,
+                focusPrivacy: focusPrivacy
+            )
         )
         self.authManager = authManager
         self.onSave = onSave
@@ -254,6 +292,8 @@ private struct PreferencesView: View {
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onOpenConfigFolder = onOpenConfigFolder
         self.onDeleteAllData = onDeleteAllData
+        self.onOpenOnboarding = onOpenOnboarding
+        self.windowStateStore = windowStateStore
     }
 
     private var runtimeIssues: [RuntimePreflightIssue] {
@@ -349,37 +389,63 @@ private struct PreferencesView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-
-            Divider()
-
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        sectionHeader
-                        selectedSectionView
+        NavigationSplitView {
+            List(selection: $selectedSection) {
+                Section {
+                    ForEach(SettingsPane.allCases) { pane in
+                        Label(L10n.text(pane.rawValue), systemImage: pane.icon)
+                            .foregroundStyle(.primary)
+                            .tag(pane)
                     }
-                    .padding(22)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                } header: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("OpenWhisper")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Text(L10n.text("F5 dictation workflow"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .textCase(nil)
+                    .padding(.vertical, 6)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
+        } detail: {
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 16) {
+                    sectionHeader
+                    Spacer(minLength: 16)
+                    saveStatusIndicator
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .padding(.bottom, 12)
 
                 Divider()
 
-                HStack {
-                    Button(L10n.text("Open Config Folder"), action: onOpenConfigFolder)
-                    Spacer()
-                    Button(L10n.text("Save Settings")) {
-                        onSave(config)
-                    }
-                    .keyboardShortcut(.defaultAction)
+                Form {
+                    selectedSectionView
                 }
-                .padding(16)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .formStyle(.grouped)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .background(Color(nsColor: .windowBackgroundColor))
         }
-        .frame(minWidth: 980, minHeight: 720)
+        .frame(minWidth: 820, minHeight: 560)
+        .onChange(of: selectedSection) { pane in
+            guard let pane else {
+                selectedSection = .account
+                return
+            }
+            windowStateStore.saveSelectedPane(pane)
+        }
+        .onChange(of: config) { _ in
+            persistSettings()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissionStatusMonitor.refresh()
             authSnapshot = authManager.authSnapshot()
@@ -425,59 +491,41 @@ private struct PreferencesView: View {
         }
     }
 
-    private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("OpenWhisper")
-                    .font(.system(size: 24, weight: .semibold))
-                Text(L10n.text("F5 dictation workflow"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
-
-            ForEach(SettingsSection.allCases) { section in
-                Button {
-                    selectedSection = section
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: section.icon)
-                            .frame(width: 18)
-                        Text(L10n.text(section.rawValue))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(
-                        selectedSection == section
-                            ? Color.accentColor.opacity(0.14)
-                            : Color.clear
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-            }
-
-            Spacer()
-        }
-        .frame(width: 210)
-        .background(Color(nsColor: .controlBackgroundColor))
+    private var activeSection: SettingsPane {
+        selectedSection ?? .account
     }
 
     private var sectionHeader: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(L10n.text(selectedSection.rawValue))
+            Text(L10n.text(activeSection.rawValue))
                 .font(.system(size: 24, weight: .semibold))
             Text(sectionSubtitle)
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var saveStatusIndicator: some View {
+        switch saveStatus {
+        case .saved:
+            Label(L10n.text("Saved automatically"), systemImage: "checkmark.circle.fill")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(L10n.text("Settings saved automatically"))
+        case .failed(let message):
+            Label(L10n.text("Save failed"), systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.red)
+                .help(message)
+                .accessibilityLabel(L10n.format("Could not save settings: %@", message))
         }
     }
 
     private var sectionSubtitle: String {
-        switch selectedSection {
+        switch activeSection {
         case .account:
             return L10n.text("Connect ChatGPT, verify permissions, and keep the first-run flow healthy.")
         case .dictation:
@@ -499,7 +547,7 @@ private struct PreferencesView: View {
 
     @ViewBuilder
     private var selectedSectionView: some View {
-        switch selectedSection {
+        switch activeSection {
         case .account:
             accountOverviewCard
         case .dictation:
@@ -523,6 +571,15 @@ private struct PreferencesView: View {
             privacyCard
         case .advanced:
             advancedRecoveryCard
+        }
+    }
+
+    private func persistSettings() {
+        switch onSave(config) {
+        case .success:
+            saveStatus = .saved
+        case .failure(let error):
+            saveStatus = .failed(error.localizedDescription)
         }
     }
 
@@ -609,8 +666,12 @@ private struct PreferencesView: View {
         )
     }
 
-    private var filteredTerminologyEntries: [(offset: Int, entry: TerminologyEntry)] {
-        config.transcription.terminology.entries.enumerated().compactMap { offset, entry in
+    private var filteredTerminologyEntries: [TerminologyEntry] {
+        let query = terminologySearchText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+
+        return config.transcription.terminology.entries.filter { entry in
             let include: Bool
             switch terminologyFilter {
             case .all:
@@ -620,7 +681,24 @@ private struct PreferencesView: View {
             case .corrections:
                 include = entry.type == .correction
             }
-            return include ? (offset: offset, entry: entry) : nil
+            guard include else {
+                return false
+            }
+            guard !query.isEmpty else {
+                return true
+            }
+            return [
+                entry.original,
+                entry.replacement ?? "",
+                entry.aliases.joined(separator: " "),
+                entry.source,
+            ]
+            .joined(separator: " ")
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .contains(query)
+        }
+        .sorted {
+            $0.original.localizedStandardCompare($1.original) == .orderedAscending
         }
     }
 
@@ -645,6 +723,19 @@ private struct PreferencesView: View {
                     Spacer()
 
                     chatGPTSetupActions
+                }
+
+                HStack {
+                    Text(
+                        L10n.text(
+                            "Need to revisit the first-run flow or practice F5 again?"
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(L10n.text("Open Setup Guide"), action: onOpenOnboarding)
+                        .buttonStyle(.bordered)
                 }
 
                 if permissionStatusMonitor.snapshot.microphone != .granted
@@ -898,6 +989,20 @@ private struct PreferencesView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.orange)
                 }
+
+                Divider()
+
+                LabeledContent(L10n.text("Configuration")) {
+                    Button(L10n.text("Open Config Folder"), action: onOpenConfigFolder)
+                        .buttonStyle(.bordered)
+                }
+                Text(
+                    L10n.text(
+                        "Open the local support folder only for advanced troubleshooting, backup, or manual inspection."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
             }
         }
     }
@@ -1459,26 +1564,43 @@ private struct PreferencesView: View {
     }
 
     private var terminologyToolbar: some View {
-        HStack(spacing: 10) {
-            Picker("", selection: $terminologyFilter) {
-                ForEach(TerminologyFilter.allCases) { filter in
-                    Text(L10n.text(filter.rawValue)).tag(filter)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                TextField(
+                    L10n.text("Search terminology"),
+                    text: $terminologySearchText
+                )
+                .textFieldStyle(.roundedBorder)
+
+                Picker("", selection: $terminologyFilter) {
+                    ForEach(TerminologyFilter.allCases) { filter in
+                        Text(L10n.text(filter.rawValue)).tag(filter)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 300)
             }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 430)
 
-            Spacer()
-
-            Button(L10n.text("Import Dictionary...")) {
-                importTerminologyDictionary()
+            HStack {
+                Text(
+                    L10n.format(
+                        "%ld matching entries",
+                        filteredTerminologyEntries.count
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                Spacer()
+                Button(L10n.text("Import Dictionary...")) {
+                    importTerminologyDictionary()
+                }
             }
         }
     }
 
     private var terminologyEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.text(editingTerminologyIndex == nil ? "Add Entry" : "Edit Entry"))
+            Text(L10n.text(editingTerminologyID == nil ? "Add Entry" : "Edit Entry"))
                 .font(.system(size: 12, weight: .semibold))
 
             HStack {
@@ -1498,12 +1620,12 @@ private struct PreferencesView: View {
                     TextField(L10n.text("Correct text"), text: $editingReplacement)
                 }
 
-                if editingTerminologyIndex != nil {
+                if editingTerminologyID != nil {
                     Button(L10n.text("Cancel")) {
                         clearTerminologyEditor()
                     }
                 }
-                Button(L10n.text(editingTerminologyIndex == nil ? "Add" : "Save Entry")) {
+                Button(L10n.text(editingTerminologyID == nil ? "Add" : "Save Entry")) {
                     saveTerminologyEditor()
                 }
                 .buttonStyle(.borderedProminent)
@@ -1518,32 +1640,27 @@ private struct PreferencesView: View {
     private var terminologyList: some View {
         Group {
             if filteredTerminologyEntries.isEmpty {
-                Text(L10n.text("No dictionary entries for this filter."))
+                Text(
+                    L10n.text(
+                        terminologySearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? "No dictionary entries for this filter."
+                            : "No terminology entries match your search."
+                    )
+                )
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(filteredTerminologyEntries.prefix(5)), id: \.offset) { index, entry in
-                        terminologyEntryRow(index: index, entry: entry)
-                    }
-
-                    if filteredTerminologyEntries.count > 5 {
-                        Text(
-                            L10n.format(
-                                "Showing 5 of %ld. Use the filter or edit config.json for bulk changes.",
-                                filteredTerminologyEntries.count
-                            )
-                        )
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    ForEach(filteredTerminologyEntries) { entry in
+                        terminologyEntryRow(entry: entry)
                     }
                 }
             }
         }
     }
 
-    private func terminologyEntryRow(index: Int, entry: TerminologyEntry) -> some View {
+    private func terminologyEntryRow(entry: TerminologyEntry) -> some View {
         HStack(spacing: 8) {
             Text(L10n.text(entry.type.rawValue.capitalized))
                 .font(.system(size: 11, weight: .medium))
@@ -1568,19 +1685,27 @@ private struct PreferencesView: View {
             Spacer()
 
             Toggle("", isOn: Binding(
-                get: { config.transcription.terminology.entries[index].isEnabled },
-                set: { config.transcription.terminology.entries[index].isEnabled = $0 }
+                get: {
+                    config.transcription.terminology.entries
+                        .first(where: { $0.id == entry.id })?
+                        .isEnabled ?? false
+                },
+                set: { isEnabled in
+                    updateTerminologyEntry(id: entry.id) {
+                        $0.isEnabled = isEnabled
+                    }
+                }
             ))
             .toggleStyle(.switch)
             .labelsHidden()
 
             Button(L10n.text("Edit")) {
-                editTerminologyEntry(at: index)
+                editTerminologyEntry(id: entry.id)
             }
             .buttonStyle(.borderless)
 
             Button(L10n.text("Delete")) {
-                config.transcription.terminology.entries.remove(at: index)
+                deleteTerminologyEntry(id: entry.id)
             }
             .buttonStyle(.borderless)
         }
@@ -1590,9 +1715,16 @@ private struct PreferencesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private func editTerminologyEntry(at index: Int) {
-        let entry = config.transcription.terminology.entries[index]
-        editingTerminologyIndex = index
+    private func editTerminologyEntry(id: UUID) {
+        guard let entry = config.transcription.terminology.entries.first(where: { $0.id == id }) else {
+            terminologyImportMessage = L10n.text(
+                "That terminology entry changed before it could be edited. Refresh your search and try again."
+            )
+            terminologyImportIsError = true
+            clearTerminologyEditor()
+            return
+        }
+        editingTerminologyID = entry.id
         editingTerminologyType = entry.type
         editingOriginal = entry.original
         editingReplacement = entry.replacement ?? ""
@@ -1607,31 +1739,64 @@ private struct PreferencesView: View {
         let replacement = editingTerminologyType == .correction
             ? editingReplacement.trimmingCharacters(in: .whitespacesAndNewlines)
             : nil
-        let entry = TerminologyEntry(
-            type: editingTerminologyType,
-            original: original,
-            replacement: replacement,
-            aliases: [],
-            isEnabled: true,
-            source: "user",
-            usageCount: 0,
-            createdAt: ISO8601DateFormatter().string(from: Date())
-        )
-
-        if let editingTerminologyIndex {
-            config.transcription.terminology.entries[editingTerminologyIndex] = entry
+        if let editingTerminologyID {
+            guard let index = config.transcription.terminology.entries.firstIndex(where: {
+                $0.id == editingTerminologyID
+            }) else {
+                terminologyImportMessage = L10n.text(
+                    "That terminology entry changed before it could be saved. Refresh your search and try again."
+                )
+                terminologyImportIsError = true
+                clearTerminologyEditor()
+                return
+            }
+            var entry = config.transcription.terminology.entries[index]
+            entry.type = editingTerminologyType
+            entry.original = original
+            entry.replacement = replacement
+            config.transcription.terminology.entries[index] = entry
         } else {
-            config.transcription.terminology.entries.append(entry)
+            config.transcription.terminology.entries.append(
+                TerminologyEntry(
+                    type: editingTerminologyType,
+                    original: original,
+                    replacement: replacement,
+                    aliases: [],
+                    isEnabled: true,
+                    source: "user",
+                    usageCount: 0,
+                    createdAt: ISO8601DateFormatter().string(from: Date())
+                )
+            )
         }
 
         clearTerminologyEditor()
     }
 
     private func clearTerminologyEditor() {
-        editingTerminologyIndex = nil
+        editingTerminologyID = nil
         editingTerminologyType = .term
         editingOriginal = ""
         editingReplacement = ""
+    }
+
+    private func updateTerminologyEntry(
+        id: UUID,
+        update: (inout TerminologyEntry) -> Void
+    ) {
+        guard let index = config.transcription.terminology.entries.firstIndex(where: {
+            $0.id == id
+        }) else {
+            return
+        }
+        update(&config.transcription.terminology.entries[index])
+    }
+
+    private func deleteTerminologyEntry(id: UUID) {
+        config.transcription.terminology.entries.removeAll { $0.id == id }
+        if editingTerminologyID == id {
+            clearTerminologyEditor()
+        }
     }
 
     private var canSaveTerminologyEntry: Bool {
@@ -1675,16 +1840,12 @@ private struct PreferencesView: View {
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.text(title))
-                .font(.system(size: 13, weight: .semibold))
+        Section {
             content()
+                .font(.system(size: 12))
+        } header: {
+            Text(L10n.text(title))
         }
-        .font(.system(size: 12))
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private func setupRow(title: String, status: SetupStatus) -> some View {

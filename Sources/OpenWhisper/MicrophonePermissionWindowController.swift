@@ -95,10 +95,10 @@ private struct MicrophonePermissionView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label(L10n.text("Installed app path: /Applications/OpenWhisper.app"), systemImage: "checkmark.circle.fill")
-                Label(L10n.text("First-run permission is requested only once from a clean TCC state"), systemImage: "mic.circle")
-            }
+            Label(
+                L10n.text("Microphone is required for dictation. You can change this later in System Settings."),
+                systemImage: "mic.circle"
+            )
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
 

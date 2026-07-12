@@ -5,21 +5,20 @@ This spec mirrors the HUD implementation currently shipped in `dist/OpenWhisper.
 ## Core Shell
 
 - Container: one integrated graphite dictation indicator
-- Processing / success size: `220 x 48`
-- Recording size: `246 x 48`
-- Error size: `318 x 48`
+- Recording / processing / success size: `284 x 44`
+- Error / retryable error size: `320 x 56`
 - Corner radius: `16`
 - Border: `1px`, mist at `8%` opacity
 - Shadow: short, low-contrast black shadow
 - Layout:
-  - horizontal padding: `12`
-  - vertical padding: `9`
-  - leading visual width: `62`
-  - leading visual height: `22`
-  - text gap: `8`
-  - trailing timer reserve: `36`
-  - inline cancel control: `16 x 16`
-  - cancel control spacing from timer: `6`
+- horizontal padding: `10`
+- vertical padding: `8`
+- leading visual width: `54`
+- leading visual height: `20`
+- text gap: `7`
+- trailing timer reserve: `34`
+- inline cancel control: `14 x 14`
+- cancel control spacing from timer: `5`
 
 ## Color Tokens
 
@@ -85,6 +84,7 @@ Reference profile:
   - do not pulse the entire group uniformly
   - send a traveling ridge from left to right across the 9 bars
   - keep the center-weighted contour underneath the moving ridge
+  - when Reduce Motion is enabled, replace the traveling ridge with a static center-weighted profile
 
 Reference frames:
 
@@ -117,6 +117,8 @@ Reference frames:
 - Title: `Error`
 - No cancel affordance in this state
 - Detail text is visible
+- Ordinary errors remain visible for at least `5 seconds`
+- Retryable errors remain visible until Retry or a new dictation
 - Leading visual: same badge container as success/copy, inside the same integrated shell
 - Fill: Error at low opacity
 - Border: Error at medium opacity
@@ -144,3 +146,6 @@ When the MCP quota resets, the `HUD` board in Figma should contain:
   - no detached cancel panel or floating red dot outside the shell
   - Ice Blue stays concentrated on the active center bars
   - Success/copy/error remain inside the same branded indicator architecture
+  - Recording, processing, and success share one stable shell size
+  - Increase Contrast strengthens the shell border and text/icon contrast
+  - State changes are announced to VoiceOver

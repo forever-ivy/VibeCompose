@@ -14,6 +14,8 @@ enum VerificationError: Error, CustomStringConvertible {
     case unreadableImage(String)
     case missingHud(String, Int)
     case duplicateState(String, String, Int)
+    case unstablePrimaryGeometry(String, Int, Int, Int, Int)
+    case invalidErrorGeometry(String, Int, Int, Int, Int)
 
     var description: String {
         switch self {
@@ -25,6 +27,22 @@ enum VerificationError: Error, CustomStringConvertible {
             return "\(state) did not contain enough visible HUD pixels (\(visiblePixels) visible)"
         case .duplicateState(let left, let right, let changedPixels):
             return "\(left) and \(right) look too similar as HUD windows (\(changedPixels) changed pixels)"
+        case .unstablePrimaryGeometry(
+            let state,
+            let expectedWidth,
+            let expectedHeight,
+            let actualWidth,
+            let actualHeight
+        ):
+            return "\(state) changed the primary HUD geometry from \(expectedWidth)x\(expectedHeight) to \(actualWidth)x\(actualHeight)"
+        case .invalidErrorGeometry(
+            let state,
+            let primaryWidth,
+            let primaryHeight,
+            let actualWidth,
+            let actualHeight
+        ):
+            return "\(state) must be at least as large as the \(primaryWidth)x\(primaryHeight) primary HUD, got \(actualWidth)x\(actualHeight)"
         }
     }
 }
@@ -111,6 +129,30 @@ do {
             throw VerificationError.missingHud(state.name, visiblePixels)
         }
         print("\(state.name): \(state.width)x\(state.height), \(visiblePixels) visible HUD pixels")
+    }
+
+    let primary = states[0]
+    for state in states[1...2] {
+        guard state.width == primary.width, state.height == primary.height else {
+            throw VerificationError.unstablePrimaryGeometry(
+                state.name,
+                primary.width,
+                primary.height,
+                state.width,
+                state.height
+            )
+        }
+    }
+    for state in states[3...4] {
+        guard state.width >= primary.width, state.height >= primary.height else {
+            throw VerificationError.invalidErrorGeometry(
+                state.name,
+                primary.width,
+                primary.height,
+                state.width,
+                state.height
+            )
+        }
     }
 
     for index in 0..<(states.count - 1) {

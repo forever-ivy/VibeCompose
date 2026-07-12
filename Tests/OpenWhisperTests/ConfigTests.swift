@@ -237,6 +237,28 @@ func legacyImportedTerminologyEntriesMigrateIntoUserDictionaryEntries() throws {
 }
 
 @Test
+func legacyTerminologyEntriesReceiveAndPersistStableIdentifiers() throws {
+    let json = """
+    {
+      "type": "term",
+      "original": "OpenWhisper",
+      "aliases": [],
+      "isEnabled": true,
+      "source": "legacy-import",
+      "usageCount": 0,
+      "createdAt": "2026-07-13T00:00:00Z"
+    }
+    """.data(using: .utf8)!
+
+    let migrated = try JSONDecoder().decode(TerminologyEntry.self, from: json)
+    let reencoded = try JSONEncoder().encode(migrated)
+    let reloaded = try JSONDecoder().decode(TerminologyEntry.self, from: reencoded)
+
+    #expect(reloaded.id == migrated.id)
+    #expect(reloaded.original == "OpenWhisper")
+}
+
+@Test
 func terminologyImportMetadataIsPreserved() throws {
     let json = """
     {

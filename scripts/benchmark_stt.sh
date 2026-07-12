@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1090
-source "$ROOT_DIR/product.env"
+source "$ROOT_DIR/scripts/lib/load_env.sh"
+load_product_env "$ROOT_DIR/product.env"
 
 APP_BIN="/Applications/$OPENWHISPER_APP_NAME.app/Contents/MacOS/$OPENWHISPER_APP_NAME"
 

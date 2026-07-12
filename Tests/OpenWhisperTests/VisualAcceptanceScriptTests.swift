@@ -10,7 +10,8 @@ func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
     let scriptURL = root.appendingPathComponent("scripts/visual_acceptance.sh")
     let script = try String(contentsOf: scriptURL, encoding: .utf8)
 
-    #expect(script.contains("source \"$ROOT/product.env\""))
+    #expect(script.contains("source \"$ROOT/scripts/lib/load_env.sh\""))
+    #expect(script.contains("load_product_env \"$ROOT/product.env\""))
     #expect(script.contains("APP_DIR=\"/Applications/$APP_NAME.app\""))
     #expect(script.contains("--visual-acceptance-output"))
     #expect(script.contains("--args"))
@@ -53,5 +54,7 @@ func visualAcceptanceVerifierDocumentsRequiredStates() throws {
     #expect(verifier.contains("visible HUD pixels"))
     #expect(verifier.contains("changed HUD-window pixels"))
     #expect(verifier.contains("distinct window size"))
+    #expect(verifier.contains("unstablePrimaryGeometry"))
+    #expect(verifier.contains("invalidErrorGeometry"))
     #expect(!verifier.contains("expected HUD band"))
 }

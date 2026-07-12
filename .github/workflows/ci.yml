@@ -8,11 +8,13 @@ on:
 jobs:
   macos:
     runs-on: macos-latest
+    env:
+      OPENWHISPER_ALLOW_ADHOC_SIGNING: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app
-      - name: Swift Build
-        run: swift build --package-path .
-      - name: Swift Test
-        run: swift test --package-path .
+      - name: Shell Syntax
+        run: find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Product Check
+        run: ./scripts/check.sh

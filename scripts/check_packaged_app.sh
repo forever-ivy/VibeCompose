@@ -3,12 +3,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1090
-source "$ROOT/product.env"
+source "$ROOT/scripts/lib/load_env.sh"
+load_product_env "$ROOT/product.env"
+load_version_env "$ROOT/version.env"
 
 APP="$ROOT/dist/$OPENWHISPER_APP_NAME.app"
 PLIST="$APP/Contents/Info.plist"
 
 "$ROOT/scripts/package_app.sh" >/dev/null
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 
 if /usr/bin/plutil -extract LSUIElement raw -o - "$PLIST" >/dev/null 2>&1; then
   echo "Packaged app must not declare LSUIElement in Info.plist; runtime should switch to accessory mode explicitly." >&2
@@ -54,5 +57,21 @@ if [[ "$EXECUTABLE_NAME" != "$OPENWHISPER_APP_NAME" ]]; then
   echo "Packaged app executable mismatch: expected $OPENWHISPER_APP_NAME, got $EXECUTABLE_NAME" >&2
   exit 1
 fi
+
+VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
+if [[ "$VERSION" != "$OPENWHISPER_VERSION" ]]; then
+  echo "Packaged app version mismatch: expected $OPENWHISPER_VERSION, got $VERSION" >&2
+  exit 1
+fi
+
+SHA256_FILE="$ROOT/dist/SHA256SUMS"
+if [[ ! -f "$SHA256_FILE" ]]; then
+  echo "Missing SHA-256 manifest: $SHA256_FILE" >&2
+  exit 1
+fi
+(
+  cd "$ROOT/dist"
+  /usr/bin/shasum -a 256 -c "$(basename "$SHA256_FILE")"
+)
 
 echo "Packaged app metadata looks correct."

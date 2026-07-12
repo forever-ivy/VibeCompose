@@ -8,11 +8,17 @@ enum OverlayDemoState: String, Equatable, Sendable, CaseIterable {
     case retryableError = "retryable-error"
 }
 
+struct SettingsSnapshotSize: Equatable, Sendable {
+    let width: Int
+    let height: Int
+}
+
 enum AppLaunchMode: Equatable {
     case normal
     case settings
     case privacySettings
     case accessibilityGuide
+    case onboarding
     case overlayDemo
     case overlayDemoState(OverlayDemoState)
     case benchmark
@@ -33,6 +39,10 @@ enum AppLaunchMode: Equatable {
 
         if arguments.contains("--guide-accessibility") {
             return .accessibilityGuide
+        }
+
+        if arguments.contains("--onboarding") || arguments.contains("--open-onboarding") {
+            return .onboarding
         }
 
         if requestedSettingsPane(arguments: arguments) == "privacy" {
@@ -121,6 +131,59 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
+    static func onboardingSnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        if let value = environment["OPENWHISPER_ONBOARDING_SNAPSHOT_OUTPUT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty
+        {
+            return URL(fileURLWithPath: value)
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--onboarding-snapshot-output", index + 1 < arguments.count {
+                let value = arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+
+            if argument.hasPrefix("--onboarding-snapshot-output=") {
+                let value = String(
+                    argument.dropFirst("--onboarding-snapshot-output=".count)
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+        }
+
+        return nil
+    }
+
+    static func settingsSnapshotSize(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> SettingsSnapshotSize? {
+        if let value = environment["OPENWHISPER_SETTINGS_SNAPSHOT_SIZE"],
+           let size = parseSettingsSnapshotSize(value) {
+            return size
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--settings-snapshot-size", index + 1 < arguments.count {
+                return parseSettingsSnapshotSize(arguments[index + 1])
+            }
+
+            if argument.hasPrefix("--settings-snapshot-size=") {
+                return parseSettingsSnapshotSize(
+                    String(argument.dropFirst("--settings-snapshot-size=".count))
+                )
+            }
+        }
+
+        return nil
+    }
+
     private static func requestedSettingsPane(arguments: [String]) -> String? {
         for (index, argument) in arguments.enumerated() {
             if argument == "--settings-pane", index + 1 < arguments.count {
@@ -160,5 +223,23 @@ enum AppLaunchMode: Equatable {
         }
 
         return nil
+    }
+
+    private static func parseSettingsSnapshotSize(_ rawValue: String) -> SettingsSnapshotSize? {
+        let normalized = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "×", with: "x")
+        let components = normalized.split(separator: "x", omittingEmptySubsequences: false)
+        guard
+            components.count == 2,
+            let width = Int(components[0]),
+            let height = Int(components[1]),
+            (820...2_000).contains(width),
+            (560...1_600).contains(height)
+        else {
+            return nil
+        }
+        return SettingsSnapshotSize(width: width, height: height)
     }
 }
