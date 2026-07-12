@@ -17,8 +17,18 @@
 
 - [Architecture](engineering/architecture.md)
 - [Release process](engineering/release.md)
+- [Updater decision](engineering/updater.md)
 - [Visual acceptance](engineering/visual-acceptance.md)
 - [HUD visual specification](design/hud-visual-spec.md)
+
+## Legal, Privacy, and Support
+
+- [Privacy Policy](legal/privacy-policy.md) / [隐私政策](legal/privacy-policy.zh-CN.md)
+- [Terms of Use](legal/terms-of-use.md) / [使用条款](legal/terms-of-use.zh-CN.md)
+- [Refund Policy](legal/refund-policy.md) / [退款政策](legal/refund-policy.zh-CN.md)
+- [Support Policy](support/support-policy.md) / [支持政策](support/support-policy.zh-CN.md)
+- [Upstream incident playbook](support/upstream-incident-playbook.md) / [上游事故预案](support/upstream-incident-playbook.zh-CN.md)
+- [Security reporting](../SECURITY.md)
 
 ## Releases and Marketing
 

@@ -28,6 +28,11 @@ func settingsWindowStateRestoresLastPaneAndHonorsDeepLinks() throws {
             focusPrivacy: true
         ) == .privacy
     )
+    #expect(
+        store.initialPane(
+            focusedPane: .advanced
+        ) == .advanced
+    )
 }
 
 @Test
@@ -74,6 +79,9 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(source.contains("$config.transcription.languagePreference"))
     #expect(source.contains("$config.transcription.punctuationPreference"))
     #expect(source.contains("Technical literals such as paths"))
+    #expect(source.contains("Button(L10n.text(\"Export Diagnostics…\")"))
+    #expect(source.contains("onExportSupportDiagnostics"))
+    #expect(source.contains("account email, tokens, API keys"))
 
     let configFolderButtonCount = source
         .components(separatedBy: "Button(L10n.text(\"Open Config Folder\")")

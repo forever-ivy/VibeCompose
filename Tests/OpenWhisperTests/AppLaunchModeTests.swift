@@ -63,6 +63,18 @@ struct AppLaunchModeTests {
                 arguments: ["OpenWhisper", "--settings-pane=privacy"]
             ) == .privacySettings
         )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--settings-pane", "advanced"]
+            ) == .advancedSettings
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--settings-pane=advanced"]
+            ) == .advancedSettings
+        )
     }
 
     @Test

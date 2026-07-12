@@ -17,6 +17,7 @@ enum AppLaunchMode: Equatable {
     case normal
     case settings
     case privacySettings
+    case advancedSettings
     case accessibilityGuide
     case onboarding
     case history
@@ -62,6 +63,9 @@ enum AppLaunchMode: Equatable {
 
         if requestedSettingsPane(arguments: arguments) == "privacy" {
             return .privacySettings
+        }
+        if requestedSettingsPane(arguments: arguments) == "advanced" {
+            return .advancedSettings
         }
 
         if arguments.contains("--settings") || arguments.contains("--open-settings") {

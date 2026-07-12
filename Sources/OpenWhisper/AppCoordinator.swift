@@ -190,6 +190,7 @@ final class AppCoordinator {
             case .normal,
                  .settings,
                  .privacySettings,
+                 .advancedSettings,
                  .accessibilityGuide,
                  .onboarding,
                  .history,
@@ -225,9 +226,18 @@ final class AppCoordinator {
                 notifier.ensureAuthorization()
                 if launchMode == .settings
                     || launchMode == .privacySettings
+                    || launchMode == .advancedSettings
                     || launchMode == .accessibilityGuide
                 {
-                    openSettings(focusPrivacy: launchMode == .privacySettings)
+                    let focusedPane: SettingsPane? = switch launchMode {
+                    case .privacySettings:
+                        .privacy
+                    case .advancedSettings:
+                        .advanced
+                    default:
+                        nil
+                    }
+                    openSettings(focusPane: focusedPane)
                     scheduleSettingsSnapshotIfRequested()
                 }
                 if launchMode == .accessibilityGuide {
@@ -694,9 +704,9 @@ final class AppCoordinator {
     }
 
     private func openSettings(
-        focusPrivacy: Bool = false
+        focusPane: SettingsPane? = nil
     ) {
-        if focusPrivacy {
+        if focusPane != nil {
             preferencesWindowController = nil
         }
 
@@ -795,6 +805,34 @@ final class AppCoordinator {
                 onOpenConfigFolder: { [weak self] in
                     self?.openConfigFolder()
                 },
+                onExportSupportDiagnostics: { [weak self] destinationURL in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Diagnostics",
+                                code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper settings are no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+
+                    return Result {
+                        try SupportDiagnosticsExporter(
+                            applicationSupportURL: self.configStore.directoryURL
+                        ).export(
+                            to: destinationURL,
+                            config: self.config,
+                            authSnapshot: self.authManager.authSnapshot(),
+                            permissionSnapshot: .live(),
+                            signatureState: AccessibilityPermission
+                                .signatureState()
+                        )
+                    }
+                },
                 onDeleteAllData: { [weak self] in
                     guard let self else {
                         return .failure(
@@ -812,7 +850,7 @@ final class AppCoordinator {
                 onOpenOnboarding: { [weak self] in
                     self?.openOnboarding()
                 },
-                focusPrivacy: focusPrivacy
+                focusPane: focusPane
             )
         }
 

@@ -72,8 +72,20 @@ macOS 首发策略：
 - `.pasted` 尚不能证明目标应用实际接收文本，真实多应用焦点矩阵未完成；
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
 - Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与高对比度验收未完成；
-- 隐私政策、服务条款、退款、支持和诊断导出文档未完成；
+- 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
 - 当前自动化全绿仍只属于 precheck，不能替代 `/Applications/OpenWhisper.app` 的真实交互证据。
+
+2026-07-13 Phase 4 进展：
+
+- Settings → Advanced 新增用户主动触发的脱敏支持诊断 ZIP；
+- 归档只包含运行/配置摘要、脱敏延迟、最多五份崩溃报告白名单元数据和 SHA-256，不包含音频、正文、邮箱、凭据、术语、自定义端点、原始崩溃正文、History、Recovery 或 `config.json`；
+- 已建立中英文隐私政策、使用条款、退款政策、支持政策、安全报告流程和上游事故预案；
+- release manifest 记录 ZIP/DMG 精确哈希、字节数、版本、构建、架构和 HTTPS 下载 URL；
+- Homebrew Cask 从 `sha256 :no_check` 改为未发布时全零 fail-closed，并由发布脚本写入精确 ZIP 哈希；
+- 安装器新增 build 与 Developer ID Team ID 校验；
+- Sparkle 2 已完成选型，商业 release gate 会在缺少 `SUFeedURL`/`SUPublicEDKey` 时阻断。
+
+仍未完成：有效 Developer ID、公证实证、Sparkle 嵌入与签名 appcast、自动更新/回滚实机证明，以及永久商业运营主体和联系方式。
 
 UI 调研确认的主要问题：
 
@@ -798,12 +810,12 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-012 | P1 | History window（已实现，待完整交互验收） | Retention | 搜索、详情、Copy、Retry、Delete |
 | OW-MAC-013 | P1 | Terminology manager（已实现，待键盘/VoiceOver 验收） | Dictionary model | 常规管理不编辑 JSON |
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
-| OW-MAC-015 | P1 | Notarization + updater | 014 | 新机安装和更新成功 |
+| OW-MAC-015 | P1 | Notarization + updater（Sparkle 2 已选型，待集成） | 014 | 新机安装和更新成功 |
 | OW-MAC-016 | P2 | Product metrics | Privacy spec | 无敏感内容事件 |
 | OW-MAC-017 | P2 | Voice Modes | Text polish engine | Direct 无额外延迟 |
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
 | OW-MAC-019 | P2 | App compatibility matrix | Closed Beta | 目标 App 成功/降级明确 |
-| OW-MAC-020 | P2 | Support diagnostics bundle | Redaction | 导出包无 Token/正文/音频 |
+| OW-MAC-020 | P2 | Support diagnostics bundle（已实现，待安装版交互验收） | Redaction | 导出包无 Token/正文/音频 |
 | OW-MAC-021 | P1 | 音频 metadata-first 与流式 multipart（已实现） | Provider boundary | 25 MB/symlink 在网络前拒绝，上传不构造内存 body |
 | OW-MAC-022 | P1 | 技术字面量与语言/标点偏好（已实现） | Normalizer/Polish | literal round-trip，token 破坏时安全回退 |
 | OW-MAC-023 | P1 | 异步粘贴等待与 HUD generation（已实现） | Session lifecycle | MainActor 可继续调度，取消后无迟到状态 |

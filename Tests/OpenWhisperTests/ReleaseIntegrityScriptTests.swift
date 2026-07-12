@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Testing
 
 @Test
@@ -68,6 +69,7 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("stapler validate"))
     #expect(packageScript.contains("spctl --assess"))
     #expect(packageScript.contains("SHA256SUMS"))
+    #expect(packageScript.contains("generate_release_metadata.sh"))
     #expect(packageScript.contains("codesign --verify --deep --strict"))
 
     #expect(installScript.contains("STAGED_APP="))
@@ -76,6 +78,163 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(installScript.contains("mv \"$STAGED_APP\" \"$TARGET_APP\""))
     #expect(installScript.contains("restoring the previous app"))
     #expect(installScript.contains("codesign --verify --deep --strict"))
+    #expect(installScript.contains("CFBundleVersion"))
+    #expect(installScript.contains("TeamIdentifier=$EXPECTED_TEAM_ID"))
+    #expect(installScript.contains("Developer ID Application:"))
+}
+
+@Test
+func releaseMetadataGeneratorProducesExactArtifactContract() throws {
+    let root = repositoryRoot()
+    let generatorURL = root.appendingPathComponent(
+        "scripts/generate_release_metadata.swift"
+    )
+    let temporaryDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "OpenWhisperReleaseMetadataTests-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    try FileManager.default.createDirectory(
+        at: temporaryDirectory,
+        withIntermediateDirectories: true
+    )
+    defer {
+        try? FileManager.default.removeItem(at: temporaryDirectory)
+    }
+
+    let zipURL = temporaryDirectory.appendingPathComponent("OpenWhisper.zip")
+    let dmgURL = temporaryDirectory.appendingPathComponent("OpenWhisper.dmg")
+    let outputURL = temporaryDirectory.appendingPathComponent("manifest.json")
+    let zipData = Data("zip-artifact".utf8)
+    let dmgData = Data("dmg-artifact".utf8)
+    try zipData.write(to: zipURL)
+    try dmgData.write(to: dmgURL)
+
+    let result = try runBash(
+        """
+        swift "$1" \
+          --output "$2" \
+          --app-name OpenWhisper \
+          --bundle-id app.openwhisper.mac \
+          --repository forever-ivy/openwhisper \
+          --minimum-macos 13.0 \
+          --version 0.1.0 \
+          --build 1 \
+          --architecture arm64 \
+          --zip "$3" \
+          --dmg "$4" \
+          --zip-url https://example.invalid/OpenWhisper.zip \
+          --dmg-url https://example.invalid/OpenWhisper.dmg \
+          --generated-at 2026-07-13T00:00:00Z
+        """,
+        arguments: [
+            generatorURL.path,
+            outputURL.path,
+            zipURL.path,
+            dmgURL.path,
+        ]
+    )
+    #expect(result.status == 0)
+
+    let object = try #require(
+        try JSONSerialization.jsonObject(
+            with: Data(contentsOf: outputURL)
+        ) as? [String: Any]
+    )
+    #expect(object["schemaVersion"] as? Int == 1)
+    let release = try #require(object["release"] as? [String: Any])
+    #expect(release["version"] as? String == "0.1.0")
+    #expect(release["build"] as? String == "1")
+    #expect(release["tag"] as? String == "v0.1.0")
+    let artifacts = try #require(object["artifacts"] as? [[String: Any]])
+    #expect(artifacts.count == 2)
+    #expect(artifacts[0]["kind"] as? String == "zip")
+    #expect(artifacts[0]["byteCount"] as? Int == zipData.count)
+    #expect(
+        artifacts[0]["sha256"] as? String
+            == SHA256.hash(data: zipData).map {
+                String(format: "%02x", $0)
+            }
+            .joined()
+    )
+
+    let attributes = try FileManager.default.attributesOfItem(
+        atPath: outputURL.path
+    )
+    #expect(
+        (attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600
+    )
+
+    let insecureResult = try runBash(
+        """
+        swift "$1" \
+          --output "$2" \
+          --app-name OpenWhisper \
+          --bundle-id app.openwhisper.mac \
+          --repository forever-ivy/openwhisper \
+          --minimum-macos 13.0 \
+          --version 0.1.0 \
+          --build 1 \
+          --architecture arm64 \
+          --zip "$3" \
+          --dmg "$4" \
+          --zip-url http://example.invalid/OpenWhisper.zip \
+          --dmg-url https://example.invalid/OpenWhisper.dmg
+        """,
+        arguments: [
+            generatorURL.path,
+            outputURL.path,
+            zipURL.path,
+            dmgURL.path,
+        ]
+    )
+    #expect(insecureResult.status != 0)
+}
+
+@Test
+func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
+    let root = repositoryRoot()
+    let cask = try String(
+        contentsOf: root.appendingPathComponent(
+            "packaging/homebrew/Casks/openwhisper.rb"
+        ),
+        encoding: .utf8
+    )
+    let updateCaskScript = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/update_homebrew_cask.sh"
+        ),
+        encoding: .utf8
+    )
+    let releaseGate = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_release_gate.sh"
+        ),
+        encoding: .utf8
+    )
+    let updaterDecision = try String(
+        contentsOf: root.appendingPathComponent(
+            "docs/engineering/updater.md"
+        ),
+        encoding: .utf8
+    )
+
+    #expect(!cask.contains("sha256 :no_check"))
+    #expect(
+        cask.contains(
+            "sha256 \"0000000000000000000000000000000000000000000000000000000000000000\""
+        )
+    )
+    #expect(updateCaskScript.contains("^[0-9a-f]{64}$"))
+    #expect(updateCaskScript.contains("must not use the unreleased fail-closed value"))
+    #expect(releaseGate.contains("Developer ID Application:"))
+    #expect(releaseGate.contains("TeamIdentifier=$EXPECTED_TEAM_ID"))
+    #expect(releaseGate.contains("stapler validate"))
+    #expect(releaseGate.contains("spctl --assess"))
+    #expect(releaseGate.contains("SUFeedURL"))
+    #expect(releaseGate.contains("SUPublicEDKey"))
+    #expect(updaterDecision.contains("Sparkle 2"))
+    #expect(updaterDecision.contains("not yet integrated"))
 }
 
 private func repositoryRoot() -> URL {

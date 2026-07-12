@@ -12,6 +12,7 @@ TARGET_APP="/Applications/$OPENWHISPER_APP_NAME.app"
 STAGED_APP="/Applications/.$OPENWHISPER_APP_NAME.install.$$.app"
 BACKUP_APP="/Applications/.$OPENWHISPER_APP_NAME.backup.$$.app"
 REQUIRE_GATEKEEPER="${OPENWHISPER_INSTALL_REQUIRE_GATEKEEPER:-0}"
+EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
 
 cleanup() {
   rm -rf "$STAGED_APP"
@@ -27,7 +28,9 @@ validate_app() {
   local executable="$app/Contents/MacOS/$OPENWHISPER_APP_NAME"
   local bundle_id=""
   local version=""
+  local build=""
   local architectures=""
+  local signature_details=""
 
   [[ -f "$plist" && -x "$executable" ]] || {
     echo "Invalid OpenWhisper bundle layout: $app" >&2
@@ -36,12 +39,17 @@ validate_app() {
 
   bundle_id="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$plist")"
   version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$plist")"
+  build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$plist")"
   [[ "$bundle_id" == "$OPENWHISPER_BUNDLE_ID" ]] || {
     echo "Bundle identifier mismatch: expected $OPENWHISPER_BUNDLE_ID, got $bundle_id" >&2
     return 1
   }
   [[ "$version" == "$OPENWHISPER_VERSION" ]] || {
     echo "Version mismatch: expected $OPENWHISPER_VERSION, got $version" >&2
+    return 1
+  }
+  [[ "$build" == "$OPENWHISPER_BUILD" ]] || {
+    echo "Build mismatch: expected $OPENWHISPER_BUILD, got $build" >&2
     return 1
   }
 
@@ -57,6 +65,19 @@ validate_app() {
   esac
 
   if [[ "$REQUIRE_GATEKEEPER" == "1" ]]; then
+    [[ -n "$EXPECTED_TEAM_ID" ]] || {
+      echo "OPENWHISPER_TEAM_ID is required when Gatekeeper installation is enforced." >&2
+      return 1
+    }
+    signature_details="$(/usr/bin/codesign -dvvv "$app" 2>&1)"
+    [[ "$signature_details" == *"Authority=Developer ID Application:"* ]] || {
+      echo "Gatekeeper installation requires a Developer ID Application signature." >&2
+      return 1
+    }
+    [[ "$signature_details" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
+      echo "Installed app Team ID does not match OPENWHISPER_TEAM_ID." >&2
+      return 1
+    }
     /usr/sbin/spctl --assess --type execute --verbose=4 "$app"
   fi
 }

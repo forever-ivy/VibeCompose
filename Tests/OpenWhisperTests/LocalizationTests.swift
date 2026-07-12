@@ -22,6 +22,8 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Saved automatically"] == "已自动保存")
     #expect(strings["Save failed"] == "保存失败")
     #expect(strings["Configuration"] == "配置")
+    #expect(strings["Export Diagnostics…"] == "导出诊断…")
+    #expect(strings["Support Diagnostics"] == "支持诊断")
 }
 
 @Test

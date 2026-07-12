@@ -64,6 +64,12 @@ if [[ "$VERSION" != "$OPENWHISPER_VERSION" ]]; then
   exit 1
 fi
 
+BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
+if [[ "$BUILD" != "$OPENWHISPER_BUILD" ]]; then
+  echo "Packaged app build mismatch: expected $OPENWHISPER_BUILD, got $BUILD" >&2
+  exit 1
+fi
+
 SHA256_FILE="$ROOT/dist/SHA256SUMS"
 if [[ ! -f "$SHA256_FILE" ]]; then
   echo "Missing SHA-256 manifest: $SHA256_FILE" >&2
@@ -73,5 +79,43 @@ fi
   cd "$ROOT/dist"
   /usr/bin/shasum -a 256 -c "$(basename "$SHA256_FILE")"
 )
+
+RELEASE_MANIFEST="$ROOT/dist/release-manifest.json"
+if [[ ! -f "$RELEASE_MANIFEST" ]]; then
+  echo "Missing release metadata manifest: $RELEASE_MANIFEST" >&2
+  exit 1
+fi
+
+MANIFEST_VERSION="$(/usr/bin/plutil -extract release.version raw -o - "$RELEASE_MANIFEST")"
+MANIFEST_BUILD="$(/usr/bin/plutil -extract release.build raw -o - "$RELEASE_MANIFEST")"
+MANIFEST_BUNDLE_ID="$(/usr/bin/plutil -extract product.bundleIdentifier raw -o - "$RELEASE_MANIFEST")"
+MANIFEST_ZIP_NAME="$(/usr/bin/plutil -extract artifacts.0.fileName raw -o - "$RELEASE_MANIFEST")"
+MANIFEST_ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$RELEASE_MANIFEST")"
+MANIFEST_DMG_NAME="$(/usr/bin/plutil -extract artifacts.1.fileName raw -o - "$RELEASE_MANIFEST")"
+MANIFEST_DMG_SHA256="$(/usr/bin/plutil -extract artifacts.1.sha256 raw -o - "$RELEASE_MANIFEST")"
+
+[[ "$MANIFEST_VERSION" == "$OPENWHISPER_VERSION" ]] || {
+  echo "Release manifest version mismatch." >&2
+  exit 1
+}
+[[ "$MANIFEST_BUILD" == "$OPENWHISPER_BUILD" ]] || {
+  echo "Release manifest build mismatch." >&2
+  exit 1
+}
+[[ "$MANIFEST_BUNDLE_ID" == "$OPENWHISPER_BUNDLE_ID" ]] || {
+  echo "Release manifest bundle identifier mismatch." >&2
+  exit 1
+}
+
+EXPECTED_ZIP_SHA256="$(/usr/bin/shasum -a 256 "$ROOT/dist/$MANIFEST_ZIP_NAME" | awk '{print $1}')"
+EXPECTED_DMG_SHA256="$(/usr/bin/shasum -a 256 "$ROOT/dist/$MANIFEST_DMG_NAME" | awk '{print $1}')"
+[[ "$MANIFEST_ZIP_SHA256" == "$EXPECTED_ZIP_SHA256" ]] || {
+  echo "Release manifest ZIP checksum mismatch." >&2
+  exit 1
+}
+[[ "$MANIFEST_DMG_SHA256" == "$EXPECTED_DMG_SHA256" ]] || {
+  echo "Release manifest DMG checksum mismatch." >&2
+  exit 1
+}
 
 echo "Packaged app metadata looks correct."

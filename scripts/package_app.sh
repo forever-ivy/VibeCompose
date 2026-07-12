@@ -253,6 +253,9 @@ fi
 } >"$SHA256_PATH.tmp"
 mv "$SHA256_PATH.tmp" "$SHA256_PATH"
 
+OPENWHISPER_RELEASE_ARCHITECTURE="$ARCH" \
+  "$ROOT/scripts/generate_release_metadata.sh" >/dev/null
+
 rm -rf "$DMG_STAGING_DIR"
 rm -rf "$ICONSET_DIR"
 rm -f "$ENTITLEMENTS_FILE"
@@ -264,3 +267,4 @@ echo "Signed with $SIGNING_SUMMARY"
 echo "Created $ZIP_PATH"
 echo "Created $DMG_PATH"
 echo "Created $SHA256_PATH"
+echo "Created $ROOT/dist/release-manifest.json"

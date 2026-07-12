@@ -39,4 +39,6 @@ What actually happened?
 
 ## Logs Or Screenshots
 
-Paste the smallest useful error or attach a screenshot.
+Paste the smallest non-sensitive error or attach a redacted screenshot.
+
+If requested, attach the ZIP created by **Settings → Advanced → Export Diagnostics** after reviewing it. Do not attach access tokens, refresh tokens, cookies, API keys, audio, transcripts, raw crash reports, or private document content.

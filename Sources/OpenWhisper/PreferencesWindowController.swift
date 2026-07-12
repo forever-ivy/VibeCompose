@@ -34,9 +34,10 @@ final class PreferencesWindowController: NSWindowController {
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
+        onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
-        focusPrivacy: Bool = false
+        focusPane: SettingsPane? = nil
     ) {
         let view = PreferencesView(
             initialConfig: config,
@@ -49,9 +50,10 @@ final class PreferencesWindowController: NSWindowController {
             onRetryRecoveryRecord: onRetryRecoveryRecord,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onOpenConfigFolder: onOpenConfigFolder,
+            onExportSupportDiagnostics: onExportSupportDiagnostics,
             onDeleteAllData: onDeleteAllData,
             onOpenOnboarding: onOpenOnboarding,
-            focusPrivacy: focusPrivacy
+            focusPane: focusPane
         )
         let hostingController = NSHostingController(rootView: view)
 
@@ -232,6 +234,8 @@ private struct PreferencesView: View {
     @State private var showsDeleteAllDataConfirmation = false
     @State private var privacyMessage: String?
     @State private var privacyMessageIsError = false
+    @State private var diagnosticsExportMessage: String?
+    @State private var diagnosticsExportMessageIsError = false
 
     let authManager: ChatGPTAuthManager
     let onSave: (AppConfig) -> Result<Void, any Error>
@@ -242,6 +246,7 @@ private struct PreferencesView: View {
     let onRetryRecoveryRecord: (RecoveryRecord) -> Void
     let onRequestMicrophoneAccess: () -> Void
     let onOpenConfigFolder: () -> Void
+    let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
     let onOpenOnboarding: () -> Void
     let windowStateStore: SettingsWindowStateStore
@@ -257,9 +262,10 @@ private struct PreferencesView: View {
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
+        onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
-        focusPrivacy: Bool = false
+        focusPane: SettingsPane? = nil
     ) {
         let windowStateStore = SettingsWindowStateStore()
         _config = State(initialValue: initialConfig)
@@ -271,7 +277,7 @@ private struct PreferencesView: View {
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
         _selectedSection = State(
             initialValue: windowStateStore.initialPane(
-                focusPrivacy: focusPrivacy
+                focusedPane: focusPane
             )
         )
         self.authManager = authManager
@@ -283,6 +289,7 @@ private struct PreferencesView: View {
         self.onRetryRecoveryRecord = onRetryRecoveryRecord
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onOpenConfigFolder = onOpenConfigFolder
+        self.onExportSupportDiagnostics = onExportSupportDiagnostics
         self.onDeleteAllData = onDeleteAllData
         self.onOpenOnboarding = onOpenOnboarding
         self.windowStateStore = windowStateStore
@@ -1023,7 +1030,59 @@ private struct PreferencesView: View {
                 )
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+
+                Divider()
+
+                LabeledContent(L10n.text("Support Diagnostics")) {
+                    Button(L10n.text("Export Diagnostics…")) {
+                        exportSupportDiagnostics()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                Text(
+                    L10n.text(
+                        "Creates a local ZIP with redacted runtime, permission, latency, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, tokens, API keys, terminology, custom endpoints, and raw crash reports."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+                if let diagnosticsExportMessage {
+                    Text(diagnosticsExportMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            diagnosticsExportMessageIsError ? .red : .secondary
+                        )
+                }
             }
+        }
+    }
+
+    private func exportSupportDiagnostics() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = SupportDiagnosticsExporter
+            .suggestedFileName()
+        panel.title = L10n.text("Export Support Diagnostics")
+        panel.prompt = L10n.text("Export")
+
+        guard panel.runModal() == .OK, let destinationURL = panel.url else {
+            return
+        }
+
+        switch onExportSupportDiagnostics(destinationURL) {
+        case .success(let archiveURL):
+            diagnosticsExportMessage = L10n.format(
+                "Saved redacted diagnostics as %@.",
+                archiveURL.lastPathComponent
+            )
+            diagnosticsExportMessageIsError = false
+            NSWorkspace.shared.activateFileViewerSelecting([archiveURL])
+        case .failure(let error):
+            diagnosticsExportMessage = error.localizedDescription
+            diagnosticsExportMessageIsError = true
         }
     }
 

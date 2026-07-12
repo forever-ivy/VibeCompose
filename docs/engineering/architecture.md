@@ -208,6 +208,8 @@ Privacy controls currently use the existing explicit Save flow. Remaining produc
 - `scripts/benchmark_stt.sh` runs explicit audio inputs through packaged-app benchmark mode.
 - Benchmark output includes cold/warm `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 summaries.
 - Product diagnostics are local-only in the current alpha; no product analytics upload is enabled.
+- `SupportDiagnosticsExporter` creates an owner-only local ZIP containing a non-secret runtime/configuration summary, redacted latency rows, whitelisted metadata from up to five crash reports, and per-file SHA-256 values.
+- Support exports exclude audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoint values, raw crash bodies, history, Recovery metadata, and `config.json`; they are never uploaded automatically.
 
 ## 10. Packaging and Verification
 
@@ -231,6 +233,15 @@ HUD visual acceptance launches the installed app once per required state and ask
 
 Ad-hoc signing is allowed only for local development. Commercial distribution still requires strict environment parsing, a fixed Developer ID/Team ID, Hardened Runtime, notarization and stapling, fail-closed Gatekeeper checks, staged atomic installation with rollback, fixed artifact SHA-256 values, and a signed updater.
 
+Release metadata and distribution guards currently include:
+
+- exact ZIP/DMG byte counts, HTTPS download URLs, and SHA-256 values in `dist/release-manifest.json`;
+- a Homebrew Cask that uses an impossible all-zero checksum until the release preparation script records the exact notarized ZIP hash;
+- installer validation of bundle ID, version, build, architecture, signature, and—when release enforcement is enabled—the expected Developer ID Team ID;
+- a commercial release gate that requires Developer ID, stapling, Gatekeeper success, manifest/Cask consistency, and signed-updater `SUFeedURL`/`SUPublicEDKey` configuration.
+
+Sparkle 2 is the selected updater, but it is not yet integrated. The commercial release gate therefore intentionally remains closed.
+
 ## 11. Known Architectural Gaps
 
 The current alpha must not be described as commercially release-ready while these remain:
@@ -239,5 +250,5 @@ The current alpha must not be described as commercially release-ready while thes
 - Settings and Onboarding are not yet at the target native product architecture; History, Terminology, and Quick Add still require full keyboard/VoiceOver interaction acceptance;
 - HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
 - the advanced recovery API key is still environment-variable based rather than Keychain-backed;
-- notarization, updater, crash diagnostics export, and rollback-safe release infrastructure are not complete;
+- a real Developer ID/notarized artifact and installed Sparkle update/rollback proof are not complete;
 - clean-TCC microphone/accessibility ordering and the full installed-app F5/ESC/inline-close/Retry/paste-or-copy matrix still require trusted native GUI evidence.

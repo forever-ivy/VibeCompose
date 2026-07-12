@@ -20,13 +20,14 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 麦克风和辅助功能权限诊断
 - 有限留存的本地历史、失败音频恢复、隐私控制和性能基准工具
 - 敏感应用排除与“删除全部数据”
+- 脱敏支持诊断 ZIP 导出
 - 作为高级恢复路径的 OpenAI-Compatible 转写
 
 ## 产品边界
 
 默认 ChatGPT 账户路径依赖未公开的上游行为，不应被描述为稳定公开 API、OpenAI 官方合作或企业 SLA。
 
-当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。商业发布仍受 Developer ID 签名、公证、签名更新器、发布脚本 fail-closed、原生 Onboarding/管理界面以及隐私与支持文档约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
+当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。商业发布仍受 Developer ID 签名、公证、已集成的签名更新器、完整安装版 Onboarding/交互验收，以及永久商业运营主体和联系方式约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
 
 ## 系统要求
 
@@ -79,6 +80,8 @@ OpenWhisper 的本地应用数据位于：
 
 诊断只包含耗时、字节数、服务类型和错误分类，不包含音频、转写正文、剪贴板内容或 Token。在系统支持的范围内，本地数据文件使用仅当前用户可读写的权限。
 
+通过 **设置 → 高级 → 导出诊断**，可以创建一个由用户自行检查的本地 ZIP，其中包含脱敏运行状态、权限、延迟和崩溃摘要；不包含音频、转写正文、剪贴板文本、账户邮箱、凭据、术语、自定义端点、原始崩溃报告、历史、Recovery 元数据或 `config.json`。
+
 ChatGPT 会话保存在 Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。通过 **设置 → 隐私 → 删除全部数据**，可以删除设置、术语、转写历史、失败录音、诊断、Retry 文件和已保存的 ChatGPT 会话，并恢复为退出登录后的默认状态。
 
 ## 仓库结构
@@ -105,6 +108,12 @@ docs/design/                  视觉规范
 - [UI 对标调研](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [架构说明](docs/engineering/architecture.md)
 - [发布流程](docs/engineering/release.md)
+- [更新器选型](docs/engineering/updater.md)
+- [隐私政策](docs/legal/privacy-policy.zh-CN.md)
+- [使用条款](docs/legal/terms-of-use.zh-CN.md)
+- [退款政策](docs/legal/refund-policy.zh-CN.md)
+- [支持政策](docs/support/support-policy.zh-CN.md)
+- [安全问题报告](SECURITY.md)
 
 ## 许可证
 

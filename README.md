@@ -20,13 +20,14 @@ The current implementation already includes:
 - microphone and Accessibility permission diagnostics
 - bounded local history, failed-audio recovery, privacy controls, and benchmark tooling
 - sensitive-app exclusions and a Delete All Data action
+- redacted support-diagnostics ZIP export
 - OpenAI-compatible transcription as an advanced recovery route
 
 ## Product Boundary
 
 The default ChatGPT account route depends on undocumented upstream behavior. It is not presented as a stable public API, an OpenAI partnership, or an enterprise SLA.
 
-The current alpha closes the original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Commercial distribution is still gated by Developer ID signing, notarization, a signed updater, fail-closed release tooling, native onboarding and management surfaces, and published policy/support documents. See the [current security baseline](docs/audits/security-baseline-2026-07-13.md).
+The current alpha closes the original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Commercial distribution is still gated by Developer ID signing, notarization, an integrated signed updater, full installed-app onboarding/interaction acceptance, and final commercial operator/contact details. See the [current security baseline](docs/audits/security-baseline-2026-07-13.md).
 
 ## Requirements
 
@@ -79,6 +80,8 @@ Current privacy defaults:
 
 Diagnostics contain timing, byte counts, provider labels, and error categories. They do not contain audio, transcript text, clipboard contents, or tokens. Local data files are created with owner-only permissions where supported.
 
+**Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
+
 The ChatGPT session is stored in Keychain under `app.openwhisper.mac.ChatGPTSession`. **Settings → Privacy → Delete All Data** removes settings, terminology, transcript history, failed recordings, diagnostics, retry files, and the saved ChatGPT session, then returns OpenWhisper to its signed-out defaults.
 
 ## Repository Layout
@@ -105,6 +108,12 @@ docs/design/                  visual specifications
 - [UI comparison research](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [Architecture](docs/engineering/architecture.md)
 - [Release process](docs/engineering/release.md)
+- [Updater decision](docs/engineering/updater.md)
+- [Privacy Policy](docs/legal/privacy-policy.md)
+- [Terms of Use](docs/legal/terms-of-use.md)
+- [Refund Policy](docs/legal/refund-policy.md)
+- [Support Policy](docs/support/support-policy.md)
+- [Security reporting](SECURITY.md)
 
 ## License
 

@@ -24,8 +24,14 @@ struct SettingsWindowStateStore {
     func initialPane(
         focusPrivacy: Bool
     ) -> SettingsPane {
-        if focusPrivacy {
-            return .privacy
+        initialPane(focusedPane: focusPrivacy ? .privacy : nil)
+    }
+
+    func initialPane(
+        focusedPane: SettingsPane?
+    ) -> SettingsPane {
+        if let focusedPane {
+            return focusedPane
         }
         guard
             let rawValue = defaults.string(forKey: Self.selectedPaneKey),

@@ -21,6 +21,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ./scripts/install_app.sh
 ./scripts/check_packaged_app.sh
+./scripts/generate_release_metadata.sh
 ```
 
 Then verify the installed app:
@@ -67,11 +68,20 @@ dist/OpenWhisper-0.1.0-macos-arm64.dmg
 - Homebrew Cask uses an exact SHA-256.
 - Update manifest is signed and rollback-safe.
 
+Current fail-closed foundations:
+
+- `scripts/generate_release_metadata.sh` records exact ZIP/DMG SHA-256 values, byte counts, HTTPS URLs, version, build, architecture, bundle ID, and minimum macOS.
+- `scripts/update_homebrew_cask.sh` writes the exact ZIP hash into the Cask; the tracked unreleased Cask uses an impossible all-zero checksum rather than `:no_check`.
+- `scripts/install_app.sh` stages and validates a candidate, checks bundle ID/version/build/architecture/signature, and restores the previous app after a failed replacement.
+- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper, manifest/Cask consistency, and signed-updater keys.
+- Sparkle 2 is selected in [Updater Decision](updater.md), but is not yet integrated; the commercial release gate intentionally fails until `SUFeedURL` and `SUPublicEDKey` are present.
+
 ### Product and Support
 
 - Four-step onboarding completes from clean TCC state.
-- Crash and diagnostics collection is explicit and privacy-preserving.
-- Privacy policy, terms, refund policy, support scope, and independent-project statement are published.
+- Crash and diagnostics collection is explicit and privacy-preserving, with a user-initiated redacted ZIP export.
+- Bilingual privacy policy, terms, refund policy, and support scope exist for private alpha.
+- Public payment remains blocked until the commercial operator and permanent legal/privacy/support contacts are finalized.
 - The default upstream route has a documented recovery path and incident kill switch.
 
 ## Versioning
@@ -82,3 +92,21 @@ dist/OpenWhisper-0.1.0-macos-arm64.dmg
 - `1.0.0`: first supported commercial macOS release
 
 Do not reuse historical version claims that were not issued under the OpenWhisper identity.
+
+## Commercial Release Command
+
+After obtaining a valid Developer ID certificate, Team ID, notary profile, Sparkle feed, and EdDSA public key:
+
+```bash
+OPENWHISPER_REQUIRE_DEVELOPER_ID=1 \
+OPENWHISPER_TEAM_ID=YOUR_TEAM_ID \
+OPENWHISPER_NOTARIZE=1 \
+OPENWHISPER_NOTARY_PROFILE=YOUR_NOTARY_PROFILE \
+./scripts/package_app.sh
+
+./scripts/generate_release_metadata.sh
+./scripts/update_homebrew_cask.sh
+OPENWHISPER_TEAM_ID=YOUR_TEAM_ID ./scripts/verify_release_gate.sh
+```
+
+The final command must fail until the signed updater is integrated and the packaged app contains `SUFeedURL` and `SUPublicEDKey`.
