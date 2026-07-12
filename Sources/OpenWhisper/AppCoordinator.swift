@@ -24,6 +24,7 @@ final class AppCoordinator {
         @escaping () -> Void,
         @escaping () -> Void,
         @escaping () -> Void,
+        @escaping () -> Void,
         @escaping () -> Void
     ) -> any StatusMenuUpdating
     typealias PipelineFactory = @Sendable (TranscriptionConfig, any ChatGPTAuthProviding, TranscriptionAttemptPolicy) -> any DictationPreparing
@@ -38,6 +39,7 @@ final class AppCoordinator {
     let historyRecorder: any TranscriptionHistoryRecording
     let recoveryRecorder: any RecoveryRecording
     let soundFeedback: any SoundFeedbackPlaying
+    let softwareUpdater: any SoftwareUpdating
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -102,15 +104,18 @@ final class AppCoordinator {
             openQuickAdd,
             openTerminology,
             openSettings,
+            checkForUpdates,
             quit in
             StatusMenuController(
                 openHistoryHandler: openHistory,
                 openQuickAddHandler: openQuickAdd,
                 openTerminologyHandler: openTerminology,
                 openSettingsHandler: openSettings,
+                checkForUpdatesHandler: checkForUpdates,
                 quitHandler: quit
             )
         },
+        softwareUpdater: (any SoftwareUpdating)? = nil,
         pipelineFactory: @escaping PipelineFactory = { transcriptionConfig, authManager, attemptPolicy in
             DictationPipeline(
                 transcriber: ChatGPTTranscriber(
@@ -146,6 +151,7 @@ final class AppCoordinator {
             directoryURL: configStore.directoryURL.appendingPathComponent("Recovery", isDirectory: true)
         )
         self.soundFeedback = soundFeedback
+        self.softwareUpdater = softwareUpdater ?? SparkleSoftwareUpdater()
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -183,6 +189,7 @@ final class AppCoordinator {
                 { [weak self] in self?.openQuickAdd() },
                 { [weak self] in self?.openTerminology() },
                 { [weak self] in self?.openSettings() },
+                { [weak self] in self?.checkForUpdates() },
                 { NSApplication.shared.terminate(nil) }
             )
 
@@ -833,6 +840,32 @@ final class AppCoordinator {
                         )
                     }
                 },
+                softwareUpdateSnapshot: softwareUpdater.snapshot(),
+                onCheckForUpdates: { [weak self] in
+                    guard let self else {
+                        return .failure(
+                            .unavailable(
+                                L10n.text(
+                                    "OpenWhisper settings are no longer available."
+                                )
+                            )
+                        )
+                    }
+                    return self.softwareUpdater.checkForUpdates()
+                },
+                onSetAutomaticallyChecksForUpdates: { [weak self] enabled in
+                    guard let self else {
+                        return .failure(
+                            .unavailable(
+                                L10n.text(
+                                    "OpenWhisper settings are no longer available."
+                                )
+                            )
+                        )
+                    }
+                    return self.softwareUpdater
+                        .setAutomaticallyChecksForUpdates(enabled)
+                },
                 onDeleteAllData: { [weak self] in
                     guard let self else {
                         return .failure(
@@ -1248,6 +1281,20 @@ final class AppCoordinator {
         alert.addButton(withTitle: L10n.text("OK"))
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
+    }
+
+    private func checkForUpdates() {
+        switch softwareUpdater.checkForUpdates() {
+        case .success:
+            break
+        case .failure(let error):
+            let alert = NSAlert()
+            alert.alertStyle = .informational
+            alert.messageText = L10n.text("Software Update")
+            alert.informativeText = error.localizedDescription
+            alert.addButton(withTitle: L10n.text("OK"))
+            alert.runModal()
+        }
     }
 
     private func requestMicrophoneAccess(showExplanation: Bool = true) async throws {

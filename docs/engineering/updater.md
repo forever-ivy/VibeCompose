@@ -2,7 +2,7 @@
 
 > Decision date: July 13, 2026
 >
-> Status: selected, not yet integrated
+> Status: Sparkle 2.9.4 integrated in the private alpha; production feed and signing key not yet configured
 >
 > Commercial release gate: blocked until the implementation and installed update/rollback proof are complete
 
@@ -21,12 +21,12 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
 
 ## Required Integration
 
-1. Add Sparkle 2 as a pinned dependency.
-2. Embed and sign the Sparkle framework and helper services inside `OpenWhisper.app`.
-3. Add `SUFeedURL` and `SUPublicEDKey` to the signed `Info.plist`.
+1. **Implemented:** pin Sparkle 2.9.4 in `Package.swift` and `Package.resolved`.
+2. **Implemented:** embed Sparkle.framework and its helper services inside `OpenWhisper.app`, add the app Frameworks rpath, and sign nested code before signing the app.
+3. **Implemented as fail-closed configuration:** packaging accepts `OPENWHISPER_SPARKLE_FEED_URL` and `OPENWHISPER_SPARKLE_PUBLIC_ED_KEY` together and writes `SUFeedURL` and `SUPublicEDKey` into the signed `Info.plist`; Developer ID packaging rejects missing configuration.
 4. Store the EdDSA private key outside the repository and CI logs.
-5. Generate a signed appcast from the notarized ZIP.
-6. Expose Check for Updates in the menu and Settings.
+5. **Implemented as release tooling:** `scripts/generate_sparkle_appcast.sh` generates a signed channel appcast from the exact release ZIP using a protected private-key file or a named Keychain account. Real production signing evidence is still required.
+6. **Implemented:** expose Check for Updates in the menu and Settings, with automatic-check preference control and an explicit unavailable state in unconfigured alpha builds.
 7. Keep alpha, beta, and stable appcasts separate.
 8. Reject a feed or archive whose signature, bundle ID, Team ID, version, architecture, or minimum macOS requirement is invalid.
 9. Test update from the previous supported build, interrupted download, invalid signature, malformed appcast, downgrade attempt, failed relaunch, and rollback.
@@ -36,8 +36,11 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
 
 - `scripts/generate_release_metadata.sh` creates a machine-readable manifest for the ZIP and DMG with exact SHA-256 values and byte counts.
 - `scripts/update_homebrew_cask.sh` replaces the fail-closed Cask checksum only from that manifest.
-- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper success, manifest/Cask consistency, `SUFeedURL`, and `SUPublicEDKey`.
-- Until Sparkle is integrated, the release gate intentionally fails at the updater checks.
+- `scripts/package_app.sh` embeds and signs the pinned Sparkle framework and rejects partial or unsafe updater configuration.
+- Ad-hoc local builds add `com.apple.security.cs.disable-library-validation` because ad-hoc code has no shared Team ID; the Developer ID release gate explicitly rejects that local-only entitlement.
+- `scripts/check_packaged_app.sh` verifies the embedded framework version, runtime link/rpath, and paired HTTPS feed/public-key configuration.
+- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper success, manifest/Cask consistency, the pinned Sparkle framework, `SUFeedURL`, `SUPublicEDKey`, and a matching signed appcast.
+- Private-alpha builds intentionally omit production feed/key values. The commercial release gate therefore remains fail-closed until permanent update hosting and signing-key material are supplied.
 
 ## Key Management
 

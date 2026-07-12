@@ -9,9 +9,56 @@ load_version_env "$ROOT/version.env"
 
 APP="$ROOT/dist/$OPENWHISPER_APP_NAME.app"
 PLIST="$APP/Contents/Info.plist"
+EXECUTABLE="$APP/Contents/MacOS/$OPENWHISPER_APP_NAME"
+SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 
 "$ROOT/scripts/package_app.sh" >/dev/null
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
+
+if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then
+  echo "Packaged app is missing the embedded Sparkle framework." >&2
+  exit 1
+fi
+
+SPARKLE_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$SPARKLE_FRAMEWORK/Resources/Info.plist")"
+if [[ "$SPARKLE_VERSION" != "2.9.4" ]]; then
+  echo "Unexpected embedded Sparkle version: $SPARKLE_VERSION" >&2
+  exit 1
+fi
+
+if ! /usr/bin/otool -L "$EXECUTABLE" \
+  | grep -q '@rpath/Sparkle.framework/Versions/B/Sparkle'; then
+  echo "OpenWhisper is not linked against the embedded Sparkle framework." >&2
+  exit 1
+fi
+
+if ! /usr/bin/otool -l "$EXECUTABLE" \
+  | awk '
+      $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
+      in_rpath && $1 == "path" {
+        if ($2 == "@executable_path/../Frameworks") {
+          found = 1
+        }
+        in_rpath = 0
+      }
+      END { exit(found ? 0 : 1) }
+    '; then
+  echo "OpenWhisper is missing the app Frameworks runtime search path." >&2
+  exit 1
+fi
+
+FEED_URL="$(/usr/bin/plutil -extract SUFeedURL raw -o - "$PLIST" 2>/dev/null || true)"
+PUBLIC_KEY="$(/usr/bin/plutil -extract SUPublicEDKey raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ -n "$FEED_URL" || -n "$PUBLIC_KEY" ]]; then
+  [[ "$FEED_URL" == https://* && "$FEED_URL" != *"@"* ]] || {
+    echo "Packaged Sparkle feed must use credential-free HTTPS." >&2
+    exit 1
+  }
+  [[ "$PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || {
+    echo "Packaged Sparkle public key is not a 32-byte base64 Ed25519 key." >&2
+    exit 1
+  }
+fi
 
 if /usr/bin/plutil -extract LSUIElement raw -o - "$PLIST" >/dev/null 2>&1; then
   echo "Packaged app must not declare LSUIElement in Info.plist; runtime should switch to accessory mode explicitly." >&2
@@ -21,6 +68,17 @@ fi
 ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 if [[ "$ENTITLEMENTS" != *"com.apple.security.device.audio-input"* ]]; then
   echo "Packaged app is missing hardened runtime audio input entitlement." >&2
+  exit 1
+fi
+SIGNATURE_DETAILS="$(/usr/bin/codesign -dvvv "$APP" 2>&1)"
+if [[ "$SIGNATURE_DETAILS" == *"Signature=adhoc"* ]]; then
+  if [[ "$ENTITLEMENTS" != *"com.apple.security.cs.disable-library-validation"* ]]; then
+    echo "Ad-hoc Sparkle builds require a local-only library-validation exception." >&2
+    exit 1
+  fi
+elif [[ "$SIGNATURE_DETAILS" == *"Authority=Developer ID Application:"* \
+  && "$ENTITLEMENTS" == *"com.apple.security.cs.disable-library-validation"* ]]; then
+  echo "Developer ID releases must not disable library validation." >&2
   exit 1
 fi
 

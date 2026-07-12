@@ -12,6 +12,7 @@ DMG="$ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-macos-$(uname -m)
 MANIFEST="${OPENWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
 CASK="$ROOT/packaging/homebrew/Casks/openwhisper.rb"
 EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
+APPCAST="${OPENWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
 
 [[ -n "$EXPECTED_TEAM_ID" ]] || {
   echo "OPENWHISPER_TEAM_ID is required for the commercial release gate." >&2
@@ -30,6 +31,11 @@ SIGNATURE_DETAILS="$(/usr/bin/codesign -dvvv "$APP" 2>&1)"
 }
 [[ "$SIGNATURE_DETAILS" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
   echo "Commercial release Team ID mismatch." >&2
+  exit 1
+}
+ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
+[[ "$ENTITLEMENTS" != *"com.apple.security.cs.disable-library-validation"* ]] || {
+  echo "Commercial release must not disable hardened-runtime library validation." >&2
   exit 1
 }
 
@@ -61,13 +67,78 @@ if grep -q "sha256 :no_check" "$CASK"; then
 fi
 
 PLIST="$APP/Contents/Info.plist"
-if ! /usr/bin/plutil -extract SUFeedURL raw -o - "$PLIST" >/dev/null 2>&1; then
+SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+EXECUTABLE="$APP/Contents/MacOS/$OPENWHISPER_APP_NAME"
+[[ -d "$SPARKLE_FRAMEWORK" ]] || {
+  echo "Sparkle.framework is not embedded in the signed app." >&2
+  exit 1
+}
+SPARKLE_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$SPARKLE_FRAMEWORK/Resources/Info.plist")"
+[[ "$SPARKLE_VERSION" == "2.9.4" ]] || {
+  echo "Commercial release requires the pinned Sparkle 2.9.4 framework." >&2
+  exit 1
+}
+/usr/bin/otool -L "$EXECUTABLE" \
+  | grep -q '@rpath/Sparkle.framework/Versions/B/Sparkle' || {
+    echo "The signed app is not linked against Sparkle.framework." >&2
+    exit 1
+  }
+/usr/bin/otool -l "$EXECUTABLE" \
+  | awk '
+      $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
+      in_rpath && $1 == "path" {
+        if ($2 == "@executable_path/../Frameworks") {
+          found = 1
+        }
+        in_rpath = 0
+      }
+      END { exit(found ? 0 : 1) }
+    ' || {
+      echo "The signed app is missing its Frameworks runtime search path." >&2
+      exit 1
+    }
+
+if ! FEED_URL="$(/usr/bin/plutil -extract SUFeedURL raw -o - "$PLIST" 2>/dev/null)"; then
   echo "Signed updater feed is not configured (missing SUFeedURL)." >&2
   exit 1
 fi
-if ! /usr/bin/plutil -extract SUPublicEDKey raw -o - "$PLIST" >/dev/null 2>&1; then
+if ! PUBLIC_KEY="$(/usr/bin/plutil -extract SUPublicEDKey raw -o - "$PLIST" 2>/dev/null)"; then
   echo "Signed updater verification key is not configured (missing SUPublicEDKey)." >&2
   exit 1
 fi
+[[ "$FEED_URL" == https://* && "$FEED_URL" != *"@"* ]] || {
+  echo "Signed updater feed must use credential-free HTTPS." >&2
+  exit 1
+}
+[[ "$PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || {
+  echo "Signed updater public key is not a 32-byte base64 Ed25519 key." >&2
+  exit 1
+}
+
+[[ -f "$APPCAST" && ! -L "$APPCAST" ]] || {
+  echo "Missing regular signed Sparkle appcast: $APPCAST" >&2
+  exit 1
+}
+/usr/bin/xmllint --noout "$APPCAST"
+grep -q 'sparkle:edSignature="' "$APPCAST" || {
+  echo "Sparkle appcast has no EdDSA archive signature." >&2
+  exit 1
+}
+grep -Eq \
+  "<sparkle:version>$OPENWHISPER_BUILD</sparkle:version>|sparkle:version=\"$OPENWHISPER_BUILD\"" \
+  "$APPCAST" || {
+    echo "Sparkle appcast build does not match the release build." >&2
+    exit 1
+  }
+ZIP_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.0.downloadURL raw -o - "$MANIFEST")"
+grep -Fq "$ZIP_DOWNLOAD_URL" "$APPCAST" || {
+  echo "Sparkle appcast download URL does not match the release manifest." >&2
+  exit 1
+}
+"$ROOT/scripts/verify_sparkle_appcast.swift" \
+  --appcast "$APPCAST" \
+  --archive "$ROOT/dist/$(/usr/bin/plutil -extract artifacts.0.fileName raw -o - "$MANIFEST")" \
+  --manifest "$MANIFEST" \
+  --public-key "$PUBLIC_KEY"
 
 echo "OpenWhisper commercial release gate passed."

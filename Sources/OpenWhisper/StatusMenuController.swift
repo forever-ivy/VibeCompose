@@ -14,6 +14,7 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
     private let openQuickAddHandler: () -> Void
     private let openTerminologyHandler: () -> Void
     private let openSettingsHandler: () -> Void
+    private let checkForUpdatesHandler: () -> Void
     private let quitHandler: () -> Void
 
     init(
@@ -21,12 +22,14 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         openQuickAddHandler: @escaping () -> Void,
         openTerminologyHandler: @escaping () -> Void,
         openSettingsHandler: @escaping () -> Void,
+        checkForUpdatesHandler: @escaping () -> Void,
         quitHandler: @escaping () -> Void
     ) {
         self.openHistoryHandler = openHistoryHandler
         self.openQuickAddHandler = openQuickAddHandler
         self.openTerminologyHandler = openTerminologyHandler
         self.openSettingsHandler = openSettingsHandler
+        self.checkForUpdatesHandler = checkForUpdatesHandler
         self.quitHandler = quitHandler
         super.init()
         configureMenu()
@@ -93,6 +96,14 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let updateItem = NSMenuItem(
+            title: L10n.text("Check for Updates…"),
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
@@ -124,6 +135,11 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
     @objc
     private func openSettings() {
         openSettingsHandler()
+    }
+
+    @objc
+    private func checkForUpdates() {
+        checkForUpdatesHandler()
     }
 
     @objc

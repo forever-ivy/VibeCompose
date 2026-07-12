@@ -24,6 +24,9 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Configuration"] == "配置")
     #expect(strings["Export Diagnostics…"] == "导出诊断…")
     #expect(strings["Support Diagnostics"] == "支持诊断")
+    #expect(strings["Software Updates"] == "软件更新")
+    #expect(strings["Check for Updates…"] == "检查更新…")
+    #expect(strings["Automatically check for updates"] == "自动检查更新")
 }
 
 @Test

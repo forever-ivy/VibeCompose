@@ -22,7 +22,10 @@ BUILD_DIR="$ROOT/.build/debug"
 APP_DIR="$ROOT/dist/$APP_NAME.app"
 EXECUTABLE="$APP_DIR/Contents/MacOS/$APP_NAME"
 RESOURCES_DIR="$APP_DIR/Contents/Resources"
+FRAMEWORKS_DIR="$APP_DIR/Contents/Frameworks"
 PLIST="$APP_DIR/Contents/Info.plist"
+SPARKLE_FRAMEWORK_SOURCE="$BUILD_DIR/Sparkle.framework"
+SPARKLE_FRAMEWORK="$FRAMEWORKS_DIR/Sparkle.framework"
 ICONSET_DIR="$ROOT/dist/AppIcon.iconset"
 ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
 ENTITLEMENTS_FILE="$ROOT/dist/OpenWhisper.entitlements"
@@ -32,6 +35,8 @@ REQUIRE_DEVELOPER_ID="${OPENWHISPER_REQUIRE_DEVELOPER_ID:-0}"
 EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
 NOTARIZE="${OPENWHISPER_NOTARIZE:-0}"
 NOTARY_PROFILE="${OPENWHISPER_NOTARY_PROFILE:-}"
+SPARKLE_FEED_URL="${OPENWHISPER_SPARKLE_FEED_URL:-}"
+SPARKLE_PUBLIC_ED_KEY="${OPENWHISPER_SPARKLE_PUBLIC_ED_KEY:-}"
 ADHOC_DESIGNATED_REQUIREMENT="=designated => identifier \"$OPENWHISPER_BUNDLE_ID\""
 
 resolve_signing_identity() {
@@ -69,11 +74,31 @@ rm -f "$NOTARY_ZIP_PATH"
 rm -f "$ENTITLEMENTS_FILE"
 rm -rf "$DMG_STAGING_DIR"
 rm -rf "$ICONSET_DIR"
-mkdir -p "$APP_DIR/Contents/MacOS" "$RESOURCES_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
 swift build --package-path "$ROOT"
 cp "$BUILD_DIR/$APP_NAME" "$EXECUTABLE"
 chmod +x "$EXECUTABLE"
+if [[ ! -d "$SPARKLE_FRAMEWORK_SOURCE" ]]; then
+  echo "SwiftPM did not produce Sparkle.framework at $SPARKLE_FRAMEWORK_SOURCE." >&2
+  exit 1
+fi
+/usr/bin/ditto "$SPARKLE_FRAMEWORK_SOURCE" "$SPARKLE_FRAMEWORK"
+if ! /usr/bin/otool -l "$EXECUTABLE" \
+  | awk '
+      $1 == "cmd" && $2 == "LC_RPATH" { in_rpath = 1; next }
+      in_rpath && $1 == "path" {
+        if ($2 == "@executable_path/../Frameworks") {
+          found = 1
+        }
+        in_rpath = 0
+      }
+      END { exit(found ? 0 : 1) }
+    '; then
+  /usr/bin/install_name_tool \
+    -add_rpath "@executable_path/../Frameworks" \
+    "$EXECUTABLE"
+fi
 if [[ -d "$ROOT/Sources/OpenWhisper/Resources" ]]; then
   cp -R "$ROOT/Sources/OpenWhisper/Resources/." "$RESOURCES_DIR/"
 fi
@@ -122,6 +147,36 @@ swift "$ROOT/scripts/render_app_icon.swift" "$ICONSET_DIR"
   printf '%s\n' '</plist>'
 } >"$PLIST"
 
+if [[ -n "$SPARKLE_FEED_URL" || -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+  if [[ -z "$SPARKLE_FEED_URL" || -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+    echo "Sparkle feed URL and public EdDSA key must be configured together." >&2
+    exit 1
+  fi
+  if [[ "$SPARKLE_FEED_URL" != https://* \
+    || "$SPARKLE_FEED_URL" == *"@"* \
+    || "$SPARKLE_FEED_URL" == *[[:space:]\<\>\"\'\\]* ]]; then
+    echo "OPENWHISPER_SPARKLE_FEED_URL must be a credential-free HTTPS URL." >&2
+    exit 1
+  fi
+  if [[ ! "$SPARKLE_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+    echo "OPENWHISPER_SPARKLE_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
+    exit 1
+  fi
+  /usr/bin/plutil -insert SUFeedURL -string "$SPARKLE_FEED_URL" "$PLIST"
+  /usr/bin/plutil -insert SUPublicEDKey -string "$SPARKLE_PUBLIC_ED_KEY" "$PLIST"
+fi
+
+if [[ "$REQUIRE_DEVELOPER_ID" == "1" \
+  && ( -z "$SPARKLE_FEED_URL" || -z "$SPARKLE_PUBLIC_ED_KEY" ) ]]; then
+  echo "Developer ID release packaging requires Sparkle feed and public-key configuration." >&2
+  exit 1
+fi
+
+/usr/bin/plutil -insert SUEnableAutomaticChecks -bool false "$PLIST"
+/usr/bin/plutil -insert SUAutomaticallyUpdate -bool false "$PLIST"
+/usr/bin/plutil -insert SUAllowsAutomaticUpdates -bool false "$PLIST"
+/usr/bin/plutil -insert SUScheduledCheckInterval -integer 86400 "$PLIST"
+
 {
   printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>'
   printf '%s\n' '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
@@ -135,7 +190,57 @@ swift "$ROOT/scripts/render_app_icon.swift" "$ICONSET_DIR"
 
 SIGNING_IDENTITY="$(resolve_signing_identity)"
 CODESIGN_ARGS=(--force)
+
+enable_adhoc_library_validation_exception() {
+  /usr/libexec/PlistBuddy \
+    -c "Delete :com.apple.security.cs.disable-library-validation" \
+    "$ENTITLEMENTS_FILE" >/dev/null 2>&1 || true
+  /usr/libexec/PlistBuddy \
+    -c "Add :com.apple.security.cs.disable-library-validation bool true" \
+    "$ENTITLEMENTS_FILE"
+}
+
+sign_sparkle_components() {
+  local identity="$1"
+  local timestamp_mode="$2"
+  local common_args=(
+    --force
+    --sign "$identity"
+    --options runtime
+    --preserve-metadata=identifier,entitlements,requirements,flags,runtime
+  )
+
+  if [[ "$timestamp_mode" == "timestamp" ]]; then
+    common_args+=(--timestamp)
+  else
+    common_args+=(--timestamp=none)
+  fi
+
+  local sparkle_version_dir="$SPARKLE_FRAMEWORK/Versions/B"
+  local component=""
+  for component in \
+    "$sparkle_version_dir/XPCServices/Downloader.xpc" \
+    "$sparkle_version_dir/XPCServices/Installer.xpc" \
+    "$sparkle_version_dir/Updater.app" \
+    "$sparkle_version_dir/Autoupdate" \
+    "$SPARKLE_FRAMEWORK"; do
+    [[ -e "$component" ]] || {
+      echo "Sparkle signing component is missing: $component" >&2
+      return 1
+    }
+    /usr/bin/codesign "${common_args[@]}" "$component" >/dev/null
+  done
+}
+
 if [[ -n "$SIGNING_IDENTITY" ]]; then
+  if [[ "$SIGNING_IDENTITY" == "-" ]]; then
+    enable_adhoc_library_validation_exception
+  fi
+  if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
+    sign_sparkle_components "$SIGNING_IDENTITY" timestamp
+  else
+    sign_sparkle_components "$SIGNING_IDENTITY" none
+  fi
   CODESIGN_ARGS+=(--sign "$SIGNING_IDENTITY" --options runtime --entitlements "$ENTITLEMENTS_FILE")
   if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
     CODESIGN_ARGS+=(--timestamp)
@@ -144,6 +249,8 @@ if [[ -n "$SIGNING_IDENTITY" ]]; then
   fi
   SIGNING_SUMMARY="$SIGNING_IDENTITY"
 elif [[ "$ALLOW_ADHOC_SIGNING" == "1" ]]; then
+  enable_adhoc_library_validation_exception
+  sign_sparkle_components - none
   CODESIGN_ARGS+=(
     --sign -
     --options runtime
@@ -188,6 +295,10 @@ if [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]]; then
   if grep -q "CSSMERR_TP_CERT_REVOKED" <<<"$ASSESSMENT_OUTPUT"; then
     if [[ "$ALLOW_ADHOC_SIGNING" == "1" ]]; then
       /usr/bin/codesign --remove-signature "$APP_DIR"
+      rm -rf "$SPARKLE_FRAMEWORK"
+      /usr/bin/ditto "$SPARKLE_FRAMEWORK_SOURCE" "$SPARKLE_FRAMEWORK"
+      sign_sparkle_components - none
+      enable_adhoc_library_validation_exception
       /usr/bin/codesign \
         --force \
         --sign - \
@@ -195,6 +306,7 @@ if [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]]; then
         --requirements "$ADHOC_DESIGNATED_REQUIREMENT" \
         --entitlements "$ENTITLEMENTS_FILE" \
         "$APP_DIR" >/dev/null
+      /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_DIR"
       SIGNING_SUMMARY="ad-hoc with stable local designated requirement (stable identity was revoked)"
     else
       echo "The selected code-signing identity is revoked according to Gatekeeper:" >&2

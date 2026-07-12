@@ -73,8 +73,11 @@ Current fail-closed foundations:
 - `scripts/generate_release_metadata.sh` records exact ZIP/DMG SHA-256 values, byte counts, HTTPS URLs, version, build, architecture, bundle ID, and minimum macOS.
 - `scripts/update_homebrew_cask.sh` writes the exact ZIP hash into the Cask; the tracked unreleased Cask uses an impossible all-zero checksum rather than `:no_check`.
 - `scripts/install_app.sh` stages and validates a candidate, checks bundle ID/version/build/architecture/signature, and restores the previous app after a failed replacement.
-- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper, manifest/Cask consistency, and signed-updater keys.
-- Sparkle 2 is selected in [Updater Decision](updater.md), but is not yet integrated; the commercial release gate intentionally fails until `SUFeedURL` and `SUPublicEDKey` are present.
+- Sparkle 2.9.4 is pinned, embedded, linked through the app Frameworks rpath, and exposed through the menu and Advanced Settings.
+- Ad-hoc local builds use a library-validation exception so the no-Team-ID app can load the no-Team-ID framework; Developer ID releases must retain library validation and the release gate rejects this entitlement.
+- `scripts/generate_sparkle_appcast.sh` creates channel-specific signed appcasts without storing a private signing key in the repository.
+- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper, manifest/Cask consistency, updater feed/key configuration, the pinned embedded framework, and a matching signed appcast.
+- Private-alpha packages omit production feed/key values; the commercial release gate intentionally fails until permanent update hosting and signing-key material are supplied.
 
 ### Product and Support
 
@@ -95,18 +98,22 @@ Do not reuse historical version claims that were not issued under the OpenWhispe
 
 ## Commercial Release Command
 
-After obtaining a valid Developer ID certificate, Team ID, notary profile, Sparkle feed, and EdDSA public key:
+After obtaining a valid Developer ID certificate, Team ID, notary profile, Sparkle feed, and EdDSA key pair:
 
 ```bash
 OPENWHISPER_REQUIRE_DEVELOPER_ID=1 \
 OPENWHISPER_TEAM_ID=YOUR_TEAM_ID \
 OPENWHISPER_NOTARIZE=1 \
 OPENWHISPER_NOTARY_PROFILE=YOUR_NOTARY_PROFILE \
+OPENWHISPER_SPARKLE_FEED_URL=https://updates.example/stable/appcast.xml \
+OPENWHISPER_SPARKLE_PUBLIC_ED_KEY=BASE64_PUBLIC_KEY \
 ./scripts/package_app.sh
 
 ./scripts/generate_release_metadata.sh
+OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE=/secure/path/openwhisper-ed25519.key \
+./scripts/generate_sparkle_appcast.sh
 ./scripts/update_homebrew_cask.sh
 OPENWHISPER_TEAM_ID=YOUR_TEAM_ID ./scripts/verify_release_gate.sh
 ```
 
-The final command must fail until the signed updater is integrated and the packaged app contains `SUFeedURL` and `SUPublicEDKey`.
+The final command must fail unless the packaged app, signed appcast, release manifest, Cask checksum, Developer ID identity, notarization, stapling, and Gatekeeper assessment all agree.

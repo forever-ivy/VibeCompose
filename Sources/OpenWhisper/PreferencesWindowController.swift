@@ -35,6 +35,9 @@ final class PreferencesWindowController: NSWindowController {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
+        softwareUpdateSnapshot: SoftwareUpdateSnapshot,
+        onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
+        onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
         focusPane: SettingsPane? = nil
@@ -51,6 +54,9 @@ final class PreferencesWindowController: NSWindowController {
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onOpenConfigFolder: onOpenConfigFolder,
             onExportSupportDiagnostics: onExportSupportDiagnostics,
+            softwareUpdateSnapshot: softwareUpdateSnapshot,
+            onCheckForUpdates: onCheckForUpdates,
+            onSetAutomaticallyChecksForUpdates: onSetAutomaticallyChecksForUpdates,
             onDeleteAllData: onDeleteAllData,
             onOpenOnboarding: onOpenOnboarding,
             focusPane: focusPane
@@ -236,6 +242,9 @@ private struct PreferencesView: View {
     @State private var privacyMessageIsError = false
     @State private var diagnosticsExportMessage: String?
     @State private var diagnosticsExportMessageIsError = false
+    @State private var softwareUpdateSnapshot: SoftwareUpdateSnapshot
+    @State private var softwareUpdateMessage: String?
+    @State private var softwareUpdateMessageIsError = false
 
     let authManager: ChatGPTAuthManager
     let onSave: (AppConfig) -> Result<Void, any Error>
@@ -247,6 +256,8 @@ private struct PreferencesView: View {
     let onRequestMicrophoneAccess: () -> Void
     let onOpenConfigFolder: () -> Void
     let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
+    let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
+    let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
     let onOpenOnboarding: () -> Void
     let windowStateStore: SettingsWindowStateStore
@@ -263,6 +274,9 @@ private struct PreferencesView: View {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
+        softwareUpdateSnapshot: SoftwareUpdateSnapshot,
+        onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
+        onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
         focusPane: SettingsPane? = nil
@@ -275,6 +289,7 @@ private struct PreferencesView: View {
         _authSnapshot = State(initialValue: authManager.authSnapshot())
         _browserBridgeSnapshot = State(initialValue: authManager.browserBridgeSnapshot())
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
+        _softwareUpdateSnapshot = State(initialValue: softwareUpdateSnapshot)
         _selectedSection = State(
             initialValue: windowStateStore.initialPane(
                 focusedPane: focusPane
@@ -290,6 +305,8 @@ private struct PreferencesView: View {
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onOpenConfigFolder = onOpenConfigFolder
         self.onExportSupportDiagnostics = onExportSupportDiagnostics
+        self.onCheckForUpdates = onCheckForUpdates
+        self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
         self.onDeleteAllData = onDeleteAllData
         self.onOpenOnboarding = onOpenOnboarding
         self.windowStateStore = windowStateStore
@@ -1033,6 +1050,58 @@ private struct PreferencesView: View {
 
                 Divider()
 
+                LabeledContent(L10n.text("Software Updates")) {
+                    Button(L10n.text("Check for Updates…")) {
+                        checkForSoftwareUpdates()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        !softwareUpdateSnapshot.isConfigured
+                            || !softwareUpdateSnapshot.canCheckForUpdates
+                    )
+                }
+
+                Toggle(
+                    L10n.text("Automatically check for updates"),
+                    isOn: Binding(
+                        get: {
+                            softwareUpdateSnapshot.automaticallyChecksForUpdates
+                        },
+                        set: { enabled in
+                            setAutomaticUpdateChecks(enabled)
+                        }
+                    )
+                )
+                .disabled(!softwareUpdateSnapshot.isConfigured)
+
+                Text(softwareUpdateSnapshot.detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                if let lastCheckDate = softwareUpdateSnapshot.lastUpdateCheckDate {
+                    Text(
+                        L10n.format(
+                            "Last checked: %@",
+                            lastCheckDate.formatted(
+                                date: .abbreviated,
+                                time: .shortened
+                            )
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
+
+                if let softwareUpdateMessage {
+                    Text(softwareUpdateMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            softwareUpdateMessageIsError ? .red : .secondary
+                        )
+                }
+
+                Divider()
+
                 LabeledContent(L10n.text("Support Diagnostics")) {
                     Button(L10n.text("Export Diagnostics…")) {
                         exportSupportDiagnostics()
@@ -1055,6 +1124,31 @@ private struct PreferencesView: View {
                         )
                 }
             }
+        }
+    }
+
+    private func checkForSoftwareUpdates() {
+        switch onCheckForUpdates() {
+        case .success:
+            softwareUpdateMessage = L10n.text("Checking for updates…")
+            softwareUpdateMessageIsError = false
+        case .failure(let error):
+            softwareUpdateMessage = error.localizedDescription
+            softwareUpdateMessageIsError = true
+        }
+    }
+
+    private func setAutomaticUpdateChecks(_ enabled: Bool) {
+        switch onSetAutomaticallyChecksForUpdates(enabled) {
+        case .success(let snapshot):
+            softwareUpdateSnapshot = snapshot
+            softwareUpdateMessage = enabled
+                ? L10n.text("Automatic update checks are enabled.")
+                : L10n.text("Automatic update checks are disabled.")
+            softwareUpdateMessageIsError = false
+        case .failure(let error):
+            softwareUpdateMessage = error.localizedDescription
+            softwareUpdateMessageIsError = true
         }
     }
 

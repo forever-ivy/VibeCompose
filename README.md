@@ -27,7 +27,7 @@ The current implementation already includes:
 
 The default ChatGPT account route depends on undocumented upstream behavior. It is not presented as a stable public API, an OpenAI partnership, or an enterprise SLA.
 
-The current alpha closes the original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Commercial distribution is still gated by Developer ID signing, notarization, an integrated signed updater, full installed-app onboarding/interaction acceptance, and final commercial operator/contact details. See the [current security baseline](docs/audits/security-baseline-2026-07-13.md).
+The current alpha closes the original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Sparkle 2.9.4 is integrated, but commercial distribution is still gated by Developer ID signing, notarization, production update hosting/keys and installed update proof, full installed-app onboarding/interaction acceptance, and final commercial operator/contact details. See the [current security baseline](docs/audits/security-baseline-2026-07-13.md).
 
 ## Requirements
 

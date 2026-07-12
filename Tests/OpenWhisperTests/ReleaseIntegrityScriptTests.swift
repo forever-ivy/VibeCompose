@@ -71,6 +71,17 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("SHA256SUMS"))
     #expect(packageScript.contains("generate_release_metadata.sh"))
     #expect(packageScript.contains("codesign --verify --deep --strict"))
+    #expect(packageScript.contains("Sparkle.framework"))
+    #expect(packageScript.contains("@executable_path/../Frameworks"))
+    #expect(packageScript.contains("OPENWHISPER_SPARKLE_FEED_URL"))
+    #expect(packageScript.contains("OPENWHISPER_SPARKLE_PUBLIC_ED_KEY"))
+    #expect(packageScript.contains("sign_sparkle_components"))
+    #expect(packageScript.contains("enable_adhoc_library_validation_exception"))
+    #expect(
+        packageScript.contains(
+            "com.apple.security.cs.disable-library-validation"
+        )
+    )
 
     #expect(installScript.contains("STAGED_APP="))
     #expect(installScript.contains("BACKUP_APP="))
@@ -192,6 +203,118 @@ func releaseMetadataGeneratorProducesExactArtifactContract() throws {
 }
 
 @Test
+func sparkleAppcastVerifierMatchesManifestArchiveAndPublicKey() throws {
+    let root = repositoryRoot()
+    let verifierURL = root.appendingPathComponent(
+        "scripts/verify_sparkle_appcast.swift"
+    )
+    let temporaryDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "OpenWhisperSparkleVerificationTests-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    try FileManager.default.createDirectory(
+        at: temporaryDirectory,
+        withIntermediateDirectories: true
+    )
+    defer {
+        try? FileManager.default.removeItem(at: temporaryDirectory)
+    }
+
+    let archiveURL = temporaryDirectory.appendingPathComponent(
+        "OpenWhisper-0.1.0-macos-arm64.zip"
+    )
+    let manifestURL = temporaryDirectory.appendingPathComponent(
+        "release-manifest.json"
+    )
+    let appcastURL = temporaryDirectory.appendingPathComponent("appcast.xml")
+    let archiveData = Data("signed-openwhisper-update".utf8)
+    try archiveData.write(to: archiveURL)
+
+    let privateKey = Curve25519.Signing.PrivateKey()
+    let signature = try privateKey.signature(for: archiveData)
+    let publicKey = privateKey.publicKey.rawRepresentation
+        .base64EncodedString()
+    let sha256 = SHA256.hash(data: archiveData)
+        .map { String(format: "%02x", $0) }
+        .joined()
+    let downloadURL = "https://example.invalid/OpenWhisper-0.1.0-macos-arm64.zip"
+
+    let manifest: [String: Any] = [
+        "release": [
+            "version": "0.1.0",
+            "build": "1",
+        ],
+        "artifacts": [
+            [
+                "fileName": archiveURL.lastPathComponent,
+                "kind": "zip",
+                "byteCount": archiveData.count,
+                "sha256": sha256,
+                "downloadURL": downloadURL,
+            ],
+        ],
+    ]
+    try JSONSerialization.data(
+        withJSONObject: manifest,
+        options: [.prettyPrinted, .sortedKeys]
+    ).write(to: manifestURL)
+    try """
+    <?xml version="1.0"?>
+    <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+      <channel>
+        <item>
+          <sparkle:version>1</sparkle:version>
+          <enclosure
+            url="\(downloadURL)"
+            length="\(archiveData.count)"
+            type="application/octet-stream"
+            sparkle:edSignature="\(signature.base64EncodedString())"/>
+        </item>
+      </channel>
+    </rss>
+    """.write(to: appcastURL, atomically: true, encoding: .utf8)
+
+    let validResult = try runBash(
+        """
+        swift "$1" \
+          --appcast "$2" \
+          --archive "$3" \
+          --manifest "$4" \
+          --public-key "$5"
+        """,
+        arguments: [
+            verifierURL.path,
+            appcastURL.path,
+            archiveURL.path,
+            manifestURL.path,
+            publicKey,
+        ]
+    )
+    #expect(validResult.status == 0)
+    #expect(validResult.stdout.contains("signature verified"))
+
+    try Data("tampered-update".utf8).write(to: archiveURL)
+    let tamperedResult = try runBash(
+        """
+        swift "$1" \
+          --appcast "$2" \
+          --archive "$3" \
+          --manifest "$4" \
+          --public-key "$5"
+        """,
+        arguments: [
+            verifierURL.path,
+            appcastURL.path,
+            archiveURL.path,
+            manifestURL.path,
+            publicKey,
+        ]
+    )
+    #expect(tamperedResult.status != 0)
+}
+
+@Test
 func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     let root = repositoryRoot()
     let cask = try String(
@@ -218,6 +341,20 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
         ),
         encoding: .utf8
     )
+    let appcastScript = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/generate_sparkle_appcast.sh"
+        ),
+        encoding: .utf8
+    )
+    let packageManifest = try String(
+        contentsOf: root.appendingPathComponent("Package.swift"),
+        encoding: .utf8
+    )
+    let packageResolution = try String(
+        contentsOf: root.appendingPathComponent("Package.resolved"),
+        encoding: .utf8
+    )
 
     #expect(!cask.contains("sha256 :no_check"))
     #expect(
@@ -233,8 +370,25 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(releaseGate.contains("spctl --assess"))
     #expect(releaseGate.contains("SUFeedURL"))
     #expect(releaseGate.contains("SUPublicEDKey"))
+    #expect(releaseGate.contains("Sparkle.framework"))
+    #expect(releaseGate.contains("sparkle:edSignature"))
+    #expect(releaseGate.contains("OPENWHISPER_SPARKLE_APPCAST_PATH"))
+    #expect(
+        releaseGate.contains(
+            "Commercial release must not disable hardened-runtime library validation."
+        )
+    )
+    #expect(appcastScript.contains("generate_appcast"))
+    #expect(appcastScript.contains("--ed-key-file"))
+    #expect(appcastScript.contains("PRIVATE_KEY_MODE"))
+    #expect(appcastScript.contains("sparkle:edSignature"))
+    #expect(appcastScript.contains("verify_sparkle_appcast.swift"))
+    #expect(releaseGate.contains("verify_sparkle_appcast.swift"))
+    #expect(packageManifest.contains("exact: \"2.9.4\""))
+    #expect(packageManifest.contains(".product(name: \"Sparkle\""))
+    #expect(packageResolution.contains("\"version\" : \"2.9.4\""))
     #expect(updaterDecision.contains("Sparkle 2"))
-    #expect(updaterDecision.contains("not yet integrated"))
+    #expect(updaterDecision.contains("integrated in the private alpha"))
 }
 
 private func repositoryRoot() -> URL {

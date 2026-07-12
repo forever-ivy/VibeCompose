@@ -240,7 +240,7 @@ Release metadata and distribution guards currently include:
 - installer validation of bundle ID, version, build, architecture, signature, and—when release enforcement is enabled—the expected Developer ID Team ID;
 - a commercial release gate that requires Developer ID, stapling, Gatekeeper success, manifest/Cask consistency, and signed-updater `SUFeedURL`/`SUPublicEDKey` configuration.
 
-Sparkle 2 is the selected updater, but it is not yet integrated. The commercial release gate therefore intentionally remains closed.
+Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the status menu and Advanced Settings. Packaging accepts only paired HTTPS feed and Ed25519 public-key configuration, and release tooling can generate a signed channel appcast without storing the private key in the repository. The commercial release gate intentionally remains closed until production hosting/keys, a real signed appcast, Developer ID notarization, and installed update/rollback proof exist.
 
 ## 11. Known Architectural Gaps
 

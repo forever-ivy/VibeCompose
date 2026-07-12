@@ -33,7 +33,7 @@
 - 粘贴目标等待改为可取消异步时钟，不再用同步 sleep 阻塞 MainActor；
 - 录音、处理中音频和 multipart 在初始化失败、启动失败、上传失败、取消、退出和下次启动时均有归属明确的清理路径。
 
-**仍不能公开声明为可商业发布。** 真实 Developer ID/公证证据、完整原生首次体验、已集成签名 Updater、永久商业运营/联系方式以及若干残余可靠性问题尚未关闭。
+**仍不能公开声明为可商业发布。** 真实 Developer ID/公证证据、完整原生首次体验、生产 Updater 托管/密钥及更新回滚实证、永久商业运营/联系方式以及若干残余可靠性问题尚未关闭。
 
 ## 2. 基线状态
 
@@ -52,7 +52,7 @@
 | OW-AUD-005 录音上限/大文件内存 | 关闭 | `AudioRecorder` 使用 deadline task 硬停止；`ChatGPTTranscriber` 通过 `O_NOFOLLOW` + `fstat` 在读取内容前拒绝空文件、非普通文件和超过 25 MB 的文件，并对 device/inode/size 二次校验；multipart 以 64 KB 分块写入 `0600` 临时文件并用 `URLSession.upload(fromFile:)` 发送 | 真实慢磁盘、网络取消和系统低磁盘空间仍纳入安装版压力测试，但不再存在整段音频与 multipart 同时驻留内存的原始路径 |
 | OW-AUD-006 成功音频与全文持久化 | 关闭 | 成功路径不再写 Recovery；raw ASR 默认关闭；History/Recovery/Diagnostics 按时间与数量轮转；敏感 App 排除；Delete All Data；中英文隐私政策已披露最终文本、失败音频和诊断默认留存 | 公开收费前补齐永久商业隐私联系人 |
 | OW-AUD-007 OAuth callback 生命周期 | 关闭 | 校验 method/path/state；重复 query 返回 400 且不会结束合法等待；timeout/cancel 会停止 listener 并释放 continuation | 仍需真实浏览器关闭、网络切换和端口冲突验收 |
-| OW-AUD-008 发布完整性 | 部分关闭 | 严格 env parser；Hardened Runtime；Developer ID/Team ID 强校验；notarytool/stapler 路径；Gatekeeper fail-closed；安装 staging/旧版备份/失败恢复；ZIP/DMG SHA-256 与 release manifest；Cask 默认全零 checksum fail-closed 并可由 manifest 写入精确值；商业 release gate 要求 `SUFeedURL`/`SUPublicEDKey` | 当前证书已撤销，尚无真实 Developer ID + notarization/staple 产物；Sparkle 2 已选型但未集成，尚无签名 appcast、自动更新和回滚实机证据 |
+| OW-AUD-008 发布完整性 | 部分关闭 | 严格 env parser；Hardened Runtime；Developer ID/Team ID 强校验；notarytool/stapler 路径；Gatekeeper fail-closed；安装 staging/旧版备份/失败恢复；ZIP/DMG SHA-256 与 release manifest；Cask 默认全零 checksum fail-closed；Sparkle 2.9.4 已固定、嵌入、签名并接入菜单/设置；支持外部私钥或 Keychain 生成签名 appcast，并用内置公钥对 ZIP 做 CryptoKit 实际验签；本地 ad-hoc 构建仅为无 Team ID 框架加载临时关闭 library validation，商业 gate 明确拒绝该 entitlement | 当前证书已撤销，尚无真实 Developer ID + notarization/staple 产物；生产 feed/公钥/私钥未配置，尚无真实签名 appcast、自动更新和回滚实机证据 |
 | OW-AUD-009 技术字面量归一化 | 关闭 | `TechnicalLiteralTokenizer` 保护 URL、邮箱、POSIX/Windows 路径、文件名、版本、IP、UUID、hash、CLI flag、环境变量、inline/fenced code 和代码符号；本地处理使用 private-use token，AI Polish 使用显式 model-safe token；token 缺失或重复即回退；Settings 支持简体、繁体、原样及自动/全角/半角/原样标点 | 扩充真实混输语料和边缘文件名 corpus，保持 round-trip 门禁 |
 | OW-AUD-010 MainActor/旧回调污染 | 关闭 | 协调器使用 `activeSessionID`，取消后迟到 pipeline 或注入结果不能写入新状态；`AsyncPasteTargetWaiter` 使用 `ContinuousClock` 和可取消 `Task.sleep`，只在短检查/激活阶段回到 MainActor；HUD apply/hide 使用 presentation generation 拒绝 stale auto-hide 与动画 completion | `.pasted` 仍只证明按键事件已发送，属于 OW-AUD-001 的残余验收边界 |
 | OW-AUD-011 剪贴板恢复竞态 | 关闭 | 恢复前校验 pasteboard change count 与 OpenWhisper 所有权 | 真实跨应用复制/Universal Clipboard 场景继续验收 |
@@ -176,7 +176,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 
 ## 8. 下一安全工作序列
 
-1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID，完成真实签名、公证、Sparkle 集成与更新回滚；
+1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID 和生产 Sparkle 密钥/托管地址，完成真实签名、公证、签名 appcast 与更新回滚；
 2. 区分 paste 事件发送与目标应用确认插入，并完成真实 Notes/TextEdit/Terminal 等矩阵；
 3. 完成 clean TCC Onboarding、键盘和 VoiceOver 安装版验收；
 4. 把私有 Alpha 双语政策定稿为带永久运营主体、联系方式和结账条款的公开版本；

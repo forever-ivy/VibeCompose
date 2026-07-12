@@ -82,9 +82,30 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(source.contains("Button(L10n.text(\"Export Diagnostics…\")"))
     #expect(source.contains("onExportSupportDiagnostics"))
     #expect(source.contains("account email, tokens, API keys"))
+    #expect(source.contains("Button(L10n.text(\"Check for Updates…\")"))
+    #expect(source.contains("Automatically check for updates"))
+    #expect(source.contains("onSetAutomaticallyChecksForUpdates"))
 
     let configFolderButtonCount = source
         .components(separatedBy: "Button(L10n.text(\"Open Config Folder\")")
         .count - 1
     #expect(configFolderButtonCount == 1)
+}
+
+@Test
+func statusMenuExposesSoftwareUpdateEntry() throws {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let source = try String(
+        contentsOf: root.appendingPathComponent(
+            "Sources/OpenWhisper/StatusMenuController.swift"
+        ),
+        encoding: .utf8
+    )
+
+    #expect(source.contains("title: L10n.text(\"Check for Updates…\")"))
+    #expect(source.contains("action: #selector(checkForUpdates)"))
+    #expect(source.contains("checkForUpdatesHandler()"))
 }

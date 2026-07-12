@@ -68,7 +68,7 @@ macOS 首发策略：
 
 当前仍阻断商业发布的事项：
 
-- Developer ID、固定 Team ID、notarization/staple、signed updater 和 rollback 未完成；
+- Developer ID、固定 Team ID、notarization/staple、生产 updater 托管/密钥、真实签名 appcast 和 rollback 实证未完成；
 - `.pasted` 尚不能证明目标应用实际接收文本，真实多应用焦点矩阵未完成；
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
 - Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与高对比度验收未完成；
@@ -83,9 +83,10 @@ macOS 首发策略：
 - release manifest 记录 ZIP/DMG 精确哈希、字节数、版本、构建、架构和 HTTPS 下载 URL；
 - Homebrew Cask 从 `sha256 :no_check` 改为未发布时全零 fail-closed，并由发布脚本写入精确 ZIP 哈希；
 - 安装器新增 build 与 Developer ID Team ID 校验；
-- Sparkle 2 已完成选型，商业 release gate 会在缺少 `SUFeedURL`/`SUPublicEDKey` 时阻断。
+- Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
+- 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
 
-仍未完成：有效 Developer ID、公证实证、Sparkle 嵌入与签名 appcast、自动更新/回滚实机证明，以及永久商业运营主体和联系方式。
+仍未完成：有效 Developer ID、公证实证、生产 Sparkle feed/密钥、真实签名 appcast、自动更新/回滚实机证明，以及永久商业运营主体和联系方式。
 
 UI 调研确认的主要问题：
 
@@ -810,7 +811,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-012 | P1 | History window（已实现，待完整交互验收） | Retention | 搜索、详情、Copy、Retry、Delete |
 | OW-MAC-013 | P1 | Terminology manager（已实现，待键盘/VoiceOver 验收） | Dictionary model | 常规管理不编辑 JSON |
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
-| OW-MAC-015 | P1 | Notarization + updater（Sparkle 2 已选型，待集成） | 014 | 新机安装和更新成功 |
+| OW-MAC-015 | P1 | Notarization + updater（Sparkle 2.9.4 已集成，待生产签名与实机更新） | 014 | 新机安装和更新成功 |
 | OW-MAC-016 | P2 | Product metrics | Privacy spec | 无敏感内容事件 |
 | OW-MAC-017 | P2 | Voice Modes | Text polish engine | Direct 无额外延迟 |
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |

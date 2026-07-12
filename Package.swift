@@ -15,6 +15,10 @@ let package = Package(
             url: "https://github.com/jaywcjlove/PermissionFlow.git",
             revision: "3c5ae16337d3448e8561e00352a01b68f92fe974"
         ),
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle.git",
+            exact: "2.9.4"
+        ),
     ],
     targets: [
         .executableTarget(
@@ -22,6 +26,7 @@ let package = Package(
             dependencies: [
                 .product(name: "PermissionFlow", package: "PermissionFlow"),
                 .product(name: "SystemSettingsKit", package: "PermissionFlow"),
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/OpenWhisper",
             exclude: ["Resources"]
