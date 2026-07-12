@@ -181,13 +181,15 @@ The current Settings window exposes:
 
 - account and permission state;
 - dictation and text polish;
-- history/recovery previews;
-- terminology;
+- history/recovery entry points;
+- terminology entry points;
 - paste behavior;
 - Privacy & Data;
 - advanced recovery configuration.
 
-Privacy controls currently use the existing explicit Save flow. The productization target is still a native resizable `NavigationSplitView` with immediate persistence, window restoration, keyboard/VoiceOver coverage, and separate History and Terminology windows.
+History and Terminology now use separate native management windows. History supports filtering, details, copy/retry, audio actions, deletion, and automatic refresh. Terminology uses stable entry identifiers and supports search, sorting, editing, enable/disable, deletion, CSV import/export, import conflict preview, and a global Quick Add panel.
+
+Privacy controls currently use the existing explicit Save flow. Remaining productization work includes a native resizable `NavigationSplitView` with immediate persistence plus full keyboard/VoiceOver coverage across Settings and the management windows.
 
 ## 9. Benchmarking and Diagnostics
 
@@ -225,7 +227,7 @@ The current alpha must not be described as commercially release-ready while thes
 - complete audio is read into memory before the 25 MB upload limit is evaluated;
 - paste success is event-dispatch success, not destination insertion confirmation;
 - target waiting blocks the main actor briefly;
-- Settings, Onboarding, History, and Terminology are not yet at the target native product architecture;
+- Settings and Onboarding are not yet at the target native product architecture; History, Terminology, and Quick Add still require full keyboard/VoiceOver interaction acceptance;
 - HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
 - the advanced recovery API key is still environment-variable based rather than Keychain-backed;
 - notarization, updater, crash diagnostics export, and rollback-safe release infrastructure are not complete.

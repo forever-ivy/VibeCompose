@@ -51,7 +51,7 @@
 | OW-AUD-011 剪贴板恢复竞态 | 关闭 | 恢复前校验 pasteboard change count 与 OpenWhisper 所有权 | 真实跨应用复制/Universal Clipboard 场景继续验收 |
 | OW-AUD-012 首次麦克风顺序 | 部分关闭 | `.notDetermined` 有独立请求动作；录音层正确等待授权结果 | 四步 Onboarding 和 clean TCC 完整路径尚未实现 |
 | OW-AUD-013 配置 URL 崩溃 | 关闭 | 可配置 endpoint 经 `validatedUserOwnedURL` 返回可理解错误；Managed URL 为编译时常量 | 对全部高风险文本字段统一失焦/提交校验 |
-| OW-AUD-014 Settings stale index | 开放 | 尚未完成独立 Terminology Manager 与稳定 ID 编辑模型的专项验收 | 移除数组下标式编辑，使用稳定 ID 和冲突检测 |
+| OW-AUD-014 Settings stale index | 关闭 | Terminology 条目持久化稳定 UUID；独立 Manager 的选择、编辑、启停和删除均按 ID 定位；旧配置迁移补齐稳定 ID；导入和 Quick Add 在写入前执行重复与语义冲突检测 | 继续保留 ID 迁移、删除后编辑和冲突分类回归测试 |
 | OW-AUD-015 失败清理不完整 | 部分关闭 | 取消录音删除临时文件；Retry 到期/启动清理；成功音频删除 | 对进程崩溃、强制退出、磁盘满和写入失败建立故障注入测试 |
 | OW-AUD-016 死配置/预检偏差 | 开放 | 部分设置已接入真实行为 | 重做 Settings Config API，并为每个公开配置建立行为契约测试 |
 | OW-AUD-017 测试可能假绿 | 部分关闭 | 高风险边界已有纯单元测试，仓库提供安装版 smoke 与 visual acceptance | TCC、焦点、热键、多应用真实操作仍必须使用 `/Applications/OpenWhisper.app` 验收，不能只引用单元测试 |

@@ -4,8 +4,6 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     case account = "Account"
     case dictation = "Dictation"
     case polish = "AI Polish"
-    case recovery = "History"
-    case terminology = "Terminology"
     case paste = "Paste"
     case privacy = "Privacy"
     case advanced = "Advanced"
@@ -24,14 +22,10 @@ struct SettingsWindowStateStore {
     }
 
     func initialPane(
-        focusRecoveryHistory: Bool,
         focusPrivacy: Bool
     ) -> SettingsPane {
         if focusPrivacy {
             return .privacy
-        }
-        if focusRecoveryHistory {
-            return .recovery
         }
         guard
             let rawValue = defaults.string(forKey: Self.selectedPaneKey),

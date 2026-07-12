@@ -79,6 +79,24 @@ func transcriptionHistoryAppliesAgeAndCountRetention() throws {
 }
 
 @Test
+func legacyTranscriptionHistoryUsesStableIdentifiersAndCanBeDeleted() throws {
+    let root = temporaryOpenWhisperDirectory()
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let historyURL = root.appendingPathComponent("transcription-history.jsonl")
+    let legacyLine = #"{"timestamp":"2026-07-13T00:00:00Z","rawText":"raw","finalText":"final","appName":"Notes","appBundleIdentifier":"com.apple.Notes","outcome":"pasted"}"#
+    try Data((legacyLine + "\n").utf8).write(to: historyURL)
+
+    let recorder = TranscriptionHistoryRecorder(directoryURL: root)
+    let firstLoad = try #require(recorder.loadRecent(limit: 10).first)
+    let secondLoad = try #require(recorder.loadRecent(limit: 10).first)
+
+    #expect(firstLoad.id == secondLoad.id)
+    try recorder.delete(id: firstLoad.id)
+    #expect(try recorder.loadRecent(limit: 10).isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: historyURL.path))
+}
+
+@Test
 func latencyRecorderRotatesByAgeAndCount() throws {
     let root = temporaryOpenWhisperDirectory()
     let recorder = LatencyRecorder(directoryURL: root)

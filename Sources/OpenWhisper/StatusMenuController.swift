@@ -10,17 +10,23 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let stateItem = NSMenuItem(title: L10n.text("State: idle"), action: nil, keyEquivalent: "")
     private let detailItem = NSMenuItem(title: L10n.text("Ready"), action: nil, keyEquivalent: "")
+    private let openHistoryHandler: () -> Void
+    private let openQuickAddHandler: () -> Void
+    private let openTerminologyHandler: () -> Void
     private let openSettingsHandler: () -> Void
-    private let openConfigHandler: () -> Void
     private let quitHandler: () -> Void
 
     init(
+        openHistoryHandler: @escaping () -> Void,
+        openQuickAddHandler: @escaping () -> Void,
+        openTerminologyHandler: @escaping () -> Void,
         openSettingsHandler: @escaping () -> Void,
-        openConfigHandler: @escaping () -> Void,
         quitHandler: @escaping () -> Void
     ) {
+        self.openHistoryHandler = openHistoryHandler
+        self.openQuickAddHandler = openQuickAddHandler
+        self.openTerminologyHandler = openTerminologyHandler
         self.openSettingsHandler = openSettingsHandler
-        self.openConfigHandler = openConfigHandler
         self.quitHandler = quitHandler
         super.init()
         configureMenu()
@@ -52,6 +58,33 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         menu.addItem(detailItem)
         menu.addItem(.separator())
 
+        let historyItem = NSMenuItem(
+            title: L10n.text("History…"),
+            action: #selector(openHistory),
+            keyEquivalent: ""
+        )
+        historyItem.target = self
+        menu.addItem(historyItem)
+
+        let quickAddItem = NSMenuItem(
+            title: L10n.text("Quick Add…"),
+            action: #selector(openQuickAdd),
+            keyEquivalent: " "
+        )
+        quickAddItem.keyEquivalentModifierMask = [.control, .option]
+        quickAddItem.target = self
+        menu.addItem(quickAddItem)
+
+        let terminologyItem = NSMenuItem(
+            title: L10n.text("Terminology…"),
+            action: #selector(openTerminology),
+            keyEquivalent: ""
+        )
+        terminologyItem.target = self
+        menu.addItem(terminologyItem)
+
+        menu.addItem(.separator())
+
         let settingsItem = NSMenuItem(
             title: L10n.text("Settings…"),
             action: #selector(openSettings),
@@ -60,13 +93,7 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
-        let openConfigItem = NSMenuItem(
-            title: L10n.text("Open Config Folder"),
-            action: #selector(openConfigFolder),
-            keyEquivalent: ""
-        )
-        openConfigItem.target = self
-        menu.addItem(openConfigItem)
+        menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
             title: L10n.text("Quit OpenWhisper"),
@@ -80,13 +107,23 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
     }
 
     @objc
-    private func openSettings() {
-        openSettingsHandler()
+    private func openHistory() {
+        openHistoryHandler()
     }
 
     @objc
-    private func openConfigFolder() {
-        openConfigHandler()
+    private func openQuickAdd() {
+        openQuickAddHandler()
+    }
+
+    @objc
+    private func openTerminology() {
+        openTerminologyHandler()
+    }
+
+    @objc
+    private func openSettings() {
+        openSettingsHandler()
     }
 
     @objc

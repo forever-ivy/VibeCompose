@@ -1,6 +1,11 @@
 import Carbon
 import Foundation
 
+enum OpenWhisperHotkeys {
+    static let quickAddKeyCode = UInt32(kVK_Space)
+    static let quickAddModifiers = UInt32(controlKey | optionKey)
+}
+
 enum HotKeyError: LocalizedError {
     case installHandler(OSStatus)
     case register(OSStatus)

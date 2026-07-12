@@ -1,6 +1,7 @@
 import Foundation
 
-struct TranscriptionHistoryRecord: Codable, Sendable, Equatable {
+struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
+    let id: UUID
     let timestamp: Date
     let rawText: String?
     let finalText: String
@@ -10,6 +11,7 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable {
     let textPolishProvider: String?
 
     init(
+        id: UUID = UUID(),
         timestamp: Date,
         rawText: String? = nil,
         finalText: String,
@@ -18,6 +20,7 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable {
         outcome: String,
         textPolishProvider: String? = nil
     ) {
+        self.id = id
         self.timestamp = timestamp
         self.rawText = rawText
         self.finalText = finalText
@@ -25,6 +28,59 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable {
         self.appBundleIdentifier = appBundleIdentifier
         self.outcome = outcome
         self.textPolishProvider = textPolishProvider
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedID = try container.decodeIfPresent(UUID.self, forKey: .id)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        rawText = try container.decodeIfPresent(String.self, forKey: .rawText)
+        finalText = try container.decode(String.self, forKey: .finalText)
+        appName = try container.decodeIfPresent(String.self, forKey: .appName)
+        appBundleIdentifier = try container.decodeIfPresent(
+            String.self,
+            forKey: .appBundleIdentifier
+        )
+        outcome = try container.decode(String.self, forKey: .outcome)
+        textPolishProvider = try container.decodeIfPresent(
+            String.self,
+            forKey: .textPolishProvider
+        )
+        id = decodedID ?? StableIdentifier.uuid(
+            namespace: "OpenWhisper.TranscriptionHistoryRecord",
+            components: [
+                String(timestamp.timeIntervalSince1970.bitPattern, radix: 16),
+                rawText,
+                finalText,
+                appName,
+                appBundleIdentifier,
+                outcome,
+                textPolishProvider,
+            ]
+        )
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(rawText, forKey: .rawText)
+        try container.encode(finalText, forKey: .finalText)
+        try container.encodeIfPresent(appName, forKey: .appName)
+        try container.encodeIfPresent(appBundleIdentifier, forKey: .appBundleIdentifier)
+        try container.encode(outcome, forKey: .outcome)
+        try container.encodeIfPresent(textPolishProvider, forKey: .textPolishProvider)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case timestamp
+        case rawText
+        case finalText
+        case appName
+        case appBundleIdentifier
+        case outcome
+        case textPolishProvider
     }
 }
 
@@ -140,6 +196,7 @@ struct TranscriptionHistoryPreview: Sendable, Equatable, Identifiable {
 protocol TranscriptionHistoryRecording: Sendable {
     func record(_ record: TranscriptionHistoryRecord, retention: HistoryRetentionPolicy) throws
     func loadRecent(limit: Int) throws -> [TranscriptionHistoryRecord]
+    func delete(id: UUID) throws
     func prune(retention: HistoryRetentionPolicy) throws
 }
 
@@ -193,6 +250,13 @@ final class TranscriptionHistoryRecorder: TranscriptionHistoryRecording, @unchec
         lock.lock()
         defer { lock.unlock() }
         try rewrite(retained(try loadRecordsUnlocked(), policy: retention))
+    }
+
+    func delete(id: UUID) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
+        try rewrite(try loadRecordsUnlocked().filter { $0.id != id })
     }
 
     private func loadRecordsUnlocked() throws -> [TranscriptionHistoryRecord] {

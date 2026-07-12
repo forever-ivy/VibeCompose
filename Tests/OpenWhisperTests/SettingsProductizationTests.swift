@@ -13,27 +13,18 @@ func settingsWindowStateRestoresLastPaneAndHonorsDeepLinks() throws {
     let store = SettingsWindowStateStore(defaults: defaults)
     #expect(
         store.initialPane(
-            focusRecoveryHistory: false,
             focusPrivacy: false
         ) == .account
     )
 
-    store.saveSelectedPane(.terminology)
+    store.saveSelectedPane(.advanced)
     #expect(
         store.initialPane(
-            focusRecoveryHistory: false,
             focusPrivacy: false
-        ) == .terminology
+        ) == .advanced
     )
     #expect(
         store.initialPane(
-            focusRecoveryHistory: true,
-            focusPrivacy: false
-        ) == .recovery
-    )
-    #expect(
-        store.initialPane(
-            focusRecoveryHistory: true,
             focusPrivacy: true
         ) == .privacy
     )
@@ -51,7 +42,6 @@ func settingsWindowFallsBackFromUnknownPersistedPane() throws {
     let store = SettingsWindowStateStore(defaults: defaults)
     #expect(
         store.initialPane(
-            focusRecoveryHistory: false,
             focusPrivacy: false
         ) == .account
     )

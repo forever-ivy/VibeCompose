@@ -403,7 +403,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable, Identifiable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        let decodedID = try container.decodeIfPresent(UUID.self, forKey: .id)
         let rawType = try container.decodeIfPresent(String.self, forKey: .type) ?? TerminologyEntryType.term.rawValue
         type = rawType == TerminologyEntryType.correction.rawValue ? .correction : .term
         original = try container.decodeIfPresent(String.self, forKey: .original)
@@ -417,6 +417,16 @@ struct TerminologyEntry: Codable, Sendable, Equatable, Identifiable {
         usageCount = try container.decodeIfPresent(Int.self, forKey: .usageCount) ?? 0
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
             ?? ISO8601DateFormatter().string(from: Date())
+        id = decodedID ?? StableIdentifier.uuid(
+            namespace: "OpenWhisper.TerminologyEntry",
+            components: [
+                type.rawValue,
+                original,
+                replacement,
+                aliases.joined(separator: "\u{1F}"),
+                source,
+            ]
+        )
     }
 
     private static func normalizedSource(rawType: String, source: String) -> String {

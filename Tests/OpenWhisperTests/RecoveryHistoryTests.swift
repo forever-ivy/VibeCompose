@@ -83,6 +83,39 @@ func recoveryStoreRetainsNewestRecordsAndPrunesOldAudio() throws {
 }
 
 @Test
+func recoveryStoreDeleteRemovesRecordAndAssociatedAudio() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let sourceAudioURL = root.appendingPathComponent("source.wav")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try makeMinimalWaveData().write(to: sourceAudioURL)
+
+    let store = RecoveryStore(
+        directoryURL: root.appendingPathComponent("Recovery", isDirectory: true)
+    )
+    try store.record(
+        RecoveryRecordInput(
+            timestamp: Date(),
+            sourceAudioURL: sourceAudioURL,
+            durationMs: 1_000,
+            asrText: "recover me",
+            polishText: nil,
+            appName: "Notes",
+            appBundleIdentifier: "com.apple.Notes",
+            outcome: "error",
+            errorMessage: "network"
+        )
+    )
+
+    let record = try #require(store.loadRecent(limit: 1).first)
+    let storedAudioURL = try store.resolveAudioURL(for: record)
+    try store.delete(id: record.id)
+
+    #expect(try store.loadRecent(limit: 10).isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: storedAudioURL.path))
+}
+
+@Test
 func recoveryPreviewSkipsMissingTextForTextKinds() {
     let record = RecoveryRecord(
         id: UUID(),

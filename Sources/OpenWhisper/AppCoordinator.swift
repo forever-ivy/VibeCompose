@@ -22,6 +22,8 @@ final class AppCoordinator {
     typealias StatusMenuFactory = @MainActor (
         @escaping () -> Void,
         @escaping () -> Void,
+        @escaping () -> Void,
+        @escaping () -> Void,
         @escaping () -> Void
     ) -> any StatusMenuUpdating
     typealias PipelineFactory = @Sendable (TranscriptionConfig, any ChatGPTAuthProviding, TranscriptionAttemptPolicy) -> any DictationPreparing
@@ -47,9 +49,13 @@ final class AppCoordinator {
 
     var config: AppConfig
     private var hotkeyMonitor: HotkeyMonitor?
+    private var quickAddHotkeyMonitor: HotkeyMonitor?
     var recorder: (any RecordingControlling)?
     var statusMenu: (any StatusMenuUpdating)?
     private var preferencesWindowController: PreferencesWindowController?
+    private var historyWindowController: HistoryWindowController?
+    private var terminologyWindowController: TerminologyWindowController?
+    private var terminologyQuickAddWindowController: TerminologyQuickAddWindowController?
     private var onboardingWindowController: OnboardingWindowController?
     private var microphonePermissionWindowController: MicrophonePermissionWindowController?
     var state: State = .idle
@@ -85,10 +91,17 @@ final class AppCoordinator {
         recoveryRecorder: (any RecoveryRecording)? = nil,
         soundFeedback: any SoundFeedbackPlaying = SoundFeedbackService(),
         recorderFactory: @escaping RecorderFactory = { AudioRecorder(sampleRateHz: $0) },
-        statusMenuFactory: @escaping StatusMenuFactory = { openSettings, openConfig, quit in
+        statusMenuFactory: @escaping StatusMenuFactory = {
+            openHistory,
+            openQuickAdd,
+            openTerminology,
+            openSettings,
+            quit in
             StatusMenuController(
+                openHistoryHandler: openHistory,
+                openQuickAddHandler: openQuickAdd,
+                openTerminologyHandler: openTerminology,
                 openSettingsHandler: openSettings,
-                openConfigHandler: openConfig,
                 quitHandler: quit
             )
         },
@@ -157,13 +170,22 @@ final class AppCoordinator {
             }
 
             statusMenu = statusMenuFactory(
+                { [weak self] in self?.openHistory() },
+                { [weak self] in self?.openQuickAdd() },
+                { [weak self] in self?.openTerminology() },
                 { [weak self] in self?.openSettings() },
-                { [weak self] in self?.openConfigFolder() },
                 { NSApplication.shared.terminate(nil) }
             )
 
             switch launchMode {
-            case .normal, .settings, .privacySettings, .accessibilityGuide, .onboarding:
+            case .normal,
+                 .settings,
+                 .privacySettings,
+                 .accessibilityGuide,
+                 .onboarding,
+                 .history,
+                 .terminology,
+                 .quickAdd:
                 config = try configStore.load()
                 enforceStoragePolicies()
                 recorder = recorderFactory(config.transcription.sampleRateHz)
@@ -176,6 +198,20 @@ final class AppCoordinator {
                     Task { @MainActor in
                         self?.handleHotkeyPress()
                     }
+                }
+                do {
+                    quickAddHotkeyMonitor = try HotkeyMonitor(
+                        keyCode: OpenWhisperHotkeys.quickAddKeyCode,
+                        modifiers: OpenWhisperHotkeys.quickAddModifiers
+                    ) { [weak self] in
+                        Task { @MainActor in
+                            self?.openQuickAdd()
+                        }
+                    }
+                } catch {
+                    logger.error(
+                        "Quick Add hotkey registration failed: \(error.localizedDescription, privacy: .public)"
+                    )
                 }
                 notifier.ensureAuthorization()
                 if launchMode == .settings
@@ -193,6 +229,18 @@ final class AppCoordinator {
                 if launchMode == .onboarding {
                     openOnboarding()
                     scheduleOnboardingSnapshotIfRequested()
+                }
+                if launchMode == .history {
+                    openHistory()
+                    scheduleProductSurfaceSnapshotIfRequested(mode: .history)
+                }
+                if launchMode == .terminology {
+                    openTerminology()
+                    scheduleProductSurfaceSnapshotIfRequested(mode: .terminology)
+                }
+                if launchMode == .quickAdd {
+                    openQuickAdd()
+                    scheduleProductSurfaceSnapshotIfRequested(mode: .quickAdd)
                 }
                 if launchMode == .normal, OnboardingStateStore().shouldPresent() {
                     DispatchQueue.main.async { [weak self] in
@@ -592,10 +640,9 @@ final class AppCoordinator {
     }
 
     private func openSettings(
-        focusRecoveryHistory: Bool = false,
         focusPrivacy: Bool = false
     ) {
-        if focusRecoveryHistory || focusPrivacy {
+        if focusPrivacy {
             preferencesWindowController = nil
         }
 
@@ -621,27 +668,10 @@ final class AppCoordinator {
                             )
                         )
                     }
-                    do {
-                        let previousConfig = self.config
-                        try self.configStore.save(newConfig)
-                        self.config = newConfig
-                        self.refreshReadyState(
-                            detailOverride: L10n.text("Settings saved automatically"),
-                            state: .ready
-                        )
-                        if previousConfig.privacy != newConfig.privacy {
-                            self.enforceStoragePolicies()
-                        }
-                        if previousConfig.auth != newConfig.auth
-                            || previousConfig.transcription.provider != newConfig.transcription.provider {
-                            self.prewarmAuthIfNeeded()
-                        }
-                        return .success(())
-                    } catch {
-                        self.overlay.showError(error.localizedDescription)
-                        self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
-                        return .failure(error)
-                    }
+                    return self.saveConfig(
+                        newConfig,
+                        successMessage: L10n.text("Settings saved automatically")
+                    )
                 },
                 onImportTerminologyDictionary: { [weak self] currentConfig, fileURL in
                     guard let self else {
@@ -657,11 +687,7 @@ final class AppCoordinator {
                     }
 
                     do {
-                        let data = try Data(contentsOf: fileURL)
-                        let imported = try TerminologyTextImporter().importEntries(
-                            from: data,
-                            sourceName: fileURL.lastPathComponent
-                        )
+                        let imported = try TerminologyTextImporter().importEntries(from: fileURL)
                         var updatedConfig = currentConfig
                         updatedConfig.transcription.terminology.enabled = true
                         updatedConfig.transcription.terminology.entries = Self.mergedTerminologyEntries(
@@ -732,12 +758,175 @@ final class AppCoordinator {
                 onOpenOnboarding: { [weak self] in
                     self?.openOnboarding()
                 },
-                focusRecoveryHistory: focusRecoveryHistory,
                 focusPrivacy: focusPrivacy
             )
         }
 
         preferencesWindowController?.show()
+    }
+
+    private func openHistory() {
+        if historyWindowController == nil {
+            historyWindowController = HistoryWindowController(
+                onLoadTranscriptionHistory: { [weak self] in
+                    guard let self else {
+                        return []
+                    }
+                    return (try? self.historyRecorder.loadRecent(limit: 500)) ?? []
+                },
+                onLoadRecoveryHistory: { [weak self] in
+                    guard let self else {
+                        return []
+                    }
+                    return (try? self.recoveryRecorder.loadRecent(limit: 100)) ?? []
+                },
+                onResolveRecoveryAudioURL: { [weak self] record in
+                    guard let self else {
+                        return .failure(RecoveryAudioError.missing)
+                    }
+                    return Result {
+                        try self.recoveryRecorder.resolveAudioURL(for: record)
+                    }
+                },
+                onRetryRecoveryRecord: { [weak self] record in
+                    self?.retryRecoveryRecord(record)
+                },
+                onDeleteTranscriptionRecord: { [weak self] id in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.History",
+                                code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper history is no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+                    return Result {
+                        try self.historyRecorder.delete(id: id)
+                    }
+                },
+                onDeleteRecoveryRecord: { [weak self] id in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.History",
+                                code: 2,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper history is no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+                    return Result {
+                        try self.recoveryRecorder.delete(id: id)
+                    }
+                }
+            )
+        }
+        historyWindowController?.show()
+    }
+
+    private func openQuickAdd() {
+        terminologyQuickAddWindowController?.close()
+        terminologyQuickAddWindowController = TerminologyQuickAddWindowController(
+            existingEntries: config.transcription.terminology.entries,
+            onSave: { [weak self] entry in
+                guard let self else {
+                    return .failure(
+                        NSError(
+                            domain: "OpenWhisper.Terminology",
+                            code: 2,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: L10n.text(
+                                    "OpenWhisper terminology is no longer available."
+                                ),
+                            ]
+                        )
+                    )
+                }
+
+                guard !self.config.transcription.terminology.entries.contains(where: {
+                    TerminologyLibrary.identityKey(for: $0)
+                        == TerminologyLibrary.identityKey(for: entry)
+                }) else {
+                    return .failure(TerminologyQuickAddError.duplicate)
+                }
+
+                var newConfig = self.config
+                newConfig.transcription.terminology.enabled = true
+                newConfig.transcription.terminology.entries.append(entry)
+                let result = self.saveConfig(
+                    newConfig,
+                    successMessage: L10n.text("Terminology entry saved.")
+                )
+                if case .success = result {
+                    self.terminologyWindowController?.close()
+                    self.terminologyWindowController = nil
+                }
+                return result
+            }
+        )
+        terminologyQuickAddWindowController?.show()
+    }
+
+    private func openTerminology() {
+        if terminologyWindowController == nil
+            || terminologyWindowController?.window?.isVisible == false
+        {
+            terminologyWindowController = TerminologyWindowController(
+                config: config,
+                onSave: { [weak self] newConfig in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Terminology",
+                                code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper terminology is no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+                    return self.saveConfig(
+                        newConfig,
+                        successMessage: L10n.text("Terminology updated")
+                    )
+                }
+            )
+        }
+        terminologyWindowController?.show()
+    }
+
+    private func saveConfig(
+        _ newConfig: AppConfig,
+        successMessage: String
+    ) -> Result<Void, any Error> {
+        do {
+            let previousConfig = config
+            try configStore.save(newConfig)
+            config = newConfig
+            refreshReadyState(detailOverride: successMessage, state: .ready)
+            if previousConfig.privacy != newConfig.privacy {
+                enforceStoragePolicies()
+            }
+            if previousConfig.auth != newConfig.auth
+                || previousConfig.transcription.provider != newConfig.transcription.provider {
+                prewarmAuthIfNeeded()
+            }
+            return .success(())
+        } catch {
+            overlay.showError(error.localizedDescription)
+            notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+            return .failure(error)
+        }
     }
 
     private func openOnboarding() {
@@ -838,6 +1027,68 @@ final class AppCoordinator {
         }
     }
 
+    private func scheduleProductSurfaceSnapshotIfRequested(mode: AppLaunchMode) {
+        let environment = ProcessInfo.processInfo.environment
+        let arguments = ProcessInfo.processInfo.arguments
+        let writer: () throws -> Void
+
+        switch mode {
+        case .history:
+            guard let outputURL = AppLaunchMode.historySnapshotOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) else {
+                return
+            }
+            writer = { [weak self] in
+                guard let controller = self?.historyWindowController else {
+                    throw ProductSurfaceSnapshotError.missingContentView
+                }
+                try controller.writeSnapshot(to: outputURL)
+            }
+        case .terminology:
+            guard let outputURL = AppLaunchMode.terminologySnapshotOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) else {
+                return
+            }
+            writer = { [weak self] in
+                guard let controller = self?.terminologyWindowController else {
+                    throw ProductSurfaceSnapshotError.missingContentView
+                }
+                try controller.writeSnapshot(to: outputURL)
+            }
+        case .quickAdd:
+            guard let outputURL = AppLaunchMode.quickAddSnapshotOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) else {
+                return
+            }
+            writer = { [weak self] in
+                guard let controller = self?.terminologyQuickAddWindowController else {
+                    throw ProductSurfaceSnapshotError.missingContentView
+                }
+                try controller.writeSnapshot(to: outputURL)
+            }
+        default:
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            do {
+                try writer()
+                NSApplication.shared.terminate(nil)
+            } catch {
+                print("OpenWhisper product surface self-capture failed: \(error.localizedDescription)")
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
     private func retryRecoveryRecord(_ record: RecoveryRecord) {
         guard state == .idle else {
             NSSound.beep()
@@ -894,26 +1145,7 @@ final class AppCoordinator {
         existing: [TerminologyEntry],
         incoming: [TerminologyEntry]
     ) -> [TerminologyEntry] {
-        var output = existing
-        var keys = Set(existing.map(terminologyEntryKey(_:)))
-
-        for entry in incoming {
-            let key = terminologyEntryKey(entry)
-            guard keys.insert(key).inserted else {
-                continue
-            }
-            output.append(entry)
-        }
-
-        return output
-    }
-
-    private static func terminologyEntryKey(_ entry: TerminologyEntry) -> String {
-        [
-            entry.type.rawValue,
-            entry.original.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current),
-            (entry.replacement ?? "").folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current),
-        ].joined(separator: "|")
+        TerminologyLibrary.merge(existing: existing, incoming: incoming)
     }
 
     private func showInstallRequiredAlert(message: String) {

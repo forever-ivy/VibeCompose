@@ -66,6 +66,58 @@ struct AppLaunchModeTests {
     }
 
     @Test
+    func productManagementWindowsAcceptLaunchServicesArguments() {
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--open-history"]
+            ) == .history
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--open-terminology"]
+            ) == .terminology
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--open-quick-add"]
+            ) == .quickAdd
+        )
+    }
+
+    @Test
+    func productManagementSnapshotOutputsAcceptArguments() {
+        #expect(
+            AppLaunchMode.historySnapshotOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--history-snapshot-output=/tmp/history.png",
+                ]
+            )?.path == "/tmp/history.png"
+        )
+        #expect(
+            AppLaunchMode.terminologySnapshotOutputURL(
+                environment: [
+                    "OPENWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT": "/tmp/terminology.png",
+                ]
+            )?.path == "/tmp/terminology.png"
+        )
+        #expect(
+            AppLaunchMode.quickAddSnapshotOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--quick-add-snapshot-output",
+                    "/tmp/quick-add.png",
+                ]
+            )?.path == "/tmp/quick-add.png"
+        )
+    }
+
+    @Test
     func accessibilityGuideModeAcceptsLaunchServicesArgument() {
         #expect(
             AppLaunchMode.resolve(

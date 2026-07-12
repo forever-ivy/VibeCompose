@@ -19,6 +19,9 @@ enum AppLaunchMode: Equatable {
     case privacySettings
     case accessibilityGuide
     case onboarding
+    case history
+    case terminology
+    case quickAdd
     case overlayDemo
     case overlayDemoState(OverlayDemoState)
     case benchmark
@@ -43,6 +46,18 @@ enum AppLaunchMode: Equatable {
 
         if arguments.contains("--onboarding") || arguments.contains("--open-onboarding") {
             return .onboarding
+        }
+
+        if arguments.contains("--history") || arguments.contains("--open-history") {
+            return .history
+        }
+
+        if arguments.contains("--terminology") || arguments.contains("--open-terminology") {
+            return .terminology
+        }
+
+        if arguments.contains("--quick-add") || arguments.contains("--open-quick-add") {
+            return .quickAdd
         }
 
         if requestedSettingsPane(arguments: arguments) == "privacy" {
@@ -160,6 +175,42 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
+    static func historySnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_HISTORY_SNAPSHOT_OUTPUT",
+            argumentName: "--history-snapshot-output"
+        )
+    }
+
+    static func terminologySnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT",
+            argumentName: "--terminology-snapshot-output"
+        )
+    }
+
+    static func quickAddSnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT",
+            argumentName: "--quick-add-snapshot-output"
+        )
+    }
+
     static func settingsSnapshotSize(
         environment: [String: String],
         arguments: [String] = []
@@ -196,6 +247,37 @@ enum AppLaunchMode: Equatable {
                 return String(argument.dropFirst("--settings-pane=".count))
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .lowercased()
+            }
+        }
+
+        return nil
+    }
+
+    private static func productSurfaceSnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String],
+        environmentKey: String,
+        argumentName: String
+    ) -> URL? {
+        if let value = environment[environmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty
+        {
+            return URL(fileURLWithPath: value)
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == argumentName, index + 1 < arguments.count {
+                let value = arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+
+            let prefix = "\(argumentName)="
+            if argument.hasPrefix(prefix) {
+                let value = String(argument.dropFirst(prefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
             }
         }
 

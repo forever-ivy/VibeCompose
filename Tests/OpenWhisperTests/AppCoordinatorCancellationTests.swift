@@ -293,7 +293,7 @@ struct AppCoordinatorCancellationTests {
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
         )
 
@@ -329,7 +329,7 @@ struct AppCoordinatorCancellationTests {
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
         )
 
@@ -383,7 +383,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() },
             launchAppContextProvider: { capturedContext }
         )
@@ -420,7 +420,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
         )
 
@@ -457,7 +457,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
         )
 
@@ -491,7 +491,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
         )
 
@@ -521,7 +521,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
         )
 
@@ -552,7 +552,7 @@ struct AppCoordinatorCancellationTests {
             latencyRecorder: FakeLatencyRecorder(),
             soundFeedback: soundFeedback,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
         )
 
@@ -597,7 +597,7 @@ struct AppCoordinatorCancellationTests {
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: latencyRecorder,
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, policy in script.makePipeline(policy: policy) },
             launchAppContextProvider: { capturedContext }
         )
@@ -664,7 +664,7 @@ struct AppCoordinatorCancellationTests {
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, policy in script.makePipeline(policy: policy) }
         )
 
@@ -707,7 +707,7 @@ struct AppCoordinatorCancellationTests {
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in recorder },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, policy in script.makePipeline(policy: policy) }
         )
 
@@ -746,7 +746,7 @@ struct AppCoordinatorCancellationTests {
             authManager: authManager,
             latencyRecorder: FakeLatencyRecorder(),
             recorderFactory: { _ in FakeCoordinatorRecorder() },
-            statusMenuFactory: { _, _, _ in statusMenu },
+            statusMenuFactory: { _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _ in FakeCoordinatorPipeline() }
         )
         coordinator.statusMenu = statusMenu

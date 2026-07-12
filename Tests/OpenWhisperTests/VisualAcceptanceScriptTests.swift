@@ -58,3 +58,33 @@ func visualAcceptanceVerifierDocumentsRequiredStates() throws {
     #expect(verifier.contains("invalidErrorGeometry"))
     #expect(!verifier.contains("expected HUD band"))
 }
+
+@Test
+func productSurfaceAcceptanceCoversInstalledManagementWindows() throws {
+    let root = repositoryRoot()
+    let script = try String(
+        contentsOf: root.appendingPathComponent("scripts/product_surface_acceptance.sh"),
+        encoding: .utf8
+    )
+    let verifier = try String(
+        contentsOf: root.appendingPathComponent("scripts/verify_product_surfaces.swift"),
+        encoding: .utf8
+    )
+
+    #expect(script.contains("/Applications/$APP_NAME.app"))
+    #expect(script.contains(#"capture_surface "history" "history-snapshot-output""#))
+    #expect(script.contains(#"capture_surface "terminology" "terminology-snapshot-output""#))
+    #expect(script.contains(#"capture_surface "quick-add" "quick-add-snapshot-output""#))
+    #expect(script.contains(#""--open-$launch_mode""#))
+    #expect(script.contains("verify_product_surfaces.swift"))
+    #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
+    #expect(verifier.contains("managerGeometryMismatch"))
+    #expect(verifier.contains("sampledColorBucketCount"))
+}
+
+private func repositoryRoot() -> URL {
+    URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+}

@@ -228,6 +228,7 @@ protocol RecoveryRecording: Sendable {
     func record(_ input: RecoveryRecordInput, retention: RecoveryRetentionPolicy) throws
     func loadRecent(limit: Int) throws -> [RecoveryRecord]
     func resolveAudioURL(for record: RecoveryRecord) throws -> URL
+    func delete(id: UUID) throws
     func prune(retention: RecoveryRetentionPolicy) throws
 }
 
@@ -323,6 +324,14 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
             limit: max(max(retention.maxRecords, retainedLimit), 1_000)
         )
         try rewrite(retained(records, policy: retention))
+    }
+
+    func delete(id: UUID) throws {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let records = try loadRecentUnlocked(limit: max(retainedLimit, 1_000))
+        try rewrite(records.filter { $0.id != id })
     }
 
     private func loadRecentUnlocked(limit: Int) throws -> [RecoveryRecord] {

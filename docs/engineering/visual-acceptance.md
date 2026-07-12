@@ -12,6 +12,16 @@ The command packages the current build, installs it to `/Applications/OpenWhispe
 
 Each demo process renders its own HUD content to a local temporary PNG path supplied through `--visual-acceptance-output`; the script then copies that artifact into the repository evidence directory. Using a local temporary path avoids removable-volume privacy prompts when the repository is under `/Volumes`. This primary path does not require Screen Recording permission and works in clean CI or Codex environments. If self-rendering does not produce a file, the script falls back to CoreGraphics window discovery plus `screencapture -l`, then runs the screenshot verifier.
 
+## Product management surfaces
+
+History, Terminology, and Quick Add use a separate installed-app acceptance harness:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --install
+```
+
+The harness opens each surface through LaunchServices, writes its snapshot to a local temporary path from inside the installed app, verifies image geometry and visual variation, copies the evidence under `dist/product-surface-acceptance/`, and finally relaunches the normal menu bar app.
+
 The script intentionally stops each transient overlay-demo process between HUD states. That cleanup is not the final user-review state. A successful run must relaunch the normal installed app from `/Applications/OpenWhisper.app`, verify that OpenWhisper is running, and leave it running.
 
 ## Evidence

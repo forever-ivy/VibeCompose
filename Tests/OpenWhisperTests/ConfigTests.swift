@@ -251,9 +251,11 @@ func legacyTerminologyEntriesReceiveAndPersistStableIdentifiers() throws {
     """.data(using: .utf8)!
 
     let migrated = try JSONDecoder().decode(TerminologyEntry.self, from: json)
+    let independentlyMigrated = try JSONDecoder().decode(TerminologyEntry.self, from: json)
     let reencoded = try JSONEncoder().encode(migrated)
     let reloaded = try JSONDecoder().decode(TerminologyEntry.self, from: reencoded)
 
+    #expect(independentlyMigrated.id == migrated.id)
     #expect(reloaded.id == migrated.id)
     #expect(reloaded.original == "OpenWhisper")
 }

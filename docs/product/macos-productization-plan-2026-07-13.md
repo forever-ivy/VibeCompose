@@ -459,6 +459,24 @@ Application Support/OpenWhisper
 - Quick Add 全局面板；
 - 常规用户不需要编辑 `config.json`。
 
+### 7.6 2026-07-13 原生管理表面进度
+
+本阶段已落地并通过安装版 LaunchServices 截图验收：
+
+- History 独立窗口：搜索、类型/状态/日期筛选、原文与最终文本详情、Copy、Retry、播放、Finder 定位、删除和自动刷新；
+- 历史记录使用稳定 UUID，旧 JSONL 记录通过确定性派生 ID 保持可重复选择和删除；
+- Terminology Manager：搜索、筛选、排序、term/correction 编辑、启停、删除、CSV 导入导出、导入预览与冲突分类；
+- Terminology 条目和编辑状态改用稳定 UUID，关闭 OW-AUD-014 stale-index 风险；
+- Quick Add 独立面板与 `Control–Option–Space` 全局快捷键；
+- 导入文件执行 metadata-first 检查，限制 2 MB、10,000 条并拒绝符号链接；
+- `scripts/product_surface_acceptance.sh --install` 已覆盖 History、Terminology 和 Quick Add 的安装版渲染证据。
+
+仍未完成的 Phase 3 出口项：
+
+- clean TCC 首次成功听写；
+- Settings、History、Terminology 和 Quick Add 的完整键盘/VoiceOver 交互验收；
+- 真实安装版 F5、ESC、inline close、Retry 与 paste/clipboard 矩阵。
+
 ## 8. 性能与可靠性
 
 ### 8.1 目标指标
@@ -753,8 +771,8 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-009 | P1 | Settings 原生化 | Config API | resize、键盘、VoiceOver、即时保存 |
 | OW-MAC-010 | P1 | Onboarding | Permission model | clean TCC 首次成功闭环 |
 | OW-MAC-011 | P1 | HUD a11y 和稳定几何 | Design tokens | 状态不横跳，错误可操作 |
-| OW-MAC-012 | P1 | History window | Retention | 搜索、详情、Copy、Retry、Delete |
-| OW-MAC-013 | P1 | Terminology manager | Dictionary model | 常规管理不编辑 JSON |
+| OW-MAC-012 | P1 | History window（已实现，待完整交互验收） | Retention | 搜索、详情、Copy、Retry、Delete |
+| OW-MAC-013 | P1 | Terminology manager（已实现，待键盘/VoiceOver 验收） | Dictionary model | 常规管理不编辑 JSON |
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
 | OW-MAC-015 | P1 | Notarization + updater | 014 | 新机安装和更新成功 |
 | OW-MAC-016 | P2 | Product metrics | Privacy spec | 无敏感内容事件 |

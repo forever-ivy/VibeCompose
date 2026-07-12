@@ -36,7 +36,6 @@ final class PreferencesWindowController: NSWindowController {
         onOpenConfigFolder: @escaping () -> Void,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
-        focusRecoveryHistory: Bool = false,
         focusPrivacy: Bool = false
     ) {
         let view = PreferencesView(
@@ -52,7 +51,6 @@ final class PreferencesWindowController: NSWindowController {
             onOpenConfigFolder: onOpenConfigFolder,
             onDeleteAllData: onDeleteAllData,
             onOpenOnboarding: onOpenOnboarding,
-            focusRecoveryHistory: focusRecoveryHistory,
             focusPrivacy: focusPrivacy
         )
         let hostingController = NSHostingController(rootView: view)
@@ -168,10 +166,6 @@ private extension SettingsPane {
             return "mic"
         case .polish:
             return "wand.and.stars"
-        case .recovery:
-            return "clock.arrow.circlepath"
-        case .terminology:
-            return "text.book.closed"
         case .paste:
             return "doc.on.clipboard"
         case .privacy:
@@ -265,7 +259,6 @@ private struct PreferencesView: View {
         onOpenConfigFolder: @escaping () -> Void,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
-        focusRecoveryHistory: Bool = false,
         focusPrivacy: Bool = false
     ) {
         let windowStateStore = SettingsWindowStateStore()
@@ -278,7 +271,6 @@ private struct PreferencesView: View {
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
         _selectedSection = State(
             initialValue: windowStateStore.initialPane(
-                focusRecoveryHistory: focusRecoveryHistory,
                 focusPrivacy: focusPrivacy
             )
         )
@@ -532,10 +524,6 @@ private struct PreferencesView: View {
             return L10n.text("Configure the F5 recording route and ASR behavior.")
         case .polish:
             return L10n.text("Rewrite long transcripts into concise, agent-friendly plans after ASR.")
-        case .recovery:
-            return L10n.text("Copy or retry recent audio, ASR, and AI-polished results.")
-        case .terminology:
-            return L10n.text("Maximize glossary recall and preserve casing for product and technical terms.")
         case .paste:
             return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
         case .privacy:
@@ -554,12 +542,6 @@ private struct PreferencesView: View {
             dictationCard
         case .polish:
             aiPolishCard
-        case .recovery:
-            recoveryHistoryCard
-        case .terminology:
-            settingsCard(title: "Terminology Dictionary") {
-                terminologyDictionarySection
-            }
         case .paste:
             settingsCard(title: "Paste & Clipboard") {
                 Toggle(L10n.text("Restore clipboard after paste"), isOn: $config.injection.preserveClipboard)
