@@ -1,0 +1,226 @@
+import CoreGraphics
+import Testing
+@testable import OpenWhisper
+
+@Test
+func minimalOverlayPresetUsesNineBarVoiceGlyph() {
+    let preset = OverlayStylePreset.dictationHUD
+
+    #expect(preset.pillHeight == 44)
+    #expect(preset.cornerRadius == 15)
+    #expect(preset.bottomInset == 8)
+    #expect(preset.waveformBarCount == 9)
+    #expect(preset.showsTranscriptPreview == false)
+    #expect(preset.inlineCancelControlSize == 14)
+    #expect(preset.timerFontSize == 10)
+}
+
+@Test
+func overlayStatesStillDifferentiateLeadingVisualFamilies() {
+    #expect(OverlayVisualState.recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:03").leadingVisual == .waveform)
+    #expect(OverlayVisualState.processing.leadingVisual == .waveform)
+    #expect(OverlayVisualState.success(.pasted).leadingVisual == .icon(symbolName: "checkmark.circle.fill"))
+    #expect(OverlayVisualState.error("Microphone permission is missing").leadingVisual == .icon(symbolName: "exclamationmark.triangle.fill"))
+}
+
+@Test
+func overlayStatesStayCompactExceptErrors() {
+    #expect(OverlayVisualState.recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:03").allowsSupplementaryText == false)
+    #expect(OverlayVisualState.processing.allowsSupplementaryText == false)
+    #expect(OverlayVisualState.success(.pasted).allowsSupplementaryText == false)
+    #expect(OverlayVisualState.error("Microphone permission is missing").allowsSupplementaryText == true)
+}
+
+@Test
+func recordingOverlayStateShowsCancelControlAndTimer() {
+    let state = OverlayVisualState.recording(
+        levels: Array(repeating: 0.2, count: 9),
+        elapsedText: "00:07"
+    )
+
+    #expect(state.showsCancelControl == true)
+    #expect(state.trailingText == "00:07")
+}
+
+@Test
+func processingOverlayStateShowsCancelControlWithoutTimer() {
+    #expect(OverlayVisualState.processing.showsCancelControl == true)
+    #expect(OverlayVisualState.processing.trailingText == nil)
+}
+
+@Test
+func successAndOrdinaryErrorStatesRemainNonInteractive() {
+    #expect(OverlayVisualState.success(.pasted).showsCancelControl == false)
+    #expect(OverlayVisualState.error("boom").showsCancelControl == false)
+    #expect(OverlayVisualState.error("boom").showsRetryControl == false)
+}
+
+@Test
+func retryableErrorStateShowsRetryControlWithoutCancelControl() {
+    let state = OverlayVisualState.retryableError("Cloudflare 403")
+
+    #expect(state.showsCancelControl == false)
+    #expect(state.showsRetryControl == true)
+    #expect(state.trailingText == nil)
+}
+
+@Test
+func overlayErrorMessageIsCollapsedToSingleShortLine() {
+    let state = OverlayVisualState.error("Microphone permission is missing.\nGrant access in Settings and try again after restarting OpenWhisper.")
+
+    #expect(state.supplementaryText == "Microphone permission is missing. Grant access in Settings and try…")
+}
+
+@Test
+func waveformNormalizerClampsSilenceAndLoudInput() {
+    #expect(WaveformNormalizer.normalizedLevel(fromAveragePower: -160) == 0.08)
+    #expect(WaveformNormalizer.normalizedLevel(fromAveragePower: 0) == 1)
+}
+
+@Test
+func waveformNormalizerRecordingProfileStaysSymmetricAndWithinBounds() {
+    let smoothed = WaveformNormalizer.smoothedLevels(
+        previous: Array(repeating: 0.12, count: 9),
+        targetLevel: 0.9,
+        barCount: 9
+    )
+
+    #expect(smoothed.count == 9)
+    #expect(smoothed.allSatisfy { $0 >= 0.08 && $0 <= 1 })
+    #expect(smoothed[4] > smoothed[0])
+    #expect(smoothed[4] > smoothed[8])
+    #expect(abs(smoothed[0] - smoothed[8]) < 0.0001)
+}
+
+@Test
+func waveformNormalizerProcessingPulseTravelsAcrossTheGlyph() {
+    let early = WaveformNormalizer.processingPulseLevels(frame: 0, barCount: 9)
+    let later = WaveformNormalizer.processingPulseLevels(frame: 5, barCount: 9)
+
+    #expect(early.count == 9)
+    #expect(later.count == 9)
+    #expect(early.allSatisfy { $0 >= 0.08 && $0 <= 1 })
+    #expect(later.allSatisfy { $0 >= 0.08 && $0 <= 1 })
+    #expect(early != later)
+    #expect(early.max() != later.max())
+}
+
+@Test
+func waveformNormalizerPadsMissingSamplesToTheRequestedWaveCount() {
+    let smoothed = WaveformNormalizer.smoothedLevels(
+        previous: [0.2, 0.3, 0.4],
+        targetLevel: 0.6,
+        barCount: 9
+    )
+
+    #expect(smoothed.count == 9)
+    #expect(smoothed.allSatisfy { $0 >= 0.08 && $0 <= 1 })
+}
+
+@Test
+func overlayRecordingWidthExpandsToFitTimer() {
+    let preset = OverlayStylePreset.dictationHUD
+
+    #expect(
+        preset.width(for: .recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:07")) >
+            preset.width(for: .processing)
+    )
+    #expect(preset.width(for: .error("boom")) == preset.errorPillWidth)
+    #expect(preset.width(for: .processing) >= preset.inlineControlReservedWidth)
+}
+
+@MainActor
+@Test
+func overlayPanelPlacementStaysNearBottomEdge() {
+    let preset = OverlayStylePreset.dictationHUD
+    let visibleFrame = CGRect(x: 40, y: 30, width: 1440, height: 860)
+    let frame = OverlayController.panelFrame(
+        for: CGSize(width: preset.width(for: .processing), height: preset.pillHeight),
+        in: visibleFrame,
+        bottomInset: preset.bottomInset
+    )
+
+    #expect(frame.minY == visibleFrame.minY + preset.bottomInset)
+    #expect(abs(frame.midX - visibleFrame.midX) < 0.0001)
+}
+
+@MainActor
+@Test
+func overlayControllerUsesIntegratedSessionControlInsideMainPanel() {
+    let overlay = OverlayController()
+    let snapshot = overlay.debugSnapshot
+
+    #expect(snapshot.usesIntegratedSessionControl == true)
+    #expect(snapshot.hasDetachedClosePanel == false)
+    #expect(snapshot.panelIgnoresMouseEvents == false)
+}
+
+@MainActor
+@Test
+func overlayControllerOnlyShowsInlineCancelControlForActiveSessionStates() {
+    let overlay = OverlayController()
+
+    overlay.showRecording(elapsedText: "00:04")
+    #expect(overlay.debugSnapshot.isCancelControlVisible == true)
+    #expect(overlay.debugSnapshot.isTimerVisible == true)
+
+    overlay.showProcessing()
+    #expect(overlay.debugSnapshot.isCancelControlVisible == true)
+    #expect(overlay.debugSnapshot.isTimerVisible == false)
+
+    overlay.showResult(text: "Done", outcome: .pasted)
+    #expect(overlay.debugSnapshot.isCancelControlVisible == false)
+    #expect(overlay.debugSnapshot.isRetryControlVisible == false)
+}
+
+@MainActor
+@Test
+func overlayControllerRetryableErrorShowsRetryControlOnly() {
+    let overlay = OverlayController()
+
+    overlay.showRetryableError("Cloudflare 403")
+
+    #expect(overlay.debugSnapshot.isCancelControlVisible == false)
+    #expect(overlay.debugSnapshot.isRetryControlVisible == true)
+}
+
+@MainActor
+@Test
+func overlayControllerCancelControlRoutesClickIntoOnCancel() {
+    var cancelCallCount = 0
+    var cancelSource: OverlayCancelSource?
+    let overlay = OverlayController(onCancel: { source in
+        cancelCallCount += 1
+        cancelSource = source
+    })
+
+    overlay.showRecording(elapsedText: "00:04")
+
+    #expect(overlay.debugSimulateCancelControlClick() == true)
+    #expect(cancelCallCount == 1)
+    #expect(cancelSource == .inlineClose)
+}
+
+@Test
+func overlayRecordingCopyExplainsHowToSubmitForTranscription() {
+    let state = OverlayVisualState.recording(
+        levels: Array(repeating: 0.2, count: 9),
+        elapsedText: "00:04"
+    )
+
+    #expect(state.label == "F5 again to transcribe")
+}
+
+@MainActor
+@Test
+func overlayControllerRetryControlRoutesClickIntoOnRetry() {
+    var retryCallCount = 0
+    let overlay = OverlayController(onRetry: {
+        retryCallCount += 1
+    })
+
+    overlay.showRetryableError("Cloudflare 403")
+
+    #expect(overlay.debugSimulateRetryControlClick() == true)
+    #expect(retryCallCount == 1)
+}

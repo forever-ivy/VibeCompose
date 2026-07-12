@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OpenWhisper 是原生 macOS 按键语音输入工具：F5 开始，F5 停止，安全回填或保留到剪贴板。">
+  <title>OpenWhisper — macOS 原生语音输入</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f3ef;
+      --surface: #fbfaf7;
+      --ink: #15181d;
+      --muted: #626872;
+      --line: #d8d7d2;
+      --accent: #1777d2;
+      --accent-soft: #dcecff;
+      --dark: #171a20;
+      --dark-muted: #aeb5c0;
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      line-height: 1.55;
+    }
+
+    a { color: inherit; }
+
+    .wrap {
+      width: min(calc(100% - 40px), var(--max));
+      margin: 0 auto;
+    }
+
+    .nav {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--dark);
+      color: white;
+      font-size: 13px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      font-size: 14px;
+    }
+
+    .nav-links a { text-decoration: none; color: var(--muted); }
+
+    .hero {
+      padding: 96px 0 88px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(310px, 0.75fr);
+      gap: 72px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      margin: 0 0 18px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.13em;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    h1, h2, h3 { margin-top: 0; line-height: 1.12; letter-spacing: -0.035em; }
+    h1 { margin-bottom: 24px; font-size: clamp(48px, 7vw, 82px); max-width: 850px; }
+    h2 { font-size: clamp(32px, 4vw, 50px); margin-bottom: 18px; }
+    h3 { font-size: 20px; margin-bottom: 10px; }
+
+    .lead {
+      max-width: 720px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 20px;
+    }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+
+    .button {
+      min-height: 44px;
+      padding: 0 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      text-decoration: none;
+      font-weight: 650;
+    }
+
+    .button.primary { background: var(--dark); color: white; border-color: var(--dark); }
+
+    .status-panel {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      padding: 24px;
+      border-radius: 16px;
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: 76px 1fr;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .status-row:last-child { border-bottom: 0; }
+    .status-row strong { font-size: 13px; color: var(--muted); }
+    .status-row span { font-weight: 650; }
+
+    .section { padding: 84px 0; border-bottom: 1px solid var(--line); }
+    .section-head { max-width: 760px; margin-bottom: 36px; }
+    .section-head p { margin: 0; color: var(--muted); font-size: 18px; }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+
+    .cell { background: var(--surface); padding: 28px; min-height: 210px; }
+    .cell p { margin: 0; color: var(--muted); }
+    .number { display: block; margin-bottom: 42px; color: var(--accent); font-weight: 750; }
+
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .workflow div { padding: 22px 18px; border-right: 1px solid var(--line); }
+    .workflow div:last-child { border-right: 0; }
+    .workflow strong { display: block; margin-bottom: 5px; }
+    .workflow span { color: var(--muted); font-size: 14px; }
+
+    .dark {
+      background: var(--dark);
+      color: white;
+    }
+
+    .dark .section-head p, .dark .fine { color: var(--dark-muted); }
+
+    .gates {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: #353a44;
+      border: 1px solid #353a44;
+    }
+
+    .gate { background: var(--dark); padding: 26px; }
+    .gate p { color: var(--dark-muted); margin: 0; }
+
+    .footer { padding: 28px 0; color: var(--muted); font-size: 14px; }
+    .footer .wrap { display: flex; justify-content: space-between; gap: 20px; }
+
+    @media (max-width: 800px) {
+      .nav-links a:not(:last-child) { display: none; }
+      .hero { padding-top: 64px; }
+      .hero-grid, .grid-3, .gates { grid-template-columns: 1fr; }
+      .workflow { grid-template-columns: 1fr; }
+      .workflow div { border-right: 0; border-bottom: 1px solid var(--line); }
+      .workflow div:last-child { border-bottom: 0; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111318;
+        --surface: #191c22;
+        --ink: #f3f5f7;
+        --muted: #aeb4be;
+        --line: #333842;
+        --accent-soft: #173856;
+      }
+      .button.primary { background: #f4f5f7; color: #111318; border-color: #f4f5f7; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="wrap nav" aria-label="主导航">
+      <a class="brand" href="#hero" aria-label="OpenWhisper 首页">
+        <span class="mark">OW</span>
+        <span>OpenWhisper</span>
+      </a>
+      <div class="nav-links">
+        <a href="#workflow">工作流</a>
+        <a href="#product">产品</a>
+        <a href="#safety">边界</a>
+        <a href="https://github.com/forever-ivy/openwhisper">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow">macOS native voice input</p>
+          <h1>按 F5 说话。<br>文字回到光标。</h1>
+          <p class="lead">OpenWhisper 连接用户自己的 ChatGPT 账户，把录音、转写、术语保护和安全回填压缩成一个 macOS 原生输入动作。无法确认可编辑目标时，结果保留在剪贴板。</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/forever-ivy/openwhisper">查看源码</a>
+            <a class="button" href="product/macos-productization-plan-2026-07-13.md">产品化计划</a>
+          </div>
+        </div>
+        <aside class="status-panel" aria-label="OpenWhisper 产品状态">
+          <div class="status-row"><strong>平台</strong><span>macOS 13+</span></div>
+          <div class="status-row"><strong>版本</strong><span>0.1.0 Alpha</span></div>
+          <div class="status-row"><strong>界面</strong><span>简体中文 / English</span></div>
+          <div class="status-row"><strong>许可</strong><span>MIT</span></div>
+          <div class="status-row"><strong>状态</strong><span>产品化改造中</span></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="workflow">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">single-trigger workflow</p>
+          <h2>不切应用，不打开聊天窗口。</h2>
+          <p>OpenWhisper 的核心不是“多一个录音工具”，而是把语音变成当前输入框的一种输入方式。</p>
+        </div>
+        <div class="workflow">
+          <div><strong>01 光标</strong><span>聚焦真实可编辑位置</span></div>
+          <div><strong>02 F5</strong><span>开始录音</span></div>
+          <div><strong>03 F5</strong><span>停止并转写</span></div>
+          <div><strong>04 处理</strong><span>术语对齐与可选润色</span></div>
+          <div><strong>05 输出</strong><span>安全回填或剪贴板</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="product">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">mac first</p>
+          <h2>先把 macOS 版本做成可信赖的日常工具。</h2>
+          <p>第一阶段只聚焦菜单栏、快捷键、权限、转写、回填、历史与术语管理，不同时扩张 Windows、iOS 或会议机器人。</p>
+        </div>
+        <div class="grid-3">
+          <article class="cell"><span class="number">A</span><h3>原生交互</h3><p>AppKit + SwiftUI、系统菜单、Settings、HUD、键盘与辅助功能语义。</p></article>
+          <article class="cell"><span class="number">B</span><h3>安全输入</h3><p>每次粘贴前重新确认目标；无法证明安全时只保留剪贴板。</p></article>
+          <article class="cell"><span class="number">C</span><h3>专业工作流</h3><p>中英混输、技术术语、应用模式、历史恢复与可控数据留存。</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section dark" id="safety">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">release gates</p>
+          <h2>Alpha 可以试，商业发布必须过门禁。</h2>
+          <p>默认账户路径依赖上游可用性，不是稳定公开 API。OpenWhisper 不暗示 OpenAI 隶属、赞助或背书，也不承诺无限用量。</p>
+        </div>
+        <div class="gates">
+          <article class="gate"><h3>安全</h3><p>Token 目标白名单、Recovery 路径约束、刷新竞态、安全粘贴。</p></article>
+          <article class="gate"><h3>隐私</h3><p>成功音频删除、历史留存策略、删除全部数据、敏感应用策略。</p></article>
+          <article class="gate"><h3>发布</h3><p>Developer ID、Hardened Runtime、公证、staple、固定哈希和更新签名。</p></article>
+          <article class="gate"><h3>产品</h3><p>原生 onboarding、可访问性、错误恢复、匿名且最小化的产品指标。</p></article>
+        </div>
+        <div class="actions">
+          <a class="button primary" href="product/macos-productization-plan-2026-07-13.md">查看完整计划</a>
+          <a class="button" href="audits/security-audit-2026-07-13.md">查看安全审计</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>OpenWhisper · macOS first</span>
+      <span>MIT · 2026</span>
+    </div>
+  </footer>
+</body>
+</html>

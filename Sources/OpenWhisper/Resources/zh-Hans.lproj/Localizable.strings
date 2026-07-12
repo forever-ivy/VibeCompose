@@ -1,0 +1,255 @@
+/* Window and menu */
+"OpenWhisper Settings" = "OpenWhisper 设置";
+"Settings…" = "设置…";
+"Open Config Folder" = "打开配置文件夹";
+"Save Settings" = "保存设置";
+"Quit OpenWhisper" = "退出 OpenWhisper";
+"State: idle" = "状态：空闲";
+"State: %@" = "状态：%@";
+"Ready. Press F5 to dictate" = "已就绪。按 F5 开始听写";
+"OpenWhisper %@" = "OpenWhisper %@";
+"OpenWhisper: %@" = "OpenWhisper：%@";
+
+/* Shared states */
+"Ready" = "已就绪";
+"Setup required" = "需要设置";
+"Recording" = "正在录音";
+"Processing" = "正在处理";
+"Error" = "错误";
+"Demo" = "演示";
+"Working" = "处理中";
+"Granted" = "已授权";
+"Needs attention" = "需要处理";
+"Needs permission" = "需要授权";
+"Not requested yet" = "尚未请求";
+"Re-add required" = "需要重新添加";
+"Optional but recommended" = "可选但建议开启";
+"Pasted" = "已粘贴";
+"Copied" = "已复制";
+"Copy" = "复制";
+"Retry" = "重试";
+"Refresh" = "刷新";
+"Cancel" = "取消";
+"Continue" = "继续";
+"OK" = "好";
+"Enabled" = "已启用";
+"Disabled" = "已停用";
+"enabled" = "已启用";
+"disabled" = "已停用";
+"Unavailable" = "不可用";
+"Failed" = "失败";
+"Waiting" = "等待中";
+"Connected" = "已连接";
+"Expired" = "已过期";
+"Signed In" = "已登录";
+"Signed Out" = "未登录";
+
+/* Settings navigation */
+"Account" = "账户";
+"Dictation" = "听写";
+"AI Polish" = "AI 润色";
+"History" = "历史记录";
+"Terminology" = "术语";
+"Paste" = "粘贴";
+"Advanced" = "高级";
+"All" = "全部";
+"Terms" = "术语";
+"Corrections" = "修正";
+"F5 dictation workflow" = "F5 听写工作流";
+"Connect ChatGPT, verify permissions, and keep the first-run flow healthy." = "连接 ChatGPT、检查权限，并确保首次使用流程正常。";
+"Configure the F5 recording route and ASR behavior." = "配置 F5 录音路径和语音识别行为。";
+"Rewrite long transcripts into concise, agent-friendly plans after ASR." = "在语音识别后，将长文本整理成简洁、适合交给智能体执行的计划。";
+"Copy or retry recent audio, ASR, and AI-polished results." = "复制或重试最近的音频、转写和 AI 润色结果。";
+"Maximize glossary recall and preserve casing for product and technical terms." = "提高术语命中率，并保留产品名和技术词的正确大小写。";
+"Control paste behavior while keeping clipboard recovery conservative." = "控制粘贴行为，同时保留稳妥的剪贴板兜底。";
+"Recovery routes and lower-level compatibility settings." = "配置恢复路径和底层兼容选项。";
+
+/* Account and permissions */
+"Account & Permissions" = "账户与权限";
+"ChatGPT" = "ChatGPT";
+"Microphone" = "麦克风";
+"Accessibility" = "辅助功能";
+"Connect ChatGPT to start dictation." = "连接 ChatGPT 后即可开始听写。";
+"F5 starts and stops recording. Output pastes when an editable target is focused; otherwise it stays in the clipboard." = "按 F5 开始或停止录音。有可编辑光标时自动粘贴，否则结果会保留在剪贴板。";
+"Advanced recovery route selected" = "已选择高级恢复路径";
+"ChatGPT account checks are bypassed while you use your own compatible API." = "使用自定义兼容 API 时，将跳过 ChatGPT 账户检查。";
+"Microphone access is ready." = "麦克风权限已就绪。";
+"Press F5 once and macOS will ask for microphone access." = "按一次 F5，macOS 将请求麦克风权限。";
+"Microphone access was previously denied. Open Privacy & Security > Microphone to re-enable it." = "麦克风权限此前被拒绝。请打开“隐私与安全性 > 麦克风”重新启用。";
+"Auto-paste is ready." = "自动粘贴已就绪。";
+"Allow Microphone Access" = "允许使用麦克风";
+"Open Microphone Settings" = "打开麦克风设置";
+"Guide Accessibility Access" = "引导开启辅助功能权限";
+"Open Accessibility Settings" = "打开辅助功能设置";
+"Refresh Status" = "刷新权限状态";
+"Allow Accessibility for %@ so it can send Cmd+V to the active text cursor. Until then, it only copies to the clipboard." = "请为 %@ 开启辅助功能权限，以便向当前输入光标发送 Cmd+V。在此之前，结果只会复制到剪贴板。";
+"This build is ad-hoc signed or missing a stable team identity, so macOS may open Accessibility without creating a toggle for %@. Repackage it with Apple Development signing, reopen the packaged app, then request access again." = "当前版本使用临时签名或缺少稳定的开发团队身份，因此 macOS 可能会打开辅助功能设置，但不会为 %@ 创建可切换的权限项。请使用 Apple Development 签名重新打包，重新打开已安装应用后再申请权限。";
+"OpenWhisper could not inspect its own code signature. If Accessibility opens without a %@ row, rebuild the packaged app before requesting access again." = "OpenWhisper 无法检查自身代码签名。如果辅助功能设置中没有 %@，请重新构建并安装应用后再申请权限。";
+"If %@ still does not appear in the list, click + in Accessibility and add the running app again." = "如果列表中仍未出现 %@，请在辅助功能设置中点击“+”，重新添加当前运行的应用。";
+"If %@ still does not appear in the list, click + in Accessibility and add this app manually: %@" = "如果列表中仍未出现 %@，请在辅助功能设置中点击“+”，手动添加此应用：%@";
+
+/* Dictation */
+"Dictation / ASR" = "听写 / 语音识别";
+"Hotkey" = "快捷键";
+"Feedback sounds" = "操作提示音";
+"ASR prompt cleanup" = "转写提示清理";
+"Default ASR route" = "默认语音识别路径";
+"ChatGPT Account" = "ChatGPT 账户";
+"OpenAI-Compatible Recovery" = "OpenAI 兼容恢复路径";
+"Recommended. OpenWhisper signs in to ChatGPT directly and keeps its own session on this Mac." = "推荐。OpenWhisper 会直接登录 ChatGPT，并在这台 Mac 上维护自己的会话。";
+"Optional recovery route. Bring your own OpenAI-compatible API only if you want a separate endpoint." = "可选恢复路径。仅在需要独立接口时配置你自己的 OpenAI 兼容 API。";
+"Uses the ChatGPT backend transcribe API. This ASR response is already lightly polished by ChatGPT and is separate from the AI Polish rewrite tab." = "使用 ChatGPT 后端转写接口。该结果已经由 ChatGPT 做过轻量整理，与“AI 润色”页中的重写功能相互独立。";
+"Recent Dictation History" = "最近听写记录";
+"Requesting microphone" = "正在请求麦克风权限";
+"Recording on F5" = "正在录音，按 F5 停止";
+"Retrying" = "正在重试";
+"Retrying saved audio" = "正在重试已保存的音频";
+"Pasted transcript" = "转写结果已粘贴";
+"Settings saved" = "设置已保存";
+"Imported %ld terminology terms" = "已导入 %ld 个术语";
+"Saved recovery audio is missing." = "找不到已保存的恢复音频。";
+
+/* AI polish and routes */
+"Current Product Route" = "当前产品路径";
+"OpenWhisper ships as a ChatGPT account dictation app. The normal path uses the ChatGPT backend for ASR and the ChatGPT-authenticated Responses endpoint for AI Polish." = "OpenWhisper 默认作为基于 ChatGPT 账户的听写应用运行：语音识别使用 ChatGPT 后端，AI 润色使用已登录 ChatGPT 会话的 Responses 接口。";
+"ChatGPT Auth" = "ChatGPT 登录授权";
+"%@ via %@" = "%@，接口：%@";
+"Advanced transcription recovery is selected. It uses the configured OpenAI-compatible ASR environment variable, but OpenWhisper no longer ships a provider-key fallback matrix or text-polish provider key UI." = "当前已选择高级转写恢复路径。它会使用配置好的 OpenAI 兼容语音识别环境变量；OpenWhisper 不再提供多服务商密钥兜底矩阵或文本润色密钥界面。";
+"Mode" = "模式";
+"Auto" = "自动";
+"Always rewrite" = "始终重写";
+"Off" = "关闭";
+"Show estimates" = "显示用量估算";
+"Test Connection" = "测试连接";
+"Recent Polish History" = "最近润色记录";
+"ChatGPT Auth rewrite" = "ChatGPT 登录态重写";
+"Ready with %@." = "已就绪，当前模型：%@。";
+"Usage: %ld attempts, %ld succeeded, %ld failed, %ld input tokens, %ld output tokens." = "用量：尝试 %ld 次，成功 %ld 次，失败 %ld 次，输入 %ld 个令牌，输出 %ld 个令牌。";
+"0 attempts / 0 tokens" = "0 次尝试 / 0 个令牌";
+"%ld attempts / %ld succeeded / %ld failed / %ld tokens" = "%ld 次尝试 / 成功 %ld 次 / 失败 %ld 次 / %ld 个令牌";
+"Ready: %@ / %@." = "已就绪：%@ / %@。";
+"ChatGPT Auth is not ready. Connect ChatGPT first." = "ChatGPT 登录授权尚未就绪，请先连接 ChatGPT。";
+"No text polish provider is configured." = "尚未配置文本润色服务。";
+"Text polish provider returned an empty response." = "文本润色服务返回了空结果。";
+"Text polish failed: %@" = "文本润色失败：%@";
+
+/* History */
+"Recent Records" = "最近记录";
+"Record type" = "记录类型";
+"Original audio" = "原始语音";
+"ASR transcript" = "语音识别结果";
+"AI polish result" = "AI 润色结果";
+"Latest 10" = "最近 10 条";
+"No recoverable records yet." = "暂无可恢复记录。";
+"No recent transcripts yet." = "暂无最近的转写记录。";
+"Copy transcript" = "复制转写内容";
+"Copied transcript" = "已复制转写内容";
+"Unknown target" = "未知目标";
+"Final text" = "最终文本";
+"Direct ASR" = "直接转写";
+"Audio" = "音频";
+"pasted" = "已粘贴";
+"clipboard" = "剪贴板";
+"error" = "错误";
+
+/* Terminology */
+"Terminology Dictionary" = "术语词典";
+"Terms guide transcription. Corrections deterministically replace common mistakes after transcription." = "术语用于引导转写；修正规则会在转写后确定性地替换常见错误。";
+"Import a text or CSV dictionary, then add custom terms or corrections here." = "导入文本或 CSV 词典后，可继续添加自定义术语或修正规则。";
+"Import Dictionary..." = "导入词典…";
+"Add Entry" = "添加条目";
+"Edit Entry" = "编辑条目";
+"Term" = "术语";
+"Correction" = "修正";
+"Wrong text" = "错误文本";
+"Correct text" = "正确文本";
+"Add" = "添加";
+"Save Entry" = "保存条目";
+"No dictionary entries for this filter." = "当前筛选条件下没有词典条目。";
+"Showing 5 of %ld. Use the filter or edit config.json for bulk changes." = "当前显示 %ld 条中的前 5 条。可使用筛选器，或编辑 config.json 进行批量修改。";
+"Edit" = "编辑";
+"Delete" = "删除";
+"Choose a plain text or CSV terminology dictionary." = "请选择纯文本或 CSV 格式的术语词典。";
+"Dictionary has %ld entries. Last dictionary import: %@." = "词典共有 %ld 条。上次导入时间：%@。";
+"Dictionary has %ld entries." = "词典共有 %ld 条。";
+"Could not read terminology dictionary text: %@" = "无法读取术语词典文本：%@";
+"No valid terminology entries found in %@." = "在 %@ 中没有找到有效的术语条目。";
+
+/* Paste */
+"Paste & Clipboard" = "粘贴与剪贴板";
+"Restore clipboard after paste" = "粘贴后恢复原剪贴板";
+"When no editable focus is detected, OpenWhisper leaves the polished transcript in the clipboard for manual Cmd+V." = "未检测到可编辑光标时，OpenWhisper 会把最终文本留在剪贴板，供你手动按 Cmd+V 粘贴。";
+"Copied to clipboard. Grant Accessibility access for auto-paste." = "已复制到剪贴板。开启辅助功能权限后可自动粘贴。";
+"Copied to clipboard" = "已复制到剪贴板";
+"Accessibility permission is off, so OpenWhisper left the text in the clipboard." = "辅助功能权限未开启，因此 OpenWhisper 已将文本保留在剪贴板。";
+"No editable cursor was found. Paste manually." = "未找到可编辑光标，请手动粘贴。";
+
+/* ChatGPT account and browser login */
+"Use Browser Login" = "使用浏览器登录";
+"Waiting for Browser" = "等待浏览器授权";
+"Refresh Session" = "刷新会话";
+"Sign out" = "退出登录";
+"OAuth Ready" = "OAuth 已就绪";
+"Use the default browser ChatGPT OAuth flow to connect OpenWhisper." = "使用默认浏览器的 ChatGPT OAuth 流程连接 OpenWhisper。";
+"Waiting for ChatGPT authorization in your default browser." = "正在默认浏览器中等待 ChatGPT 授权。";
+"OpenWhisper connected to ChatGPT via browser OAuth." = "OpenWhisper 已通过浏览器 OAuth 连接 ChatGPT。";
+"Browser login connected. OpenWhisper saved the ChatGPT session locally." = "浏览器登录成功，OpenWhisper 已在本机保存 ChatGPT 会话。";
+"Use Browser Login in OpenWhisper Settings before recording." = "录音前，请先在 OpenWhisper 设置中使用浏览器登录。";
+"OpenWhisper has its own ChatGPT session and can transcribe without Codex." = "OpenWhisper 已拥有独立的 ChatGPT 会话，无需依赖 Codex 即可转写。";
+"OpenWhisper has a saved ChatGPT session, but it needs refresh or sign-in again." = "OpenWhisper 已保存 ChatGPT 会话，但需要刷新或重新登录。";
+"Connect ChatGPT with the default browser OAuth flow before recording." = "录音前，请先通过默认浏览器 OAuth 流程连接 ChatGPT。";
+"OpenWhisper saved a ChatGPT session, but it has expired. Refresh or sign in again." = "OpenWhisper 保存的 ChatGPT 会话已过期，请刷新会话或重新登录。";
+"Set environment variable %@ before recording." = "录音前请设置环境变量 %@。";
+"%@ %ld more setting issue(s) need attention." = "%@ 另外还有 %ld 个设置问题需要处理。";
+"Browser login timed out. Finish the ChatGPT authorization page and try again if it expired." = "浏览器登录超时。请完成 ChatGPT 授权页面；如果页面已过期，请重新尝试。";
+"Browser login sent an invalid callback." = "浏览器登录返回了无效的回调。";
+"Browser login was rejected because the one-time state did not match." = "一次性状态参数不匹配，浏览器登录已被拒绝。";
+"Browser login finished without an authorization code." = "浏览器登录完成，但未返回授权码。";
+"Browser login callback server could not start: %@" = "浏览器登录回调服务无法启动：%@";
+"ChatGPT OAuth token exchange failed: %@" = "ChatGPT OAuth 令牌交换失败：%@";
+"ChatGPT OAuth did not return a usable access token." = "ChatGPT OAuth 未返回可用的访问令牌。";
+"OpenWhisper authorization completed. Return to OpenWhisper." = "OpenWhisper 授权已完成，请返回 OpenWhisper。";
+"Bad Request" = "请求无效";
+"Connect ChatGPT with the default browser first." = "请先通过默认浏览器连接 ChatGPT。";
+"OpenWhisper's saved ChatGPT session has expired. Sign in again." = "OpenWhisper 保存的 ChatGPT 会话已过期，请重新登录。";
+"OpenWhisper cannot currently read a usable ChatGPT session." = "OpenWhisper 当前无法读取可用的 ChatGPT 会话。";
+"OpenWhisper is signed in, but no usable ChatGPT access token is available." = "OpenWhisper 已登录，但当前没有可用的 ChatGPT access token。";
+"OpenWhisper failed to refresh the ChatGPT session: %@" = "OpenWhisper 刷新 ChatGPT 会话失败：%@";
+"OpenWhisper browser login failed: %@" = "OpenWhisper 浏览器登录失败：%@";
+
+/* Overlay and first run */
+"F5 again to transcribe" = "再次按 F5 开始转写";
+"Enable Microphone Access" = "开启麦克风权限";
+"Allow microphone access" = "允许访问麦克风";
+"OpenWhisper needs microphone access before it can record your first dictation. Click Continue and macOS should show the microphone permission prompt next." = "OpenWhisper 需要麦克风权限才能开始首次听写。点击“继续”后，macOS 将显示麦克风权限请求。";
+"Installed app path: /Applications/OpenWhisper.app" = "已安装应用路径：/Applications/OpenWhisper.app";
+"First-run permission is requested only once from a clean TCC state" = "首次权限请求只会在未决定的干净 TCC 状态下触发一次";
+"Overlay demo" = "悬浮窗演示";
+"Clipboard only" = "仅复制到剪贴板";
+"403 after 3 tries" = "尝试 3 次后仍返回 403";
+
+/* Installation */
+"OpenWhisper install required" = "需要安装 OpenWhisper";
+"OpenWhisper launch failed" = "OpenWhisper 启动失败";
+"Install OpenWhisper to /Applications first" = "请先将 OpenWhisper 安装到 /Applications";
+"OpenWhisper must be installed to /Applications/OpenWhisper.app before it runs. This copy is at %@. Rebuild, install the packaged app to /Applications, then launch that installed copy." = "OpenWhisper 必须安装到 /Applications/OpenWhisper.app 后才能运行。当前副本位于 %@。请重新构建，将打包后的应用安装到 /Applications，然后启动已安装的副本。";
+"OpenWhisper settings are no longer available." = "OpenWhisper 设置窗口已不可用。";
+
+/* Errors */
+"Microphone access is required to start recording." = "没有麦克风权限，无法开始录音。";
+"Could not initialize the audio recorder." = "无法初始化录音器。";
+"Could not start audio recording." = "录音启动失败。";
+"There is no active recording session." = "当前没有录音中的会话。";
+"Could not create the Cmd+V event." = "生成 Cmd+V 事件失败。";
+"Could not install the global hotkey handler. Status code: %d." = "无法安装全局热键处理器，状态码 %d。";
+"Could not register the global hotkey. Status code: %d." = "无法注册全局热键，状态码 %d。";
+"The recording file is invalid." = "录音文件无效。";
+"The recording exceeds %@, which is above the ChatGPT/OpenAI transcription upload limit. It was not sent." = "录音文件超过 %@，已超出 ChatGPT/OpenAI 转写上传上限，当前不会发送。";
+"ChatGPT transcription failed: %@" = "ChatGPT 转写失败：%@";
+"ChatGPT transcription returned empty text." = "ChatGPT 转写返回了空文本。";
+"Missing transcription API key. Set environment variable %@." = "缺少转写 API key，请设置环境变量 %@。";
+"ChatGPT transcription encountered Cloudflare 403 %ld times. This is usually a temporary network issue. The recording was kept; click Retry to try once more." = "ChatGPT 转写连续 %ld 次遇到 Cloudflare 403；这通常是临时网络波动。录音已保留，可点击“重试”再试一次。";
+"%@ transcription failed because the private transcription endpoint returned a Cloudflare 403 challenge. This is not an expired OpenWhisper session." = "%@ 转写失败：私有转写接口返回 Cloudflare 403 challenge；这不是 OpenWhisper 会话过期。";
+"%@ transcription failed: %@" = "%@ 转写失败：%@";
+"Transcription prompt returned empty text." = "转写提示词返回了空文本。";
+"AI Polish output looked truncated; OpenWhisper used the normalized transcript instead." = "AI 润色结果似乎被截断，OpenWhisper 已改用规范化后的转写文本。";
