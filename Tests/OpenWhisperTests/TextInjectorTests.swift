@@ -209,6 +209,22 @@ func injectionPlanDoesNotPasteWhenOnlyLaunchAppContextExists() {
 }
 
 @Test
+func retryInjectionPlanAlwaysUsesClipboardEvenWithEditableFocus() {
+    let plan = TextInjector.injectionPlan(
+        text: "OpenWhisper",
+        accessibilityTrusted: true,
+        editableTextSnapshot: nil,
+        fallbackEditableTextSnapshot: nil,
+        hasEditableTextFocus: true,
+        hasFallbackEditableTextFocus: true,
+        hasLaunchAppContext: true,
+        automaticPasteAllowed: false
+    )
+
+    #expect(plan == .clipboardFallback(reason: .retryRequiresManualPaste))
+}
+
+@Test
 func injectionPlanIgnoresStaleSnapshotsWithoutEditableFocusSignal() {
     let snapshot = EditableTextSnapshot(
         value: "stale editor text",

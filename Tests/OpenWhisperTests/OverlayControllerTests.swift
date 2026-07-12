@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Testing
 @testable import OpenWhisper
@@ -223,4 +224,25 @@ func overlayControllerRetryControlRoutesClickIntoOnRetry() {
 
     #expect(overlay.debugSimulateRetryControlClick() == true)
     #expect(retryCallCount == 1)
+}
+
+@MainActor
+@Test
+func overlayControllerWritesSelfRenderedPNGSnapshot() throws {
+    let overlay = OverlayController()
+    let outputURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("openwhisper-overlay-\(UUID().uuidString).png")
+    defer {
+        overlay.hide()
+        try? FileManager.default.removeItem(at: outputURL)
+    }
+
+    overlay.showRetryableError("Cloudflare 403")
+    try overlay.writeSnapshot(to: outputURL)
+
+    let data = try Data(contentsOf: outputURL)
+    let bitmap = try #require(NSBitmapImageRep(data: data))
+    #expect(data.count > 1_000)
+    #expect(bitmap.pixelsWide > 0)
+    #expect(bitmap.pixelsHigh > 0)
 }

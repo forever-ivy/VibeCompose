@@ -60,13 +60,16 @@ final class AppCoordinator {
     private var activeSessionID: UUID?
     private var recordingStartedAt: DispatchTime?
     private var pendingRetry: PendingRetry?
+    private var pendingRetryExpiryTask: Task<Void, Never>?
     private var authStateObserver: NSObjectProtocol?
 
     private struct PendingRetry {
+        let id: UUID
         let audio: RecordedAudio
         let launchAppContext: LaunchAppContext?
         let transcriptionConfig: TranscriptionConfig
         let injectionConfig: InjectionConfig
+        let expiresAt: Date
     }
 
     init(
@@ -76,8 +79,8 @@ final class AppCoordinator {
         injector: any TextInjecting = TextInjector(),
         overlay: (any OverlayControlling)? = nil,
         authManager: any ChatGPTAuthProviding = ChatGPTAuthManager(),
-        latencyRecorder: any LatencyRecording = LatencyRecorder(),
-        historyRecorder: any TranscriptionHistoryRecording = TranscriptionHistoryRecorder(),
+        latencyRecorder: (any LatencyRecording)? = nil,
+        historyRecorder: (any TranscriptionHistoryRecording)? = nil,
         recoveryRecorder: (any RecoveryRecording)? = nil,
         soundFeedback: any SoundFeedbackPlaying = SoundFeedbackService(),
         recorderFactory: @escaping RecorderFactory = { AudioRecorder(sampleRateHz: $0) },
@@ -114,8 +117,8 @@ final class AppCoordinator {
         let resolvedOverlay = overlay ?? OverlayController()
         self.overlay = resolvedOverlay
         self.authManager = authManager
-        self.latencyRecorder = latencyRecorder
-        self.historyRecorder = historyRecorder
+        self.latencyRecorder = latencyRecorder ?? LatencyRecorder(directoryURL: configStore.directoryURL)
+        self.historyRecorder = historyRecorder ?? TranscriptionHistoryRecorder(directoryURL: configStore.directoryURL)
         self.recoveryRecorder = recoveryRecorder ?? RecoveryStore(
             directoryURL: configStore.directoryURL.appendingPathComponent("Recovery", isDirectory: true)
         )
@@ -159,8 +162,9 @@ final class AppCoordinator {
             )
 
             switch launchMode {
-            case .normal, .settings, .accessibilityGuide:
+            case .normal, .settings, .privacySettings, .accessibilityGuide:
                 config = try configStore.load()
+                enforceStoragePolicies()
                 recorder = recorderFactory(config.transcription.sampleRateHz)
                 recorder?.configure(maxDurationSeconds: config.transcription.maxDurationSeconds)
                 refreshReadyState()
@@ -173,8 +177,12 @@ final class AppCoordinator {
                     }
                 }
                 notifier.ensureAuthorization()
-                if launchMode == .settings || launchMode == .accessibilityGuide {
-                    openSettings()
+                if launchMode == .settings
+                    || launchMode == .privacySettings
+                    || launchMode == .accessibilityGuide
+                {
+                    openSettings(focusPrivacy: launchMode == .privacySettings)
+                    scheduleSettingsSnapshotIfRequested()
                 }
                 if launchMode == .accessibilityGuide {
                     DispatchQueue.main.async {
@@ -372,7 +380,8 @@ final class AppCoordinator {
                 injectionConfig: injectionConfig,
                 launchAppContext: launchAppContext,
                 attemptPolicy: .automatic,
-                deleteAudioWhenFinished: true
+                deleteAudioWhenFinished: true,
+                automaticPasteAllowed: true
             )
         } catch {
             logger.error("Stopping recording failed: \(error.localizedDescription, privacy: .public)")
@@ -391,6 +400,11 @@ final class AppCoordinator {
             NSSound.beep()
             return
         }
+        guard pendingRetry.expiresAt > Date() else {
+            clearPendingRetry()
+            overlay.showError(L10n.text("The saved retry recording expired and was deleted."))
+            return
+        }
 
         let sessionID = UUID()
         activeSessionID = sessionID
@@ -405,7 +419,8 @@ final class AppCoordinator {
             injectionConfig: pendingRetry.injectionConfig,
             launchAppContext: pendingRetry.launchAppContext,
             attemptPolicy: .manualRetry,
-            deleteAudioWhenFinished: false
+            deleteAudioWhenFinished: false,
+            automaticPasteAllowed: false
         )
     }
 
@@ -416,7 +431,8 @@ final class AppCoordinator {
         injectionConfig: InjectionConfig,
         launchAppContext: LaunchAppContext?,
         attemptPolicy: TranscriptionAttemptPolicy,
-        deleteAudioWhenFinished: Bool
+        deleteAudioWhenFinished: Bool,
+        automaticPasteAllowed: Bool
     ) {
         let processingStarted = DispatchTime.now().uptimeNanoseconds
         let initialAudioBytes = Self.audioFileSize(at: audio.fileURL)
@@ -459,7 +475,8 @@ final class AppCoordinator {
                             text: prepared.finalText,
                             preserveClipboard: injectionConfig.preserveClipboard,
                             restoreDelayMilliseconds: injectionConfig.restoreDelayMilliseconds,
-                            launchAppContext: launchAppContext
+                            launchAppContext: launchAppContext,
+                            automaticPasteAllowed: automaticPasteAllowed
                         )
                         let injectMs = self.elapsedMilliseconds(since: injectStarted)
                         let totalProcessingMs = self.elapsedMilliseconds(since: processingStarted)
@@ -471,12 +488,6 @@ final class AppCoordinator {
                             errorCategory: nil
                         )
                         self.recordHistory(
-                            prepared: prepared,
-                            outcome: outcome,
-                            launchAppContext: launchAppContext
-                        )
-                        self.recordRecoverySuccess(
-                            audio: audio,
                             prepared: prepared,
                             outcome: outcome,
                             launchAppContext: launchAppContext
@@ -570,8 +581,11 @@ final class AppCoordinator {
         }
     }
 
-    private func openSettings(focusRecoveryHistory: Bool = false) {
-        if focusRecoveryHistory {
+    private func openSettings(
+        focusRecoveryHistory: Bool = false,
+        focusPrivacy: Bool = false
+    ) {
+        if focusRecoveryHistory || focusPrivacy {
             preferencesWindowController = nil
         }
 
@@ -669,11 +683,53 @@ final class AppCoordinator {
                 onOpenConfigFolder: { [weak self] in
                     self?.openConfigFolder()
                 },
-                focusRecoveryHistory: focusRecoveryHistory
+                onDeleteAllData: { [weak self] in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Privacy",
+                                code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper settings are no longer available."),
+                                ]
+                            )
+                        )
+                    }
+                    return self.deleteAllUserData()
+                },
+                focusRecoveryHistory: focusRecoveryHistory,
+                focusPrivacy: focusPrivacy
             )
         }
 
         preferencesWindowController?.show()
+    }
+
+    private func scheduleSettingsSnapshotIfRequested() {
+        guard let outputURL = AppLaunchMode.settingsSnapshotOutputURL(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        ) else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self else {
+                return
+            }
+            do {
+                guard let preferencesWindowController = self.preferencesWindowController else {
+                    throw PreferencesSnapshotError.missingContentView
+                }
+                try preferencesWindowController.writeSnapshot(to: outputURL)
+                NSApplication.shared.terminate(nil)
+            } catch {
+                print("OpenWhisper Settings self-capture failed: \(error.localizedDescription)")
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            NSApplication.shared.terminate(nil)
+        }
     }
 
     private func retryRecoveryRecord(_ record: RecoveryRecord) {
@@ -703,7 +759,8 @@ final class AppCoordinator {
             injectionConfig: config.injection,
             launchAppContext: launchAppContextProvider(),
             attemptPolicy: .manualRetry,
-            deleteAudioWhenFinished: false
+            deleteAudioWhenFinished: false,
+            automaticPasteAllowed: false
         )
     }
 
@@ -874,10 +931,31 @@ final class AppCoordinator {
             overlay.showRetryableError(L10n.text("403 after 3 tries"))
         }
 
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
+        let snapshotOutputURL = Self.visualAcceptanceSnapshotOutputURL()
+        if let snapshotOutputURL {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [overlay] in
+                do {
+                    guard let snapshotter = overlay as? any OverlaySnapshotCapturing else {
+                        throw OverlaySnapshotError.bitmapUnavailable
+                    }
+                    try snapshotter.writeSnapshot(to: snapshotOutputURL)
+                    NSApplication.shared.terminate(nil)
+                    return
+                } catch {
+                    print("OpenWhisper HUD self-capture failed: \(error.localizedDescription)")
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
             NSApplication.shared.terminate(nil)
         }
+    }
+
+    private static func visualAcceptanceSnapshotOutputURL() -> URL? {
+        AppLaunchMode.visualAcceptanceOutputURL(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        )
     }
 
     private func startRecordingLevelUpdates() {
@@ -942,13 +1020,20 @@ final class AppCoordinator {
         transcriptionConfig: TranscriptionConfig,
         injectionConfig: InjectionConfig
     ) throws {
+        let expiration = Date().addingTimeInterval(
+            TimeInterval(max(1, config.privacy.failedAudioRetentionHours)) * 60 * 60
+        )
         if pendingRetry?.audio.fileURL == audio.fileURL {
-            pendingRetry = PendingRetry(
+            let retry = PendingRetry(
+                id: UUID(),
                 audio: audio,
                 launchAppContext: launchAppContext,
                 transcriptionConfig: transcriptionConfig,
-                injectionConfig: injectionConfig
+                injectionConfig: injectionConfig,
+                expiresAt: expiration
             )
+            pendingRetry = retry
+            schedulePendingRetryExpiry(for: retry)
             return
         }
 
@@ -957,19 +1042,42 @@ final class AppCoordinator {
         try FileManager.default.createDirectory(at: retryDirectory, withIntermediateDirectories: true)
         let retryURL = retryDirectory.appendingPathComponent("retry-\(UUID().uuidString).wav")
         try FileManager.default.copyItem(at: audio.fileURL, to: retryURL)
-        pendingRetry = PendingRetry(
+        let retry = PendingRetry(
+            id: UUID(),
             audio: RecordedAudio(fileURL: retryURL, durationMs: audio.durationMs),
             launchAppContext: launchAppContext,
             transcriptionConfig: transcriptionConfig,
-            injectionConfig: injectionConfig
+            injectionConfig: injectionConfig,
+            expiresAt: expiration
         )
+        pendingRetry = retry
+        schedulePendingRetryExpiry(for: retry)
     }
 
     private func clearPendingRetry() {
+        pendingRetryExpiryTask?.cancel()
+        pendingRetryExpiryTask = nil
         if let pendingRetry {
             try? FileManager.default.removeItem(at: pendingRetry.audio.fileURL)
         }
         pendingRetry = nil
+    }
+
+    private func schedulePendingRetryExpiry(for retry: PendingRetry) {
+        pendingRetryExpiryTask?.cancel()
+        let delay = max(0, retry.expiresAt.timeIntervalSinceNow)
+        pendingRetryExpiryTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard let self, self.pendingRetry?.id == retry.id else {
+                return
+            }
+            self.clearPendingRetry()
+            self.logger.info("Expired pending retry audio was deleted")
+        }
     }
 
     private func isRetryableTranscriptionError(_ error: Error) -> Bool {
@@ -984,10 +1092,13 @@ final class AppCoordinator {
         transcriptionConfig: TranscriptionConfig,
         processingStarted: UInt64
     ) {
+        guard config.privacy.diagnosticsEnabled else {
+            return
+        }
         let sample = LatencySample(
             timestamp: Date(),
             audioDurationMs: audio.durationMs,
-            audioBytes: (try? Data(contentsOf: audio.fileURL).count) ?? 0,
+            audioBytes: Self.audioFileSize(at: audio.fileURL),
             provider: transcriptionConfig.provider.rawValue,
             authMs: 0,
             transcribeMs: 0,
@@ -1000,7 +1111,10 @@ final class AppCoordinator {
             resultStatus: "error",
             errorCategory: "transcribe"
         )
-        try? latencyRecorder.record(sample)
+        try? latencyRecorder.record(
+            sample,
+            retention: config.privacy.diagnosticsRetentionPolicy()
+        )
     }
 
     private func recordLatency(
@@ -1010,6 +1124,9 @@ final class AppCoordinator {
         totalProcessingMs: Int,
         errorCategory: String?
     ) {
+        guard config.privacy.diagnosticsEnabled else {
+            return
+        }
         let sample = LatencySample(
             timestamp: Date(),
             audioDurationMs: prepared.metrics.transcription.audioDurationMs,
@@ -1029,7 +1146,10 @@ final class AppCoordinator {
             resultStatus: latencyResultStatus(for: outcome),
             errorCategory: errorCategory
         )
-        try? latencyRecorder.record(sample)
+        try? latencyRecorder.record(
+            sample,
+            retention: config.privacy.diagnosticsRetentionPolicy()
+        )
     }
 
     private func recordHistory(
@@ -1037,37 +1157,28 @@ final class AppCoordinator {
         outcome: InjectionOutcome,
         launchAppContext: LaunchAppContext?
     ) {
+        guard config.privacy.historyEnabled else {
+            return
+        }
+        guard SensitiveAppPolicy.permitsPersistence(
+            bundleIdentifier: launchAppContext?.bundleIdentifier,
+            privacy: config.privacy
+        ) else {
+            logger.info("Skipped transcript history for a sensitive target application")
+            return
+        }
+
         try? historyRecorder.record(
             TranscriptionHistoryRecord(
                 timestamp: Date(),
-                rawText: prepared.rawText,
+                rawText: config.privacy.storeRawTranscripts ? prepared.rawText : nil,
                 finalText: prepared.finalText,
                 appName: launchAppContext?.localizedName,
                 appBundleIdentifier: launchAppContext?.bundleIdentifier,
                 outcome: latencyResultStatus(for: outcome),
                 textPolishProvider: prepared.metrics.textPolishProvider?.rawValue
-            )
-        )
-    }
-
-    private func recordRecoverySuccess(
-        audio: RecordedAudio,
-        prepared: PreparedDictation,
-        outcome: InjectionOutcome,
-        launchAppContext: LaunchAppContext?
-    ) {
-        try? recoveryRecorder.record(
-            RecoveryRecordInput(
-                timestamp: Date(),
-                sourceAudioURL: audio.fileURL,
-                durationMs: audio.durationMs,
-                asrText: prepared.rawText,
-                polishText: prepared.finalText,
-                appName: launchAppContext?.localizedName,
-                appBundleIdentifier: launchAppContext?.bundleIdentifier,
-                outcome: latencyResultStatus(for: outcome),
-                errorMessage: prepared.metrics.textPolishErrorMessage
-            )
+            ),
+            retention: config.privacy.historyRetentionPolicy()
         )
     }
 
@@ -1076,6 +1187,17 @@ final class AppCoordinator {
         launchAppContext: LaunchAppContext?,
         error: any Error
     ) {
+        guard config.privacy.failedAudioRecoveryEnabled else {
+            return
+        }
+        guard SensitiveAppPolicy.permitsPersistence(
+            bundleIdentifier: launchAppContext?.bundleIdentifier,
+            privacy: config.privacy
+        ) else {
+            logger.info("Skipped failed-audio recovery for a sensitive target application")
+            return
+        }
+
         try? recoveryRecorder.record(
             RecoveryRecordInput(
                 timestamp: Date(),
@@ -1087,8 +1209,64 @@ final class AppCoordinator {
                 appBundleIdentifier: launchAppContext?.bundleIdentifier,
                 outcome: "error",
                 errorMessage: error.localizedDescription
-            )
+            ),
+            retention: config.privacy.recoveryRetentionPolicy()
         )
+    }
+
+    private func enforceStoragePolicies() {
+        do {
+            let cleanup = StorageCleanupService(applicationSupportURL: configStore.directoryURL)
+            try cleanup.clearRetryOrphans()
+            try historyRecorder.prune(retention: config.privacy.historyRetentionPolicy())
+            try recoveryRecorder.prune(retention: config.privacy.recoveryRetentionPolicy())
+            try latencyRecorder.prune(retention: config.privacy.diagnosticsRetentionPolicy())
+        } catch {
+            logger.error("Storage retention cleanup failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func deleteAllUserData() -> Result<AppConfig, any Error> {
+        if state != .idle || activeSessionID != nil || processingTask != nil || startRecordingTask != nil {
+            cancelCurrentSession()
+        } else {
+            clearPendingRetry()
+        }
+
+        var firstError: (any Error)?
+        do {
+            try authManager.signOut()
+        } catch {
+            firstError = error
+        }
+
+        do {
+            try StorageCleanupService(applicationSupportURL: configStore.directoryURL).deleteAllData()
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
+        }
+
+        let freshConfig = AppConfig()
+        do {
+            try configStore.save(freshConfig)
+            config = freshConfig
+            recorder?.configure(maxDurationSeconds: freshConfig.transcription.maxDurationSeconds)
+            refreshReadyState(
+                detailOverride: L10n.text("All OpenWhisper data was deleted. Connect ChatGPT again to continue."),
+                state: .setupRequired
+            )
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
+        }
+
+        if let firstError {
+            return .failure(firstError)
+        }
+        return .success(freshConfig)
     }
 
     private func latencyResultStatus(for outcome: InjectionOutcome?) -> String {

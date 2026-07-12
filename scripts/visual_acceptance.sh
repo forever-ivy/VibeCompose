@@ -78,7 +78,10 @@ capture_state() {
   local output_file="$2"
   local log_file="$OUT_DIR/openwhisper-overlay-demo-$state.log"
   local launch_log_file
+  local self_capture_file
   launch_log_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-overlay-demo-$state.XXXXXX")"
+  self_capture_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-overlay-snapshot-$state.XXXXXX")"
+  rm -f "$self_capture_file"
 
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
   if ! wait_for_app_exit; then
@@ -86,21 +89,36 @@ capture_state() {
     exit 1
   fi
   sleep 1
-  OPENWHISPER_OVERLAY_DEMO=1 open -W -n -g \
+  open -W -n -g \
     --stdout "$launch_log_file" \
     --stderr "$launch_log_file" \
     "$APP_DIR" \
-    --args --overlay-demo-state "$state" &
+    --args \
+    --overlay-demo-state "$state" \
+    --visual-acceptance-output "$self_capture_file" &
   OPEN_PID=$!
 
-  local window_id
-  window_id="$(swift "$ROOT/scripts/find_visual_acceptance_window.swift" "$APP_NAME" 5)"
-  screencapture -x -l "$window_id" "$OUT_DIR/$output_file"
+  local attempt
+  for attempt in {1..30}; do
+    if [[ -s "$self_capture_file" ]]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [[ -s "$self_capture_file" ]]; then
+    cp "$self_capture_file" "$OUT_DIR/$output_file"
+  else
+    local window_id
+    window_id="$(swift "$ROOT/scripts/find_visual_acceptance_window.swift" "$APP_NAME" 5)"
+    screencapture -x -l "$window_id" "$OUT_DIR/$output_file"
+  fi
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
   wait "$OPEN_PID" >/dev/null 2>&1 || true
   OPEN_PID=""
   cp "$launch_log_file" "$log_file"
   rm -f "$launch_log_file"
+  rm -f "$self_capture_file"
 }
 
 capture_state "recording" "01-recording.png"
@@ -131,8 +149,8 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 
 - Run ID: \`$RUN_ID\`
 - App: \`$APP_BINARY\`
-- Demo flag: \`OPENWHISPER_OVERLAY_DEMO=1\`
-- Capture: CoreGraphics window discovery plus \`screencapture -l\`
+- Demo flag: \`--overlay-demo-state\`
+- Capture: installed-app self-rendered HUD PNG, with CoreGraphics + \`screencapture -l\` fallback
 - Final live state: normal installed app relaunched and left running as PID \`$RUNNING_PID\`
 - Evidence:
   - \`01-recording.png\`

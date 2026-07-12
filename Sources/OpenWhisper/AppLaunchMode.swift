@@ -11,6 +11,7 @@ enum OverlayDemoState: String, Equatable, Sendable, CaseIterable {
 enum AppLaunchMode: Equatable {
     case normal
     case settings
+    case privacySettings
     case accessibilityGuide
     case overlayDemo
     case overlayDemoState(OverlayDemoState)
@@ -32,6 +33,10 @@ enum AppLaunchMode: Equatable {
 
         if arguments.contains("--guide-accessibility") {
             return .accessibilityGuide
+        }
+
+        if requestedSettingsPane(arguments: arguments) == "privacy" {
+            return .privacySettings
         }
 
         if arguments.contains("--settings") || arguments.contains("--open-settings") {
@@ -56,6 +61,82 @@ enum AppLaunchMode: Equatable {
         default:
             return .normal
         }
+    }
+
+    static func visualAcceptanceOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        if let value = environment["OPENWHISPER_VISUAL_ACCEPTANCE_OUTPUT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty
+        {
+            return URL(fileURLWithPath: value)
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--visual-acceptance-output", index + 1 < arguments.count {
+                let value = arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+
+            if argument.hasPrefix("--visual-acceptance-output=") {
+                let value = String(
+                    argument.dropFirst("--visual-acceptance-output=".count)
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+        }
+
+        return nil
+    }
+
+    static func settingsSnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        if let value = environment["OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty
+        {
+            return URL(fileURLWithPath: value)
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--settings-snapshot-output", index + 1 < arguments.count {
+                let value = arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+
+            if argument.hasPrefix("--settings-snapshot-output=") {
+                let value = String(
+                    argument.dropFirst("--settings-snapshot-output=".count)
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+        }
+
+        return nil
+    }
+
+    private static func requestedSettingsPane(arguments: [String]) -> String? {
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--settings-pane", index + 1 < arguments.count {
+                return arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+            }
+
+            if argument.hasPrefix("--settings-pane=") {
+                return String(argument.dropFirst("--settings-pane=".count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+            }
+        }
+
+        return nil
     }
 
     private static func overlayDemoState(

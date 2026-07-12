@@ -78,6 +78,7 @@ enum InjectionError: LocalizedError {
 enum ClipboardFallbackReason: Sendable, Equatable {
     case accessibilityPermissionRequired
     case noEditableTarget
+    case retryRequiresManualPaste
 
     var statusDetail: String {
         switch self {
@@ -85,6 +86,8 @@ enum ClipboardFallbackReason: Sendable, Equatable {
             return L10n.text("Copied to clipboard. Grant Accessibility access for auto-paste.")
         case .noEditableTarget:
             return L10n.text("Copied to clipboard")
+        case .retryRequiresManualPaste:
+            return L10n.text("Retry completed and was copied to the clipboard.")
         }
     }
 
@@ -94,6 +97,8 @@ enum ClipboardFallbackReason: Sendable, Equatable {
             return L10n.text("Accessibility permission is off, so OpenWhisper left the text in the clipboard.")
         case .noEditableTarget:
             return L10n.text("No editable cursor was found. Paste manually.")
+        case .retryRequiresManualPaste:
+            return L10n.text("For safety, retry results are copied instead of pasted automatically.")
         }
     }
 }
@@ -109,7 +114,8 @@ protocol TextInjecting: AnyObject {
         text: String,
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
-        launchAppContext: LaunchAppContext?
+        launchAppContext: LaunchAppContext?,
+        automaticPasteAllowed: Bool
     ) throws -> InjectionOutcome
 }
 
@@ -141,8 +147,12 @@ final class TextInjector: TextInjecting {
         fallbackEditableTextSnapshot _: EditableTextSnapshot?,
         hasEditableTextFocus: Bool,
         hasFallbackEditableTextFocus: Bool,
-        hasLaunchAppContext _: Bool = false
+        hasLaunchAppContext _: Bool = false,
+        automaticPasteAllowed: Bool = true
     ) -> TextInsertionPlan {
+        guard automaticPasteAllowed else {
+            return .clipboardFallback(reason: .retryRequiresManualPaste)
+        }
         guard accessibilityTrusted else {
             return .clipboardFallback(reason: .accessibilityPermissionRequired)
         }
@@ -158,7 +168,8 @@ final class TextInjector: TextInjecting {
         text: String,
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
-        launchAppContext: LaunchAppContext?
+        launchAppContext: LaunchAppContext?,
+        automaticPasteAllowed: Bool
     ) throws -> InjectionOutcome {
         clipboardRestoreTask?.cancel()
         clipboardRestoreTask = nil
@@ -178,7 +189,8 @@ final class TextInjector: TextInjecting {
             fallbackEditableTextSnapshot: nil,
             hasEditableTextFocus: launchAppContext == nil && hasCurrentEditableTextFocus,
             hasFallbackEditableTextFocus: hasMatchingLaunchTarget,
-            hasLaunchAppContext: launchAppContext != nil
+            hasLaunchAppContext: launchAppContext != nil,
+            automaticPasteAllowed: automaticPasteAllowed
         )
 
         logger.info(

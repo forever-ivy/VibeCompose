@@ -51,6 +51,7 @@
 "History" = "历史记录";
 "Terminology" = "术语";
 "Paste" = "粘贴";
+"Privacy" = "隐私";
 "Advanced" = "高级";
 "All" = "全部";
 "Terms" = "术语";
@@ -62,7 +63,34 @@
 "Copy or retry recent audio, ASR, and AI-polished results." = "复制或重试最近的音频、转写和 AI 润色结果。";
 "Maximize glossary recall and preserve casing for product and technical terms." = "提高术语命中率，并保留产品名和技术词的正确大小写。";
 "Control paste behavior while keeping clipboard recovery conservative." = "控制粘贴行为，同时保留稳妥的剪贴板兜底。";
+"Control local retention and delete all OpenWhisper data." = "管理本地数据留存，并可删除全部 OpenWhisper 数据。";
 "Recovery routes and lower-level compatibility settings." = "配置恢复路径和底层兼容选项。";
+
+/* Privacy and data */
+"Privacy & Data" = "隐私与数据";
+"Keep local transcript history" = "保留本地转写历史";
+"Also keep the raw ASR transcript" = "同时保留原始语音识别文本";
+"Keep transcript history for %ld days" = "转写历史保留 %ld 天";
+"Keep at most %ld transcript records" = "最多保留 %ld 条转写记录";
+"Keep failed recordings for retry" = "保留失败录音以便重试";
+"Successful recordings are deleted after processing and are never added to Recovery." = "成功录音会在处理后删除，不会加入恢复记录。";
+"Delete failed recordings after %ld hours" = "失败录音在 %ld 小时后删除";
+"Keep at most %ld failed recordings" = "最多保留 %ld 条失败录音";
+"Keep local performance diagnostics" = "保留本地性能诊断";
+"Diagnostics contain timing, byte counts, provider labels, and error categories—not audio, transcript text, clipboard contents, or tokens." = "诊断仅包含耗时、字节数、服务标签和错误分类，不包含音频、转写正文、剪贴板内容或令牌。";
+"Keep diagnostics for %ld days" = "诊断记录保留 %ld 天";
+"Keep at most %ld diagnostic records" = "最多保留 %ld 条诊断记录";
+"Do not save history or recovery audio for sensitive apps" = "敏感应用不保存历史或恢复音频";
+"OpenWhisper excludes known password managers and Keychain/Passwords apps by default." = "OpenWhisper 默认排除已知密码管理器以及“钥匙串访问/密码”应用。";
+"Delete all local data" = "删除全部本地数据";
+"Deletes settings, terminology, history, failed recordings, diagnostics, retry files, and the saved ChatGPT session." = "删除设置、术语、历史、失败录音、诊断、重试文件和已保存的 ChatGPT 会话。";
+"Delete All Data" = "删除全部数据";
+"Delete all OpenWhisper data?" = "删除全部 OpenWhisper 数据？";
+"This removes transcripts, failed recordings, diagnostics, terminology, settings, and the saved ChatGPT session from this Mac. This action cannot be undone." = "这会从本机删除转写、失败录音、诊断、术语、设置和已保存的 ChatGPT 会话，且无法撤销。";
+"All OpenWhisper data was deleted from this Mac." = "已从这台 Mac 删除全部 OpenWhisper 数据。";
+"All OpenWhisper data was deleted. Connect ChatGPT again to continue." = "全部 OpenWhisper 数据已删除。请重新连接 ChatGPT 后继续使用。";
+"OpenWhisper refused to delete an unsafe data path: %@" = "OpenWhisper 拒绝删除不安全的数据路径：%@";
+"OpenWhisper refused to delete data through a symbolic link: %@" = "OpenWhisper 拒绝通过符号链接删除数据：%@";
 
 /* Account and permissions */
 "Account & Permissions" = "账户与权限";
@@ -181,8 +209,11 @@
 "When no editable focus is detected, OpenWhisper leaves the polished transcript in the clipboard for manual Cmd+V." = "未检测到可编辑光标时，OpenWhisper 会把最终文本留在剪贴板，供你手动按 Cmd+V 粘贴。";
 "Copied to clipboard. Grant Accessibility access for auto-paste." = "已复制到剪贴板。开启辅助功能权限后可自动粘贴。";
 "Copied to clipboard" = "已复制到剪贴板";
+"Retry completed and was copied to the clipboard." = "重试已完成，结果已复制到剪贴板。";
 "Accessibility permission is off, so OpenWhisper left the text in the clipboard." = "辅助功能权限未开启，因此 OpenWhisper 已将文本保留在剪贴板。";
 "No editable cursor was found. Paste manually." = "未找到可编辑光标，请手动粘贴。";
+"For safety, retry results are copied instead of pasted automatically." = "为避免粘贴到错误位置，重试结果只会复制到剪贴板，不会自动粘贴。";
+"The saved retry recording expired and was deleted." = "已保存的重试录音已过期并删除。";
 
 /* ChatGPT account and browser login */
 "Use Browser Login" = "使用浏览器登录";

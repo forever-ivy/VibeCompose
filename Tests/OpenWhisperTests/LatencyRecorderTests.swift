@@ -10,7 +10,7 @@ func latencyRecorderAppendsJsonlSamples() throws {
 
     try recorder.record(
         .init(
-            timestamp: Date(timeIntervalSince1970: 1_234),
+            timestamp: Date(),
             audioDurationMs: 3_000,
             audioBytes: 42_000,
             provider: "chatGPTManagedAuth",

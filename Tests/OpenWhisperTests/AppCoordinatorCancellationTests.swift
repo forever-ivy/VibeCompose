@@ -95,16 +95,21 @@ private final class FakeSoundFeedback: SoundFeedbackPlaying {
 private final class FakeCoordinatorInjector: TextInjecting {
     private(set) var injectCallCount = 0
     private(set) var launchContexts: [LaunchAppContext?] = []
+    private(set) var automaticPastePermissions: [Bool] = []
 
     func inject(
         text: String,
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
-        launchAppContext: LaunchAppContext?
+        launchAppContext: LaunchAppContext?,
+        automaticPasteAllowed: Bool
     ) throws -> InjectionOutcome {
         injectCallCount += 1
         launchContexts.append(launchAppContext)
-        return .pasted
+        automaticPastePermissions.append(automaticPasteAllowed)
+        return automaticPasteAllowed
+            ? .pasted
+            : .copiedToClipboard(reason: .retryRequiresManualPaste)
     }
 }
 
@@ -178,11 +183,16 @@ private final class FakeLatencyRecorder: LatencyRecording, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var samples: [LatencySample] = []
 
-    func record(_ sample: LatencySample) throws {
+    func record(
+        _ sample: LatencySample,
+        retention _: DiagnosticsRetentionPolicy
+    ) throws {
         lock.lock()
         samples.append(sample)
         lock.unlock()
     }
+
+    func prune(retention _: DiagnosticsRetentionPolicy) throws {}
 }
 
 private enum ScriptedCoordinatorPipelineOutcome: Sendable {
@@ -612,18 +622,21 @@ struct AppCoordinatorCancellationTests {
         #expect(script.audioPaths[1] != originalAudioURL.path)
         #expect(FileManager.default.fileExists(atPath: script.audioPaths[1]) == false)
         #expect(injector.launchContexts == [capturedContext])
-        #expect(latencyRecorder.samples.map(\.resultStatus) == ["error", "pasted"])
+        #expect(injector.automaticPastePermissions == [false])
+        #expect(latencyRecorder.samples.map(\.resultStatus) == ["error", "clipboard"])
 
         let recoveryStore = RecoveryStore(
             directoryURL: configStore.directoryURL.appendingPathComponent("Recovery", isDirectory: true)
         )
         let recoveryRecords = try recoveryStore.loadRecent(limit: 10)
-        #expect(recoveryRecords.map(\.outcome) == ["error", "pasted"])
-        #expect(RecoveryHistoryPreview.recentItems(from: recoveryRecords, kind: .audio, limit: 10).count == 2)
-        #expect(
-            RecoveryHistoryPreview.recentItems(from: recoveryRecords, kind: .asr, limit: 10).map(\.copyText)
-                == ["retry final"]
-        )
+        #expect(recoveryRecords.map(\.outcome) == ["error"])
+        #expect(RecoveryHistoryPreview.recentItems(from: recoveryRecords, kind: .audio, limit: 10).count == 1)
+        #expect(RecoveryHistoryPreview.recentItems(from: recoveryRecords, kind: .asr, limit: 10).isEmpty)
+
+        let history = try TranscriptionHistoryRecorder(directoryURL: configStore.directoryURL)
+            .loadRecent(limit: 10)
+        #expect(history.map(\.finalText) == ["retry final"])
+        #expect(history.allSatisfy { $0.rawText == nil })
     }
 
     @Test

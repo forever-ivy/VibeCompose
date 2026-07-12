@@ -225,9 +225,19 @@ struct RecoveryHistoryPreview: Sendable, Equatable, Identifiable {
 
 protocol RecoveryRecording: Sendable {
     var directoryURL: URL { get }
-    func record(_ input: RecoveryRecordInput) throws
+    func record(_ input: RecoveryRecordInput, retention: RecoveryRetentionPolicy) throws
     func loadRecent(limit: Int) throws -> [RecoveryRecord]
     func resolveAudioURL(for record: RecoveryRecord) throws -> URL
+    func prune(retention: RecoveryRetentionPolicy) throws
+}
+
+extension RecoveryRecording {
+    func record(_ input: RecoveryRecordInput) throws {
+        try self.record(
+            input,
+            retention: RecoveryRetentionPolicy(maxRecords: 10)
+        )
+    }
 }
 
 final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
@@ -235,27 +245,41 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
     let directoryURL: URL
     private let lock = NSLock()
     private let retainedLimit: Int
+    private let maximumReadBytes: Int
 
     init(
         fileManager: FileManager = .default,
         directoryURL: URL? = nil,
-        retainedLimit: Int = 10
+        retainedLimit: Int = 10,
+        maximumReadBytes: Int = 1_000_000
     ) {
         self.fileManager = fileManager
         self.directoryURL = directoryURL ?? ProductIdentity.recoveryURL(
             homeDirectoryURL: fileManager.homeDirectoryForCurrentUser
         )
         self.retainedLimit = retainedLimit
+        self.maximumReadBytes = max(64_000, maximumReadBytes)
     }
 
     func record(_ input: RecoveryRecordInput) throws {
+        try record(
+            input,
+            retention: RecoveryRetentionPolicy(maxRecords: retainedLimit)
+        )
+    }
+
+    func record(
+        _ input: RecoveryRecordInput,
+        retention: RecoveryRetentionPolicy
+    ) throws {
         lock.lock()
         defer { lock.unlock() }
 
-        try fileManager.createDirectory(at: audioDirectoryURL, withIntermediateDirectories: true)
-        try secureDirectory(at: directoryURL)
-        try secureDirectory(at: audioDirectoryURL)
-        var records = try loadRecentUnlocked(limit: retainedLimit)
+        try ensureSecureStorageDirectories()
+        try validateSourceAudio(at: input.sourceAudioURL)
+        var records = try loadRecentUnlocked(
+            limit: max(max(retainedLimit, retention.maxRecords), 1)
+        )
         let id = UUID()
         let audioFileName = "\(id.uuidString).wav"
         let destinationURL = audioDirectoryURL.appendingPathComponent(audioFileName)
@@ -277,8 +301,7 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
                 errorMessage: input.errorMessage
             )
         )
-        records = Array(records.sorted { $0.timestamp < $1.timestamp }.suffix(retainedLimit))
-        try rewrite(records)
+        try rewrite(retained(records, policy: retention))
     }
 
     func loadRecent(limit: Int = 10) throws -> [RecoveryRecord] {
@@ -293,16 +316,39 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
         return try resolveAudioURLUnlocked(for: record)
     }
 
+    func prune(retention: RecoveryRetentionPolicy) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let records = try loadRecentUnlocked(
+            limit: max(max(retention.maxRecords, retainedLimit), 1_000)
+        )
+        try rewrite(retained(records, policy: retention))
+    }
+
     private func loadRecentUnlocked(limit: Int) throws -> [RecoveryRecord] {
         guard fileManager.fileExists(atPath: indexURL.path) else {
             return []
         }
 
-        let contents = try String(contentsOf: indexURL, encoding: .utf8)
+        try validateExistingSecureDirectory(at: directoryURL)
+        let indexValues = try indexURL.resourceValues(
+            forKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        )
+        guard indexValues.isSymbolicLink != true else {
+            throw RecoveryAudioError.symbolicLink
+        }
+        guard indexValues.isRegularFile == true else {
+            throw RecoveryAudioError.notRegularFile
+        }
+
+        let lines = try JSONLTailReader.lines(
+            at: indexURL,
+            fileManager: fileManager,
+            maximumBytes: maximumReadBytes
+        )
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return contents
-            .split(separator: "\n")
+        return lines
             .compactMap { line in
                 try? decoder.decode(RecoveryRecord.self, from: Data(line.utf8))
             }
@@ -312,24 +358,66 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
     }
 
     private func rewrite(_ records: [RecoveryRecord]) throws {
-        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        if records.isEmpty {
+            try clearStoredRecovery()
+            return
+        }
+
+        try ensureSecureStorageDirectories()
+        let safeRecords = records.filter { record in
+            guard let resolvedURL = try? resolveAudioURLUnlocked(for: record) else {
+                return false
+            }
+            do {
+                try secureFile(at: resolvedURL)
+                return true
+            } catch {
+                return false
+            }
+        }
+
+        guard !safeRecords.isEmpty else {
+            try clearStoredRecovery()
+            return
+        }
+
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let data = try records.reduce(into: Data()) { partial, record in
+        let data = try safeRecords.reduce(into: Data()) { partial, record in
             partial.append(try encoder.encode(record))
             partial.append(0x0A)
         }
         try data.write(to: indexURL, options: [.atomic])
-        try fileManager.setAttributes(
-            [.posixPermissions: NSNumber(value: Int16(0o600))],
-            ofItemAtPath: indexURL.path
-        )
+        try secureFile(at: indexURL)
 
-        let retainedFileNames = Set(records.map(\.audioFileName))
-        let existingAudioFiles = (try? fileManager.contentsOfDirectory(at: audioDirectoryURL, includingPropertiesForKeys: nil)) ?? []
+        let retainedFileNames = Set(safeRecords.map(\.audioFileName))
+        let existingAudioFiles = try fileManager.contentsOfDirectory(
+            at: audioDirectoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        )
         for audioFile in existingAudioFiles where !retainedFileNames.contains(audioFile.lastPathComponent) {
-            try? fileManager.removeItem(at: audioFile)
+            try fileManager.removeItem(at: audioFile)
         }
+    }
+
+    private func retained(
+        _ records: [RecoveryRecord],
+        policy: RecoveryRetentionPolicy
+    ) -> [RecoveryRecord] {
+        guard policy.maxRecords > 0 else {
+            return []
+        }
+
+        return records
+            .filter { record in
+                guard let cutoffDate = policy.cutoffDate else {
+                    return true
+                }
+                return record.timestamp >= cutoffDate
+            }
+            .sorted { $0.timestamp < $1.timestamp }
+            .suffix(policy.maxRecords)
+            .map { $0 }
     }
 
     private var indexURL: URL {
@@ -341,19 +429,8 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
     }
 
     private func resolveAudioURLUnlocked(for record: RecoveryRecord) throws -> URL {
-        guard fileManager.fileExists(atPath: audioDirectoryURL.path) else {
-            throw RecoveryAudioError.missing
-        }
-
-        let directoryValues = try audioDirectoryURL.resourceValues(
-            forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
-        )
-        guard directoryValues.isSymbolicLink != true else {
-            throw RecoveryAudioError.symbolicLink
-        }
-        guard directoryValues.isDirectory == true else {
-            throw RecoveryAudioError.unsafePath
-        }
+        try validateExistingSecureDirectory(at: directoryURL)
+        try validateExistingSecureDirectory(at: audioDirectoryURL)
 
         let expectedFileName = "\(record.id.uuidString).wav"
         guard expectedFileName == record.audioFileName else {
@@ -396,10 +473,113 @@ final class RecoveryStore: RecoveryRecording, @unchecked Sendable {
         return resolvedCandidate
     }
 
-    private func secureDirectory(at url: URL) throws {
+    private func ensureSecureStorageDirectories() throws {
+        let standardizedDirectory = directoryURL.standardizedFileURL
+        let standardizedAudioDirectory = audioDirectoryURL.standardizedFileURL
+        guard standardizedAudioDirectory.deletingLastPathComponent() == standardizedDirectory else {
+            throw RecoveryAudioError.unsafePath
+        }
+
+        try ensureSecureDirectory(at: standardizedDirectory)
+        try ensureSecureDirectory(at: standardizedAudioDirectory)
+    }
+
+    private func ensureSecureDirectory(at url: URL) throws {
+        if fileManager.fileExists(atPath: url.path) {
+            try validateExistingSecureDirectory(at: url)
+        } else {
+            try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        }
         try fileManager.setAttributes(
             [.posixPermissions: NSNumber(value: Int16(0o700))],
             ofItemAtPath: url.path
+        )
+    }
+
+    private func validateExistingSecureDirectory(at url: URL) throws {
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw RecoveryAudioError.missing
+        }
+        let values = try url.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+        )
+        guard values.isSymbolicLink != true else {
+            throw RecoveryAudioError.symbolicLink
+        }
+        guard values.isDirectory == true else {
+            throw RecoveryAudioError.unsafePath
+        }
+    }
+
+    private func validateSourceAudio(at url: URL) throws {
+        let values = try url.resourceValues(
+            forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
+        )
+        guard values.isSymbolicLink != true else {
+            throw RecoveryAudioError.symbolicLink
+        }
+        guard values.isRegularFile == true else {
+            throw RecoveryAudioError.notRegularFile
+        }
+        guard (values.fileSize ?? 0) <= 25_000_000 else {
+            throw RecoveryAudioError.payloadTooLarge
+        }
+        guard try hasWaveHeader(at: url) else {
+            throw RecoveryAudioError.invalidWaveFile
+        }
+    }
+
+    private func secureFile(at url: URL) throws {
+        let values = try url.resourceValues(
+            forKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        )
+        guard values.isSymbolicLink != true else {
+            throw RecoveryAudioError.symbolicLink
+        }
+        guard values.isRegularFile == true else {
+            throw RecoveryAudioError.notRegularFile
+        }
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o600))],
+            ofItemAtPath: url.path
+        )
+    }
+
+    private func clearStoredRecovery() throws {
+        guard fileManager.fileExists(atPath: directoryURL.path) else {
+            return
+        }
+        try validateExistingSecureDirectory(at: directoryURL)
+
+        if fileManager.fileExists(atPath: indexURL.path) {
+            try fileManager.removeItem(at: indexURL)
+        }
+
+        guard fileManager.fileExists(atPath: audioDirectoryURL.path) else {
+            return
+        }
+        let values = try audioDirectoryURL.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+        )
+        if values.isSymbolicLink == true {
+            try fileManager.removeItem(at: audioDirectoryURL)
+            return
+        }
+        guard values.isDirectory == true else {
+            try fileManager.removeItem(at: audioDirectoryURL)
+            return
+        }
+
+        let existingAudioFiles = try fileManager.contentsOfDirectory(
+            at: audioDirectoryURL,
+            includingPropertiesForKeys: nil
+        )
+        for audioFile in existingAudioFiles {
+            try fileManager.removeItem(at: audioFile)
+        }
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o700))],
+            ofItemAtPath: audioDirectoryURL.path
         )
     }
 

@@ -29,6 +29,22 @@ struct AppLaunchModeTests {
     }
 
     @Test
+    func privacySettingsModeAcceptsPaneArgument() {
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--settings-pane", "privacy"]
+            ) == .privacySettings
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--settings-pane=privacy"]
+            ) == .privacySettings
+        )
+    }
+
+    @Test
     func accessibilityGuideModeAcceptsLaunchServicesArgument() {
         #expect(
             AppLaunchMode.resolve(
@@ -57,6 +73,57 @@ struct AppLaunchModeTests {
                 environment: ["OPENWHISPER_OVERLAY_DEMO_STATE": "result"],
                 arguments: ["OpenWhisper"]
             ) == .overlayDemoState(.result)
+        )
+    }
+
+    @Test
+    func visualAcceptanceOutputAcceptsEnvironmentAndLaunchServicesArgument() {
+        #expect(
+            AppLaunchMode.visualAcceptanceOutputURL(
+                environment: [
+                    "OPENWHISPER_VISUAL_ACCEPTANCE_OUTPUT": "/tmp/environment.png",
+                ]
+            )?.path == "/tmp/environment.png"
+        )
+        #expect(
+            AppLaunchMode.visualAcceptanceOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--visual-acceptance-output",
+                    "/tmp/argument.png",
+                ]
+            )?.path == "/tmp/argument.png"
+        )
+        #expect(
+            AppLaunchMode.visualAcceptanceOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--visual-acceptance-output=/tmp/inline.png",
+                ]
+            )?.path == "/tmp/inline.png"
+        )
+    }
+
+    @Test
+    func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
+        #expect(
+            AppLaunchMode.settingsSnapshotOutputURL(
+                environment: [
+                    "OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT": "/tmp/settings-environment.png",
+                ]
+            )?.path == "/tmp/settings-environment.png"
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--settings-snapshot-output",
+                    "/tmp/settings-argument.png",
+                ]
+            )?.path == "/tmp/settings-argument.png"
         )
     }
 

@@ -4,6 +4,23 @@ import ApplicationServices
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum PreferencesSnapshotError: LocalizedError {
+    case missingContentView
+    case bitmapUnavailable
+    case pngEncodingFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .missingContentView:
+            return "The OpenWhisper Settings window has no content view to capture."
+        case .bitmapUnavailable:
+            return "The OpenWhisper Settings window could not create a bitmap snapshot."
+        case .pngEncodingFailed:
+            return "The OpenWhisper Settings window could not encode its snapshot as PNG."
+        }
+    }
+}
+
 @MainActor
 final class PreferencesWindowController: NSWindowController {
     init(
@@ -17,7 +34,9 @@ final class PreferencesWindowController: NSWindowController {
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
-        focusRecoveryHistory: Bool = false
+        onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
+        focusRecoveryHistory: Bool = false,
+        focusPrivacy: Bool = false
     ) {
         let view = PreferencesView(
             initialConfig: config,
@@ -30,7 +49,9 @@ final class PreferencesWindowController: NSWindowController {
             onRetryRecoveryRecord: onRetryRecoveryRecord,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onOpenConfigFolder: onOpenConfigFolder,
-            focusRecoveryHistory: focusRecoveryHistory
+            onDeleteAllData: onDeleteAllData,
+            focusRecoveryHistory: focusRecoveryHistory,
+            focusPrivacy: focusPrivacy
         )
         let hostingController = NSHostingController(rootView: view)
 
@@ -57,6 +78,29 @@ final class PreferencesWindowController: NSWindowController {
     func show() {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func writeSnapshot(to url: URL) throws {
+        guard let contentView = window?.contentView else {
+            throw PreferencesSnapshotError.missingContentView
+        }
+
+        contentView.layoutSubtreeIfNeeded()
+        contentView.displayIfNeeded()
+        let bounds = contentView.bounds
+        guard
+            bounds.width > 0,
+            bounds.height > 0,
+            let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds)
+        else {
+            throw PreferencesSnapshotError.bitmapUnavailable
+        }
+
+        contentView.cacheDisplay(in: bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw PreferencesSnapshotError.pngEncodingFailed
+        }
+        try png.write(to: url, options: [.atomic])
     }
 }
 
@@ -104,6 +148,7 @@ private struct PreferencesView: View {
         case recovery = "History"
         case terminology = "Terminology"
         case paste = "Paste"
+        case privacy = "Privacy"
         case advanced = "Advanced"
 
         var id: String { rawValue }
@@ -122,6 +167,8 @@ private struct PreferencesView: View {
                 return "text.book.closed"
             case .paste:
                 return "doc.on.clipboard"
+            case .privacy:
+                return "hand.raised"
             case .advanced:
                 return "gearshape"
             }
@@ -157,6 +204,9 @@ private struct PreferencesView: View {
     @State private var recentRecoveryRecords: [RecoveryRecord] = []
     @State private var selectedRecoveryKind: RecoveryHistoryKind = .audio
     @State private var copiedHistoryItemID: String?
+    @State private var showsDeleteAllDataConfirmation = false
+    @State private var privacyMessage: String?
+    @State private var privacyMessageIsError = false
 
     let authManager: ChatGPTAuthManager
     let onSave: (AppConfig) -> Void
@@ -167,6 +217,7 @@ private struct PreferencesView: View {
     let onRetryRecoveryRecord: (RecoveryRecord) -> Void
     let onRequestMicrophoneAccess: () -> Void
     let onOpenConfigFolder: () -> Void
+    let onDeleteAllData: () -> Result<AppConfig, any Error>
 
     init(
         initialConfig: AppConfig,
@@ -179,7 +230,9 @@ private struct PreferencesView: View {
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
-        focusRecoveryHistory: Bool = false
+        onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
+        focusRecoveryHistory: Bool = false,
+        focusPrivacy: Bool = false
     ) {
         _config = State(initialValue: initialConfig)
         _showsAdvancedRecovery = State(initialValue: initialConfig.transcription.provider == .openAICompatible)
@@ -188,7 +241,9 @@ private struct PreferencesView: View {
         _authSnapshot = State(initialValue: authManager.authSnapshot())
         _browserBridgeSnapshot = State(initialValue: authManager.browserBridgeSnapshot())
         _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
-        _selectedSection = State(initialValue: focusRecoveryHistory ? .recovery : .account)
+        _selectedSection = State(
+            initialValue: focusPrivacy ? .privacy : (focusRecoveryHistory ? .recovery : .account)
+        )
         self.authManager = authManager
         self.onSave = onSave
         self.onImportTerminologyDictionary = onImportTerminologyDictionary
@@ -198,6 +253,7 @@ private struct PreferencesView: View {
         self.onRetryRecoveryRecord = onRetryRecoveryRecord
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onOpenConfigFolder = onOpenConfigFolder
+        self.onDeleteAllData = onDeleteAllData
     }
 
     private var runtimeIssues: [RuntimePreflightIssue] {
@@ -352,6 +408,21 @@ private struct PreferencesView: View {
                 permissionStatusMonitor.refresh()
             }
         }
+        .alert(
+            L10n.text("Delete all OpenWhisper data?"),
+            isPresented: $showsDeleteAllDataConfirmation
+        ) {
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Delete All Data"), role: .destructive) {
+                deleteAllData()
+            }
+        } message: {
+            Text(
+                L10n.text(
+                    "This removes transcripts, failed recordings, diagnostics, terminology, settings, and the saved ChatGPT session from this Mac. This action cannot be undone."
+                )
+            )
+        }
     }
 
     private var sidebar: some View {
@@ -419,6 +490,8 @@ private struct PreferencesView: View {
             return L10n.text("Maximize glossary recall and preserve casing for product and technical terms.")
         case .paste:
             return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
+        case .privacy:
+            return L10n.text("Control local retention and delete all OpenWhisper data.")
         case .advanced:
             return L10n.text("Recovery routes and lower-level compatibility settings.")
         }
@@ -446,6 +519,8 @@ private struct PreferencesView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
+        case .privacy:
+            privacyCard
         case .advanced:
             advancedRecoveryCard
         }
@@ -473,23 +548,10 @@ private struct PreferencesView: View {
             homeDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
         )
     ) -> [TextPolishProviderID: TextPolishUsage] {
-        let dataURL = directoryURL.appendingPathComponent("latency.jsonl")
-        guard let contents = try? String(contentsOf: dataURL, encoding: .utf8) else {
-            return [:]
-        }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let samples = (try? LatencyRecorder(directoryURL: directoryURL).loadRecent(limit: 1_000)) ?? []
         var usage: [TextPolishProviderID: TextPolishUsage] = [:]
 
-        for line in contents.split(separator: "\n") {
-            guard
-                let data = String(line).data(using: .utf8),
-                let sample = try? decoder.decode(LatencySample.self, from: data)
-            else {
-                continue
-            }
-
+        for sample in samples {
             let attempted = sample.textPolishAttempted ?? (sample.polishMs > 0 || sample.textPolishProvider != nil)
             guard attempted else {
                 continue
@@ -635,6 +697,174 @@ private struct PreferencesView: View {
                     textSource: .dictation
                 )
             }
+        }
+    }
+
+    private var privacyCard: some View {
+        settingsCard(title: "Privacy & Data") {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        L10n.text("Keep local transcript history"),
+                        isOn: $config.privacy.historyEnabled
+                    )
+
+                    if config.privacy.historyEnabled {
+                        Toggle(
+                            L10n.text("Also keep the raw ASR transcript"),
+                            isOn: $config.privacy.storeRawTranscripts
+                        )
+                        Stepper(
+                            L10n.format(
+                                "Keep transcript history for %ld days",
+                                config.privacy.historyRetentionDays
+                            ),
+                            value: $config.privacy.historyRetentionDays,
+                            in: 1...3_650
+                        )
+                        Stepper(
+                            L10n.format(
+                                "Keep at most %ld transcript records",
+                                config.privacy.historyRecordLimit
+                            ),
+                            value: $config.privacy.historyRecordLimit,
+                            in: 10...10_000,
+                            step: 50
+                        )
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        L10n.text("Keep failed recordings for retry"),
+                        isOn: $config.privacy.failedAudioRecoveryEnabled
+                    )
+                    Text(
+                        L10n.text(
+                            "Successful recordings are deleted after processing and are never added to Recovery."
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                    if config.privacy.failedAudioRecoveryEnabled {
+                        Stepper(
+                            L10n.format(
+                                "Delete failed recordings after %ld hours",
+                                config.privacy.failedAudioRetentionHours
+                            ),
+                            value: $config.privacy.failedAudioRetentionHours,
+                            in: 1...168
+                        )
+                        Stepper(
+                            L10n.format(
+                                "Keep at most %ld failed recordings",
+                                config.privacy.failedAudioRecordLimit
+                            ),
+                            value: $config.privacy.failedAudioRecordLimit,
+                            in: 1...100
+                        )
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        L10n.text("Keep local performance diagnostics"),
+                        isOn: $config.privacy.diagnosticsEnabled
+                    )
+                    Text(
+                        L10n.text(
+                            "Diagnostics contain timing, byte counts, provider labels, and error categories—not audio, transcript text, clipboard contents, or tokens."
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                    if config.privacy.diagnosticsEnabled {
+                        Stepper(
+                            L10n.format(
+                                "Keep diagnostics for %ld days",
+                                config.privacy.diagnosticsRetentionDays
+                            ),
+                            value: $config.privacy.diagnosticsRetentionDays,
+                            in: 1...365
+                        )
+                        Stepper(
+                            L10n.format(
+                                "Keep at most %ld diagnostic records",
+                                config.privacy.diagnosticsRecordLimit
+                            ),
+                            value: $config.privacy.diagnosticsRecordLimit,
+                            in: 100...20_000,
+                            step: 100
+                        )
+                    }
+                }
+
+                Divider()
+
+                Toggle(
+                    L10n.text("Do not save history or recovery audio for sensitive apps"),
+                    isOn: $config.privacy.excludeSensitiveApps
+                )
+                Text(
+                    L10n.text(
+                        "OpenWhisper excludes known password managers and Keychain/Passwords apps by default."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+                Divider()
+
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.text("Delete all local data"))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(
+                            L10n.text(
+                                "Deletes settings, terminology, history, failed recordings, diagnostics, retry files, and the saved ChatGPT session."
+                            )
+                        )
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(L10n.text("Delete All Data")) {
+                        showsDeleteAllDataConfirmation = true
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+
+                if let privacyMessage {
+                    Text(privacyMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(privacyMessageIsError ? .red : .secondary)
+                }
+            }
+        }
+    }
+
+    private func deleteAllData() {
+        switch onDeleteAllData() {
+        case .success(let freshConfig):
+            config = freshConfig
+            recentHistoryRecords = []
+            recentRecoveryRecords = []
+            textPolishUsage = [:]
+            copiedHistoryItemID = nil
+            authSnapshot = authManager.authSnapshot()
+            browserBridgeSnapshot = authManager.browserBridgeSnapshot()
+            privacyMessage = L10n.text("All OpenWhisper data was deleted from this Mac.")
+            privacyMessageIsError = false
+        case .failure(let error):
+            privacyMessage = error.localizedDescription
+            privacyMessageIsError = true
         }
     }
 

@@ -10,6 +10,7 @@
 ## Risk and Research
 
 - [Security audit](audits/security-audit-2026-07-13.md)
+- [Current security baseline](audits/security-baseline-2026-07-13.md) — remediation status, privacy defaults, and remaining release blockers
 - [UI and open-source comparison](research/ui-open-source-comparison-2026-07-12.md)
 
 ## Engineering and Design

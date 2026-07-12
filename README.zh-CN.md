@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-OpenWhisper 是一个开源、原生的 macOS 按键语音输入工具。按 `F5` 开始录音，再按一次 `F5` 停止；OpenWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
+OpenWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工具。按 `F5` 开始录音，再按一次 `F5` 停止；OpenWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
 
 ## 当前状态
 
@@ -16,13 +16,17 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 浏览器连接 ChatGPT，Keychain 保存本机会话
 - 语音转写、术语对齐和可选 AI 润色
 - 保守自动粘贴与剪贴板兜底
+- Retry 结果默认只复制、要求用户手动粘贴
 - 麦克风和辅助功能权限诊断
-- 本地历史、失败恢复和性能基准工具
+- 有限留存的本地历史、失败音频恢复、隐私控制和性能基准工具
+- 敏感应用排除与“删除全部数据”
 - 作为高级恢复路径的 OpenAI-Compatible 转写
 
 ## 产品边界
 
-默认 ChatGPT 账户路径依赖未公开的上游行为，不应被描述为稳定公开 API、OpenAI 官方合作或企业 SLA。商业发布前必须完成产品化计划中的安全、隐私、发布完整性和上游连续性门禁。
+默认 ChatGPT 账户路径依赖未公开的上游行为，不应被描述为稳定公开 API、OpenAI 官方合作或企业 SLA。
+
+当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。商业发布仍受 Developer ID 签名、公证、签名更新器、发布脚本 fail-closed、原生 Onboarding/管理界面以及隐私与支持文档约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
 
 ## 系统要求
 
@@ -45,6 +49,7 @@ open -n /Applications/OpenWhisper.app
 本机没有有效 Apple 签名证书时，可仅为调试显式使用 ad-hoc 签名：
 
 ```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
@@ -54,13 +59,27 @@ Ad-hoc 签名只适合本地验证，可能导致 macOS 辅助功能设置中无
 
 ## 本地数据
 
-OpenWhisper 的应用数据位于：
+OpenWhisper 的本地应用数据位于：
 
 ```text
 ~/Library/Application Support/OpenWhisper/
 ```
 
-ChatGPT 会话存储在 OpenWhisper 对应的 Keychain 服务中。商业发布前还必须补齐明确的数据留存、全部删除和 Token 目标白名单能力。
+当前默认隐私策略：
+
+| 数据 | 默认策略 |
+| --- | --- |
+| 转写历史 | 开启；保留 30 天且最多 500 条 |
+| 原始 ASR 文本 | 关闭；除非用户显式开启，否则只保存最终文本 |
+| 成功录音 | 处理后删除，不进入 Recovery |
+| 失败录音 | 开启 Retry；保留 24 小时且最多 10 条 |
+| 本地诊断 | 开启；保留 14 天且最多 1,000 条 |
+| 敏感应用 | 已知密码管理器、钥匙串和“密码”默认不写历史或恢复音频 |
+| Retry 文件 | 临时且有有效期；重启时删除不可恢复的孤儿文件 |
+
+诊断只包含耗时、字节数、服务类型和错误分类，不包含音频、转写正文、剪贴板内容或 Token。在系统支持的范围内，本地数据文件使用仅当前用户可读写的权限。
+
+ChatGPT 会话保存在 Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。通过 **设置 → 隐私 → 删除全部数据**，可以删除设置、术语、转写历史、失败录音、诊断、Retry 文件和已保存的 ChatGPT 会话，并恢复为退出登录后的默认状态。
 
 ## 仓库结构
 
@@ -82,6 +101,7 @@ docs/design/                  视觉规范
 - [macOS 产品化改造计划](docs/product/macos-productization-plan-2026-07-13.md)
 - [产品与商业化分析](docs/product/product-and-commercialization-plan-2026-07-13.md)
 - [安全审计](docs/audits/security-audit-2026-07-13.md)
+- [当前安全基线](docs/audits/security-baseline-2026-07-13.md)
 - [UI 对标调研](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [架构说明](docs/engineering/architecture.md)
 - [发布流程](docs/engineering/release.md)

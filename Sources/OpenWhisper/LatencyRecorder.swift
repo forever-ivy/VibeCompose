@@ -59,41 +59,115 @@ struct LatencySample: Codable, Sendable, Equatable {
 }
 
 protocol LatencyRecording: Sendable {
-    func record(_ sample: LatencySample) throws
+    func record(_ sample: LatencySample, retention: DiagnosticsRetentionPolicy) throws
+    func prune(retention: DiagnosticsRetentionPolicy) throws
+}
+
+extension LatencyRecording {
+    func record(_ sample: LatencySample) throws {
+        try self.record(
+            sample,
+            retention: DiagnosticsRetentionPolicy(maxRecords: 1_000, retentionDays: 14)
+        )
+    }
 }
 
 final class LatencyRecorder: LatencyRecording, @unchecked Sendable {
     private let fileManager: FileManager
     let directoryURL: URL
     private let lock = NSLock()
+    private let maximumReadBytes: Int
 
     init(
         fileManager: FileManager = .default,
-        directoryURL: URL? = nil
+        directoryURL: URL? = nil,
+        maximumReadBytes: Int = 4_000_000
     ) {
         self.fileManager = fileManager
         self.directoryURL = directoryURL ?? ProductIdentity.applicationSupportURL(
             homeDirectoryURL: fileManager.homeDirectoryForCurrentUser
         )
+        self.maximumReadBytes = max(64_000, maximumReadBytes)
     }
 
-    func record(_ sample: LatencySample) throws {
+    func record(
+        _ sample: LatencySample,
+        retention: DiagnosticsRetentionPolicy
+    ) throws {
         lock.lock()
         defer { lock.unlock() }
 
+        var samples = try loadSamplesUnlocked()
+        samples.append(sample)
+        try rewrite(retained(samples, policy: retention))
+    }
+
+    func loadRecent(limit: Int = 1_000) throws -> [LatencySample] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(try loadSamplesUnlocked().suffix(max(0, limit)))
+    }
+
+    func prune(retention: DiagnosticsRetentionPolicy) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try rewrite(retained(try loadSamplesUnlocked(), policy: retention))
+    }
+
+    private func loadSamplesUnlocked() throws -> [LatencySample] {
+        let lines = try JSONLTailReader.lines(
+            at: dataURL,
+            fileManager: fileManager,
+            maximumBytes: maximumReadBytes
+        )
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return lines.compactMap { line in
+            try? decoder.decode(LatencySample.self, from: Data(line.utf8))
+        }
+    }
+
+    private func retained(
+        _ samples: [LatencySample],
+        policy: DiagnosticsRetentionPolicy
+    ) -> [LatencySample] {
+        guard policy.maxRecords > 0 else {
+            return []
+        }
+        return samples
+            .filter { $0.timestamp >= policy.cutoffDate }
+            .sorted { $0.timestamp < $1.timestamp }
+            .suffix(policy.maxRecords)
+            .map { $0 }
+    }
+
+    private func rewrite(_ samples: [LatencySample]) throws {
+        if samples.isEmpty {
+            if fileManager.fileExists(atPath: dataURL.path) {
+                try fileManager.removeItem(at: dataURL)
+            }
+            return
+        }
+
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        let dataURL = directoryURL.appendingPathComponent("latency.jsonl")
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o700))],
+            ofItemAtPath: directoryURL.path
+        )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let line = try encoder.encode(sample) + Data([0x0A])
-
-        if fileManager.fileExists(atPath: dataURL.path) {
-            let handle = try FileHandle(forWritingTo: dataURL)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: line)
-        } else {
-            try line.write(to: dataURL, options: [.atomic])
+        let data = try samples.reduce(into: Data()) { partial, sample in
+            partial.append(try encoder.encode(sample))
+            partial.append(0x0A)
         }
+        try data.write(to: dataURL, options: [.atomic])
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o600))],
+            ofItemAtPath: dataURL.path
+        )
+    }
+
+    private var dataURL: URL {
+        directoryURL.appendingPathComponent("latency.jsonl")
     }
 }

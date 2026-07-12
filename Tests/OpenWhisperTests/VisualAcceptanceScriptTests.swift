@@ -12,8 +12,9 @@ func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
 
     #expect(script.contains("source \"$ROOT/product.env\""))
     #expect(script.contains("APP_DIR=\"/Applications/$APP_NAME.app\""))
-    #expect(script.contains("OPENWHISPER_OVERLAY_DEMO=1"))
-    #expect(script.contains("--args --overlay-demo-state"))
+    #expect(script.contains("--visual-acceptance-output"))
+    #expect(script.contains("--args"))
+    #expect(script.contains("--overlay-demo-state"))
     #expect(script.contains("find_visual_acceptance_window.swift"))
     #expect(script.contains("screencapture -x -l"))
     #expect(script.contains("verify_visual_acceptance.swift"))

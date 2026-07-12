@@ -1,113 +1,231 @@
-# OpenWhisper Architecture
+# OpenWhisper macOS Architecture
 
-## Overview
+## 1. Product Scope
 
-`OpenWhisper` is a native macOS menu bar app with a narrow workflow:
+OpenWhisper is a native AppKit + SwiftUI menu bar application for one global dictation workflow:
 
-1. User presses `F5`
-2. App starts recording and shows a compact HUD
-3. User presses `F5` again
-4. App validates OpenWhisper-managed ChatGPT session availability
-5. Audio is sent to the ChatGPT backend transcription path
-6. Result text is normalized, optionally polished, normalized again, then pasted or copied
+```text
+focus an editable target
+→ F5 starts recording
+→ F5 stops recording
+→ transcribe
+→ normalize terminology
+→ optionally polish
+→ re-check the current target
+→ paste when proven safe, otherwise copy
+```
 
-The V1 architecture deliberately optimizes for a single-app workflow where OpenWhisper signs into ChatGPT directly and keeps its own local session.
+The current product line is macOS-only. The installed application at `/Applications/OpenWhisper.app` is the authoritative runtime for permission and interaction verification; `dist/OpenWhisper.app` is packaging output only.
 
-## Runtime Components
+## 2. Trust-Boundary Rules
 
+The implementation follows four fail-safe rules:
+
+1. A previously active application can be reactivated, but old launch context is never proof that the current focused control is editable.
+2. A managed ChatGPT token can only be attached to the built-in approved HTTPS origins and paths.
+3. Recovery metadata cannot choose an arbitrary file path.
+4. An asynchronous result may mutate UI, storage, retry state, or paste state only while its dictation session is still current.
+
+When OpenWhisper cannot prove a safe insertion target, the transcript remains in the clipboard. HUD Retry and saved Recovery Retry are copy-only by default.
+
+## 3. Runtime State and Session Ownership
+
+`AppCoordinator` is the current orchestration boundary. It owns:
+
+- hotkey transitions;
+- microphone permission and recording;
+- the active `sessionID`;
+- transcription and optional polish tasks;
+- HUD state;
+- history, diagnostics, and recovery writes;
+- pending Retry state and expiry;
+- final text insertion.
+
+The effective session flow is:
+
+```text
+idle
+→ starting(sessionID)
+→ recording(sessionID)
+→ processing(sessionID)
+→ pasted | copied | retryableFailure | terminalFailure
+→ idle
+```
+
+Every recording/processing branch checks `activeSessionID` before a late result can update the current session. Cancellation clears the current ID and associated tasks. `AudioRecorder` also owns a monotonic deadline task and invokes the coordinator when the configured recording limit is reached.
+
+The long-term target remains a dedicated `DictationSession` model rather than coordinator-owned state fields.
+
+## 4. Runtime Components
+
+### App and interaction
+
+- `AppDelegate`
+  - creates the application coordinator and menu bar lifecycle.
 - `AppCoordinator`
-  - owns hotkey, recording, transcription, setup-state refresh, and insertion
+  - orchestrates recording, transcription, retry, insertion, storage, and setup state.
+- `StatusMenuController`
+  - exposes status, Settings, History/Recovery entry points, and Quit.
 - `HotkeyMonitor`
-  - registers the global `F5` shortcut
-- `AudioRecorder`
-  - records mono WAV clips for short dictation
-- `ChatGPTAuthManager`
-  - owns OpenWhisper-managed ChatGPT session state, refresh, sign-out, and local token access
-- `ChatGPTSessionStore`
-  - persists OpenWhisper-owned session material in macOS Keychain
-- `ChatGPTTranscriber`
-  - calls the private ChatGPT backend transcription route with `Authorization: Bearer <token>`
-  - measures `auth_ms` and `transcribe_ms`
-  - applies a fixed prompt where supported
-- `RuntimePreflight`
-  - checks OpenWhisper-managed ChatGPT login state, token availability, and any advanced recovery misconfiguration
-- `TranscriptionPromptBuilder`
-  - builds the fixed “directly usable text” prompt and optional hidden hint terms
-- `TerminologyNormalizer`
-  - applies deterministic terminology alignment before and after optional text polish
-- `TerminologyTextImporter`
-  - imports plain text or CSV terminology dictionaries into OpenWhisper-owned entries
-- `OpenAICompatibleTextPolisher`
-  - runs the optional post-ASR rewrite pass through OpenWhisper-managed ChatGPT Auth
-  - calls the configured ChatGPT backend Responses endpoint with a ChatGPT access token
-- `LatencyRecorder`
-  - appends per-dictation JSONL metrics under `~/Library/Application Support/OpenWhisper/latency.jsonl`
-- `TextInjector`
-  - pastes only when an editable target exists; otherwise leaves text in the clipboard
-- `DictationPipeline`
-  - orchestrates transcription, deterministic normalization, optional text polish, and final normalization through testable seams
+  - registers the global `F5` shortcut.
 - `OverlayController`
-  - renders the floating HUD
+  - renders recording, processing, pasted, copied, error, and retryable-error HUD states.
 - `PreferencesWindowController`
-  - shows the workflow-sidebar Settings surface for account, dictation, AI polish, terminology, paste, and advanced recovery settings
+  - hosts the current workflow-sidebar Settings surface, including Privacy & Data.
 
-## Provider Strategy
+### Audio and transcription
 
-Two transcription routes exist:
+- `AudioRecorder`
+  - records mono PCM WAV clips;
+  - enforces `maxDurationSeconds` while recording;
+  - deletes cancelled temporary recordings.
+- `ChatGPTTranscriber`
+  - executes the managed ChatGPT or user-owned OpenAI-compatible transcription route;
+  - records timing and response-category metrics;
+  - currently loads the complete audio file into memory before building multipart data.
+- `DictationPipeline`
+  - sequences ASR, terminology normalization, optional polish, and final normalization.
+- `TranscriptionPromptBuilder`
+  - creates the fixed direct-output prompt and exact preservation hints.
+- `TerminologyNormalizer`
+  - applies deterministic terminology alignment.
+- `OpenAICompatibleTextPolisher`
+  - performs the optional post-ASR rewrite through the managed ChatGPT responses route and fails open to usable ASR.
 
-- `chatGPTManagedAuth`
-  - default V1 route
-  - recommended for launch
-  - uses a OpenWhisper-managed ChatGPT session
-  - does not require an API key in the normal flow
-- `openAICompatible`
-  - advanced recovery route
-  - not part of default onboarding
-  - requires user-provided endpoint, model, and API key env var
+### Authentication and network
 
-Text polish is separate from ASR. It can use:
+- `ChatGPTAuthManager`
+  - stores the current ChatGPT session generation;
+  - coalesces concurrent refreshes into one flight;
+  - invalidates in-flight work on sign-out;
+  - commits a late result only when its generation and original refresh token still match.
+- `BrowserAuthBridge`
+  - runs the default-browser OAuth + PKCE flow;
+  - validates callback method, path, state, and duplicate query parameters;
+  - applies timeout/cancellation cleanup to the local listener.
+- `ChatGPTSessionStore`
+  - persists the managed session in macOS Keychain under `app.openwhisper.mac.ChatGPTSession`.
+- `ManagedEndpointPolicy`
+  - fixes managed transcription and responses endpoints to approved `https://chatgpt.com` paths;
+  - rejects credentials, query strings, fragments, non-HTTPS schemes, and unapproved ports;
+  - validates user-owned endpoints separately.
+- `SecureHTTPClient`
+  - uses an ephemeral session and rejects HTTP redirects.
 
-- OpenWhisper-managed ChatGPT Auth
-- the configured ChatGPT backend Responses endpoint and model
-- no separate text-polish provider API key
-- a fail-open fallback that must never block usable ASR output
+Managed credentials and user-owned API credentials are separate trust domains. The advanced OpenAI-compatible endpoint never receives the managed ChatGPT token.
 
-## Output Strategy
+## 5. Safe Output and Retry
 
-`OpenWhisper` treats ASR and text polish as separate stages so long dictation can be rewritten without changing the paste/injection layer.
+`TextInjector` first writes the final text to the pasteboard, then selects one of:
 
-Behavior:
+- `.keyPressPaste` when Accessibility is trusted and a current editable target is confirmed;
+- `.clipboardFallback(.accessibilityPermissionRequired)`;
+- `.clipboardFallback(.noEditableTarget)`;
+- `.clipboardFallback(.retryRequiresManualPaste)`.
 
-- OpenAI-compatible recovery sends a fixed prompt through the official transcriptions API
-- the ChatGPT account route tries the same prompt and retries without it if the private route rejects the field
-- optional manual text or CSV imports become OpenWhisper-owned canonical terminology entries
-- imported terminology is aligned by a deterministic local normalizer before and after optional text polish
-- optional text polish removes filler words, prefers later corrections, and uses plan-like structure for long agent-facing dictation
-- hidden `transcription.hintTerms` remain exact-only preservation hints
-- if text polish has no available provider or fails, OpenWhisper falls back to the deterministic normalized transcript
+The original clipboard is restored only when the pasteboard change count still proves OpenWhisper owns the current contents. Retry output intentionally remains in the clipboard.
 
-## Benchmarking
+Current limitation: `.pasted` means OpenWhisper sent the paste key event after its checks; it does not prove that the destination application accepted and inserted the text. The target-wait loop also still uses a short synchronous sleep on the main actor and must be moved to cancellable async coordination.
 
-- `scripts/benchmark_stt.sh` runs the packaged app in headless benchmark mode
-- benchmark mode prints per-file `cold` and `warm` summaries with `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 values
-- benchmark input audio files are supplied explicitly through the script arguments
+## 6. Storage and Privacy
 
-## Visual Acceptance
+The application support root is:
 
-- `scripts/visual_acceptance.sh --install` packages, installs, and launches `/Applications/OpenWhisper.app` in overlay demo mode through LaunchServices
-- overlay demo mode is enabled with `OPENWHISPER_OVERLAY_DEMO=1` or the `--overlay-demo` launch argument
-- the script launches one installed-app demo process per state, discovers the OpenWhisper HUD window with CoreGraphics, and captures that window with `screencapture -l`
-- `scripts/verify_visual_acceptance.swift` verifies that each HUD-window screenshot has visible content and that adjacent states are visually distinct
-- generated evidence is stored under `dist/visual-acceptance/<run-id>`
+```text
+~/Library/Application Support/OpenWhisper/
+```
 
-## Packaging
+Current defaults:
 
-- `product.env` is the shell-facing source of truth for product identity
-- `Sources/OpenWhisper/ProductIdentity.swift` is the runtime identity source of truth
-- `version.env` is the single source of truth for version metadata
-- `scripts/package_app.sh` builds `dist/OpenWhisper.app`
-- `scripts/install_app.sh` installs the packaged app to `/Applications/OpenWhisper.app`
-- `scripts/package_app.sh` also creates `dist/OpenWhisper-<version>-macos-<arch>.zip`
-- `scripts/package_app.sh` also creates `dist/OpenWhisper-<version>-macos-<arch>.dmg`
-- `scripts/install_launch_agent.sh` installs `app.openwhisper.mac`
-- Homebrew Cask metadata is stored under `packaging/homebrew/Casks/openwhisper.rb`
+| Store | Contents | Default retention |
+| --- | --- | --- |
+| `config.json` | user configuration and privacy preferences | until reset/delete |
+| `transcription-history.jsonl` | final text, target metadata, outcome; raw ASR only when enabled | 30 days, 500 records |
+| `Recovery/recovery-history.jsonl` | failed-dictation metadata | 24 hours, 10 records |
+| `Recovery/Audio/*.wav` | failed recordings only | same as Recovery metadata |
+| `latency.jsonl` | timing, byte counts, provider labels, result/error categories | 14 days, 1,000 records |
+| `Retry/` | transient in-memory Retry copy | expires and is removed on startup if orphaned |
+
+Privacy behavior:
+
+- successful recordings are deleted after processing and are not copied into Recovery;
+- raw ASR history is disabled by default;
+- known password managers, Keychain, and Passwords are excluded from transcript/recovery persistence;
+- users can add extra sensitive bundle identifiers in configuration;
+- diagnostics do not include audio, transcript text, clipboard content, tokens, or complete provider response bodies;
+- storage directories use `0700` and data files use `0600` where supported;
+- bounded JSONL tail reads avoid synchronously loading an unlimited history file;
+- startup pruning enforces time and count limits.
+
+`StorageCleanupService.deleteAllData()` validates the application-support boundary, refuses symbolic-link deletion, removes the complete local data root, recreates a secure empty directory, signs out of ChatGPT, and saves a fresh default configuration.
+
+## 7. Recovery Containment
+
+Recovery records persist an opaque UUID. The derived filename is always `<UUID>.wav`; legacy `audioFileName` values are ignored.
+
+Before Copy or Retry, `RecoveryStore` verifies:
+
+- the Recovery root and JSONL index are not symbolic links;
+- the audio directory is a real directory and not a symbolic link;
+- the derived file is directly contained in that directory;
+- the target is a regular non-symlink file;
+- the resolved path remains inside the resolved recovery directory;
+- the file is below the upload limit;
+- the first 12 bytes contain a RIFF/WAVE header.
+
+Startup pruning removes unreferenced audio, drops records whose audio no longer passes containment checks, and tightens retained legacy audio to `0600`. Corrupt or malicious metadata therefore cannot select an arbitrary user-readable file or redirect cleanup into another directory.
+
+## 8. Settings and Product Surfaces
+
+The current Settings window exposes:
+
+- account and permission state;
+- dictation and text polish;
+- history/recovery previews;
+- terminology;
+- paste behavior;
+- Privacy & Data;
+- advanced recovery configuration.
+
+Privacy controls currently use the existing explicit Save flow. The productization target is still a native resizable `NavigationSplitView` with immediate persistence, window restoration, keyboard/VoiceOver coverage, and separate History and Terminology windows.
+
+## 9. Benchmarking and Diagnostics
+
+- `LatencyRecorder` rewrites a bounded JSONL sample set using the configured retention policy.
+- `scripts/benchmark_stt.sh` runs explicit audio inputs through packaged-app benchmark mode.
+- Benchmark output includes cold/warm `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 summaries.
+- Product diagnostics are local-only in the current alpha; no product analytics upload is enabled.
+
+## 10. Packaging and Verification
+
+Sources of truth:
+
+- `product.env` — shell-facing product identity;
+- `Sources/OpenWhisper/ProductIdentity.swift` — runtime identity;
+- `version.env` — version/build;
+- `/Applications/OpenWhisper.app` — installed runtime.
+
+Canonical commands:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+./scripts/install_app.sh
+./scripts/check_packaged_app.sh
+```
+
+HUD visual acceptance launches the installed app once per required state and asks the app to self-render its panel into PNG. CoreGraphics window capture remains a fallback, so automated visual evidence does not depend on granting the shell Screen Recording access.
+
+Ad-hoc signing is allowed only for local development. Commercial distribution still requires strict environment parsing, a fixed Developer ID/Team ID, Hardened Runtime, notarization and stapling, fail-closed Gatekeeper checks, staged atomic installation with rollback, fixed artifact SHA-256 values, and a signed updater.
+
+## 11. Known Architectural Gaps
+
+The current alpha must not be described as commercially release-ready while these remain:
+
+- complete audio is read into memory before the 25 MB upload limit is evaluated;
+- paste success is event-dispatch success, not destination insertion confirmation;
+- target waiting blocks the main actor briefly;
+- Settings, Onboarding, History, and Terminology are not yet at the target native product architecture;
+- HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
+- the advanced recovery API key is still environment-variable based rather than Keychain-backed;
+- notarization, updater, crash diagnostics export, and rollback-safe release infrastructure are not complete.

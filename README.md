@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-OpenWhisper is an open-source, native macOS push-to-talk voice input app. Press `F5` to start recording, press `F5` again to stop, and OpenWhisper returns the transcript to the current editable field or leaves it in the clipboard when automatic insertion is not safe.
+OpenWhisper is an MIT-licensed, native macOS push-to-talk voice input app. Press `F5` to start recording, press `F5` again to stop, and OpenWhisper returns the transcript to the current editable field or leaves it in the clipboard when automatic insertion is not safe.
 
 ## Status
 
@@ -16,13 +16,17 @@ The current implementation already includes:
 - browser-based ChatGPT connection with Keychain-backed local session storage
 - transcription, terminology alignment, and optional AI polish
 - conservative paste behavior with clipboard fallback
+- retry results that are copied for manual paste instead of being injected automatically
 - microphone and Accessibility permission diagnostics
-- local history, recovery records, and benchmark tooling
+- bounded local history, failed-audio recovery, privacy controls, and benchmark tooling
+- sensitive-app exclusions and a Delete All Data action
 - OpenAI-compatible transcription as an advanced recovery route
 
 ## Product Boundary
 
-The default ChatGPT account route depends on undocumented upstream behavior. It is not presented as a stable public API, an OpenAI partnership, or an enterprise SLA. Commercial distribution remains gated by the security, privacy, release-integrity, and provider-continuity work in the productization plan.
+The default ChatGPT account route depends on undocumented upstream behavior. It is not presented as a stable public API, an OpenAI partnership, or an enterprise SLA.
+
+The current alpha closes the original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Commercial distribution is still gated by Developer ID signing, notarization, a signed updater, fail-closed release tooling, native onboarding and management surfaces, and published policy/support documents. See the [current security baseline](docs/audits/security-baseline-2026-07-13.md).
 
 ## Requirements
 
@@ -45,6 +49,7 @@ open -n /Applications/OpenWhisper.app
 For local debugging when no valid Apple signing identity is available:
 
 ```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
@@ -54,13 +59,27 @@ Do not launch `dist/OpenWhisper.app` as the live app. Permission and interaction
 
 ## Runtime Data
 
-OpenWhisper stores application data under:
+OpenWhisper stores local application data under:
 
 ```text
 ~/Library/Application Support/OpenWhisper/
 ```
 
-The ChatGPT session is stored in Keychain under the OpenWhisper service identity. Successful commercial release must include explicit retention controls, data deletion, and audited token-to-endpoint restrictions.
+Current privacy defaults:
+
+| Data | Default |
+| --- | --- |
+| Transcript history | Enabled; 30 days and at most 500 records |
+| Raw ASR text | Disabled; only final text is retained unless explicitly enabled |
+| Successful recordings | Deleted after processing and never added to Recovery |
+| Failed recordings | Enabled for retry; 24 hours and at most 10 records |
+| Local diagnostics | Enabled; 14 days and at most 1,000 records |
+| Sensitive apps | Known password managers, Keychain, and Passwords are excluded from history and recovery |
+| Retry files | Temporary, time-limited, and removed on the next startup if orphaned |
+
+Diagnostics contain timing, byte counts, provider labels, and error categories. They do not contain audio, transcript text, clipboard contents, or tokens. Local data files are created with owner-only permissions where supported.
+
+The ChatGPT session is stored in Keychain under `app.openwhisper.mac.ChatGPTSession`. **Settings → Privacy → Delete All Data** removes settings, terminology, transcript history, failed recordings, diagnostics, retry files, and the saved ChatGPT session, then returns OpenWhisper to its signed-out defaults.
 
 ## Repository Layout
 
@@ -82,6 +101,7 @@ docs/design/                  visual specifications
 - [macOS productization plan](docs/product/macos-productization-plan-2026-07-13.md)
 - [Product and commercialization analysis](docs/product/product-and-commercialization-plan-2026-07-13.md)
 - [Security audit](docs/audits/security-audit-2026-07-13.md)
+- [Current security baseline](docs/audits/security-baseline-2026-07-13.md)
 - [UI comparison research](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [Architecture](docs/engineering/architecture.md)
 - [Release process](docs/engineering/release.md)

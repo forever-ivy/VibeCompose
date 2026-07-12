@@ -4,6 +4,7 @@ struct AppConfig: Codable, Sendable {
     var transcription: TranscriptionConfig = .init()
     var injection: InjectionConfig = .init()
     var auth: AuthConfig = .init()
+    var privacy: PrivacyConfig = .init()
 
     init() {}
 
@@ -12,6 +13,81 @@ struct AppConfig: Codable, Sendable {
         transcription = try container.decodeIfPresent(TranscriptionConfig.self, forKey: .transcription) ?? .init()
         injection = try container.decodeIfPresent(InjectionConfig.self, forKey: .injection) ?? .init()
         auth = try container.decodeIfPresent(AuthConfig.self, forKey: .auth) ?? .init()
+        privacy = try container.decodeIfPresent(PrivacyConfig.self, forKey: .privacy) ?? .init()
+    }
+}
+
+struct PrivacyConfig: Codable, Sendable, Equatable {
+    var historyEnabled: Bool = true
+    var historyRetentionDays: Int = 30
+    var historyRecordLimit: Int = 500
+    var storeRawTranscripts: Bool = false
+    var failedAudioRecoveryEnabled: Bool = true
+    var failedAudioRetentionHours: Int = 24
+    var failedAudioRecordLimit: Int = 10
+    var diagnosticsEnabled: Bool = true
+    var diagnosticsRetentionDays: Int = 14
+    var diagnosticsRecordLimit: Int = 1_000
+    var excludeSensitiveApps: Bool = true
+    var additionalSensitiveAppBundleIdentifiers: [String] = []
+
+    init() {}
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        historyEnabled = try container.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? true
+        historyRetentionDays = Self.bounded(
+            try container.decodeIfPresent(Int.self, forKey: .historyRetentionDays) ?? 30,
+            minimum: 1,
+            maximum: 3_650
+        )
+        historyRecordLimit = Self.bounded(
+            try container.decodeIfPresent(Int.self, forKey: .historyRecordLimit) ?? 500,
+            minimum: 10,
+            maximum: 10_000
+        )
+        storeRawTranscripts = try container.decodeIfPresent(Bool.self, forKey: .storeRawTranscripts) ?? false
+        failedAudioRecoveryEnabled = try container.decodeIfPresent(Bool.self, forKey: .failedAudioRecoveryEnabled) ?? true
+        failedAudioRetentionHours = Self.bounded(
+            try container.decodeIfPresent(Int.self, forKey: .failedAudioRetentionHours) ?? 24,
+            minimum: 1,
+            maximum: 168
+        )
+        failedAudioRecordLimit = Self.bounded(
+            try container.decodeIfPresent(Int.self, forKey: .failedAudioRecordLimit) ?? 10,
+            minimum: 1,
+            maximum: 100
+        )
+        diagnosticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .diagnosticsEnabled) ?? true
+        diagnosticsRetentionDays = Self.bounded(
+            try container.decodeIfPresent(Int.self, forKey: .diagnosticsRetentionDays) ?? 14,
+            minimum: 1,
+            maximum: 365
+        )
+        diagnosticsRecordLimit = Self.bounded(
+            try container.decodeIfPresent(Int.self, forKey: .diagnosticsRecordLimit) ?? 1_000,
+            minimum: 100,
+            maximum: 20_000
+        )
+        excludeSensitiveApps = try container.decodeIfPresent(Bool.self, forKey: .excludeSensitiveApps) ?? true
+        additionalSensitiveAppBundleIdentifiers = Self.normalizedBundleIdentifiers(
+            try container.decodeIfPresent([String].self, forKey: .additionalSensitiveAppBundleIdentifiers) ?? []
+        )
+    }
+
+    private static func bounded(_ value: Int, minimum: Int, maximum: Int) -> Int {
+        min(maximum, max(minimum, value))
+    }
+
+    private static func normalizedBundleIdentifiers(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else {
+                return nil
+            }
+            return normalized
+        }
     }
 }
 
@@ -433,9 +509,17 @@ struct ConfigStore {
 
     func save(_ config: AppConfig) throws {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o700))],
+            ofItemAtPath: directoryURL.path
+        )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)
         try data.write(to: configURL, options: [.atomic])
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o600))],
+            ofItemAtPath: configURL.path
+        )
     }
 }

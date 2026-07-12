@@ -21,8 +21,30 @@ protocol OverlayControlling: AnyObject {
     func hide()
 }
 
+enum OverlaySnapshotError: LocalizedError {
+    case missingContentView
+    case bitmapUnavailable
+    case pngEncodingFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .missingContentView:
+            return "The OpenWhisper HUD has no content view to capture."
+        case .bitmapUnavailable:
+            return "The OpenWhisper HUD could not create a bitmap snapshot."
+        case .pngEncodingFailed:
+            return "The OpenWhisper HUD could not encode its snapshot as PNG."
+        }
+    }
+}
+
 @MainActor
-final class OverlayController: OverlayControlling {
+protocol OverlaySnapshotCapturing: AnyObject {
+    func writeSnapshot(to url: URL) throws
+}
+
+@MainActor
+final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private let style = OverlayStylePreset.dictationHUD
     private let panel: NSPanel
     private let panelRootView = OverlayPassthroughView()
@@ -148,6 +170,29 @@ final class OverlayController: OverlayControlling {
         hideSessionControls()
         panel.alphaValue = 0
         panel.orderOut(nil)
+    }
+
+    func writeSnapshot(to url: URL) throws {
+        guard let contentView = panel.contentView else {
+            throw OverlaySnapshotError.missingContentView
+        }
+
+        contentView.layoutSubtreeIfNeeded()
+        contentView.displayIfNeeded()
+        let bounds = contentView.bounds
+        guard
+            bounds.width > 0,
+            bounds.height > 0,
+            let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds)
+        else {
+            throw OverlaySnapshotError.bitmapUnavailable
+        }
+
+        contentView.cacheDisplay(in: bounds, to: bitmap)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw OverlaySnapshotError.pngEncodingFailed
+        }
+        try png.write(to: url, options: [.atomic])
     }
 
     private func apply(state: OverlayVisualState) {

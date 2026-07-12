@@ -138,63 +138,114 @@ struct TranscriptionHistoryPreview: Sendable, Equatable, Identifiable {
 }
 
 protocol TranscriptionHistoryRecording: Sendable {
-    func record(_ record: TranscriptionHistoryRecord) throws
+    func record(_ record: TranscriptionHistoryRecord, retention: HistoryRetentionPolicy) throws
     func loadRecent(limit: Int) throws -> [TranscriptionHistoryRecord]
+    func prune(retention: HistoryRetentionPolicy) throws
+}
+
+extension TranscriptionHistoryRecording {
+    func record(_ record: TranscriptionHistoryRecord) throws {
+        try self.record(
+            record,
+            retention: HistoryRetentionPolicy(maxRecords: 500, retentionDays: 30)
+        )
+    }
 }
 
 final class TranscriptionHistoryRecorder: TranscriptionHistoryRecording, @unchecked Sendable {
     private let fileManager: FileManager
     let directoryURL: URL
     private let lock = NSLock()
+    private let maximumReadBytes: Int
 
     init(
         fileManager: FileManager = .default,
-        directoryURL: URL? = nil
+        directoryURL: URL? = nil,
+        maximumReadBytes: Int = 4_000_000
     ) {
         self.fileManager = fileManager
         self.directoryURL = directoryURL ?? ProductIdentity.applicationSupportURL(
             homeDirectoryURL: fileManager.homeDirectoryForCurrentUser
         )
+        self.maximumReadBytes = max(64_000, maximumReadBytes)
     }
 
-    func record(_ record: TranscriptionHistoryRecord) throws {
+    func record(
+        _ record: TranscriptionHistoryRecord,
+        retention: HistoryRetentionPolicy
+    ) throws {
         lock.lock()
         defer { lock.unlock() }
 
-        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        let dataURL = historyURL
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let line = try encoder.encode(record) + Data([0x0A])
-
-        if fileManager.fileExists(atPath: dataURL.path) {
-            let handle = try FileHandle(forWritingTo: dataURL)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: line)
-        } else {
-            try line.write(to: dataURL, options: [.atomic])
-        }
+        var records = try loadRecordsUnlocked()
+        records.append(record)
+        try rewrite(retained(records, policy: retention))
     }
 
     func loadRecent(limit: Int = 200) throws -> [TranscriptionHistoryRecord] {
         lock.lock()
         defer { lock.unlock() }
 
-        guard fileManager.fileExists(atPath: historyURL.path) else {
-            return []
-        }
+        return Array(try loadRecordsUnlocked().suffix(max(0, limit)))
+    }
 
-        let contents = try String(contentsOf: historyURL, encoding: .utf8)
+    func prune(retention: HistoryRetentionPolicy) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try rewrite(retained(try loadRecordsUnlocked(), policy: retention))
+    }
+
+    private func loadRecordsUnlocked() throws -> [TranscriptionHistoryRecord] {
+        let lines = try JSONLTailReader.lines(
+            at: historyURL,
+            fileManager: fileManager,
+            maximumBytes: maximumReadBytes
+        )
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let records = contents
-            .split(separator: "\n")
-            .suffix(max(0, limit))
-            .compactMap { line -> TranscriptionHistoryRecord? in
-                try? decoder.decode(TranscriptionHistoryRecord.self, from: Data(line.utf8))
+        return lines.compactMap { line in
+            try? decoder.decode(TranscriptionHistoryRecord.self, from: Data(line.utf8))
+        }
+    }
+
+    private func retained(
+        _ records: [TranscriptionHistoryRecord],
+        policy: HistoryRetentionPolicy
+    ) -> [TranscriptionHistoryRecord] {
+        guard policy.maxRecords > 0 else {
+            return []
+        }
+        return records
+            .filter { $0.timestamp >= policy.cutoffDate }
+            .sorted { $0.timestamp < $1.timestamp }
+            .suffix(policy.maxRecords)
+            .map { $0 }
+    }
+
+    private func rewrite(_ records: [TranscriptionHistoryRecord]) throws {
+        if records.isEmpty {
+            if fileManager.fileExists(atPath: historyURL.path) {
+                try fileManager.removeItem(at: historyURL)
             }
-        return Array(records)
+            return
+        }
+
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o700))],
+            ofItemAtPath: directoryURL.path
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try records.reduce(into: Data()) { partial, record in
+            partial.append(try encoder.encode(record))
+            partial.append(0x0A)
+        }
+        try data.write(to: historyURL, options: [.atomic])
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o600))],
+            ofItemAtPath: historyURL.path
+        )
     }
 
     private var historyURL: URL {

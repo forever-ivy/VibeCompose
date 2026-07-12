@@ -163,7 +163,7 @@ func recoveryResolverRejectsInvalidWaveContent() throws {
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let sourceAudioURL = root.appendingPathComponent("source.wav")
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    try Data("not-a-wave".utf8).write(to: sourceAudioURL)
+    try makeMinimalWaveData().write(to: sourceAudioURL)
 
     let store = RecoveryStore(directoryURL: root.appendingPathComponent("Recovery", isDirectory: true))
     try store.record(
@@ -180,9 +180,37 @@ func recoveryResolverRejectsInvalidWaveContent() throws {
         )
     )
     let record = try #require(store.loadRecent(limit: 1).first)
+    let storedURL = try store.resolveAudioURL(for: record)
+    try Data("not-a-wave".utf8).write(to: storedURL)
 
     #expect(throws: RecoveryAudioError.invalidWaveFile) {
         try store.resolveAudioURL(for: record)
+    }
+}
+
+@Test
+func recoveryStoreRejectsInvalidSourceAudio() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let sourceAudioURL = root.appendingPathComponent("source.wav")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data("not-a-wave".utf8).write(to: sourceAudioURL)
+
+    let store = RecoveryStore(directoryURL: root.appendingPathComponent("Recovery", isDirectory: true))
+    #expect(throws: RecoveryAudioError.invalidWaveFile) {
+        try store.record(
+            RecoveryRecordInput(
+                timestamp: Date(),
+                sourceAudioURL: sourceAudioURL,
+                durationMs: 1_000,
+                asrText: nil,
+                polishText: nil,
+                appName: nil,
+                appBundleIdentifier: nil,
+                outcome: "error",
+                errorMessage: nil
+            )
+        )
     }
 }
 

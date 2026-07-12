@@ -8,7 +8,9 @@ Use this chain for OpenWhisper HUD or interaction-facing visual work after unit/
 ./scripts/visual_acceptance.sh --install
 ```
 
-The command packages the current build, installs it to `/Applications/OpenWhisper.app`, launches one installed-app demo process per HUD state through LaunchServices with `OPENWHISPER_OVERLAY_DEMO=1` and `--overlay-demo-state`, discovers the OpenWhisper HUD window with CoreGraphics, captures that window with `screencapture -l`, and runs the screenshot verifier.
+The command packages the current build, installs it to `/Applications/OpenWhisper.app`, and launches one installed-app demo process per HUD state through LaunchServices with `OPENWHISPER_OVERLAY_DEMO=1` and `--overlay-demo-state`.
+
+Each demo process renders its own HUD content to a local temporary PNG path supplied through `--visual-acceptance-output`; the script then copies that artifact into the repository evidence directory. Using a local temporary path avoids removable-volume privacy prompts when the repository is under `/Volumes`. This primary path does not require Screen Recording permission and works in clean CI or Codex environments. If self-rendering does not produce a file, the script falls back to CoreGraphics window discovery plus `screencapture -l`, then runs the screenshot verifier.
 
 The script intentionally stops each transient overlay-demo process between HUD states. That cleanup is not the final user-review state. A successful run must relaunch the normal installed app from `/Applications/OpenWhisper.app`, verify that OpenWhisper is running, and leave it running.
 
