@@ -8,9 +8,24 @@ Use this chain for OpenWhisper HUD or interaction-facing visual work after unit/
 ./scripts/visual_acceptance.sh --install
 ```
 
-The command packages the current build, installs it to `/Applications/OpenWhisper.app`, and launches one installed-app demo process per HUD state through LaunchServices with `OPENWHISPER_OVERLAY_DEMO=1` and `--overlay-demo-state`.
+The command packages the current build, installs it to `/Applications/OpenWhisper.app`, and launches one installed-app demo process per HUD state through LaunchServices with `--overlay-demo-state`.
 
 Each demo process renders its own HUD content to a local temporary PNG path supplied through `--visual-acceptance-output`; the script then copies that artifact into the repository evidence directory. Using a local temporary path avoids removable-volume privacy prompts when the repository is under `/Volumes`. This primary path does not require Screen Recording permission and works in clean CI or Codex environments. If self-rendering does not produce a file, the script falls back to CoreGraphics window discovery plus `screencapture -l`, then runs the screenshot verifier.
+
+The harness explicitly forces Reduce Motion and Increase Contrast off for the
+baseline states so the result does not depend on the current user's system
+settings. It then launches two deterministic accessibility profiles:
+
+- Reduce Motion writes processing snapshots at two different times. The first
+  must visibly differ from the animated baseline and the pair must remain
+  pixel-stable.
+- Increase Contrast writes a retryable-error snapshot. It must visibly differ
+  from the baseline while preserving the exact window geometry.
+
+Normal app launches continue to read live
+`NSWorkspace.accessibilityDisplayShouldReduceMotion` and
+`accessibilityDisplayShouldIncreaseContrast`; the override arguments exist
+only to make installed-app acceptance deterministic.
 
 ## Product management surfaces
 
@@ -72,8 +87,13 @@ The directory must contain HUD-window screenshots:
 - `01-recording.png`
 - `02-processing.png`
 - `03-result.png`
-- `04-error.png`
-- `05-retryable-error.png`
+- `04-paste-sent.png`
+- `05-copied.png`
+- `06-error.png`
+- `07-retryable-error.png`
+- `08-processing-reduced-motion.png`
+- `09-processing-reduced-motion-followup.png`
+- `10-retryable-error-increase-contrast.png`
 - `verification.txt`
 - `summary.md`
 

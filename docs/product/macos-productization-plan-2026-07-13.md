@@ -71,7 +71,7 @@ macOS 首发策略：
 - Developer ID、固定 Team ID、notarization/staple、生产 updater 托管/密钥、真实签名 appcast 和 rollback 实证未完成；
 - 已将“确认插入”“仅发送粘贴并保留剪贴板”“纯剪贴板兜底”拆为三种结果，并用同一 AX target 的前后 value/range 变化验证插入；真实 Notes/TextEdit/Terminal 多应用焦点矩阵仍未完成；
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
-- Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与高对比度验收未完成；
+- HUD 的 Reduce Motion / Increase Contrast 已加入安装版确定性像素门禁；Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与交互式高对比度验收仍未完成；
 - 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
 - 远程签名能力 Kill Switch 的客户端、缓存、反重放、生成/验签脚本和发布门禁已完成；生产 URL、独立密钥、首份签名策略和事故演练未完成；
 - 当前自动化全绿仍只属于 precheck，不能替代 `/Applications/OpenWhisper.app` 的真实交互证据。
@@ -109,7 +109,7 @@ UI 调研确认的主要问题：
 - 首次使用和权限修复混入过多工程诊断信息。
 - History 和 Terminology 只是设置页中的有限预览。
 - HUD 不同状态宽度跳变，错误停留时间不足。
-- HUD 已实现 Reduce Motion、Increase Contrast 和状态 announcement；完整安装版键盘、VoiceOver 与高对比度交互证据仍不完整。
+- HUD 已实现 Reduce Motion、Increase Contrast 和状态 announcement，并可通过注入显示选项生成不依赖当前系统设置的安装版视觉证据；完整安装版键盘、VoiceOver 与交互式高对比度证据仍不完整。
 - 代码、视觉规范、截图和视觉测试不是同一事实源。
 
 商业化分析确认的主要约束：
@@ -526,12 +526,13 @@ Application Support/OpenWhisper
 - Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
 - `scripts/accessibility_acceptance.sh --install` 已覆盖六个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
 - `scripts/interaction_acceptance.sh` 可用同一隐私边界启动长时间保持的安装版界面，供官方 Computer Use 验证键盘、焦点和控件激活；验收进程不读取或持久化真实配置、凭据、History、Recovery、术语或 Onboarding 完成状态，并可显式恢复正常菜单栏运行。
+- `OverlayController` 的辅助显示选项已改为可注入 provider；正常运行仍实时读取 macOS Reduce Motion / Increase Contrast，视觉验收则显式固定基线并生成 Reduce Motion 双时点与 Increase Contrast 快照。门禁要求 Reduce Motion 波形跨时点零/近零像素漂移、增强对比度产生明确像素变化且两者都不改变对应 HUD 几何。
 - 2026-07-13 本机安装版 TextEdit 粘贴验收再次证明签名/TCC 阻断：可用 Keychain 中的 Apple Development 身份被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，打包只能回退 ad-hoc；此时 `AXIsProcessTrusted()` 为 false，不能把“权限列表已打开”当作已授权。需要更新有效开发/Developer ID 证书后重新安装、重新授权并重跑真实矩阵。
 
 仍未完成的 Phase 3 出口项：
 
 - clean TCC 首次成功听写；
-- Settings、Onboarding、History、Terminology 和 Quick Add 已完成安装版无障碍结构预检，完整键盘/VoiceOver/高对比度交互验收仍未完成；
+- HUD 已完成 Reduce Motion / Increase Contrast 安装版确定性视觉门禁；Settings、Onboarding、History、Terminology 和 Quick Add 已完成安装版无障碍结构预检，但完整键盘/VoiceOver/高对比度交互验收仍未完成；
 - 真实安装版 F5、ESC、inline close、Retry 与 paste/clipboard 矩阵。
 
 ## 8. 性能与可靠性
@@ -848,7 +849,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-008 | P1 | OAuth 生命周期 | BrowserAuthBridge | 重复参数/取消/超时不崩溃不挂起 |
 | OW-MAC-009 | P1 | Settings 原生化 | Config API | resize、键盘、VoiceOver、即时保存 |
 | OW-MAC-010 | P1 | Onboarding | Permission model | clean TCC 首次成功闭环 |
-| OW-MAC-011 | P1 | HUD a11y 和稳定几何 | Design tokens | 状态不横跳，错误可操作 |
+| OW-MAC-011 | P1 | HUD a11y 和稳定几何（显示选项实现与像素门禁已完成，待官方交互验收） | Design tokens | 状态不横跳，错误可操作 |
 | OW-MAC-012 | P1 | History window（已实现，待完整交互验收） | Retention | 搜索、详情、Copy、Retry、Delete |
 | OW-MAC-013 | P1 | Terminology manager（已实现，待键盘/VoiceOver 验收） | Dictionary model | 常规管理不编辑 JSON |
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |

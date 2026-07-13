@@ -141,6 +141,38 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
+    static func visualAcceptanceFollowupOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT",
+            argumentName: "--visual-acceptance-followup-output"
+        )
+    }
+
+    static func visualAcceptanceDisplayOptionsOverride(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> AccessibilityDisplayOptionsOverride {
+        AccessibilityDisplayOptionsOverride(
+            reduceMotion: optionalBooleanLaunchValue(
+                environment: environment,
+                arguments: arguments,
+                environmentKey: "OPENWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION",
+                argumentName: "--visual-acceptance-reduce-motion"
+            ),
+            increaseContrast: optionalBooleanLaunchValue(
+                environment: environment,
+                arguments: arguments,
+                environmentKey: "OPENWHISPER_VISUAL_ACCEPTANCE_INCREASE_CONTRAST",
+                argumentName: "--visual-acceptance-increase-contrast"
+            )
+        )
+    }
+
     static func pasteAcceptanceOutputURL(
         environment: [String: String],
         arguments: [String] = []
@@ -398,6 +430,48 @@ enum AppLaunchMode: Equatable {
         }
 
         return nil
+    }
+
+    private static func optionalBooleanLaunchValue(
+        environment: [String: String],
+        arguments: [String],
+        environmentKey: String,
+        argumentName: String
+    ) -> Bool? {
+        for (index, argument) in arguments.enumerated() {
+            if argument == argumentName {
+                if index + 1 < arguments.count,
+                   let value = parseOptionalBoolean(arguments[index + 1]) {
+                    return value
+                }
+                return true
+            }
+
+            let prefix = "\(argumentName)="
+            if argument.hasPrefix(prefix) {
+                return parseOptionalBoolean(String(argument.dropFirst(prefix.count)))
+            }
+        }
+
+        if let rawValue = environment[environmentKey],
+           let value = parseOptionalBoolean(rawValue) {
+            return value
+        }
+
+        return nil
+    }
+
+    private static func parseOptionalBoolean(_ rawValue: String) -> Bool? {
+        switch rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() {
+        case "1", "true", "yes", "on", "enabled":
+            return true
+        case "0", "false", "no", "off", "disabled":
+            return false
+        default:
+            return nil
+        }
     }
 
     private static func overlayDemoState(

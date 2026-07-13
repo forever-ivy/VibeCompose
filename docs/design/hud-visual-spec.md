@@ -148,4 +148,7 @@ When the MCP quota resets, the `HUD` board in Figma should contain:
   - Success/copy/error remain inside the same branded indicator architecture
   - Recording, processing, and success share one stable shell size
   - Increase Contrast strengthens the shell border and text/icon contrast
+  - Reduce Motion replaces the traveling processing ridge with one static,
+    centered nine-bar profile
+  - Accessibility profile snapshots preserve the baseline shell geometry
   - State changes are announced to VoiceOver

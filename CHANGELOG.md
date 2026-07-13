@@ -23,6 +23,12 @@
   Computer Use keyboard/focus acceptance without reading or persisting the
   user's live configuration, credentials, transcripts, Recovery data, or
   terminology.
+- Made HUD accessibility display options injectable while preserving live
+  macOS Reduce Motion and Increase Contrast behavior in normal launches.
+  Installed-app visual acceptance now forces a deterministic baseline, proves
+  the reduced-motion processing waveform remains pixel-stable across paired
+  captures, and proves Increase Contrast visibly changes the error shell,
+  detail text, and retry control without changing HUD geometry.
 - Added opt-in local product metrics for app launch, Onboarding-step
   completion, dictation, discard, and Retry outcomes. Metrics use only
   version/build, enums, and duration/latency buckets, have bounded owner-only

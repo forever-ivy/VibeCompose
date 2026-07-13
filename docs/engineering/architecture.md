@@ -310,7 +310,16 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ./scripts/check_packaged_app.sh
 ```
 
-HUD visual acceptance launches the installed app once per required state and asks the app to self-render its panel into PNG. CoreGraphics window capture remains a fallback, so automated visual evidence does not depend on granting the shell Screen Recording access.
+HUD visual acceptance launches the installed app once per required state and
+asks the app to self-render its panel into PNG. CoreGraphics window capture
+remains a fallback, so automated visual evidence does not depend on granting
+the shell Screen Recording access. `OverlayController` receives an injectable
+accessibility-display-options provider: normal launches sample live
+`NSWorkspace` Reduce Motion and Increase Contrast values, while visual
+acceptance passes explicit tri-state overrides. The harness forces a
+deterministic baseline, verifies a reduced-motion processing pair has no pixel
+drift, and verifies Increase Contrast causes a visible render change without
+changing HUD geometry.
 
 Settings, Onboarding, History, Terminology, and Quick Add self-capture launches
 enable `SnapshotPrivacyMode` before loading runtime state. The capture process
@@ -364,8 +373,9 @@ The current alpha must not be described as commercially release-ready while thes
   incomplete;
 - Settings now uses `NavigationSplitView` with immediate persistence, and the
   HUD implementation respects Reduce Motion, strengthens Increase Contrast,
-  and posts state announcements; trusted installed-app keyboard/VoiceOver and
-  high-contrast interaction evidence is still incomplete across Settings,
+  posts state announcements, and has deterministic installed-app pixel gates
+  for both display options; trusted installed-app keyboard/VoiceOver and
+  interactive high-contrast evidence is still incomplete across Settings,
   Onboarding, History, Terminology, Quick Add, and HUD;
 - a real Developer ID/notarized artifact and installed Sparkle update/rollback proof are not complete;
 - permanent capability-policy hosting, a separate production Ed25519 key, and

@@ -151,6 +151,87 @@ func reducedMotionProcessingProfileIsStaticCenteredAndVisible() {
     #expect(abs(levels[0] - levels[8]) < 0.0001)
 }
 
+@MainActor
+@Test
+func overlayControllerIncreaseContrastStrengthensShellTextAndControls() {
+    let standard = OverlayController(
+        accessibilityDisplayOptionsProvider: {
+            AccessibilityDisplayOptions(
+                reduceMotion: false,
+                increaseContrast: false
+            )
+        }
+    )
+    let increased = OverlayController(
+        accessibilityDisplayOptionsProvider: {
+            AccessibilityDisplayOptions(
+                reduceMotion: false,
+                increaseContrast: true
+            )
+        }
+    )
+    defer {
+        standard.hide()
+        increased.hide()
+    }
+
+    standard.showRetryableError("Cloudflare 403")
+    increased.showRetryableError("Cloudflare 403")
+
+    let standardAppearance = standard.debugSnapshot.accessibilityAppearance
+    let increasedAppearance = increased.debugSnapshot.accessibilityAppearance
+    #expect(
+        increasedAppearance.backgroundBorderWidth
+            > standardAppearance.backgroundBorderWidth
+    )
+    #expect(
+        increasedAppearance.backgroundBorderAlpha
+            > standardAppearance.backgroundBorderAlpha
+    )
+    #expect(standardAppearance.detailUsesPrimaryText == false)
+    #expect(increasedAppearance.detailUsesPrimaryText == true)
+    #expect(increasedAppearance.timerOpacity > standardAppearance.timerOpacity)
+    #expect(
+        increasedAppearance.cancelControlOpacity
+            > standardAppearance.cancelControlOpacity
+    )
+    #expect(
+        increasedAppearance.retryControlOpacity
+            > standardAppearance.retryControlOpacity
+    )
+    #expect(
+        increasedAppearance.waveformBaseOpacity
+            > standardAppearance.waveformBaseOpacity
+    )
+}
+
+@MainActor
+@Test
+func overlayControllerReducedMotionUsesStaticProcessingWaveform() async {
+    let overlay = OverlayController(
+        accessibilityDisplayOptionsProvider: {
+            AccessibilityDisplayOptions(
+                reduceMotion: true,
+                increaseContrast: false
+            )
+        }
+    )
+    defer { overlay.hide() }
+
+    overlay.showProcessing()
+    let initial = overlay.debugSnapshot
+    try? await Task.sleep(nanoseconds: 180_000_000)
+    let followup = overlay.debugSnapshot
+
+    #expect(initial.processingAnimationIsActive == false)
+    #expect(followup.processingAnimationIsActive == false)
+    #expect(
+        initial.displayedLevels
+            == WaveformNormalizer.reducedMotionProcessingLevels(barCount: 9)
+    )
+    #expect(followup.displayedLevels == initial.displayedLevels)
+}
+
 @Test
 func overlayPresentationGenerationRejectsStaleCompletions() {
     var generation = OverlayPresentationGeneration()

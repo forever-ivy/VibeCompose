@@ -1775,6 +1775,8 @@ final class AppCoordinator {
         }
 
         let snapshotOutputURL = Self.visualAcceptanceSnapshotOutputURL()
+        let followupSnapshotOutputURL =
+            Self.visualAcceptanceFollowupSnapshotOutputURL()
         if let snapshotOutputURL {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [overlay] in
                 do {
@@ -1782,10 +1784,29 @@ final class AppCoordinator {
                         throw OverlaySnapshotError.bitmapUnavailable
                     }
                     try snapshotter.writeSnapshot(to: snapshotOutputURL)
+                    if followupSnapshotOutputURL == nil {
+                        NSApplication.shared.terminate(nil)
+                        return
+                    }
+                } catch {
+                    print("OpenWhisper HUD self-capture failed: \(error.localizedDescription)")
+                }
+            }
+        }
+        if let followupSnapshotOutputURL {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [overlay] in
+                do {
+                    guard let snapshotter = overlay as? any OverlaySnapshotCapturing else {
+                        throw OverlaySnapshotError.bitmapUnavailable
+                    }
+                    try snapshotter.writeSnapshot(to: followupSnapshotOutputURL)
                     NSApplication.shared.terminate(nil)
                     return
                 } catch {
-                    print("OpenWhisper HUD self-capture failed: \(error.localizedDescription)")
+                    print(
+                        "OpenWhisper HUD follow-up self-capture failed: "
+                            + error.localizedDescription
+                    )
                 }
             }
         }
@@ -1815,6 +1836,13 @@ final class AppCoordinator {
 
     private static func visualAcceptanceSnapshotOutputURL() -> URL? {
         AppLaunchMode.visualAcceptanceOutputURL(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        )
+    }
+
+    private static func visualAcceptanceFollowupSnapshotOutputURL() -> URL? {
+        AppLaunchMode.visualAcceptanceFollowupOutputURL(
             environment: ProcessInfo.processInfo.environment,
             arguments: ProcessInfo.processInfo.arguments
         )

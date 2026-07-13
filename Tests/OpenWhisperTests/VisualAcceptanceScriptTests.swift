@@ -16,6 +16,12 @@ func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
     #expect(script.contains("--visual-acceptance-output"))
     #expect(script.contains("--args"))
     #expect(script.contains("--overlay-demo-state"))
+    #expect(script.contains("--visual-acceptance-reduce-motion"))
+    #expect(script.contains("--visual-acceptance-increase-contrast"))
+    #expect(script.contains("--visual-acceptance-followup-output"))
+    #expect(script.contains("08-processing-reduced-motion.png"))
+    #expect(script.contains("09-processing-reduced-motion-followup.png"))
+    #expect(script.contains("10-retryable-error-increase-contrast.png"))
     #expect(script.contains("find_visual_acceptance_window.swift"))
     #expect(script.contains("screencapture -x -l"))
     #expect(script.contains("verify_visual_acceptance.swift"))
@@ -64,6 +70,10 @@ func visualAcceptanceVerifierDocumentsRequiredStates() throws {
     #expect(verifier.contains("distinct window size"))
     #expect(verifier.contains("unstablePrimaryGeometry"))
     #expect(verifier.contains("invalidErrorGeometry"))
+    #expect(verifier.contains("unstableReducedMotion"))
+    #expect(verifier.contains("insufficientAccessibilityDifference"))
+    #expect(verifier.contains("reduced-motion-static"))
+    #expect(verifier.contains("increase-contrast"))
     #expect(!verifier.contains("expected HUD band"))
 }
 

@@ -266,6 +266,92 @@ struct AppLaunchModeTests {
     }
 
     @Test
+    func visualAcceptanceAccessibilityOverridesAreExplicitAndTriState() {
+        #expect(
+            AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
+                environment: [:],
+                arguments: ["OpenWhisper"]
+            ) == .none
+        )
+        #expect(
+            AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--visual-acceptance-reduce-motion=on",
+                    "--visual-acceptance-increase-contrast",
+                    "off",
+                ]
+            ) == AccessibilityDisplayOptionsOverride(
+                reduceMotion: true,
+                increaseContrast: false
+            )
+        )
+        #expect(
+            AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
+                environment: [
+                    "OPENWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION": "0",
+                    "OPENWHISPER_VISUAL_ACCEPTANCE_INCREASE_CONTRAST": "yes",
+                ]
+            ) == AccessibilityDisplayOptionsOverride(
+                reduceMotion: false,
+                increaseContrast: true
+            )
+        )
+        #expect(
+            AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
+                environment: [
+                    "OPENWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION": "on",
+                ],
+                arguments: [
+                    "OpenWhisper",
+                    "--visual-acceptance-reduce-motion=off",
+                ]
+            ).reduceMotion == false
+        )
+    }
+
+    @Test
+    func accessibilityDisplayOptionsOverridePreservesUnspecifiedSystemValues() {
+        let system = AccessibilityDisplayOptions(
+            reduceMotion: true,
+            increaseContrast: false
+        )
+
+        #expect(AccessibilityDisplayOptionsOverride.none.applying(to: system) == system)
+        #expect(
+            AccessibilityDisplayOptionsOverride(
+                reduceMotion: false,
+                increaseContrast: nil
+            ).applying(to: system) == AccessibilityDisplayOptions(
+                reduceMotion: false,
+                increaseContrast: false
+            )
+        )
+    }
+
+    @Test
+    func visualAcceptanceFollowupOutputAcceptsEnvironmentAndArgument() {
+        #expect(
+            AppLaunchMode.visualAcceptanceFollowupOutputURL(
+                environment: [
+                    "OPENWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT":
+                        "/tmp/followup-environment.png",
+                ]
+            )?.path == "/tmp/followup-environment.png"
+        )
+        #expect(
+            AppLaunchMode.visualAcceptanceFollowupOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--visual-acceptance-followup-output=/tmp/followup-argument.png",
+                ]
+            )?.path == "/tmp/followup-argument.png"
+        )
+    }
+
+    @Test
 func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
         #expect(
             AppLaunchMode.settingsSnapshotOutputURL(

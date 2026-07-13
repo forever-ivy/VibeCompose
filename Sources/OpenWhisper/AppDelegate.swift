@@ -1,5 +1,6 @@
 import AppKit
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: AppCoordinator?
     private var authManager: ChatGPTAuthManager?
@@ -18,8 +19,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let authManager = snapshotPrivacyMode.isEnabled
             ? ChatGPTAuthManager(store: InMemoryChatGPTSessionStore())
             : ChatGPTAuthManager()
+        let accessibilityDisplayOptionsOverride =
+            AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
+                environment: environment,
+                arguments: arguments
+            )
+        let overlay = OverlayController(
+            accessibilityDisplayOptionsProvider: {
+                accessibilityDisplayOptionsOverride.applying(to: .system)
+            }
+        )
         self.authManager = authManager
-        coordinator = AppCoordinator(authManager: authManager)
+        coordinator = AppCoordinator(
+            overlay: overlay,
+            authManager: authManager
+        )
         coordinator?.start(launchMode: launchMode)
     }
 

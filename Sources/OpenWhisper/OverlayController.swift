@@ -57,9 +57,77 @@ struct OverlayPresentationGeneration: Sendable, Equatable {
     }
 }
 
+struct AccessibilityDisplayOptions: Sendable, Equatable {
+    let reduceMotion: Bool
+    let increaseContrast: Bool
+
+    @MainActor
+    static var system: AccessibilityDisplayOptions {
+        AccessibilityDisplayOptions(
+            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+            increaseContrast: NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        )
+    }
+}
+
+struct AccessibilityDisplayOptionsOverride: Sendable, Equatable {
+    let reduceMotion: Bool?
+    let increaseContrast: Bool?
+
+    static let none = AccessibilityDisplayOptionsOverride(
+        reduceMotion: nil,
+        increaseContrast: nil
+    )
+
+    func applying(to base: AccessibilityDisplayOptions) -> AccessibilityDisplayOptions {
+        AccessibilityDisplayOptions(
+            reduceMotion: reduceMotion ?? base.reduceMotion,
+            increaseContrast: increaseContrast ?? base.increaseContrast
+        )
+    }
+}
+
+struct OverlayAccessibilityAppearance: Sendable, Equatable {
+    let backgroundBorderWidth: CGFloat
+    let backgroundBorderAlpha: CGFloat
+    let detailUsesPrimaryText: Bool
+    let timerOpacity: CGFloat
+    let cancelControlOpacity: CGFloat
+    let retryControlOpacity: CGFloat
+    let waveformBaseOpacity: CGFloat
+
+    static func resolve(
+        options: AccessibilityDisplayOptions,
+        style: OverlayStylePreset
+    ) -> OverlayAccessibilityAppearance {
+        if options.increaseContrast {
+            return OverlayAccessibilityAppearance(
+                backgroundBorderWidth: 1.5,
+                backgroundBorderAlpha: 0.34,
+                detailUsesPrimaryText: true,
+                timerOpacity: 1,
+                cancelControlOpacity: 1,
+                retryControlOpacity: 1,
+                waveformBaseOpacity: 0.86
+            )
+        }
+
+        return OverlayAccessibilityAppearance(
+            backgroundBorderWidth: 1,
+            backgroundBorderAlpha: 0.08,
+            detailUsesPrimaryText: false,
+            timerOpacity: style.timerOpacity,
+            cancelControlOpacity: 0.78,
+            retryControlOpacity: 0.84,
+            waveformBaseOpacity: 0.68
+        )
+    }
+}
+
 @MainActor
 final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private let style = OverlayStylePreset.dictationHUD
+    private let accessibilityDisplayOptionsProvider: @MainActor () -> AccessibilityDisplayOptions
     private let panel: NSPanel
     private let panelRootView = OverlayPassthroughView()
     private let backgroundView = NSView()
@@ -79,6 +147,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private var processingFrameIndex = 0
     private var displayedLevels: [CGFloat]
     private var currentState: OverlayVisualState
+    private var accessibilityAppearance: OverlayAccessibilityAppearance
     private var presentationGeneration = OverlayPresentationGeneration()
     private var escapeHotkeyMonitor: HotkeyMonitor?
     var onCancel: (@MainActor (OverlayCancelSource) -> Void)?
@@ -86,16 +155,25 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
     init(
         onCancel: (@MainActor (OverlayCancelSource) -> Void)? = nil,
-        onRetry: (@MainActor () -> Void)? = nil
+        onRetry: (@MainActor () -> Void)? = nil,
+        accessibilityDisplayOptionsProvider: @escaping @MainActor () -> AccessibilityDisplayOptions = {
+            .system
+        }
     ) {
+        self.accessibilityDisplayOptionsProvider = accessibilityDisplayOptionsProvider
         displayedLevels = Array(
             repeating: WaveformNormalizer.minimumVisibleLevel,
             count: style.waveformBarCount
         )
         currentState = .processing
+        accessibilityAppearance = OverlayAccessibilityAppearance.resolve(
+            options: accessibilityDisplayOptionsProvider(),
+            style: style
+        )
         waveformView = OverlayWaveformView(
             levels: displayedLevels,
-            style: style
+            style: style,
+            baseOpacity: accessibilityAppearance.waveformBaseOpacity
         )
         panel = NSPanel(
             contentRect: NSRect(
@@ -305,7 +383,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private func startProcessingAnimation() {
         stopProcessingAnimation()
 
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        if accessibilityDisplayOptionsProvider().reduceMotion {
             displayedLevels = WaveformNormalizer.reducedMotionProcessingLevels(
                 barCount: style.waveformBarCount
             )
@@ -337,7 +415,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         if panel.alphaValue == 0 || !panel.isVisible {
             panel.alphaValue = 0
             panel.orderFrontRegardless()
-            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            if accessibilityDisplayOptionsProvider().reduceMotion {
                 panel.alphaValue = 1
                 return
             }
@@ -362,7 +440,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             else {
                 return
             }
-            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            if self.accessibilityDisplayOptionsProvider().reduceMotion {
                 self.hide()
                 return
             }
@@ -559,24 +637,29 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     private func updateAccessibilityAppearance() {
-        let increaseContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-        backgroundView.layer?.borderWidth = increaseContrast ? 1.5 : 1
+        let options = accessibilityDisplayOptionsProvider()
+        accessibilityAppearance = OverlayAccessibilityAppearance.resolve(
+            options: options,
+            style: style
+        )
+        backgroundView.layer?.borderWidth = accessibilityAppearance.backgroundBorderWidth
         backgroundView.layer?.borderColor = OpenWhisperPalette.mist
-            .withAlphaComponent(increaseContrast ? 0.34 : 0.08)
+            .withAlphaComponent(accessibilityAppearance.backgroundBorderAlpha)
             .cgColor
         titleLabel.textColor = OpenWhisperPalette.mist
-        detailLabel.textColor = increaseContrast
+        detailLabel.textColor = accessibilityAppearance.detailUsesPrimaryText
             ? OpenWhisperPalette.mist
             : OpenWhisperPalette.mistMuted
         trailingTimerLabel.textColor = OpenWhisperPalette.mistMuted.withAlphaComponent(
-            increaseContrast ? 1 : style.timerOpacity
+            accessibilityAppearance.timerOpacity
         )
         closeButton.contentTintColor = OpenWhisperPalette.mistMuted.withAlphaComponent(
-            increaseContrast ? 1 : 0.78
+            accessibilityAppearance.cancelControlOpacity
         )
         retryButton.contentTintColor = OpenWhisperPalette.mistMuted.withAlphaComponent(
-            increaseContrast ? 1 : 0.84
+            accessibilityAppearance.retryControlOpacity
         )
+        waveformView.update(baseOpacity: accessibilityAppearance.waveformBaseOpacity)
     }
 
     private func announce(_ state: OverlayVisualState) {
@@ -715,7 +798,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             isRetryControlVisible: !retryButton.isHidden,
             isTimerVisible: !trailingTimerLabel.isHidden,
             presentationGeneration: presentationGeneration.value,
-            panelIsVisible: panel.isVisible
+            panelIsVisible: panel.isVisible,
+            processingAnimationIsActive: processingTimer?.isValid == true,
+            displayedLevels: displayedLevels,
+            accessibilityAppearance: accessibilityAppearance
         )
     }
 }
@@ -729,6 +815,9 @@ struct OverlayDebugSnapshot: Sendable, Equatable {
     let isTimerVisible: Bool
     let presentationGeneration: UInt64
     let panelIsVisible: Bool
+    let processingAnimationIsActive: Bool
+    let displayedLevels: [CGFloat]
+    let accessibilityAppearance: OverlayAccessibilityAppearance
 }
 
 private final class OverlayPassthroughView: NSView {
@@ -767,10 +856,16 @@ private final class OverlayHitTargetButton: NSButton {
 private final class OverlayWaveformView: NSView {
     private var levels: [CGFloat]
     private let style: OverlayStylePreset
+    private var baseOpacity: CGFloat
 
-    init(levels: [CGFloat], style: OverlayStylePreset) {
+    init(
+        levels: [CGFloat],
+        style: OverlayStylePreset,
+        baseOpacity: CGFloat
+    ) {
         self.levels = levels
         self.style = style
+        self.baseOpacity = baseOpacity
         super.init(frame: .zero)
         wantsLayer = true
     }
@@ -790,6 +885,11 @@ private final class OverlayWaveformView: NSView {
                 count: max(0, style.waveformBarCount - trimmed.count)
             )
         }
+        needsDisplay = true
+    }
+
+    func update(baseOpacity: CGFloat) {
+        self.baseOpacity = baseOpacity
         needsDisplay = true
     }
 
@@ -820,7 +920,7 @@ private final class OverlayWaveformView: NSView {
             let distanceFromCenter = abs(CGFloat(index) - center) / max(1, center)
             let accentMix = (1 - min(1, distanceFromCenter)) * min(1, 0.42 + (level * 0.68))
             let barColor = NSColor.blend(
-                from: OpenWhisperPalette.mist.withAlphaComponent(0.68),
+                from: OpenWhisperPalette.mist.withAlphaComponent(baseOpacity),
                 to: OpenWhisperPalette.iceBlue,
                 amount: accentMix
             )

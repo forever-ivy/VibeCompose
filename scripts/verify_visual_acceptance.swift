@@ -16,11 +16,14 @@ enum VerificationError: Error, CustomStringConvertible {
     case duplicateState(String, String, Int)
     case unstablePrimaryGeometry(String, Int, Int, Int, Int)
     case invalidErrorGeometry(String, Int, Int, Int, Int)
+    case accessibilityVariantGeometryMismatch(String, String, Int, Int, Int, Int)
+    case insufficientAccessibilityDifference(String, String, Int)
+    case unstableReducedMotion(Int)
 
     var description: String {
         switch self {
         case .usage:
-            return "Usage: verify_visual_acceptance.swift recording processing result paste-sent copied error retryable-error"
+            return "Usage: verify_visual_acceptance.swift recording processing result paste-sent copied error retryable-error reduced-motion reduced-motion-followup increase-contrast"
         case .unreadableImage(let path):
             return "Could not read screenshot: \(path)"
         case .missingHud(let state, let visiblePixels):
@@ -43,6 +46,19 @@ enum VerificationError: Error, CustomStringConvertible {
             let actualHeight
         ):
             return "\(state) must be at least as large as the \(primaryWidth)x\(primaryHeight) primary HUD, got \(actualWidth)x\(actualHeight)"
+        case .accessibilityVariantGeometryMismatch(
+            let baseline,
+            let variant,
+            let baselineWidth,
+            let baselineHeight,
+            let variantWidth,
+            let variantHeight
+        ):
+            return "\(variant) changed geometry from \(baseline) \(baselineWidth)x\(baselineHeight) to \(variantWidth)x\(variantHeight)"
+        case .insufficientAccessibilityDifference(let baseline, let variant, let changedPixels):
+            return "\(variant) did not visibly differ enough from \(baseline) (\(changedPixels) changed pixels)"
+        case .unstableReducedMotion(let changedPixels):
+            return "reduced-motion-static snapshots changed by \(changedPixels) pixels"
         }
     }
 }
@@ -55,6 +71,9 @@ let expectedStateNames = [
     "copied",
     "error",
     "retryable-error",
+    "reduced-motion",
+    "reduced-motion-followup",
+    "increase-contrast",
 ]
 
 func loadImage(path: String, name: String) throws -> LoadedImage {
@@ -124,6 +143,8 @@ do {
     }
     let minimumVisiblePixels = 2_500
     let minimumChangedPixels = 500
+    let minimumAccessibilityChangedPixels = 80
+    let maximumReducedMotionChangedPixels = 4
 
     for state in states {
         let visiblePixels = visiblePixelCount(in: state)
@@ -157,7 +178,7 @@ do {
         }
     }
 
-    for index in 0..<(states.count - 1) {
+    for index in 0..<6 {
         let left = states[index]
         let right = states[index + 1]
         if left.width != right.width || left.height != right.height {
@@ -171,6 +192,73 @@ do {
         }
         print("\(left.name) -> \(right.name): \(changedPixels) changed HUD-window pixels")
     }
+
+    let processing = states[1]
+    let retryableError = states[6]
+    let reducedMotion = states[7]
+    let reducedMotionFollowup = states[8]
+    let increaseContrast = states[9]
+
+    for (baseline, variant) in [
+        (processing, reducedMotion),
+        (reducedMotion, reducedMotionFollowup),
+        (retryableError, increaseContrast),
+    ] {
+        guard baseline.width == variant.width, baseline.height == variant.height else {
+            throw VerificationError.accessibilityVariantGeometryMismatch(
+                baseline.name,
+                variant.name,
+                baseline.width,
+                baseline.height,
+                variant.width,
+                variant.height
+            )
+        }
+    }
+
+    let reducedMotionDifference = changedPixelCount(
+        from: processing,
+        to: reducedMotion
+    )
+    guard reducedMotionDifference >= minimumAccessibilityChangedPixels else {
+        throw VerificationError.insufficientAccessibilityDifference(
+            processing.name,
+            reducedMotion.name,
+            reducedMotionDifference
+        )
+    }
+    print(
+        "processing -> reduced-motion: "
+            + "\(reducedMotionDifference) changed HUD-window pixels"
+    )
+
+    let reducedMotionDrift = changedPixelCount(
+        from: reducedMotion,
+        to: reducedMotionFollowup
+    )
+    guard reducedMotionDrift <= maximumReducedMotionChangedPixels else {
+        throw VerificationError.unstableReducedMotion(reducedMotionDrift)
+    }
+    print(
+        "reduced-motion-static: "
+            + "\(reducedMotionDrift) changed HUD-window pixels"
+    )
+
+    let contrastDifference = changedPixelCount(
+        from: retryableError,
+        to: increaseContrast
+    )
+    guard contrastDifference >= minimumAccessibilityChangedPixels else {
+        throw VerificationError.insufficientAccessibilityDifference(
+            retryableError.name,
+            increaseContrast.name,
+            contrastDifference
+        )
+    }
+    print(
+        "retryable-error -> increase-contrast: "
+            + "\(contrastDifference) changed HUD-window pixels"
+    )
 
     print("OpenWhisper visual acceptance passed.")
 } catch {
