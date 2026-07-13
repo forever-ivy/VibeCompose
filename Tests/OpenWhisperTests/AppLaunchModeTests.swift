@@ -223,7 +223,7 @@ struct AppLaunchModeTests {
     }
 
     @Test
-    func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
+func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
         #expect(
             AppLaunchMode.settingsSnapshotOutputURL(
                 environment: [
@@ -300,4 +300,17 @@ struct AppLaunchModeTests {
             ) == .benchmark
         )
     }
+}
+
+@Test
+func settingsSnapshotOutputImplicitlyOpensSettings() {
+    #expect(
+        AppLaunchMode.resolve(
+            environment: [
+                "OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT":
+                    "/tmp/settings.png",
+            ],
+            arguments: ["OpenWhisper"]
+        ) == .settings
+    )
 }

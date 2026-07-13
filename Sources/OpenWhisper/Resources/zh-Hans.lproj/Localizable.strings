@@ -357,14 +357,15 @@
 "Auto" = "自动";
 "Always rewrite" = "始终重写";
 "Off" = "关闭";
+"Auto skips short, low-complexity dictation and rewrites only when corrections, structure, translation, email, or longer input justify the extra latency." = "自动模式会跳过短且低复杂度的听写，仅在出现改口、结构化、翻译、邮件或较长输入时执行重写，避免不必要的等待。";
 "Show estimates" = "显示用量估算";
 "Test Connection" = "测试连接";
 "Recent Polish History" = "最近润色记录";
 "ChatGPT Auth rewrite" = "ChatGPT 登录态重写";
 "Ready with %@." = "已就绪，当前模型：%@。";
-"Usage: %ld attempts, %ld succeeded, %ld failed, %ld input tokens, %ld output tokens." = "用量：尝试 %ld 次，成功 %ld 次，失败 %ld 次，输入 %ld 个令牌，输出 %ld 个令牌。";
+"Usage: %ld attempts, %ld succeeded, %ld failed, %ld skipped, %ld input tokens, %ld output tokens." = "用量：尝试 %ld 次，成功 %ld 次，失败 %ld 次，自动跳过 %ld 次，输入 %ld 个令牌，输出 %ld 个令牌。";
 "0 attempts / 0 tokens" = "0 次尝试 / 0 个令牌";
-"%ld attempts / %ld succeeded / %ld failed / %ld tokens" = "%ld 次尝试 / 成功 %ld 次 / 失败 %ld 次 / %ld 个令牌";
+"%ld attempts / %ld succeeded / %ld failed / %ld skipped / %ld tokens" = "%ld 次尝试 / 成功 %ld 次 / 失败 %ld 次 / 跳过 %ld 次 / %ld 个令牌";
 "Ready: %@ / %@." = "已就绪：%@ / %@。";
 "ChatGPT Auth is not ready. Connect ChatGPT first." = "ChatGPT 登录授权尚未就绪，请先连接 ChatGPT。";
 "No text polish provider is configured." = "尚未配置文本润色服务。";

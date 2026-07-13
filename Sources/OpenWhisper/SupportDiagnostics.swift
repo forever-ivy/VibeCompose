@@ -141,6 +141,7 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
     let normalizationMs: Int
     let polishMs: Int
     let textPolishAttempted: Bool
+    let textPolishDecisionReason: String?
     let textPolishErrorPresent: Bool
     let estimatedPolishInputTokens: Int
     let estimatedPolishOutputTokens: Int
@@ -172,6 +173,14 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
         polishMs = Self.nonnegative(sample.polishMs)
         textPolishAttempted = sample.textPolishAttempted
             ?? (sample.polishMs > 0 || sample.textPolishProvider != nil)
+        textPolishDecisionReason = sample.textPolishDecisionReason.map {
+            Self.allowedValue(
+                $0,
+                allowed: Set(
+                    TextPolishDecisionReason.allCases.map(\.rawValue)
+                )
+            )
+        }
         textPolishErrorPresent = sample.textPolishError != nil
         estimatedPolishInputTokens = Self.nonnegative(
             sample.estimatedPolishInputTokens

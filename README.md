@@ -14,7 +14,8 @@ The current implementation already includes:
 - global `F5` start/stop workflow
 - English and Simplified Chinese UI
 - browser-based ChatGPT connection with Keychain-backed local session storage
-- transcription, terminology alignment, and optional AI polish
+- transcription, terminology alignment, and optional AI polish with an Auto
+  mode that skips short, low-complexity dictation to avoid unnecessary latency
 - conservative paste behavior with clipboard fallback
 - retry results that are copied for manual paste instead of being injected automatically
 - microphone and Accessibility permission diagnostics
@@ -71,6 +72,10 @@ Ad-hoc signing is for local validation only. It can prevent macOS from showing a
 
 Do not launch `dist/OpenWhisper.app` as the live app. Permission and interaction verification must use `/Applications/OpenWhisper.app`.
 
+Automated product-surface screenshots run in an isolated acceptance mode with
+default configuration, empty in-memory credentials, and no live history,
+recovery, or terminology records.
+
 ## Runtime Data
 
 OpenWhisper stores local application data under:
@@ -91,7 +96,10 @@ Current privacy defaults:
 | Sensitive apps | Known password managers, Keychain, and Passwords are excluded from history and recovery |
 | Retry files | Temporary, time-limited, and removed on the next startup if orphaned |
 
-Diagnostics contain timing, byte counts, provider labels, and error categories. They do not contain audio, transcript text, clipboard contents, or tokens. Local data files are created with owner-only permissions where supported.
+Diagnostics contain timing, byte counts, provider labels, bounded AI Polish
+decision reasons, and error categories. They do not contain audio, transcript
+text, clipboard contents, or tokens. Local data files are created with
+owner-only permissions where supported.
 
 **Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
 

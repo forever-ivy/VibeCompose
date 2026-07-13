@@ -11,6 +11,7 @@ struct LatencySample: Codable, Sendable, Equatable {
     let normalizationMs: Int
     let polishMs: Int
     let textPolishAttempted: Bool?
+    let textPolishDecisionReason: String?
     let textPolishError: String?
     let estimatedPolishInputTokens: Int
     let estimatedPolishOutputTokens: Int
@@ -30,6 +31,7 @@ struct LatencySample: Codable, Sendable, Equatable {
         normalizationMs: Int,
         polishMs: Int = 0,
         textPolishAttempted: Bool? = nil,
+        textPolishDecisionReason: String? = nil,
         textPolishError: String? = nil,
         estimatedPolishInputTokens: Int = 0,
         estimatedPolishOutputTokens: Int = 0,
@@ -48,6 +50,7 @@ struct LatencySample: Codable, Sendable, Equatable {
         self.normalizationMs = normalizationMs
         self.polishMs = polishMs
         self.textPolishAttempted = textPolishAttempted
+        self.textPolishDecisionReason = textPolishDecisionReason
         self.textPolishError = textPolishError
         self.estimatedPolishInputTokens = estimatedPolishInputTokens
         self.estimatedPolishOutputTokens = estimatedPolishOutputTokens

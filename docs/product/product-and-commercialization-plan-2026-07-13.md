@@ -348,9 +348,9 @@ TerminologyContextResolver
 
 ### 5.2 真正的 Auto Polish
 
-当前 `TextPolishProviderSelector` 只判断模式和登录状态，没有根据长度或复杂度决策。
+`TextPolishDecisionEngine` 已接入当前流水线，不再只按模式和登录状态决定是否请求二次重写。
 
-建议决策规则：
+当前决策规则：
 
 ```text
 Direct 模式：默认跳过
@@ -382,17 +382,15 @@ run_translation
 forced_always
 ```
 
-实现建议：
+已实现：
 
 ```text
 Sources/OpenWhisper/TextPolishDecisionEngine.swift
-Sources/OpenWhisper/DictationContext.swift
+Sources/OpenWhisper/DictationPipeline.swift
+Sources/OpenWhisper/LatencyRecorder.swift
 ```
 
-接入位置：
-
-- `Sources/OpenWhisper/DictationPipeline.swift`
-- `Sources/OpenWhisper/AppCoordinator.swift`
+决策结果只记录有限枚举原因，不保存用于判断的正文。Settings 会展示执行、成功、失败和自动跳过次数。未来 Voice Modes 可直接复用当前 `DictationMode` 决策入口。
 
 ### 5.3 请求链路优化
 
@@ -556,6 +554,7 @@ StorageCleanupService
 - 用户可以删除 Recovery Key、切回 ChatGPT 账户路径，Delete All Data 也会删除该 Key；
 - Recovery 只切换 Dictation ASR，AI Polish 继续依赖 ChatGPT Auth；
 - 从默认 ChatGPT 路径切换到可能计费的 API 前会显示费用与数据流向确认。
+- 产品界面自动截图使用独立隐私模式，默认配置、空内存认证和空用户内容，避免发布素材意外包含真实邮箱、端点、历史、Recovery 或术语。
 
 持续验收：
 
@@ -821,7 +820,7 @@ North Star：
 
 ### 第 3–6 周：性能、可靠性和隐私
 
-- 实现 `TextPolishDecisionEngine`；
+- 验证 `TextPolishDecisionEngine` 的真实语料跳过率和延迟收益；
 - 优化音频读取和 multipart；
 - 执行 `maxDurationSeconds`；
 - 增加 TTFB、重试次数和决策原因；

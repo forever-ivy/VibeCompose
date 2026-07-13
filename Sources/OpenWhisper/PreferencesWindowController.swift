@@ -37,6 +37,10 @@ final class PreferencesWindowController: NSWindowController {
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
+        textPolishUsageDirectoryURL: URL? = ProductIdentity
+            .applicationSupportURL(
+                homeDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
+            ),
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
@@ -58,6 +62,7 @@ final class PreferencesWindowController: NSWindowController {
             onExportSupportDiagnostics: onExportSupportDiagnostics,
             providerCapabilityPolicy: providerCapabilityPolicy,
             recoveryCredentialStore: recoveryCredentialStore,
+            textPolishUsageDirectoryURL: textPolishUsageDirectoryURL,
             softwareUpdateSnapshot: softwareUpdateSnapshot,
             onCheckForUpdates: onCheckForUpdates,
             onSetAutomaticallyChecksForUpdates: onSetAutomaticallyChecksForUpdates,
@@ -192,18 +197,20 @@ private struct TextPolishUsage: Equatable {
     var attempts = 0
     var succeeded = 0
     var failed = 0
+    var skipped = 0
     var inputTokens = 0
     var outputTokens = 0
 
     var summary: String {
-        guard attempts > 0 else {
+        guard attempts > 0 || skipped > 0 else {
             return L10n.text("0 attempts / 0 tokens")
         }
         return L10n.format(
-            "%ld attempts / %ld succeeded / %ld failed / %ld tokens",
+            "%ld attempts / %ld succeeded / %ld failed / %ld skipped / %ld tokens",
             attempts,
             succeeded,
             failed,
+            skipped,
             inputTokens + outputTokens
         )
     }
@@ -371,6 +378,7 @@ private struct PreferencesView: View {
     let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
+    let textPolishUsageDirectoryURL: URL?
     let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
@@ -391,6 +399,7 @@ private struct PreferencesView: View {
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
+        textPolishUsageDirectoryURL: URL?,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
@@ -408,7 +417,11 @@ private struct PreferencesView: View {
         _terminologyImportMessage = State(initialValue: Self.terminologyStatusMessage(for: initialConfig))
         _authSnapshot = State(initialValue: authManager.authSnapshot())
         _browserBridgeSnapshot = State(initialValue: authManager.browserBridgeSnapshot())
-        _textPolishUsage = State(initialValue: Self.loadTextPolishUsage())
+        _textPolishUsage = State(
+            initialValue: textPolishUsageDirectoryURL.map {
+                Self.loadTextPolishUsage(directoryURL: $0)
+            } ?? [:]
+        )
         _providerPolicySnapshot = State(initialValue: .loading)
         _softwareUpdateSnapshot = State(initialValue: softwareUpdateSnapshot)
         switch recoveryCredentialState {
@@ -438,6 +451,7 @@ private struct PreferencesView: View {
         self.onExportSupportDiagnostics = onExportSupportDiagnostics
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
+        self.textPolishUsageDirectoryURL = textPolishUsageDirectoryURL
         self.onCheckForUpdates = onCheckForUpdates
         self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
         self.onDeleteAllData = onDeleteAllData
@@ -785,12 +799,16 @@ private struct PreferencesView: View {
 
         for sample in samples {
             let attempted = sample.textPolishAttempted ?? (sample.polishMs > 0 || sample.textPolishProvider != nil)
+            let provider = sample.textPolishProvider.flatMap(TextPolishProviderID.init(rawValue:)) ?? .chatGPTAuth
+            var current = usage[provider] ?? TextPolishUsage()
             guard attempted else {
+                if sample.textPolishDecisionReason != nil {
+                    current.skipped += 1
+                    usage[provider] = current
+                }
                 continue
             }
 
-            let provider = sample.textPolishProvider.flatMap(TextPolishProviderID.init(rawValue:)) ?? .chatGPTAuth
-            var current = usage[provider] ?? TextPolishUsage()
             current.attempts += 1
             if sample.textPolishProvider != nil {
                 current.succeeded += 1
@@ -806,7 +824,9 @@ private struct PreferencesView: View {
     }
 
     private func refreshTextPolishStatus() {
-        textPolishUsage = Self.loadTextPolishUsage()
+        textPolishUsage = textPolishUsageDirectoryURL.map {
+            Self.loadTextPolishUsage(directoryURL: $0)
+        } ?? [:]
     }
 
     private func refreshRecentHistory() {
@@ -1751,6 +1771,14 @@ private struct PreferencesView: View {
                 }
                 .pickerStyle(.segmented)
 
+                Text(
+                    L10n.text(
+                        "Auto skips short, low-complexity dictation and rewrites only when corrections, structure, translation, email, or longer input justify the extra latency."
+                    )
+                )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
                 HStack(spacing: 16) {
                     Toggle(L10n.text("Show estimates"), isOn: $config.transcription.textPolish.showCostEstimates)
                     if let textPolishMessage {
@@ -1944,10 +1972,11 @@ private struct PreferencesView: View {
                     .foregroundStyle(.secondary)
                 Text(
                     L10n.format(
-                        "Usage: %ld attempts, %ld succeeded, %ld failed, %ld input tokens, %ld output tokens.",
+                        "Usage: %ld attempts, %ld succeeded, %ld failed, %ld skipped, %ld input tokens, %ld output tokens.",
                         usage.attempts,
                         usage.succeeded,
                         usage.failed,
+                        usage.skipped,
                         usage.inputTokens,
                         usage.outputTokens
                     )

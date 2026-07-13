@@ -26,6 +26,12 @@ private struct FakeTextPolisher: TextPolishing {
 
 private struct FakePolishError: Error {}
 
+private func alwaysTextPolishConfig() -> TextPolishConfig {
+    var config = TextPolishConfig()
+    config.mode = .always
+    return config
+}
+
 @Test
 func terminologyNormalizerPreservesHintTermsWithoutModelRewrite() {
     let result = TerminologyNormalizer().normalize(
@@ -740,7 +746,8 @@ func dictationPipelineRunsTextPolishBetweenNormalizationPasses() async throws {
                     estimatedOutputTokens: 400
                 )
             )
-        )
+        ),
+        textPolishConfig: alwaysTextPolishConfig()
     )
 
     let audio = RecordedAudio(
@@ -757,6 +764,54 @@ func dictationPipelineRunsTextPolishBetweenNormalizationPasses() async throws {
     #expect(result.metrics.textPolishErrorMessage == nil)
     #expect(result.metrics.estimatedPolishInputTokens == 1_200)
     #expect(result.metrics.estimatedPolishOutputTokens == 400)
+}
+
+@Test
+func dictationPipelineAutoModeSkipsShortDirectPolish() async throws {
+    let pipeline = DictationPipeline(
+        transcriber: FakeTranscriber(
+            result: TranscriptionResult(
+                text: "明天下午三点开会。",
+                metrics: .init(
+                    provider: .chatGPTManagedAuth,
+                    audioDurationMs: 2_000,
+                    audioBytes: 64_000,
+                    authMs: 20,
+                    transcribeMs: 300,
+                    promptIncluded: true
+                )
+            )
+        ),
+        normalizer: TerminologyNormalizer(),
+        importedEntries: [],
+        hintTerms: [],
+        textPolisher: FakeTextPolisher(
+            result: .success(
+                TextPolishResult(
+                    text: "不应执行的重写结果。",
+                    provider: .chatGPTAuth,
+                    applied: true,
+                    estimatedInputTokens: 100,
+                    estimatedOutputTokens: 40
+                )
+            )
+        )
+    )
+
+    let result = try await pipeline.prepare(
+        audio: RecordedAudio(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("fake-auto-polish-skip.wav"),
+            durationMs: 2_000
+        )
+    )
+
+    #expect(result.finalText == "明天下午三点开会。")
+    #expect(result.metrics.textPolishAttempted == false)
+    #expect(
+        result.metrics.textPolishDecisionReason == .skipShortDirect
+    )
+    #expect(result.metrics.estimatedPolishInputTokens == 0)
 }
 
 @Test
@@ -778,7 +833,8 @@ func dictationPipelineFallsBackToNormalizedTextWhenTextPolishFails() async throw
         normalizer: TerminologyNormalizer(),
         importedEntries: [],
         hintTerms: ["OpenWhisper"],
-        textPolisher: FakeTextPolisher(result: .failure(FakePolishError()))
+        textPolisher: FakeTextPolisher(result: .failure(FakePolishError())),
+        textPolishConfig: alwaysTextPolishConfig()
     )
 
     let audio = RecordedAudio(
@@ -825,7 +881,8 @@ func dictationPipelineFallsBackWhenTextPolishChangesProtectedLiteralToken() asyn
                     estimatedOutputTokens: 40
                 )
             )
-        )
+        ),
+        textPolishConfig: alwaysTextPolishConfig()
     )
 
     let audio = RecordedAudio(
@@ -872,7 +929,8 @@ func dictationPipelineFallsBackWhenTextPolishSuspiciouslyTruncatesLongInput() as
                     estimatedOutputTokens: 300
                 )
             )
-        )
+        ),
+        textPolishConfig: alwaysTextPolishConfig()
     )
 
     let audio = RecordedAudio(
@@ -920,7 +978,8 @@ func dictationPipelineKeepsResequenceIntendedStepsWithPolish() async throws {
                     estimatedOutputTokens: 110
                 )
             )
-        )
+        ),
+        textPolishConfig: alwaysTextPolishConfig()
     )
 
     let audio = RecordedAudio(

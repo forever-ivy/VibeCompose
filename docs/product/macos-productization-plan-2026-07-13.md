@@ -90,6 +90,7 @@ macOS 首发策略：
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
 - 安全粘贴新增同一 AX target 的前后文本快照验证；只有精确观察到预期 UTF-16 替换才记为 `inserted_verified`，无法观察或结果不确定时记为 `paste_dispatched` 并保留转写剪贴板，未发送事件仍记为 `clipboard`；
 - HUD、History 筛选与标签、延迟诊断和双语文案已区分“已确认插入 / 已发送粘贴 / 已复制”，旧版 `pasted` 历史按“仅发送粘贴（旧记录）”解释，不追溯性宣称已验证。
+- Auto Polish 决策引擎已接入真实流水线：短且低复杂度的 Direct 听写跳过二次重写；改口、结构化、邮件、翻译、长输入和未来显式 Voice Mode 才执行，并只把有限枚举决策原因写入脱敏诊断。
 
 2026-07-13 Advanced Recovery 进展：
 
@@ -522,6 +523,7 @@ Application Support/OpenWhisper
 - Quick Add 独立面板与 `Control–Option–Space` 全局快捷键；
 - 导入文件执行 metadata-first 检查，限制 2 MB、10,000 条并拒绝符号链接；
 - `scripts/product_surface_acceptance.sh --install` 已覆盖 History、Terminology 和 Quick Add 的安装版渲染证据。
+- Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
 
 仍未完成的 Phase 3 出口项：
 
@@ -547,14 +549,17 @@ Application Support/OpenWhisper
 
 ### 8.2 Text Polish 决策
 
-建立 `TextPolishDecisionEngine`：
+`TextPolishDecisionEngine` 已建立并接入 `DictationPipeline`：
 
-- 短句默认直接输出；
-- 长段、Agent Plan、Email 等模式按规则润色；
+- `Off` 始终关闭，`Always` 始终执行；
+- Auto 下短且低复杂度的 Direct 输入默认直接输出；
+- 改口、结构化、翻译、邮件、长段及显式 Reply/Email/Agent Plan/Code Prompt/Translate 模式按规则执行；
 - 技术字面量先转换为 model-safe token，每个 token 必须恰好保留一次；
 - 润色失败永远回退到可用 ASR；
-- 记录 decision reason、耗时和 fallback 原因；
+- 记录 `skip_short_direct`、`run_self_correction`、`run_agent_plan`、`run_long_dictation` 等有限 decision reason、耗时和 fallback 原因；
 - 不记录完整敏感文本到分析事件。
+
+当前自动化覆盖短句跳过、改口、结构化、翻译、长输入、显式模式、关闭、强制执行和 Provider 不可用分支。后续 Beta 需要用真实语料验证 60%–80% 跳过率与 P50 改善。
 
 ### 8.3 Provider 健康与熔断
 
@@ -835,7 +840,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
 | OW-MAC-015 | P1 | Notarization + updater（Sparkle 2.9.4 已集成，待生产签名与实机更新） | 014 | 新机安装和更新成功 |
 | OW-MAC-016 | P2 | Product metrics | Privacy spec | 无敏感内容事件 |
-| OW-MAC-017 | P2 | Voice Modes | Text polish engine | Direct 无额外延迟 |
+| OW-MAC-017 | P2 | Voice Modes（Auto 决策引擎与 Direct 快路径已实现，待模式 UI/商业模块） | Text polish engine | Direct 无额外延迟 |
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
 | OW-MAC-019 | P2 | App compatibility matrix | Closed Beta | 目标 App 成功/降级明确 |
 | OW-MAC-020 | P2 | Support diagnostics bundle（已实现，待安装版交互验收） | Redaction | 导出包无 Token/正文/音频 |

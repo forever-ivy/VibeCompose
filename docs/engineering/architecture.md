@@ -88,7 +88,15 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - builds a private `0600` multipart file in 64 KB chunks and uploads it with `URLSession.upload(fromFile:)`;
   - removes multipart files after success, HTTP failure, transport failure, or cancellation.
 - `DictationPipeline`
-  - sequences ASR, terminology normalization, optional polish, and final normalization.
+  - sequences ASR, terminology normalization, optional polish, and final normalization;
+  - asks `TextPolishDecisionEngine` whether Auto mode should run before
+    resolving or sending a second rewrite request.
+- `TextPolishDecisionEngine`
+  - skips short, low-complexity Direct dictation;
+  - runs for explicit correction, structure, email, translation, long-form,
+    or future Voice Mode intent;
+  - emits a bounded reason such as `skip_short_direct`,
+    `run_self_correction`, or `run_long_dictation` without retaining text.
 - `TranscriptionPromptBuilder`
   - creates the fixed direct-output prompt and exact preservation hints.
 - `TerminologyNormalizer`
@@ -262,7 +270,9 @@ management windows.
 
 ## 9. Benchmarking and Diagnostics
 
-- `LatencyRecorder` rewrites a bounded JSONL sample set using the configured retention policy.
+- `LatencyRecorder` rewrites a bounded JSONL sample set using the configured
+  retention policy and records only the bounded AI Polish decision reason,
+  not the transcript used to make that decision.
 - `scripts/benchmark_stt.sh` runs explicit audio inputs through packaged-app benchmark mode.
 - Benchmark output includes cold/warm `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 summaries.
 - Product diagnostics are local-only in the current alpha; no product analytics upload is enabled.
@@ -288,6 +298,15 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
 HUD visual acceptance launches the installed app once per required state and asks the app to self-render its panel into PNG. CoreGraphics window capture remains a fallback, so automated visual evidence does not depend on granting the shell Screen Recording access.
+
+Settings, Onboarding, History, Terminology, and Quick Add self-capture launches
+enable `SnapshotPrivacyMode` before loading runtime state. The capture process
+uses `AppConfig()` defaults, an empty in-memory ChatGPT session store, an empty
+in-memory OpenAI-Compatible credential store, and empty history/recovery/
+terminology collections. It also disables persistence, permission requests,
+support export, update mutations, and normal hotkey/runtime startup so
+acceptance artifacts cannot contain the user's account email, custom endpoint,
+transcripts, recovery metadata, or terminology.
 
 Ad-hoc signing is allowed only for local development. Commercial distribution still requires strict environment parsing, a fixed Developer ID/Team ID, Hardened Runtime, notarization and stapling, fail-closed Gatekeeper checks, staged atomic installation with rollback, fixed artifact SHA-256 values, and a signed updater.
 

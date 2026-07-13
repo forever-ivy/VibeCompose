@@ -20,6 +20,8 @@ func latencyRecorderAppendsJsonlSamples() throws {
             normalizationMs: 2,
             polishMs: 300,
             textPolishAttempted: true,
+            textPolishDecisionReason:
+                TextPolishDecisionReason.runAgentPlan.rawValue,
             estimatedPolishInputTokens: 1_200,
             estimatedPolishOutputTokens: 400,
             injectMs: 40,
@@ -33,6 +35,11 @@ func latencyRecorderAppendsJsonlSamples() throws {
     #expect(contents.contains("\"provider\":\"chatGPTManagedAuth\""))
     #expect(contents.contains("\"textPolishProvider\":\"chatGPTAuth\""))
     #expect(contents.contains("\"textPolishAttempted\":true"))
+    #expect(
+        contents.contains(
+            "\"textPolishDecisionReason\":\"run_agent_plan\""
+        )
+    )
     #expect(contents.contains("\"transcribeMs\":850"))
     #expect(contents.contains("\"estimatedPolishInputTokens\":1200"))
 }

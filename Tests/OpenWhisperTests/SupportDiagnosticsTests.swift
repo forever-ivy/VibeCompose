@@ -58,6 +58,8 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
             normalizationMs: 4,
             polishMs: 120,
             textPolishAttempted: true,
+            textPolishDecisionReason:
+                TextPolishDecisionReason.runAgentPlan.rawValue,
             textPolishError: "Bearer secret-token /Users/alice/private-transcript.txt",
             estimatedPolishInputTokens: 300,
             estimatedPolishOutputTokens: 80,
@@ -229,6 +231,11 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
     #expect(exportedText.contains("\"authenticationState\" : \"ready\""))
     #expect(exportedText.contains("\"signatureState\" : \"stableTeamIdentity\""))
     #expect(exportedText.contains("\"resultStatus\":\"paste_dispatched\""))
+    #expect(
+        exportedText.contains(
+            "\"textPolishDecisionReason\":\"run_agent_plan\""
+        )
+    )
     #expect(exportedText.contains("\"textPolishErrorPresent\":true"))
     #expect(exportedText.contains("\"crashSummaryCount\" : 1"))
     #expect(exportedText.contains("\"buildVersion\" : \"1\""))

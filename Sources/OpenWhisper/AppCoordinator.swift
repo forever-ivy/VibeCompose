@@ -80,6 +80,7 @@ final class AppCoordinator {
     private var pendingRetryExpiryTask: Task<Void, Never>?
     private var authStateObserver: NSObjectProtocol?
     private var activeProcessingAudio: ActiveProcessingAudio?
+    private var snapshotPrivacyMode = SnapshotPrivacyMode.disabled
 
     private struct PendingRetry {
         let id: UUID
@@ -133,7 +134,24 @@ final class AppCoordinator {
             attemptPolicy,
             providerCapabilityPolicy,
             recoveryCredentialStore in
-            DictationPipeline(
+            let textPolishConfig = transcriptionConfig.textPolish
+            let chatGPTAuthAvailable =
+                authManager.authSnapshot().state == .ready
+            let textPolishAvailable = TextPolishProviderSelector()
+                .selectProvider(
+                    config: textPolishConfig,
+                    chatGPTAuthAvailable: chatGPTAuthAvailable
+                ) != nil
+            let textPolisher: (any TextPolishing)? = textPolishAvailable
+                ? OpenAICompatibleTextPolisher(
+                    config: textPolishConfig,
+                    chatGPTAuthProvider: authManager,
+                    chatGPTAuthAvailable: chatGPTAuthAvailable,
+                    providerCapabilityPolicy: providerCapabilityPolicy
+                )
+                : nil
+
+            return DictationPipeline(
                 transcriber: ChatGPTTranscriber(
                     authManager: authManager,
                     config: transcriptionConfig,
@@ -147,12 +165,8 @@ final class AppCoordinator {
                 ),
                 importedEntries: transcriptionConfig.activeDictionaryEntries,
                 hintTerms: transcriptionConfig.hintTerms,
-                textPolisher: OpenAICompatibleTextPolisher(
-                    config: transcriptionConfig.textPolish,
-                    chatGPTAuthProvider: authManager,
-                    chatGPTAuthAvailable: authManager.authSnapshot().state == .ready,
-                    providerCapabilityPolicy: providerCapabilityPolicy
-                )
+                textPolisher: textPolisher,
+                textPolishConfig: textPolishConfig
             )
         },
         launchAppContextProvider: @escaping LaunchAppContextProvider = { LaunchAppContext.current() }
@@ -196,6 +210,11 @@ final class AppCoordinator {
 
     func start(launchMode: AppLaunchMode = .normal) {
         do {
+            snapshotPrivacyMode = SnapshotPrivacyMode.resolve(
+                environment: ProcessInfo.processInfo.environment,
+                arguments: ProcessInfo.processInfo.arguments
+            )
+
             if let launchBlocker = AppInstallLocation.launchBlocker() {
                 NSSound.beep()
                 showInstallRequiredAlert(message: launchBlocker.message)
@@ -224,37 +243,41 @@ final class AppCoordinator {
                  .history,
                  .terminology,
                  .quickAdd:
-                config = try configStore.load()
-                enforceStoragePolicies()
-                Task { [providerCapabilityPolicy] in
-                    _ = await providerCapabilityPolicy.refresh(force: false)
-                }
-                recorder = recorderFactory(config.transcription.sampleRateHz)
-                recorder?.configure(maxDurationSeconds: config.transcription.maxDurationSeconds)
-                refreshReadyState()
-                checkLaunchLoginState()
-                prewarmAuthIfNeeded()
-
-                hotkeyMonitor = try HotkeyMonitor(keyCode: config.transcription.hotkeyKeyCode) { [weak self] in
-                    Task { @MainActor in
-                        self?.handleHotkeyPress()
+                if snapshotPrivacyMode.isEnabled {
+                    config = AppConfig()
+                } else {
+                    config = try configStore.load()
+                    enforceStoragePolicies()
+                    Task { [providerCapabilityPolicy] in
+                        _ = await providerCapabilityPolicy.refresh(force: false)
                     }
-                }
-                do {
-                    quickAddHotkeyMonitor = try HotkeyMonitor(
-                        keyCode: OpenWhisperHotkeys.quickAddKeyCode,
-                        modifiers: OpenWhisperHotkeys.quickAddModifiers
-                    ) { [weak self] in
+                    recorder = recorderFactory(config.transcription.sampleRateHz)
+                    recorder?.configure(maxDurationSeconds: config.transcription.maxDurationSeconds)
+                    refreshReadyState()
+                    checkLaunchLoginState()
+                    prewarmAuthIfNeeded()
+
+                    hotkeyMonitor = try HotkeyMonitor(keyCode: config.transcription.hotkeyKeyCode) { [weak self] in
                         Task { @MainActor in
-                            self?.openQuickAdd()
+                            self?.handleHotkeyPress()
                         }
                     }
-                } catch {
-                    logger.error(
-                        "Quick Add hotkey registration failed: \(error.localizedDescription, privacy: .public)"
-                    )
+                    do {
+                        quickAddHotkeyMonitor = try HotkeyMonitor(
+                            keyCode: OpenWhisperHotkeys.quickAddKeyCode,
+                            modifiers: OpenWhisperHotkeys.quickAddModifiers
+                        ) { [weak self] in
+                            Task { @MainActor in
+                                self?.openQuickAdd()
+                            }
+                        }
+                    } catch {
+                        logger.error(
+                            "Quick Add hotkey registration failed: \(error.localizedDescription, privacy: .public)"
+                        )
+                    }
+                    notifier.ensureAuthorization()
                 }
-                notifier.ensureAuthorization()
                 if launchMode == .settings
                     || launchMode == .privacySettings
                     || launchMode == .advancedSettings
@@ -629,7 +652,7 @@ final class AppCoordinator {
                 let prepared = try await pipeline.prepare(audio: audio)
                 guard !Task.isCancelled else { return }
                 self.logger.info(
-                    "Dictation pipeline completed transcriptCharacters=\(prepared.rawText.count, privacy: .public) finalCharacters=\(prepared.finalText.count, privacy: .public) authMs=\(prepared.metrics.transcription.authMs, privacy: .public) transcribeMs=\(prepared.metrics.transcription.transcribeMs, privacy: .public)"
+                    "Dictation pipeline completed transcriptCharacters=\(prepared.rawText.count, privacy: .public) finalCharacters=\(prepared.finalText.count, privacy: .public) authMs=\(prepared.metrics.transcription.authMs, privacy: .public) transcribeMs=\(prepared.metrics.transcription.transcribeMs, privacy: .public) polishDecision=\(prepared.metrics.textPolishDecisionReason?.rawValue ?? "none", privacy: .public) polishMs=\(prepared.metrics.polishMs, privacy: .public)"
                 )
 
                 let canInject = await MainActor.run {
@@ -768,14 +791,17 @@ final class AppCoordinator {
         }
 
         if preferencesWindowController == nil {
-            let authManager: ChatGPTAuthManager
-            if let concrete = self.authManager as? ChatGPTAuthManager {
-                authManager = concrete
-            } else {
-                authManager = ChatGPTAuthManager()
-            }
+            let presentationConfig = snapshotPrivacyMode.presentationConfig(
+                liveConfig: config
+            )
+            let authManager = snapshotPrivacyMode.presentationAuthManager(
+                liveAuthManager: self.authManager
+            )
+            let credentialStore = snapshotPrivacyMode.presentationCredentialStore(
+                liveCredentialStore: recoveryCredentialStore
+            )
             preferencesWindowController = PreferencesWindowController(
-                config: config,
+                config: presentationConfig,
                 authManager: authManager,
                 onSave: { [weak self] newConfig in
                     guard let self else {
@@ -788,6 +814,9 @@ final class AppCoordinator {
                                 ]
                             )
                         )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(())
                     }
                     return self.saveConfig(
                         newConfig,
@@ -805,6 +834,10 @@ final class AppCoordinator {
                                 ]
                             )
                         )
+                    }
+
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(currentConfig)
                     }
 
                     do {
@@ -837,16 +870,23 @@ final class AppCoordinator {
                     guard let self else {
                         return []
                     }
-                    return (try? self.historyRecorder.loadRecent(limit: 200)) ?? []
+                    return self.snapshotPrivacyMode.loadPresentationRecords {
+                        (try? self.historyRecorder.loadRecent(limit: 200)) ?? []
+                    }
                 },
                 onLoadRecoveryHistory: { [weak self] in
                     guard let self else {
                         return []
                     }
-                    return (try? self.recoveryRecorder.loadRecent(limit: 10)) ?? []
+                    return self.snapshotPrivacyMode.loadPresentationRecords {
+                        (try? self.recoveryRecorder.loadRecent(limit: 10)) ?? []
+                    }
                 },
                 onResolveRecoveryAudioURL: { [weak self] record in
                     guard let self else {
+                        return .failure(RecoveryAudioError.missing)
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
                         return .failure(RecoveryAudioError.missing)
                     }
                     return Result {
@@ -854,12 +894,21 @@ final class AppCoordinator {
                     }
                 },
                 onRetryRecoveryRecord: { [weak self] record in
+                    guard self?.snapshotPrivacyMode.isEnabled == false else {
+                        return
+                    }
                     self?.retryRecoveryRecord(record)
                 },
                 onRequestMicrophoneAccess: { [weak self] in
+                    guard self?.snapshotPrivacyMode.isEnabled == false else {
+                        return
+                    }
                     self?.requestMicrophoneAccessFromSettings()
                 },
                 onOpenConfigFolder: { [weak self] in
+                    guard self?.snapshotPrivacyMode.isEnabled == false else {
+                        return
+                    }
                     self?.openConfigFolder()
                 },
                 onExportSupportDiagnostics: { [weak self] destinationURL in
@@ -868,6 +917,19 @@ final class AppCoordinator {
                             NSError(
                                 domain: "OpenWhisper.Diagnostics",
                                 code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper settings are no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Diagnostics",
+                                code: 2,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
                                         "OpenWhisper settings are no longer available."
@@ -891,10 +953,23 @@ final class AppCoordinator {
                     }
                 },
                 providerCapabilityPolicy: providerCapabilityPolicy,
-                recoveryCredentialStore: recoveryCredentialStore,
+                recoveryCredentialStore: credentialStore,
+                textPolishUsageDirectoryURL:
+                    snapshotPrivacyMode.presentationDiagnosticsDirectoryURL(
+                        liveDirectoryURL: configStore.directoryURL
+                    ),
                 softwareUpdateSnapshot: softwareUpdater.snapshot(),
                 onCheckForUpdates: { [weak self] in
                     guard let self else {
+                        return .failure(
+                            .unavailable(
+                                L10n.text(
+                                    "OpenWhisper settings are no longer available."
+                                )
+                            )
+                        )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
                         return .failure(
                             .unavailable(
                                 L10n.text(
@@ -915,6 +990,9 @@ final class AppCoordinator {
                             )
                         )
                     }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(self.softwareUpdater.snapshot())
+                    }
                     return self.softwareUpdater
                         .setAutomaticallyChecksForUpdates(enabled)
                 },
@@ -929,6 +1007,9 @@ final class AppCoordinator {
                                 ]
                             )
                         )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(AppConfig())
                     }
                     return self.deleteAllUserData()
                 },
@@ -949,16 +1030,23 @@ final class AppCoordinator {
                     guard let self else {
                         return []
                     }
-                    return (try? self.historyRecorder.loadRecent(limit: 500)) ?? []
+                    return self.snapshotPrivacyMode.loadPresentationRecords {
+                        (try? self.historyRecorder.loadRecent(limit: 500)) ?? []
+                    }
                 },
                 onLoadRecoveryHistory: { [weak self] in
                     guard let self else {
                         return []
                     }
-                    return (try? self.recoveryRecorder.loadRecent(limit: 100)) ?? []
+                    return self.snapshotPrivacyMode.loadPresentationRecords {
+                        (try? self.recoveryRecorder.loadRecent(limit: 100)) ?? []
+                    }
                 },
                 onResolveRecoveryAudioURL: { [weak self] record in
                     guard let self else {
+                        return .failure(RecoveryAudioError.missing)
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
                         return .failure(RecoveryAudioError.missing)
                     }
                     return Result {
@@ -966,6 +1054,9 @@ final class AppCoordinator {
                     }
                 },
                 onRetryRecoveryRecord: { [weak self] record in
+                    guard self?.snapshotPrivacyMode.isEnabled == false else {
+                        return
+                    }
                     self?.retryRecoveryRecord(record)
                 },
                 onDeleteTranscriptionRecord: { [weak self] id in
@@ -981,6 +1072,9 @@ final class AppCoordinator {
                                 ]
                             )
                         )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(())
                     }
                     return Result {
                         try self.historyRecorder.delete(id: id)
@@ -1000,6 +1094,9 @@ final class AppCoordinator {
                             )
                         )
                     }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(())
+                    }
                     return Result {
                         try self.recoveryRecorder.delete(id: id)
                     }
@@ -1012,7 +1109,9 @@ final class AppCoordinator {
     private func openQuickAdd() {
         terminologyQuickAddWindowController?.close()
         terminologyQuickAddWindowController = TerminologyQuickAddWindowController(
-            existingEntries: config.transcription.terminology.entries,
+            existingEntries: snapshotPrivacyMode.isEnabled
+                ? []
+                : config.transcription.terminology.entries,
             onSave: { [weak self] entry in
                 guard let self else {
                     return .failure(
@@ -1026,6 +1125,9 @@ final class AppCoordinator {
                             ]
                         )
                     )
+                }
+                if self.snapshotPrivacyMode.isEnabled {
+                    return .success(())
                 }
 
                 guard !self.config.transcription.terminology.entries.contains(where: {
@@ -1057,7 +1159,9 @@ final class AppCoordinator {
             || terminologyWindowController?.window?.isVisible == false
         {
             terminologyWindowController = TerminologyWindowController(
-                config: config,
+                config: snapshotPrivacyMode.presentationConfig(
+                    liveConfig: config
+                ),
                 onSave: { [weak self] newConfig in
                     guard let self else {
                         return .failure(
@@ -1071,6 +1175,9 @@ final class AppCoordinator {
                                 ]
                             )
                         )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(())
                     }
                     return self.saveConfig(
                         newConfig,
@@ -1108,12 +1215,9 @@ final class AppCoordinator {
 
     private func openOnboarding() {
         if onboardingWindowController == nil {
-            let authManager: ChatGPTAuthManager
-            if let concrete = self.authManager as? ChatGPTAuthManager {
-                authManager = concrete
-            } else {
-                authManager = ChatGPTAuthManager()
-            }
+            let authManager = snapshotPrivacyMode.presentationAuthManager(
+                liveAuthManager: self.authManager
+            )
             onboardingWindowController = OnboardingWindowController(
                 authManager: authManager,
                 onRequestMicrophoneAccess: { [weak self] in
@@ -1127,6 +1231,9 @@ final class AppCoordinator {
                                 ]
                             )
                         )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .success(())
                     }
                     do {
                         try await self.requestMicrophoneAccess(showExplanation: false)
@@ -1687,6 +1794,7 @@ final class AppCoordinator {
             transcribeMs: 0,
             normalizationMs: 0,
             polishMs: 0,
+            textPolishDecisionReason: nil,
             estimatedPolishInputTokens: 0,
             estimatedPolishOutputTokens: 0,
             injectMs: 0,
@@ -1721,6 +1829,8 @@ final class AppCoordinator {
             normalizationMs: prepared.metrics.normalizationMs,
             polishMs: prepared.metrics.polishMs,
             textPolishAttempted: prepared.metrics.textPolishAttempted,
+            textPolishDecisionReason:
+                prepared.metrics.textPolishDecisionReason?.rawValue,
             textPolishError: prepared.metrics.textPolishErrorMessage,
             estimatedPolishInputTokens: prepared.metrics.estimatedPolishInputTokens,
             estimatedPolishOutputTokens: prepared.metrics.estimatedPolishOutputTokens,

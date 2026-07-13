@@ -44,6 +44,19 @@ enum AppLaunchMode: Equatable {
             break
         }
 
+        if settingsSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments
+        ) != nil {
+            if requestedSettingsPane(arguments: arguments) == "privacy" {
+                return .privacySettings
+            }
+            if requestedSettingsPane(arguments: arguments) == "advanced" {
+                return .advancedSettings
+            }
+            return .settings
+        }
+
         if arguments.contains("--guide-accessibility") {
             return .accessibilityGuide
         }

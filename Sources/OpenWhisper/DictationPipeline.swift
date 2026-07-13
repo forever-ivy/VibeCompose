@@ -21,6 +21,7 @@ struct DictationMetrics: Sendable, Equatable {
     let normalizationMs: Int
     let polishMs: Int
     let textPolishAttempted: Bool
+    let textPolishDecisionReason: TextPolishDecisionReason?
     let textPolishProvider: TextPolishProviderID?
     let textPolishErrorMessage: String?
     let estimatedPolishInputTokens: Int
@@ -31,6 +32,7 @@ struct DictationMetrics: Sendable, Equatable {
         normalizationMs: Int,
         polishMs: Int = 0,
         textPolishAttempted: Bool = false,
+        textPolishDecisionReason: TextPolishDecisionReason? = nil,
         textPolishProvider: TextPolishProviderID? = nil,
         textPolishErrorMessage: String? = nil,
         estimatedPolishInputTokens: Int = 0,
@@ -40,6 +42,7 @@ struct DictationMetrics: Sendable, Equatable {
         self.normalizationMs = normalizationMs
         self.polishMs = polishMs
         self.textPolishAttempted = textPolishAttempted
+        self.textPolishDecisionReason = textPolishDecisionReason
         self.textPolishProvider = textPolishProvider
         self.textPolishErrorMessage = textPolishErrorMessage
         self.estimatedPolishInputTokens = estimatedPolishInputTokens
@@ -62,6 +65,10 @@ struct DictationPipeline: DictationPreparing {
     let importedEntries: [TerminologyEntry]
     let hintTerms: [String]
     var textPolisher: (any TextPolishing)?
+    var textPolishConfig: TextPolishConfig = .init()
+    var textPolishDecisionEngine: any TextPolishDeciding =
+        TextPolishDecisionEngine()
+    var dictationMode: DictationMode = .direct
     var literalTokenizer: TechnicalLiteralTokenizer = .init()
 
     func prepare(audio: RecordedAudio) async throws -> PreparedDictation {
@@ -82,7 +89,15 @@ struct DictationPipeline: DictationPreparing {
         var estimatedPolishOutputTokens = 0
         var polishMs = 0
 
-        if let textPolisher {
+        let textPolishDecision = textPolishDecisionEngine.decide(
+            normalizedText: prePolish.text,
+            audioDurationMs: transcription.metrics.audioDurationMs,
+            mode: dictationMode,
+            config: textPolishConfig,
+            providerAvailable: textPolisher != nil
+        )
+
+        if textPolishDecision.shouldPolish, let textPolisher {
             textPolishAttempted = true
             let polishStarted = DispatchTime.now().uptimeNanoseconds
             do {
@@ -110,6 +125,7 @@ struct DictationPipeline: DictationPreparing {
                         prePolish: prePolish,
                         normalizationMs: normalizationMs,
                         polishMs: polishMs,
+                        textPolishDecisionReason: textPolishDecision.reason,
                         textPolishErrorMessage: textPolishErrorMessage,
                         estimatedPolishInputTokens: estimatedPolishInputTokens,
                         estimatedPolishOutputTokens: estimatedPolishOutputTokens
@@ -128,6 +144,7 @@ struct DictationPipeline: DictationPreparing {
                         prePolish: prePolish,
                         normalizationMs: normalizationMs,
                         polishMs: polishMs,
+                        textPolishDecisionReason: textPolishDecision.reason,
                         textPolishErrorMessage: textPolishErrorMessage,
                         estimatedPolishInputTokens: estimatedPolishInputTokens,
                         estimatedPolishOutputTokens: estimatedPolishOutputTokens
@@ -161,6 +178,7 @@ struct DictationPipeline: DictationPreparing {
                 normalizationMs: normalizationMs,
                 polishMs: polishMs,
                 textPolishAttempted: textPolishAttempted,
+                textPolishDecisionReason: textPolishDecision.reason,
                 textPolishProvider: textPolishProvider,
                 textPolishErrorMessage: textPolishErrorMessage,
                 estimatedPolishInputTokens: estimatedPolishInputTokens,
@@ -174,6 +192,7 @@ struct DictationPipeline: DictationPreparing {
         prePolish: NormalizationResult,
         normalizationMs: Int,
         polishMs: Int,
+        textPolishDecisionReason: TextPolishDecisionReason?,
         textPolishErrorMessage: String?,
         estimatedPolishInputTokens: Int,
         estimatedPolishOutputTokens: Int
@@ -189,6 +208,7 @@ struct DictationPipeline: DictationPreparing {
                 normalizationMs: normalizationMs,
                 polishMs: polishMs,
                 textPolishAttempted: true,
+                textPolishDecisionReason: textPolishDecisionReason,
                 textPolishProvider: nil,
                 textPolishErrorMessage: textPolishErrorMessage,
                 estimatedPolishInputTokens: estimatedPolishInputTokens,
