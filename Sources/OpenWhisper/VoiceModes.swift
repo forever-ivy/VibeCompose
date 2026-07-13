@@ -345,12 +345,18 @@ struct VoiceModeConfig: Codable, Sendable, Equatable {
 
 extension TranscriptionConfig {
     func resolvingVoiceMode(
-        for launchAppContext: LaunchAppContext?
+        for launchAppContext: LaunchAppContext?,
+        voiceModesAllowed: Bool = true
     ) -> TranscriptionConfig {
         var resolved = self
-        resolved.voiceModes = voiceModes.runtimeConfiguration(
-            for: launchAppContext
-        )
+        resolved.voiceModes = voiceModesAllowed
+            ? voiceModes.runtimeConfiguration(
+                for: launchAppContext
+            )
+            : VoiceModeConfig(
+                defaultMode: .direct,
+                applicationRules: []
+            )
         return resolved
     }
 }

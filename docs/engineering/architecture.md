@@ -107,6 +107,8 @@ The long-term target remains a dedicated `DictationSession` model rather than co
     configuration cannot create ambiguous SwiftUI identities;
   - freeze the resolved mode into the per-session transcription
     configuration and remove the complete rule list before provider use.
+  - are forced to Direct at the runtime boundary when the current signed
+    commercial entitlement does not allow Voice Modes.
 - `TranscriptionPromptBuilder`
   - creates the fixed direct-output prompt and exact preservation hints.
 - `TerminologyNormalizer`
@@ -231,8 +233,10 @@ Privacy behavior:
 
 The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `openwhisper-<UUID>.wav` and `openwhisper-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
 
-`AppCoordinator.deleteAllUserData()` deletes both Keychain trust domains,
-then `StorageCleanupService.deleteAllData()` validates the
+`AppCoordinator.deleteAllUserData()` deletes the ChatGPT session, Recovery API
+key, Pro receipt, and random License Device ID from their separate Keychain
+items, then
+`StorageCleanupService.deleteAllData()` validates the
 application-support boundary, refuses symbolic-link deletion, removes the
 complete local data root, recreates a secure empty directory, and saves a
 fresh default configuration.
@@ -258,6 +262,8 @@ Startup pruning removes unreferenced audio, drops records whose audio no longer 
 The current Settings window exposes:
 
 - account and permission state;
+- signed Pro license state, random Device ID, bounded receipt import/removal,
+  update-build entitlement, and offline-grace recovery guidance;
 - dictation and text polish;
 - a default Voice Mode plus optional exact bundle-identifier application
   rules, including an installed-application picker and explicit warnings when
@@ -381,6 +387,18 @@ Release metadata and distribution guards currently include:
 - a separate signed provider capability policy gate requiring
   `OWCapabilityPolicyURL`, `OWCapabilityPublicEDKey`, and a verified,
   non-expired policy covering the release build.
+- an independent signed-license gate requiring
+  `OWProPreviewEnabled=false` and a valid `OWLicensePublicEDKey` in every
+  commercial build.
+
+`OpenWhisperLicensing` is a separate Swift target containing receipt models,
+Ed25519 verification, Keychain receipt/device stores, offline-grace and
+maximum-build decisions, and the commercial feature-access protocol. The
+private signing key is never part of the repository or app. The current
+private Alpha explicitly enables Pro Preview, while runtime and release gates
+fail closed for non-preview builds. The exact open-core and future private
+package policy is documented in
+[`commercial-module-boundary.md`](../product/commercial-module-boundary.md).
 
 Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the status menu and Advanced Settings. Packaging accepts only paired HTTPS feed and Ed25519 public-key configuration, and release tooling can generate a signed channel appcast without storing the private key in the repository. The commercial release gate intentionally remains closed until production hosting/keys, a real signed appcast, Developer ID notarization, and installed update/rollback proof exist.
 

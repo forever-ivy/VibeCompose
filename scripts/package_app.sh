@@ -43,6 +43,8 @@ SPARKLE_FEED_URL="${OPENWHISPER_SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${OPENWHISPER_SPARKLE_PUBLIC_ED_KEY:-}"
 CAPABILITY_POLICY_URL="${OPENWHISPER_CAPABILITY_POLICY_URL:-}"
 CAPABILITY_PUBLIC_ED_KEY="${OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}"
+LICENSE_PUBLIC_ED_KEY="${OPENWHISPER_LICENSE_PUBLIC_ED_KEY:-}"
+PRO_PREVIEW_ENABLED="${OPENWHISPER_PRO_PREVIEW_ENABLED:-1}"
 ADHOC_DESIGNATED_REQUIREMENT="=designated => identifier \"$OPENWHISPER_BUNDLE_ID\""
 
 resolve_signing_identity() {
@@ -206,6 +208,38 @@ if [[ "$REQUIRE_DEVELOPER_ID" == "1" \
   && ( -z "$CAPABILITY_POLICY_URL" || -z "$CAPABILITY_PUBLIC_ED_KEY" ) ]]; then
   echo "Developer ID release packaging requires signed provider capability policy configuration." >&2
   exit 1
+fi
+
+if [[ "$PRO_PREVIEW_ENABLED" != "0" \
+  && "$PRO_PREVIEW_ENABLED" != "1" ]]; then
+  echo "OPENWHISPER_PRO_PREVIEW_ENABLED must be 0 or 1." >&2
+  exit 1
+fi
+if [[ -n "$LICENSE_PUBLIC_ED_KEY" \
+  && ! "$LICENSE_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+  echo "OPENWHISPER_LICENSE_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
+  exit 1
+fi
+if [[ "$PRO_PREVIEW_ENABLED" == "1" ]]; then
+  /usr/bin/plutil -insert OWProPreviewEnabled -bool true "$PLIST"
+else
+  /usr/bin/plutil -insert OWProPreviewEnabled -bool false "$PLIST"
+fi
+if [[ -n "$LICENSE_PUBLIC_ED_KEY" ]]; then
+  /usr/bin/plutil -insert OWLicensePublicEDKey \
+    -string "$LICENSE_PUBLIC_ED_KEY" \
+    "$PLIST"
+fi
+
+if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
+  if [[ "$PRO_PREVIEW_ENABLED" != "0" ]]; then
+    echo "Developer ID commercial packaging must disable the private Pro preview." >&2
+    exit 1
+  fi
+  if [[ -z "$LICENSE_PUBLIC_ED_KEY" ]]; then
+    echo "Developer ID commercial packaging requires the signed-license Ed25519 public key." >&2
+    exit 1
+  fi
 fi
 
 /usr/bin/plutil -insert SUEnableAutomaticChecks -bool false "$PLIST"

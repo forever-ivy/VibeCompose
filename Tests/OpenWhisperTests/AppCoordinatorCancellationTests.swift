@@ -751,6 +751,10 @@ struct AppCoordinatorCancellationTests {
 
         coordinator.handleHotkeyPress()
         await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.config.transcription.voiceModes = VoiceModeConfig(
+            defaultMode: .email,
+            applicationRules: []
+        )
         coordinator.handleHotkeyPress()
         await waitForCondition { injector.injectCallCount == 1 }
 

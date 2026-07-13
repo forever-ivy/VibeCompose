@@ -97,6 +97,8 @@ macOS 首发策略：
 - HUD、History 筛选与标签、延迟诊断和双语文案已区分“已确认插入 / 已发送粘贴 / 已复制”，旧版 `pasted` 历史按“仅发送粘贴（旧记录）”解释，不追溯性宣称已验证。
 - Auto Polish 决策引擎已接入真实流水线：短且低复杂度的 Direct 听写跳过二次重写；改口、结构化、邮件、翻译、长输入和显式非 Direct Voice Mode 才执行，并只把有限枚举决策原因写入脱敏诊断。
 - 应用感知 Voice Modes 的 Alpha 技术预览已接入真实流水线与 Settings：支持 Direct、Reply、Email、Agent Plan、Code Prompt 和 Translate，可设置默认模式或按精确 Bundle Identifier 覆盖；只保存应用名称和 Bundle Identifier，不读取窗口或文档内容；模式在录音开始时冻结，Provider 不接收完整规则表。
+- `OpenWhisperLicensing` 已作为独立 Swift target 落地：支持 Ed25519 签名收据、随机应用级 Device ID、Keychain 收据/设备存储、最多 90 天离线宽限、最大可用 build、功能枚举、导入/移除与 Delete All Data；Voice Modes 和 Quick Add 在运行时重新检查权益，修改本地配置不能绕过 Direct 回退。
+- 私有 Alpha 会在 Info.plist 显式写入 `OWProPreviewEnabled=true`；商业 release gate 要求关闭 Preview 并配置独立的 `OWLicensePublicEDKey`。许可证私钥、支付密钥和客户邮箱不进入仓库或 App。
 
 2026-07-13 Advanced Recovery 进展：
 
@@ -107,7 +109,7 @@ macOS 首发策略：
 - Recovery 只改变听写 ASR，AI Polish 继续使用 ChatGPT 登录授权；
 - Delete All Data 同时删除 ChatGPT 会话和 Recovery API Key。
 
-仍未完成：有效 Developer ID、公证实证、生产 Sparkle feed/密钥、真实签名 appcast、自动更新/回滚实机证明、生产 Capability Policy 托管/密钥/事故演练，以及永久商业运营主体和联系方式。
+仍未完成：有效 Developer ID、公证实证、生产 Sparkle feed/密钥、真实签名 appcast、自动更新/回滚实机证明、生产 Capability Policy 托管/密钥/事故演练、生产许可证激活/停用/席位恢复服务与结账集成，以及永久商业运营主体和联系方式。
 
 UI 调研确认的主要问题：
 
@@ -887,8 +889,8 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
 | OW-MAC-015 | P1 | Notarization + updater（Sparkle 2.9.4 已集成，待生产签名与实机更新） | 014 | 新机安装和更新成功 |
 | OW-MAC-016 | P2 | Product metrics（本地、默认关闭、汇总分析与自愿导出已实现；待真实 Beta 指标验证） | Privacy spec | 无敏感内容事件 |
-| OW-MAC-017 | P2 | Voice Modes（Alpha 默认模式、应用规则、模式提示词、配置防御和 Settings UI 已实现；待商业模块边界、License Manager 与完整安装版交互验收） | Text polish engine | Direct 无额外延迟；应用规则只使用名称/Bundle ID；非 Direct 模式明确依赖 AI Polish |
-| OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
+| OW-MAC-017 | P2 | Voice Modes（Alpha 默认模式、应用规则、模式提示词、配置防御、Settings UI、签名权益运行时回退已实现；待未来独立 Pro 实现包与完整安装版交互验收） | Text polish engine | Direct 无额外延迟；应用规则只使用名称/Bundle ID；非 Direct 模式明确依赖 AI Polish |
+| OW-MAC-018 | P2 | License Manager（独立模块、签名收据、Keychain、随机 Device ID、离线宽限、build 权益、UI、CLI 和 release gate 已实现；待生产激活/停用、席位恢复、退款撤销和结账服务） | Commercial boundary | 离线宽限与设备限制可恢复 |
 | OW-MAC-019 | P2 | App compatibility matrix（TextEdit/隔离 Terminal 自动证据已完成） | Closed Beta | Notes 与目标第三方 App 成功/降级明确 |
 | OW-MAC-020 | P2 | Support diagnostics bundle（已实现，待安装版交互验收） | Redaction | 导出包无 Token/正文/音频 |
 | OW-MAC-021 | P1 | 音频 metadata-first 与流式 multipart（已实现） | Provider boundary | 25 MB/symlink 在网络前拒绝，上传不构造内存 body |

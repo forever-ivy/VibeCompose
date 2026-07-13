@@ -140,6 +140,21 @@ fi
   echo "Signed provider capability policy key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
+
+PRO_PREVIEW_ENABLED="$(/usr/bin/plutil -extract OWProPreviewEnabled raw -o - "$PLIST" 2>/dev/null || true)"
+[[ "$PRO_PREVIEW_ENABLED" == "false" ]] || {
+  echo "Commercial release must disable the private Pro preview." >&2
+  exit 1
+}
+if ! LICENSE_PUBLIC_KEY="$(/usr/bin/plutil -extract OWLicensePublicEDKey raw -o - "$PLIST" 2>/dev/null)"; then
+  echo "Commercial release is missing OWLicensePublicEDKey." >&2
+  exit 1
+fi
+[[ "$LICENSE_PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || {
+  echo "Commercial license verification key is not a 32-byte base64 Ed25519 key." >&2
+  exit 1
+}
+
 [[ -f "$CAPABILITY_POLICY" && ! -L "$CAPABILITY_POLICY" ]] || {
   echo "Missing regular signed provider capability policy: $CAPABILITY_POLICY" >&2
   exit 1

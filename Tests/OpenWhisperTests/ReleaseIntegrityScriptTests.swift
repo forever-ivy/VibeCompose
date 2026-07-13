@@ -78,8 +78,12 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("OPENWHISPER_SPARKLE_PUBLIC_ED_KEY"))
     #expect(packageScript.contains("OPENWHISPER_CAPABILITY_POLICY_URL"))
     #expect(packageScript.contains("OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY"))
+    #expect(packageScript.contains("OPENWHISPER_LICENSE_PUBLIC_ED_KEY"))
+    #expect(packageScript.contains("OPENWHISPER_PRO_PREVIEW_ENABLED"))
     #expect(packageScript.contains("OWCapabilityPolicyURL"))
     #expect(packageScript.contains("OWCapabilityPublicEDKey"))
+    #expect(packageScript.contains("OWLicensePublicEDKey"))
+    #expect(packageScript.contains("OWProPreviewEnabled"))
     #expect(packageScript.contains("sign_sparkle_components"))
     #expect(packageScript.contains("enable_adhoc_library_validation_exception"))
     #expect(packageScript.contains("plutil -lint \"$ENTITLEMENTS_FILE\""))
@@ -384,6 +388,13 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(updateCaskScript.contains("must not use the unreleased fail-closed value"))
     #expect(releaseGate.contains("Developer ID Application:"))
     #expect(releaseGate.contains("verify_repository_hygiene.py"))
+    #expect(releaseGate.contains("OWLicensePublicEDKey"))
+    #expect(releaseGate.contains("OWProPreviewEnabled"))
+    #expect(
+        releaseGate.contains(
+            "Commercial release must disable the private Pro preview."
+        )
+    )
     #expect(releaseGate.contains("TeamIdentifier=$EXPECTED_TEAM_ID"))
     #expect(releaseGate.contains("stapler validate"))
     #expect(releaseGate.contains("spctl --assess"))

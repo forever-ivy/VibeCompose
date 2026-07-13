@@ -79,6 +79,24 @@ if [[ -n "$CAPABILITY_POLICY_URL" || -n "$CAPABILITY_PUBLIC_KEY" ]]; then
   }
 fi
 
+PRO_PREVIEW_ENABLED="$(/usr/bin/plutil -extract OWProPreviewEnabled raw -o - "$PLIST" 2>/dev/null || true)"
+LICENSE_PUBLIC_KEY="$(/usr/bin/plutil -extract OWLicensePublicEDKey raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ "$PRO_PREVIEW_ENABLED" != "true" \
+  && "$PRO_PREVIEW_ENABLED" != "false" ]]; then
+  echo "Packaged app must declare OWProPreviewEnabled explicitly." >&2
+  exit 1
+fi
+if [[ -n "$LICENSE_PUBLIC_KEY" \
+  && ! "$LICENSE_PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+  echo "Packaged license verification key is not a 32-byte base64 Ed25519 key." >&2
+  exit 1
+fi
+if [[ "$PRO_PREVIEW_ENABLED" == "false" \
+  && -z "$LICENSE_PUBLIC_KEY" ]]; then
+  echo "A non-preview package must include the signed-license verification key." >&2
+  exit 1
+fi
+
 if /usr/bin/plutil -extract LSUIElement raw -o - "$PLIST" >/dev/null 2>&1; then
   echo "Packaged app must not declare LSUIElement in Info.plist; runtime should switch to accessory mode explicitly." >&2
   exit 1

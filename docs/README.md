@@ -6,6 +6,7 @@
 - [Product and commercialization analysis](product/product-and-commercialization-plan-2026-07-13.md) — positioning, packaging, pricing, and growth inputs
 - [V1 PRD](product/v1-prd.md) — current product scope
 - [Brand identity](product/brand-identity.md) — canonical product names and identifiers
+- [Commercial module boundary](product/commercial-module-boundary.md) — MIT core, licensing adapter, Pro package, and contribution rules
 
 ## Risk and Research
 
@@ -18,6 +19,7 @@
 - [Architecture](engineering/architecture.md)
 - [Release process](engineering/release.md)
 - [Updater decision](engineering/updater.md)
+- [License operations](engineering/licensing.md)
 - [Visual acceptance](engineering/visual-acceptance.md)
 - [HUD visual specification](design/hud-visual-spec.md)
 

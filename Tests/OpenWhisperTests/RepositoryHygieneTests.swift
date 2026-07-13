@@ -18,10 +18,12 @@ func canonicalCheckRunsRepositoryHygieneGate() throws {
     #expect(checkScript.contains("verify_repository_hygiene.py"))
     #expect(verifier.contains("verify_canonical_identity"))
     #expect(verifier.contains("verify_no_committed_secrets"))
+    #expect(verifier.contains("verify_no_private_key_artifacts"))
     #expect(verifier.contains("verify_localization"))
     #expect(verifier.contains("verify_markdown_links"))
     #expect(verifier.contains("LEGACY_MARKERS"))
     #expect(verifier.contains("SECRET_PATTERNS"))
+    #expect(verifier.contains("PRIVATE_KEY_FILENAME_PATTERN"))
     #expect(verifier.contains("LOCALIZATION_CALL_PATTERN"))
     #expect(verifier.contains("MARKDOWN_LINK_PATTERN"))
 }

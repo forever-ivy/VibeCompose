@@ -9,6 +9,14 @@ let package = Package(
     ],
     products: [
         .executable(name: "OpenWhisper", targets: ["OpenWhisper"]),
+        .library(
+            name: "OpenWhisperLicensing",
+            targets: ["OpenWhisperLicensing"]
+        ),
+        .executable(
+            name: "OpenWhisperLicenseTool",
+            targets: ["OpenWhisperLicenseTool"]
+        ),
     ],
     dependencies: [
         .package(
@@ -24,6 +32,7 @@ let package = Package(
         .executableTarget(
             name: "OpenWhisper",
             dependencies: [
+                "OpenWhisperLicensing",
                 .product(name: "PermissionFlow", package: "PermissionFlow"),
                 .product(name: "SystemSettingsKit", package: "PermissionFlow"),
                 .product(name: "Sparkle", package: "Sparkle"),
@@ -31,10 +40,24 @@ let package = Package(
             path: "Sources/OpenWhisper",
             exclude: ["Resources"]
         ),
+        .target(
+            name: "OpenWhisperLicensing",
+            path: "Sources/OpenWhisperLicensing"
+        ),
+        .executableTarget(
+            name: "OpenWhisperLicenseTool",
+            dependencies: ["OpenWhisperLicensing"],
+            path: "Sources/OpenWhisperLicenseTool"
+        ),
         .testTarget(
             name: "OpenWhisperTests",
-            dependencies: ["OpenWhisper"],
+            dependencies: ["OpenWhisper", "OpenWhisperLicensing"],
             path: "Tests/OpenWhisperTests"
+        ),
+        .testTarget(
+            name: "OpenWhisperLicensingTests",
+            dependencies: ["OpenWhisperLicensing"],
+            path: "Tests/OpenWhisperLicensingTests"
         ),
     ],
     swiftLanguageModes: [.v6]

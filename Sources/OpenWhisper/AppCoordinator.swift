@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import OpenWhisperLicensing
 import OSLog
 
 struct TranscriptionAttemptPolicy: Sendable, Equatable {
@@ -56,6 +57,7 @@ final class AppCoordinator {
     let softwareUpdater: any SoftwareUpdating
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
+    let licenseManager: any CommercialLicenseManaging
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -84,6 +86,7 @@ final class AppCoordinator {
     private var startRecordingTask: Task<Void, Never>?
     private var activeSessionID: UUID?
     private var recordingStartedAt: DispatchTime?
+    private var recordingTranscriptionConfig: TranscriptionConfig?
     private var pendingRetry: PendingRetry?
     private var pendingRetryExpiryTask: Task<Void, Never>?
     private var authStateObserver: NSObjectProtocol?
@@ -137,6 +140,8 @@ final class AppCoordinator {
         },
         softwareUpdater: (any SoftwareUpdating)? = nil,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
+        licenseManager: any CommercialLicenseManaging =
+            StaticLicenseManager.preview,
         pipelineFactory: @escaping PipelineFactory = {
             transcriptionConfig,
             authManager,
@@ -209,6 +214,7 @@ final class AppCoordinator {
         self.softwareUpdater = softwareUpdater ?? SparkleSoftwareUpdater()
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
+        self.licenseManager = licenseManager
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -453,6 +459,7 @@ final class AppCoordinator {
         state = .idle
         activeSessionID = nil
         recordingStartedAt = nil
+        recordingTranscriptionConfig = nil
         launchAppContext = nil
         overlay.hide()
         refreshReadyState()
@@ -480,6 +487,7 @@ final class AppCoordinator {
         state = .idle
         activeSessionID = nil
         recordingStartedAt = nil
+        recordingTranscriptionConfig = nil
         launchAppContext = nil
         overlay.hide()
     }
@@ -493,6 +501,13 @@ final class AppCoordinator {
         logger.info("Allocated recording session \(sessionID.uuidString, privacy: .public)")
         activeSessionID = sessionID
         launchAppContext = launchAppContextProvider()
+        recordingTranscriptionConfig = config.transcription
+            .resolvingVoiceMode(
+                for: launchAppContext,
+                voiceModesAllowed: licenseManager
+                    .snapshot()
+                    .allows(.voiceModes)
+            )
         state = .processing
         statusMenu?.update(state: .processing, detail: L10n.text("Requesting microphone"))
         overlay.showProcessing()
@@ -533,6 +548,7 @@ final class AppCoordinator {
                     self.stopRecordingLevelUpdates()
                     self.state = .idle
                     self.activeSessionID = nil
+                    self.recordingTranscriptionConfig = nil
                     self.statusMenu?.update(state: .setupRequired, detail: message)
                     self.overlay.showError(message)
                     self.notifier.notify(title: L10n.text("OpenWhisper setup required"), body: message)
@@ -581,6 +597,7 @@ final class AppCoordinator {
                 self.state = .idle
                 self.activeSessionID = nil
                 self.recordingStartedAt = nil
+                self.recordingTranscriptionConfig = nil
                 self.refreshReadyState(detailOverride: error.localizedDescription, state: .error)
                 self.overlay.showError(error.localizedDescription)
                 self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
@@ -619,8 +636,15 @@ final class AppCoordinator {
             soundFeedback.play(.recordingStopped, enabled: config.transcription.feedbackSoundsEnabled)
 
             let launchAppContext = self.launchAppContext
-            let transcriptionConfig = config.transcription
-                .resolvingVoiceMode(for: launchAppContext)
+            let transcriptionConfig =
+                recordingTranscriptionConfig
+                ?? config.transcription.resolvingVoiceMode(
+                    for: launchAppContext,
+                    voiceModesAllowed: licenseManager
+                        .snapshot()
+                        .allows(.voiceModes)
+                )
+            recordingTranscriptionConfig = nil
             let injectionConfig = config.injection
             startProcessing(
                 audio: audio,
@@ -638,6 +662,7 @@ final class AppCoordinator {
             state = .idle
             activeSessionID = nil
             recordingStartedAt = nil
+            recordingTranscriptionConfig = nil
             statusMenu?.update(state: .error, detail: error.localizedDescription)
             overlay.showError(error.localizedDescription)
             notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
@@ -1136,6 +1161,7 @@ final class AppCoordinator {
                 },
                 providerCapabilityPolicy: providerCapabilityPolicy,
                 recoveryCredentialStore: credentialStore,
+                licenseManager: licenseManager,
                 textPolishUsageDirectoryURL:
                     snapshotPrivacyMode.presentationDiagnosticsDirectoryURL(
                         liveDirectoryURL: configStore.directoryURL
@@ -1289,6 +1315,18 @@ final class AppCoordinator {
     }
 
     private func openQuickAdd() {
+        guard licenseManager.snapshot().allows(.quickAdd) else {
+            NSSound.beep()
+            notifier.notify(
+                title: L10n.text("OpenWhisper Pro required"),
+                body: L10n.text(
+                    "Quick Add is a Pro workflow. Core terminology management remains available in Community."
+                )
+            )
+            openSettings(focusPane: .account)
+            return
+        }
+
         terminologyQuickAddWindowController?.close()
         terminologyQuickAddWindowController = TerminologyQuickAddWindowController(
             existingEntries: snapshotPrivacyMode.isEnabled
@@ -1621,7 +1659,10 @@ final class AppCoordinator {
             audio: audio,
             sessionID: sessionID,
             transcriptionConfig: config.transcription.resolvingVoiceMode(
-                for: launchAppContext
+                for: launchAppContext,
+                voiceModesAllowed: licenseManager
+                    .snapshot()
+                    .allows(.voiceModes)
             ),
             injectionConfig: config.injection,
             launchAppContext: launchAppContext,
@@ -2264,6 +2305,14 @@ final class AppCoordinator {
 
         do {
             try recoveryCredentialStore.deleteAPIKey()
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
+        }
+
+        do {
+            try licenseManager.reset()
         } catch {
             if firstError == nil {
                 firstError = error

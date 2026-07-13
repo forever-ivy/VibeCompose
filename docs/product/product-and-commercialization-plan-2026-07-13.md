@@ -605,6 +605,19 @@ StorageCleanupService
 - Pro 代码采用独立模块或独立授权；
 - OpenWhisper 品牌、签名构建、更新和支持仍可形成商业价值。
 
+2026-07-14 客户端授权基础已落地：
+
+- 独立 `OpenWhisperLicensing` Swift target；
+- Ed25519 签名的设备绑定收据，私钥不进入仓库或 App；
+- 随机应用级 Device ID，不读取硬件序列号、Apple ID 或邮箱；
+- Keychain 收据与 Device ID 存储；
+- 最大可用 build、最多 90 天离线宽限和有限功能枚举；
+- Settings 中导入、状态、恢复提示和本地移除；
+- Voice Modes 与 Quick Add 的运行时权益复核；
+- 私有 Alpha Preview 显式标记，商业发布必须关闭 Preview 并配置独立公钥。
+
+仍需外部生产能力：结账、激活/停用、设备席位恢复、收据刷新、退款撤销、客服后台和独立生产密钥运营。
+
 ### 7.3 退款和支持
 
 退款：

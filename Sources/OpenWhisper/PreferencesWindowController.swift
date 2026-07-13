@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import ApplicationServices
+import OpenWhisperLicensing
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -38,6 +39,7 @@ final class PreferencesWindowController: NSWindowController {
         onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
+        licenseManager: any CommercialLicenseManaging,
         textPolishUsageDirectoryURL: URL? = ProductIdentity
             .applicationSupportURL(
                 homeDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
@@ -64,6 +66,7 @@ final class PreferencesWindowController: NSWindowController {
             onExportProductMetrics: onExportProductMetrics,
             providerCapabilityPolicy: providerCapabilityPolicy,
             recoveryCredentialStore: recoveryCredentialStore,
+            licenseManager: licenseManager,
             textPolishUsageDirectoryURL: textPolishUsageDirectoryURL,
             softwareUpdateSnapshot: softwareUpdateSnapshot,
             onCheckForUpdates: onCheckForUpdates,
@@ -339,6 +342,11 @@ private struct PreferencesView: View {
     @State private var recoveryMessageIsError = false
     @State private var isTestingRecoveryConnection = false
     @State private var providerPolicySnapshot: ProviderCapabilityPolicySnapshot
+    @State private var licenseSnapshot: LicenseSnapshot
+    @State private var licenseDeviceIdentifier: String
+    @State private var licenseMessage: String?
+    @State private var licenseMessageIsError = false
+    @State private var showsRemoveLicenseConfirmation = false
     @State private var softwareUpdateSnapshot: SoftwareUpdateSnapshot
     @State private var softwareUpdateMessage: String?
     @State private var softwareUpdateMessageIsError = false
@@ -362,6 +370,7 @@ private struct PreferencesView: View {
     let onExportProductMetrics: (URL) -> Result<URL, any Error>
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
+    let licenseManager: any CommercialLicenseManaging
     let textPolishUsageDirectoryURL: URL?
     let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
@@ -384,6 +393,7 @@ private struct PreferencesView: View {
         onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
+        licenseManager: any CommercialLicenseManaging,
         textPolishUsageDirectoryURL: URL?,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
@@ -408,6 +418,13 @@ private struct PreferencesView: View {
             } ?? [:]
         )
         _providerPolicySnapshot = State(initialValue: .loading)
+        _licenseSnapshot = State(
+            initialValue: licenseManager.snapshot()
+        )
+        _licenseDeviceIdentifier = State(
+            initialValue:
+                (try? licenseManager.deviceIdentifier()) ?? ""
+        )
         _softwareUpdateSnapshot = State(initialValue: softwareUpdateSnapshot)
         switch recoveryCredentialState {
         case .success(let isStored):
@@ -437,6 +454,7 @@ private struct PreferencesView: View {
         self.onExportProductMetrics = onExportProductMetrics
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
+        self.licenseManager = licenseManager
         self.textPolishUsageDirectoryURL = textPolishUsageDirectoryURL
         self.onCheckForUpdates = onCheckForUpdates
         self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
@@ -614,6 +632,7 @@ private struct PreferencesView: View {
             refreshRecentHistory()
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
+            refreshLicenseStatus()
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatGPTAuthStateDidChange)) { _ in
             authSnapshot = authManager.authSnapshot()
@@ -626,6 +645,7 @@ private struct PreferencesView: View {
             refreshRecentHistory()
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
+            refreshLicenseStatus()
         }
         .task {
             providerPolicySnapshot = await providerCapabilityPolicy.refresh(
@@ -650,7 +670,7 @@ private struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
+                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, settings, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID from this Mac. This action cannot be undone."
                 )
             )
         }
@@ -666,6 +686,21 @@ private struct PreferencesView: View {
             Text(
                 L10n.text(
                     "Future dictation audio will be sent to the configured endpoint with the API key stored in Keychain. Your API provider may charge for transcription. AI Polish will still use your ChatGPT account."
+                )
+            )
+        }
+        .alert(
+            L10n.text("Remove Pro license from this Mac?"),
+            isPresented: $showsRemoveLicenseConfirmation
+        ) {
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Remove License"), role: .destructive) {
+                removeLicenseReceipt()
+            }
+        } message: {
+            Text(
+                L10n.text(
+                    "This removes only the local activation receipt. Community dictation remains available, and the license can be activated again subject to its device limit."
                 )
             )
         }
@@ -963,7 +998,262 @@ private struct PreferencesView: View {
                         )
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Divider()
+
+                licenseSection
             }
+        }
+    }
+
+    private var licenseSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(L10n.text("License & Pro"))
+                    .font(.system(size: 13, weight: .semibold))
+                Text(licenseSnapshot.localizedStatusTitle)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(licenseStatusColor)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        licenseStatusColor.opacity(0.12)
+                    )
+                    .clipShape(Capsule())
+                Spacer()
+            }
+
+            Text(licenseSnapshot.localizedStatusDetail)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let verificationDueAt =
+                licenseSnapshot.verificationDueAt
+            {
+                LabeledContent(L10n.text("Verification due")) {
+                    Text(
+                        verificationDueAt.formatted(
+                            date: .abbreviated,
+                            time: .shortened
+                        )
+                    )
+                    .font(.system(size: 11))
+                }
+            }
+
+            if let maximumBuild = licenseSnapshot.maximumBuild {
+                LabeledContent(L10n.text("Eligible through build")) {
+                    Text(String(maximumBuild))
+                        .font(
+                            .system(
+                                size: 11,
+                                design: .monospaced
+                            )
+                        )
+                }
+            }
+
+            if !licenseDeviceIdentifier.isEmpty {
+                LabeledContent(L10n.text("Device ID")) {
+                    HStack(spacing: 8) {
+                        Text(licenseDeviceIdentifier)
+                            .font(
+                                .system(
+                                    size: 10,
+                                    design: .monospaced
+                                )
+                            )
+                            .textSelection(.enabled)
+                            .lineLimit(1)
+                        Button(L10n.text("Copy")) {
+                            copyLicenseDeviceIdentifier()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button(L10n.text("Import Signed License…")) {
+                    importLicenseReceipt()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    !licenseManager.canInstallReceipts()
+                        || licenseSnapshot.state == .preview
+                )
+
+                if storedLicenseCanBeRemoved {
+                    Button(
+                        L10n.text("Remove License"),
+                        role: .destructive
+                    ) {
+                        showsRemoveLicenseConfirmation = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if !licenseManager.canInstallReceipts() {
+                    Text(
+                        L10n.text(
+                            "Signed license import is unavailable in this preview build."
+                        )
+                    )
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            if let licenseMessage {
+                Text(licenseMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(
+                        licenseMessageIsError ? .red : .secondary
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var storedLicenseCanBeRemoved: Bool {
+        switch licenseSnapshot.state {
+        case .active,
+             .offlineGrace,
+             .verificationRequired,
+             .updateEntitlementExpired,
+             .deviceMismatch,
+             .invalid:
+            return true
+        case .community, .preview, .configurationError:
+            return false
+        }
+    }
+
+    private var licenseStatusColor: Color {
+        switch licenseSnapshot.state {
+        case .active, .preview:
+            return .green
+        case .offlineGrace, .updateEntitlementExpired:
+            return .orange
+        case .community:
+            return .secondary
+        case .verificationRequired,
+             .deviceMismatch,
+             .invalid,
+             .configurationError:
+            return .red
+        }
+    }
+
+    private func refreshLicenseStatus() {
+        licenseSnapshot = licenseManager.snapshot()
+        licenseDeviceIdentifier =
+            (try? licenseManager.deviceIdentifier()) ?? ""
+    }
+
+    private func copyLicenseDeviceIdentifier() {
+        guard !licenseDeviceIdentifier.isEmpty else {
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(
+            licenseDeviceIdentifier,
+            forType: .string
+        )
+        licenseMessage = L10n.text("Device ID copied.")
+        licenseMessageIsError = false
+    }
+
+    private func importLicenseReceipt() {
+        let panel = NSOpenPanel()
+        let receiptType = UTType(
+            filenameExtension: "owlicense",
+            conformingTo: .json
+        )
+        panel.allowedContentTypes = [receiptType ?? .json, .json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.title = L10n.text("Import Signed License")
+        panel.prompt = L10n.text("Import")
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        do {
+            let values = try url.resourceValues(
+                forKeys: [
+                    .isRegularFileKey,
+                    .isSymbolicLinkKey,
+                    .fileSizeKey,
+                ]
+            )
+            guard
+                values.isRegularFile == true,
+                values.isSymbolicLink != true,
+                let fileSize = values.fileSize,
+                fileSize > 0,
+                fileSize <= LicenseManager.maximumReceiptBytes
+            else {
+                throw LicenseValidationError.malformedReceipt
+            }
+            let data = try Data(
+                contentsOf: url,
+                options: [.mappedIfSafe]
+            )
+            licenseSnapshot = try licenseManager.installReceipt(data)
+            licenseMessage = L10n.text(
+                "The signed Pro license was installed for this Mac."
+            )
+            licenseMessageIsError = false
+        } catch {
+            licenseMessage = localizedLicenseImportError(error)
+            licenseMessageIsError = true
+        }
+    }
+
+    private func removeLicenseReceipt() {
+        do {
+            try licenseManager.removeReceipt()
+            refreshLicenseStatus()
+            licenseMessage = L10n.text(
+                "The local license receipt was removed. Community dictation remains available."
+            )
+            licenseMessageIsError = false
+        } catch {
+            licenseMessage = L10n.text(
+                "OpenWhisper could not remove the local license receipt."
+            )
+            licenseMessageIsError = true
+        }
+    }
+
+    private func localizedLicenseImportError(
+        _ error: any Error
+    ) -> String {
+        switch error as? LicenseValidationError {
+        case .deviceMismatch:
+            return L10n.text(
+                "This license was activated for a different Mac."
+            )
+        case .invalidSignature:
+            return L10n.text(
+                "The license signature could not be verified."
+            )
+        case .wrongProduct:
+            return L10n.text(
+                "This license was issued for a different product."
+            )
+        case .configurationMissing, .invalidPublicKey:
+            return L10n.text(
+                "This build cannot verify signed licenses."
+            )
+        default:
+            return L10n.text(
+                "The license could not be installed. Use the original signed receipt and verify that it was issued for this Device ID."
+            )
         }
     }
 
@@ -1233,7 +1523,7 @@ private struct PreferencesView: View {
                             .font(.system(size: 12, weight: .semibold))
                         Text(
                             L10n.text(
-                                "Deletes settings, terminology, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, and the OpenAI-Compatible API key."
+                                "Deletes settings, terminology, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID."
                             )
                         )
                         .font(.system(size: 11))
@@ -1272,6 +1562,7 @@ private struct PreferencesView: View {
             browserBridgeSnapshot = authManager.browserBridgeSnapshot()
             privacyMessage = L10n.text("All OpenWhisper data was deleted from this Mac.")
             privacyMessageIsError = false
+            refreshLicenseStatus()
         case .failure(let error):
             privacyMessage = error.localizedDescription
             privacyMessageIsError = true
@@ -1874,7 +2165,26 @@ private struct PreferencesView: View {
     private var aiPolishCard: some View {
         settingsCard(title: "AI Polish") {
             VStack(alignment: .leading, spacing: 12) {
+                if !licenseSnapshot.allows(.voiceModes) {
+                    HStack(alignment: .center, spacing: 10) {
+                        Label(
+                            L10n.text("Voice Modes require OpenWhisper Pro"),
+                            systemImage: "lock.fill"
+                        )
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        Spacer()
+                        Button(L10n.text("Manage License")) {
+                            selectedSection = .account
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
                 voiceModeSection
+                    .disabled(
+                        !licenseSnapshot.allows(.voiceModes)
+                    )
 
                 Divider()
 
@@ -1922,7 +2232,11 @@ private struct PreferencesView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(L10n.text("Voice Modes"))
                     .font(.system(size: 13, weight: .semibold))
-                Text(L10n.text("Preview"))
+                Text(
+                    licenseSnapshot.state == .preview
+                        ? L10n.text("Pro Preview")
+                        : L10n.text("Pro")
+                )
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 7)

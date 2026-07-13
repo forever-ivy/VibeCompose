@@ -20,6 +20,11 @@
   identity markers, common committed-secret patterns, missing Simplified
   Chinese literals, duplicate localization keys, or broken local Markdown
   links.
+- Added an independent `OpenWhisperLicensing` module with Ed25519-signed,
+  device-bound Pro receipts, bounded offline grace, maximum-build entitlement,
+  Keychain receipt/device storage, a local operator CLI, runtime Voice
+  Modes/Quick Add gates, bilingual License UI, and commercial release checks
+  that reject preview-enabled or unkeyed builds.
 - Isolated automated Settings, Onboarding, History, Terminology, and Quick Add
   snapshots from live configuration, account sessions, API credentials,
   transcripts, recovery records, and terminology.

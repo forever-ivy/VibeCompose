@@ -67,6 +67,10 @@ SECRET_PATTERNS = (
         + "PRIVATE KEY-----"
     ),
 )
+PRIVATE_KEY_FILENAME_PATTERN = re.compile(
+    r"(?:^|[-_.])(?:license|signing)[-_.]?private(?:[-_.]|$)",
+    re.IGNORECASE,
+)
 
 
 def relative(path: Path) -> str:
@@ -124,6 +128,18 @@ def verify_no_committed_secrets(paths: list[Path]) -> list[str]:
             failures.append(
                 f"{relative(path)}:{line} matches secret pattern "
                 f"{pattern.pattern!r}"
+            )
+    return failures
+
+
+def verify_no_private_key_artifacts() -> list[str]:
+    failures: list[str] = []
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or is_excluded(path):
+            continue
+        if PRIVATE_KEY_FILENAME_PATTERN.search(path.name):
+            failures.append(
+                f"{relative(path)} looks like a private signing-key artifact"
             )
     return failures
 
@@ -201,6 +217,7 @@ def main() -> int:
     failures = [
         *verify_canonical_identity(paths),
         *verify_no_committed_secrets(paths),
+        *verify_no_private_key_artifacts(),
         *verify_localization(),
         *verify_markdown_links(),
     ]
@@ -213,8 +230,8 @@ def main() -> int:
 
     print(
         "Repository hygiene verification passed "
-        "(canonical identity, secret patterns, localization literals, "
-        "local Markdown links)."
+        "(canonical identity, secret/private-key patterns, localization "
+        "literals, local Markdown links)."
     )
     return 0
 
