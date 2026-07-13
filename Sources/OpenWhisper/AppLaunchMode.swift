@@ -169,6 +169,23 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
+    static func accessibilityAuditOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_ACCESSIBILITY_AUDIT_OUTPUT",
+            argumentName: "--accessibility-audit-output"
+        )
+    }
+
+    static func settingsPane(arguments: [String]) -> SettingsPane? {
+        requestedSettingsPane(arguments: arguments)
+            .flatMap(SettingsPane.fromLaunchArgument)
+    }
+
     static func settingsSnapshotOutputURL(
         environment: [String: String],
         arguments: [String] = []

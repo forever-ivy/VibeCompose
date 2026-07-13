@@ -30,6 +30,10 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
                 environment: environment,
                 arguments: arguments
             ) != nil
+            || AppLaunchMode.accessibilityAuditOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
 
         return SnapshotPrivacyMode(isEnabled: hasSnapshotOutput)
     }

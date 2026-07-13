@@ -22,6 +22,25 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --inst
 
 The harness opens each surface through LaunchServices, writes its snapshot to a local temporary path from inside the installed app, verifies image geometry and visual variation, copies the evidence under `dist/product-surface-acceptance/`, and finally relaunches the normal menu bar app.
 
+## Accessibility structure precheck
+
+Run the installed-app SwiftUI accessibility audit with:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+```
+
+It covers Account, Dictation, AI Polish, Paste, Privacy, Advanced,
+Onboarding, History, Terminology, and Quick Add. Each transient process uses
+default configuration and empty in-memory user data, enables AppKit's enhanced
+accessibility tree, and fails if the surface has no actionable controls or an
+actionable element has no usable accessible name.
+
+The generated JSON is structural evidence only. It does not prove Tab order,
+keyboard activation, VoiceOver speech output, focus timing, system permission
+dialogs, or high-contrast appearance; those remain official Computer Use
+interaction requirements.
+
 The script intentionally stops each transient overlay-demo process between HUD states. That cleanup is not the final user-review state. A successful run must relaunch the normal installed app from `/Applications/OpenWhisper.app`, verify that OpenWhisper is running, and leave it running.
 
 ## Evidence

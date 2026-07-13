@@ -14,5 +14,9 @@
 - Isolated automated Settings, Onboarding, History, Terminology, and Quick Add
   snapshots from live configuration, account sessions, API credentials,
   transcripts, recovery records, and terminology.
+- Added an installed-app accessibility structure acceptance harness covering
+  every Settings pane, Onboarding, History, Terminology, and Quick Add. It
+  audits the SwiftUI accessibility tree for actionable controls without names
+  while keeping acceptance data isolated from the user's live content.
 
 OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.

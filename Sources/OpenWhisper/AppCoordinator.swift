@@ -289,10 +289,16 @@ final class AppCoordinator {
                     case .advancedSettings:
                         .advanced
                     default:
-                        nil
+                        AppLaunchMode.settingsPane(
+                            arguments: ProcessInfo.processInfo.arguments
+                        )
                     }
                     openSettings(focusPane: focusedPane)
                     scheduleSettingsSnapshotIfRequested()
+                    scheduleAccessibilityAuditIfRequested(
+                        window: preferencesWindowController?.window,
+                        surface: "settings-\((focusedPane ?? .account).launchArgumentValue)"
+                    )
                 }
                 if launchMode == .accessibilityGuide {
                     DispatchQueue.main.async {
@@ -302,18 +308,34 @@ final class AppCoordinator {
                 if launchMode == .onboarding {
                     openOnboarding()
                     scheduleOnboardingSnapshotIfRequested()
+                    scheduleAccessibilityAuditIfRequested(
+                        window: onboardingWindowController?.window,
+                        surface: "onboarding"
+                    )
                 }
                 if launchMode == .history {
                     openHistory()
                     scheduleProductSurfaceSnapshotIfRequested(mode: .history)
+                    scheduleAccessibilityAuditIfRequested(
+                        window: historyWindowController?.window,
+                        surface: "history"
+                    )
                 }
                 if launchMode == .terminology {
                     openTerminology()
                     scheduleProductSurfaceSnapshotIfRequested(mode: .terminology)
+                    scheduleAccessibilityAuditIfRequested(
+                        window: terminologyWindowController?.window,
+                        surface: "terminology"
+                    )
                 }
                 if launchMode == .quickAdd {
                     openQuickAdd()
                     scheduleProductSurfaceSnapshotIfRequested(mode: .quickAdd)
+                    scheduleAccessibilityAuditIfRequested(
+                        window: terminologyQuickAddWindowController?.window,
+                        surface: "quick-add"
+                    )
                 }
                 if launchMode == .normal, OnboardingStateStore().shouldPresent() {
                     DispatchQueue.main.async { [weak self] in
@@ -1366,6 +1388,36 @@ final class AppCoordinator {
                 NSApplication.shared.terminate(nil)
             } catch {
                 print("OpenWhisper product surface self-capture failed: \(error.localizedDescription)")
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func scheduleAccessibilityAuditIfRequested(
+        window: NSWindow?,
+        surface: String
+    ) {
+        guard let outputURL = AppLaunchMode.accessibilityAuditOutputURL(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        ) else {
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            do {
+                try AccessibilityAudit.write(
+                    window: window,
+                    surface: surface,
+                    to: outputURL
+                )
+                NSApplication.shared.terminate(nil)
+            } catch {
+                print(
+                    "OpenWhisper accessibility audit failed: \(error.localizedDescription)"
+                )
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {

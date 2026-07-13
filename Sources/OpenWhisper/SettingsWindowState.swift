@@ -9,6 +9,46 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     case advanced = "Advanced"
 
     var id: String { rawValue }
+
+    var launchArgumentValue: String {
+        switch self {
+        case .account:
+            return "account"
+        case .dictation:
+            return "dictation"
+        case .polish:
+            return "ai-polish"
+        case .paste:
+            return "paste"
+        case .privacy:
+            return "privacy"
+        case .advanced:
+            return "advanced"
+        }
+    }
+
+    static func fromLaunchArgument(_ value: String) -> SettingsPane? {
+        switch value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+        {
+        case "account":
+            return .account
+        case "dictation":
+            return .dictation
+        case "polish", "ai-polish", "aipolish":
+            return .polish
+        case "paste":
+            return .paste
+        case "privacy":
+            return .privacy
+        case "advanced":
+            return .advanced
+        default:
+            return nil
+        }
+    }
 }
 
 struct SettingsWindowStateStore {

@@ -555,6 +555,7 @@ StorageCleanupService
 - Recovery 只切换 Dictation ASR，AI Polish 继续依赖 ChatGPT Auth；
 - 从默认 ChatGPT 路径切换到可能计费的 API 前会显示费用与数据流向确认。
 - 产品界面自动截图使用独立隐私模式，默认配置、空内存认证和空用户内容，避免发布素材意外包含真实邮箱、端点、历史、Recovery 或术语。
+- 安装版无障碍结构门禁覆盖六个 Settings pane、Onboarding、History、Terminology 和 Quick Add；它验证可操作控件名称并保持用户数据隔离，但不替代真实键盘、VoiceOver、高对比度和权限交互。
 
 持续验收：
 

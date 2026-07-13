@@ -76,6 +76,17 @@ Automated product-surface screenshots run in an isolated acceptance mode with
 default configuration, empty in-memory credentials, and no live history,
 recovery, or terminology records.
 
+Installed accessibility structure precheck:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+```
+
+This checks all six Settings panes plus Onboarding, History, Terminology, and
+Quick Add for a non-empty SwiftUI accessibility tree and named actionable
+controls. It complements—but does not replace—keyboard and VoiceOver
+interaction acceptance.
+
 ## Runtime Data
 
 OpenWhisper stores local application data under:

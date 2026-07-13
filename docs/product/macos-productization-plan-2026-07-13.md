@@ -524,11 +524,13 @@ Application Support/OpenWhisper
 - 导入文件执行 metadata-first 检查，限制 2 MB、10,000 条并拒绝符号链接；
 - `scripts/product_surface_acceptance.sh --install` 已覆盖 History、Terminology 和 Quick Add 的安装版渲染证据。
 - Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
+- `scripts/accessibility_acceptance.sh --install` 已覆盖六个 Settings pane、Onboarding、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
+- 2026-07-13 本机安装版 TextEdit 粘贴验收再次证明签名/TCC 阻断：可用 Keychain 中的 Apple Development 身份被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，打包只能回退 ad-hoc；此时 `AXIsProcessTrusted()` 为 false，不能把“权限列表已打开”当作已授权。需要更新有效开发/Developer ID 证书后重新安装、重新授权并重跑真实矩阵。
 
 仍未完成的 Phase 3 出口项：
 
 - clean TCC 首次成功听写；
-- Settings、History、Terminology 和 Quick Add 的完整键盘/VoiceOver 交互验收；
+- Settings、Onboarding、History、Terminology 和 Quick Add 已完成安装版无障碍结构预检，完整键盘/VoiceOver/高对比度交互验收仍未完成；
 - 真实安装版 F5、ESC、inline close、Retry 与 paste/clipboard 矩阵。
 
 ## 8. 性能与可靠性

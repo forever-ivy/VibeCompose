@@ -62,6 +62,14 @@ Ad-hoc 签名只适合本地验证，可能导致 macOS 辅助功能设置中无
 
 自动产品界面截图会进入隔离验收模式，仅使用默认配置、空的内存凭据以及空历史、Recovery 和术语数据，不读取或展示用户真实内容。
 
+安装版无障碍结构预检：
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+```
+
+该命令覆盖六个设置页面、Onboarding、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
+
 ## 本地数据
 
 OpenWhisper 的本地应用数据位于：
