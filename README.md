@@ -16,6 +16,9 @@ The current implementation already includes:
 - browser-based ChatGPT connection with Keychain-backed local session storage
 - transcription, terminology alignment, and optional AI polish with an Auto
   mode that skips short, low-complexity dictation to avoid unnecessary latency
+- application-aware Voice Modes for Direct, Reply, Email, Agent Plan,
+  Code Prompt, and Translate output; app rules use only the application name
+  and exact bundle identifier
 - conservative paste behavior with clipboard fallback
 - retry results that are copied for manual paste instead of being injected automatically
 - microphone and Accessibility permission diagnostics

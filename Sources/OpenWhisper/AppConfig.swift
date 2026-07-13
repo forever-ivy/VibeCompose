@@ -299,6 +299,7 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     var feedbackSoundsEnabled: Bool = true
     var languagePreference: TranscriptLanguagePreference = .simplifiedChinese
     var punctuationPreference: TranscriptPunctuationPreference = .automatic
+    var voiceModes: VoiceModeConfig = .init()
     var terminology: TerminologyConfig = .init()
     var textPolish: TextPolishConfig = .init()
 
@@ -327,6 +328,10 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
             TranscriptPunctuationPreference.self,
             forKey: .punctuationPreference
         ) ?? .automatic
+        voiceModes = try container.decodeIfPresent(
+            VoiceModeConfig.self,
+            forKey: .voiceModes
+        ) ?? .init()
         terminology = try container.decodeIfPresent(TerminologyConfig.self, forKey: .terminology) ?? .init()
         textPolish = try container.decodeIfPresent(TextPolishConfig.self, forKey: .textPolish) ?? .init()
     }

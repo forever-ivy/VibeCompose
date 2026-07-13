@@ -316,6 +316,12 @@ private struct PreferencesView: View {
     @State private var textPolishUsage: [TextPolishProviderID: TextPolishUsage] = [:]
     @State private var textPolishMessage: String?
     @State private var textPolishMessageIsError = false
+    @State private var editingVoiceModeRuleID: UUID?
+    @State private var editingVoiceModeAppName = ""
+    @State private var editingVoiceModeBundleIdentifier = ""
+    @State private var editingVoiceMode: DictationMode = .reply
+    @State private var voiceModeMessage: String?
+    @State private var voiceModeMessageIsError = false
     @State private var recentHistoryRecords: [TranscriptionHistoryRecord] = []
     @State private var recentRecoveryRecords: [RecoveryRecord] = []
     @State private var selectedRecoveryKind: RecoveryHistoryKind = .audio
@@ -710,7 +716,9 @@ private struct PreferencesView: View {
         case .dictation:
             return L10n.text("Configure the F5 recording route and ASR behavior.")
         case .polish:
-            return L10n.text("Rewrite long transcripts into concise, agent-friendly plans after ASR.")
+            return L10n.text(
+                "Choose the writing shape for each app and control when AI Polish rewrites a transcript."
+            )
         case .paste:
             return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
         case .privacy:
@@ -1866,6 +1874,10 @@ private struct PreferencesView: View {
     private var aiPolishCard: some View {
         settingsCard(title: "AI Polish") {
             VStack(alignment: .leading, spacing: 12) {
+                voiceModeSection
+
+                Divider()
+
                 Picker(L10n.text("Mode"), selection: $config.transcription.textPolish.mode) {
                     Text(L10n.text("Auto")).tag(TextPolishMode.automaticWhenKeyAvailable)
                     Text(L10n.text("Always rewrite")).tag(TextPolishMode.always)
@@ -1903,6 +1915,376 @@ private struct PreferencesView: View {
                 )
             }
         }
+    }
+
+    private var voiceModeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.text("Voice Modes"))
+                    .font(.system(size: 13, weight: .semibold))
+                Text(L10n.text("Preview"))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Color(nsColor: .controlBackgroundColor)
+                    )
+                    .clipShape(Capsule())
+                Spacer()
+            }
+
+            Text(
+                L10n.text(
+                    "Choose a default writing shape and optionally override it for exact macOS bundle identifiers. OpenWhisper uses only the app name and bundle identifier—not window or document content—to select a mode."
+                )
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            LabeledContent(L10n.text("Default Voice Mode")) {
+                Picker(
+                    L10n.text("Default Voice Mode"),
+                    selection: $config.transcription.voiceModes.defaultMode
+                ) {
+                    ForEach(DictationMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 210)
+            }
+
+            Text(config.transcription.voiceModes.defaultMode.caption)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if config.transcription.voiceModes.requiresTextPolish,
+               config.transcription.textPolish.mode == .disabled
+            {
+                Label(
+                    L10n.text(
+                        "This Voice Mode needs AI Polish. Turn rewrite mode to Auto or Always rewrite to apply it."
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.orange)
+            } else if config.transcription.voiceModes.requiresTextPolish,
+                      authSnapshot.state != .ready
+            {
+                Label(
+                    L10n.text(
+                        "Reply, Email, Agent Plan, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."
+                    ),
+                    systemImage: "person.crop.circle.badge.exclamationmark"
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.text("Application Rules"))
+                    .font(.system(size: 12, weight: .semibold))
+
+                HStack(spacing: 8) {
+                    Button(L10n.text("Choose App…")) {
+                        chooseVoiceModeApplication()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Text(
+                        L10n.text(
+                            "Choose an installed app or enter its exact bundle identifier."
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 8) {
+                    TextField(
+                        L10n.text("App name (optional)"),
+                        text: $editingVoiceModeAppName
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 150)
+
+                    TextField(
+                        L10n.text("Bundle identifier"),
+                        text: $editingVoiceModeBundleIdentifier,
+                        prompt: Text("com.apple.Notes")
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 220)
+                }
+
+                HStack(spacing: 8) {
+                    Picker(
+                        L10n.text("Voice Mode"),
+                        selection: $editingVoiceMode
+                    ) {
+                        ForEach(DictationMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .frame(width: 210)
+
+                    Button(
+                        L10n.text(
+                            editingVoiceModeRuleID == nil
+                                ? "Add Rule"
+                                : "Save Rule"
+                        )
+                    ) {
+                        saveVoiceModeRule()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        editingVoiceModeBundleIdentifier
+                            .trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+                            .isEmpty
+                    )
+
+                    if editingVoiceModeRuleID != nil {
+                        Button(L10n.text("Cancel")) {
+                            resetVoiceModeRuleEditor()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Spacer()
+                }
+
+                if let voiceModeMessage {
+                    Text(voiceModeMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            voiceModeMessageIsError ? .red : .secondary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if config.transcription.voiceModes.applicationRules.isEmpty {
+                    Text(
+                        L10n.text(
+                            "No application rules. The default Voice Mode applies everywhere."
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+                } else {
+                    VStack(spacing: 6) {
+                        ForEach(
+                            config.transcription.voiceModes.applicationRules
+                        ) { rule in
+                            voiceModeRuleRow(rule)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func voiceModeRuleRow(
+        _ rule: AppModeRule
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Toggle(
+                L10n.format(
+                    "Enable Voice Mode rule for %@",
+                    rule.appName ?? rule.bundleIdentifier
+                ),
+                isOn: Binding(
+                    get: { rule.isEnabled },
+                    set: { isEnabled in
+                        updateVoiceModeRule(rule.id) {
+                            $0.isEnabled = isEnabled
+                        }
+                    }
+                )
+            )
+            .labelsHidden()
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rule.appName ?? rule.bundleIdentifier)
+                    .font(.system(size: 12, weight: .medium))
+                Text(rule.bundleIdentifier)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(rule.mode.title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(rule.isEnabled ? .primary : .secondary)
+                .frame(width: 100, alignment: .trailing)
+
+            Button {
+                startEditingVoiceModeRule(rule)
+            } label: {
+                Image(systemName: "pencil")
+                    .frame(width: 12, height: 12)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(L10n.text("Edit"))
+            .accessibilityLabel(
+                L10n.format(
+                    "Edit Voice Mode rule for %@",
+                    rule.appName ?? rule.bundleIdentifier
+                )
+            )
+
+            Button(role: .destructive) {
+                config.transcription.voiceModes.remove(id: rule.id)
+                if editingVoiceModeRuleID == rule.id {
+                    resetVoiceModeRuleEditor()
+                }
+                voiceModeMessage = L10n.text(
+                    "Application Voice Mode rule removed."
+                )
+                voiceModeMessageIsError = false
+            } label: {
+                Image(systemName: "trash")
+                    .frame(width: 12, height: 12)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(L10n.text("Delete"))
+            .accessibilityLabel(
+                L10n.format(
+                    "Delete Voice Mode rule for %@",
+                    rule.appName ?? rule.bundleIdentifier
+                )
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func saveVoiceModeRule() {
+        do {
+            let existingRule = editingVoiceModeRuleID.flatMap { id in
+                config.transcription.voiceModes.applicationRules.first {
+                    $0.id == id
+                }
+            }
+            let rule = try AppModeRule.validated(
+                id: existingRule?.id ?? UUID(),
+                appName: editingVoiceModeAppName,
+                bundleIdentifier: editingVoiceModeBundleIdentifier,
+                mode: editingVoiceMode,
+                isEnabled: existingRule?.isEnabled ?? true
+            )
+            config.transcription.voiceModes.upsert(rule)
+            voiceModeMessage = L10n.format(
+                "Voice Mode rule saved for %@.",
+                rule.appName ?? rule.bundleIdentifier
+            )
+            voiceModeMessageIsError = false
+            resetVoiceModeRuleEditor(clearMessage: false)
+        } catch {
+            voiceModeMessage = error.localizedDescription
+            voiceModeMessageIsError = true
+            NSSound.beep()
+        }
+    }
+
+    private func chooseVoiceModeApplication() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(
+            fileURLWithPath: "/Applications",
+            isDirectory: true
+        )
+        panel.title = L10n.text("Choose an Application")
+        panel.message = L10n.text(
+            "OpenWhisper stores only the selected app name and bundle identifier for this Voice Mode rule."
+        )
+        panel.prompt = L10n.text("Choose App")
+
+        guard
+            panel.runModal() == .OK,
+            let appURL = panel.url,
+            let bundle = Bundle(url: appURL),
+            let bundleIdentifier = bundle.bundleIdentifier,
+            AppModeRule.isValidBundleIdentifier(bundleIdentifier)
+        else {
+            if panel.url != nil {
+                voiceModeMessage = L10n.text(
+                    "The selected application does not expose a valid bundle identifier."
+                )
+                voiceModeMessageIsError = true
+                NSSound.beep()
+            }
+            return
+        }
+
+        editingVoiceModeBundleIdentifier =
+            AppModeRule.normalizedBundleIdentifier(bundleIdentifier)
+        editingVoiceModeAppName = (
+            bundle.object(
+                forInfoDictionaryKey: "CFBundleDisplayName"
+            ) as? String
+        ) ?? (
+            bundle.object(
+                forInfoDictionaryKey: "CFBundleName"
+            ) as? String
+        ) ?? appURL.deletingPathExtension().lastPathComponent
+        voiceModeMessage = nil
+        voiceModeMessageIsError = false
+    }
+
+    private func startEditingVoiceModeRule(_ rule: AppModeRule) {
+        editingVoiceModeRuleID = rule.id
+        editingVoiceModeAppName = rule.appName ?? ""
+        editingVoiceModeBundleIdentifier = rule.bundleIdentifier
+        editingVoiceMode = rule.mode
+        voiceModeMessage = nil
+        voiceModeMessageIsError = false
+    }
+
+    private func resetVoiceModeRuleEditor(
+        clearMessage: Bool = true
+    ) {
+        editingVoiceModeRuleID = nil
+        editingVoiceModeAppName = ""
+        editingVoiceModeBundleIdentifier = ""
+        editingVoiceMode = .reply
+        if clearMessage {
+            voiceModeMessage = nil
+            voiceModeMessageIsError = false
+        }
+    }
+
+    private func updateVoiceModeRule(
+        _ id: UUID,
+        update: (inout AppModeRule) -> Void
+    ) {
+        guard
+            var rule = config.transcription.voiceModes
+                .applicationRules.first(where: { $0.id == id })
+        else {
+            return
+        }
+        update(&rule)
+        config.transcription.voiceModes.upsert(rule)
     }
 
     private var recoveryHistoryCard: some View {

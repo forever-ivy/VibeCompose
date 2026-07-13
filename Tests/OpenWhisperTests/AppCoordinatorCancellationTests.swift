@@ -335,6 +335,30 @@ private final class CoordinatorPipelineScript: @unchecked Sendable {
     }
 }
 
+private final class CoordinatorVoiceModeCapture:
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var modes: [DictationMode] = []
+    private var ruleCounts: [Int] = []
+
+    func append(_ config: TranscriptionConfig) {
+        lock.lock()
+        modes.append(config.voiceModes.defaultMode)
+        ruleCounts.append(config.voiceModes.applicationRules.count)
+        lock.unlock()
+    }
+
+    func snapshot() -> (
+        modes: [DictationMode],
+        ruleCounts: [Int]
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (modes, ruleCounts)
+    }
+}
+
 private struct ScriptedCoordinatorPipeline: DictationPreparing {
     let script: CoordinatorPipelineScript
 
@@ -658,6 +682,82 @@ struct AppCoordinatorCancellationTests {
 
         coordinator.cancelCurrentSession()
         await startGate.resume()
+    }
+
+    @Test
+    func appSpecificVoiceModeIsFrozenIntoProcessingConfig() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let audioURL = root.appendingPathComponent("voice-mode.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(
+            fileURL: audioURL,
+            durationMs: 1_000
+        )
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let injector = FakeCoordinatorInjector()
+        let capture = CoordinatorVoiceModeCapture()
+        let launchContext = LaunchAppContext(
+            bundleIdentifier: "com.openai.codex",
+            localizedName: "Codex",
+            processIdentifier: 123
+        )
+        var config = AppConfig()
+        config.transcription.voiceModes = VoiceModeConfig(
+            defaultMode: .direct,
+            applicationRules: [
+                try AppModeRule.validated(
+                    appName: "Codex",
+                    bundleIdentifier: "com.openai.codex",
+                    mode: .codePrompt
+                ),
+            ]
+        )
+
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: {
+                transcriptionConfig,
+                _,
+                _,
+                _,
+                _ in
+                capture.append(transcriptionConfig)
+                return FakeCoordinatorPipeline()
+            },
+            launchAppContextProvider: { launchContext }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { injector.injectCallCount == 1 }
+
+        let snapshot = capture.snapshot()
+        #expect(snapshot.modes == [.codePrompt])
+        #expect(snapshot.ruleCounts == [0])
+        #expect(injector.launchContexts == [launchContext])
     }
 
     @Test

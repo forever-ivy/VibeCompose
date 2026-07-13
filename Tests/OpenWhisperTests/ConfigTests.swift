@@ -12,10 +12,38 @@ func defaultConfigUsesChatGPTAccountDefaults() throws {
     #expect(config.transcription.hintTerms.isEmpty)
     #expect(config.transcription.speechCleanupEnabled == true)
     #expect(config.transcription.feedbackSoundsEnabled == true)
+    #expect(config.transcription.voiceModes.defaultMode == .direct)
+    #expect(config.transcription.voiceModes.applicationRules.isEmpty)
     #expect(config.injection.preserveClipboard == false)
     #expect(config.auth.preferredLoginSurface == .defaultBrowser)
     #expect(config.auth.allowEmbeddedFallback == false)
     #expect(config.auth.persistCapturedSession == true)
+}
+
+@Test
+func configRoundTripPreservesVoiceModesAndApplicationRules() throws {
+    var config = AppConfig()
+    config.transcription.voiceModes = VoiceModeConfig(
+        defaultMode: .agentPlan,
+        applicationRules: [
+            try AppModeRule.validated(
+                appName: "Mail",
+                bundleIdentifier: "com.apple.mail",
+                mode: .email
+            ),
+            try AppModeRule.validated(
+                appName: "Codex",
+                bundleIdentifier: "com.openai.codex",
+                mode: .codePrompt,
+                isEnabled: false
+            ),
+        ]
+    )
+
+    let data = try JSONEncoder().encode(config)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(decoded.transcription.voiceModes == config.transcription.voiceModes)
 }
 
 @Test

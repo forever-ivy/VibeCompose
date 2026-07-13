@@ -815,6 +815,55 @@ func dictationPipelineAutoModeSkipsShortDirectPolish() async throws {
 }
 
 @Test
+func dictationPipelineExplicitVoiceModePolishesShortDictation() async throws {
+    let pipeline = DictationPipeline(
+        transcriber: FakeTranscriber(
+            result: TranscriptionResult(
+                text: "明天下午三点开会。",
+                metrics: .init(
+                    provider: .chatGPTManagedAuth,
+                    audioDurationMs: 2_000,
+                    audioBytes: 64_000,
+                    authMs: 20,
+                    transcribeMs: 300,
+                    promptIncluded: true
+                )
+            )
+        ),
+        normalizer: TerminologyNormalizer(),
+        importedEntries: [],
+        hintTerms: [],
+        textPolisher: FakeTextPolisher(
+            result: .success(
+                TextPolishResult(
+                    text: "主题：明天下午三点开会",
+                    provider: .chatGPTAuth,
+                    applied: true,
+                    estimatedInputTokens: 120,
+                    estimatedOutputTokens: 50
+                )
+            )
+        ),
+        dictationMode: .email
+    )
+
+    let result = try await pipeline.prepare(
+        audio: RecordedAudio(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "fake-email-voice-mode.wav"
+                ),
+            durationMs: 2_000
+        )
+    )
+
+    #expect(result.finalText == "主题：明天下午三点开会")
+    #expect(result.metrics.textPolishAttempted)
+    #expect(result.metrics.textPolishDecisionReason == .runEmail)
+    #expect(result.metrics.textPolishProvider == .chatGPTAuth)
+}
+
+@Test
 func dictationPipelineFallsBackToNormalizedTextWhenTextPolishFails() async throws {
     let pipeline = DictationPipeline(
         transcriber: FakeTranscriber(

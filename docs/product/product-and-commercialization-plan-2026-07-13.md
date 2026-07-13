@@ -390,7 +390,7 @@ Sources/OpenWhisper/DictationPipeline.swift
 Sources/OpenWhisper/LatencyRecorder.swift
 ```
 
-决策结果只记录有限枚举原因，不保存用于判断的正文。Settings 会展示执行、成功、失败和自动跳过次数。未来 Voice Modes 可直接复用当前 `DictationMode` 决策入口。
+决策结果只记录有限枚举原因，不保存用于判断的正文。Settings 会展示执行、成功、失败和自动跳过次数。当前 Alpha 已将 Voice Modes 接入该 `DictationMode` 决策入口：支持默认模式和按精确 Bundle Identifier 的应用规则，模式在录音开始时冻结到当前会话，Provider 不会收到完整应用规则表。
 
 ### 5.3 请求链路优化
 

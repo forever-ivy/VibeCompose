@@ -144,6 +144,8 @@ final class AppCoordinator {
             providerCapabilityPolicy,
             recoveryCredentialStore in
             let textPolishConfig = transcriptionConfig.textPolish
+            let dictationMode =
+                transcriptionConfig.voiceModes.defaultMode
             let chatGPTAuthAvailable =
                 authManager.authSnapshot().state == .ready
             let textPolishAvailable = TextPolishProviderSelector()
@@ -154,6 +156,7 @@ final class AppCoordinator {
             let textPolisher: (any TextPolishing)? = textPolishAvailable
                 ? OpenAICompatibleTextPolisher(
                     config: textPolishConfig,
+                    dictationMode: dictationMode,
                     chatGPTAuthProvider: authManager,
                     chatGPTAuthAvailable: chatGPTAuthAvailable,
                     providerCapabilityPolicy: providerCapabilityPolicy,
@@ -180,7 +183,8 @@ final class AppCoordinator {
                 importedEntries: transcriptionConfig.activeDictionaryEntries,
                 hintTerms: transcriptionConfig.hintTerms,
                 textPolisher: textPolisher,
-                textPolishConfig: textPolishConfig
+                textPolishConfig: textPolishConfig,
+                dictationMode: dictationMode
             )
         },
         launchAppContextProvider: @escaping LaunchAppContextProvider = { LaunchAppContext.current() }
@@ -614,9 +618,10 @@ final class AppCoordinator {
             overlay.showProcessing()
             soundFeedback.play(.recordingStopped, enabled: config.transcription.feedbackSoundsEnabled)
 
-            let transcriptionConfig = config.transcription
-            let injectionConfig = config.injection
             let launchAppContext = self.launchAppContext
+            let transcriptionConfig = config.transcription
+                .resolvingVoiceMode(for: launchAppContext)
+            let injectionConfig = config.injection
             startProcessing(
                 audio: audio,
                 sessionID: sessionID,
@@ -691,7 +696,7 @@ final class AppCoordinator {
         let processingStarted = DispatchTime.now().uptimeNanoseconds
         let initialAudioBytes = Self.audioFileSize(at: audio.fileURL)
         logger.info(
-            "Processing started session=\(sessionID.uuidString, privacy: .public) provider=\(transcriptionConfig.provider.rawValue, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(initialAudioBytes, privacy: .public) cloudflareAttempts=\(attemptPolicy.cloudflareChallengeMaxAttempts, privacy: .public)"
+            "Processing started session=\(sessionID.uuidString, privacy: .public) provider=\(transcriptionConfig.provider.rawValue, privacy: .public) voiceMode=\(transcriptionConfig.voiceModes.defaultMode.rawValue, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(initialAudioBytes, privacy: .public) cloudflareAttempts=\(attemptPolicy.cloudflareChallengeMaxAttempts, privacy: .public)"
         )
 
         processingTask?.cancel()
@@ -1611,12 +1616,15 @@ final class AppCoordinator {
         let audio = RecordedAudio(fileURL: audioURL, durationMs: record.audioDurationMs)
         statusMenu?.update(state: .processing, detail: L10n.text("Retrying saved audio"))
         overlay.showProcessing()
+        let launchAppContext = launchAppContextProvider()
         startProcessing(
             audio: audio,
             sessionID: sessionID,
-            transcriptionConfig: config.transcription,
+            transcriptionConfig: config.transcription.resolvingVoiceMode(
+                for: launchAppContext
+            ),
             injectionConfig: config.injection,
-            launchAppContext: launchAppContextProvider(),
+            launchAppContext: launchAppContext,
             attemptPolicy: .manualRetry,
             deleteAudioWhenFinished: false,
             automaticPasteAllowed: false

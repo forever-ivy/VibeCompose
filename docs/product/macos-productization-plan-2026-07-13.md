@@ -94,7 +94,8 @@ macOS 首发策略：
 - Settings 与 Onboarding 的麦克风授权动作现在等待同一异步请求结果，并在系统回调成功后进行有上限的状态轮询；授权未及时收敛时不会误报成功，而是提供“刷新权限状态”和明确恢复文案。安装版权限表面新增 Vision OCR 黑盒门禁，直接验证 Settings → Account 中麦克风与辅助功能均显示“已授权”。
 - 安全粘贴新增同一 AX target 的前后文本快照验证；只有精确观察到预期 UTF-16 替换才记为 `inserted_verified`，无法观察或结果不确定时记为 `paste_dispatched` 并保留转写剪贴板，未发送事件仍记为 `clipboard`；
 - HUD、History 筛选与标签、延迟诊断和双语文案已区分“已确认插入 / 已发送粘贴 / 已复制”，旧版 `pasted` 历史按“仅发送粘贴（旧记录）”解释，不追溯性宣称已验证。
-- Auto Polish 决策引擎已接入真实流水线：短且低复杂度的 Direct 听写跳过二次重写；改口、结构化、邮件、翻译、长输入和未来显式 Voice Mode 才执行，并只把有限枚举决策原因写入脱敏诊断。
+- Auto Polish 决策引擎已接入真实流水线：短且低复杂度的 Direct 听写跳过二次重写；改口、结构化、邮件、翻译、长输入和显式非 Direct Voice Mode 才执行，并只把有限枚举决策原因写入脱敏诊断。
+- 应用感知 Voice Modes 的 Alpha 技术预览已接入真实流水线与 Settings：支持 Direct、Reply、Email、Agent Plan、Code Prompt 和 Translate，可设置默认模式或按精确 Bundle Identifier 覆盖；只保存应用名称和 Bundle Identifier，不读取窗口或文档内容；模式在录音开始时冻结，Provider 不接收完整规则表。
 
 2026-07-13 Advanced Recovery 进展：
 
@@ -549,6 +550,13 @@ Application Support/OpenWhisper
 - History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T112011Z`；
 - HUD 状态、Reduce Motion 与 Increase Contrast：`dist/visual-acceptance/20260713T111636Z`。
 
+2026-07-13 Voice Modes 增量证据：
+
+- 完整检查：执行 `OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh`，退出码 `0`；
+- 安装版无障碍结构：`dist/accessibility-acceptance/20260713T135523Z`，AI Polish 页面包含 28 个具名可操作控件，全部 13 个产品表面通过；
+- 安装版高对比度视觉：`dist/accessibility-visual-acceptance/20260713T135600Z`，AI Polish 页面在固定几何下产生明确视觉差异且局部边缘对比度提升；
+- 已重新打包并安装到 `/Applications/OpenWhisper.app`，最终恢复正常菜单栏运行。
+
 仍未完成的 Phase 3 出口项：
 
 - clean TCC 首次成功听写；
@@ -878,7 +886,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
 | OW-MAC-015 | P1 | Notarization + updater（Sparkle 2.9.4 已集成，待生产签名与实机更新） | 014 | 新机安装和更新成功 |
 | OW-MAC-016 | P2 | Product metrics（本地、默认关闭、汇总分析与自愿导出已实现；待真实 Beta 指标验证） | Privacy spec | 无敏感内容事件 |
-| OW-MAC-017 | P2 | Voice Modes（Auto 决策引擎与 Direct 快路径已实现，待模式 UI/商业模块） | Text polish engine | Direct 无额外延迟 |
+| OW-MAC-017 | P2 | Voice Modes（Alpha 默认模式、应用规则、模式提示词、配置防御和 Settings UI 已实现；待商业模块边界、License Manager 与完整安装版交互验收） | Text polish engine | Direct 无额外延迟；应用规则只使用名称/Bundle ID；非 Direct 模式明确依赖 AI Polish |
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
 | OW-MAC-019 | P2 | App compatibility matrix（TextEdit/隔离 Terminal 自动证据已完成） | Closed Beta | Notes 与目标第三方 App 成功/降级明确 |
 | OW-MAC-020 | P2 | Support diagnostics bundle（已实现，待安装版交互验收） | Redaction | 导出包无 Token/正文/音频 |

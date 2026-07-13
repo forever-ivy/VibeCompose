@@ -94,9 +94,19 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `TextPolishDecisionEngine`
   - skips short, low-complexity Direct dictation;
   - runs for explicit correction, structure, email, translation, long-form,
-    or future Voice Mode intent;
+    or an explicit non-Direct Voice Mode;
   - emits a bounded reason such as `skip_short_direct`,
     `run_self_correction`, or `run_long_dictation` without retaining text.
+- `VoiceModeConfig` and `AppModeRule`
+  - provide Direct, Reply, Email, Agent Plan, Code Prompt, and Translate;
+  - resolve an optional application rule from the exact normalized bundle
+    identifier captured when recording begins;
+  - store only the selected app name and bundle identifier, never window or
+    document content;
+  - normalize, bound, and de-duplicate decoded rules so malformed local
+    configuration cannot create ambiguous SwiftUI identities;
+  - freeze the resolved mode into the per-session transcription
+    configuration and remove the complete rule list before provider use.
 - `TranscriptionPromptBuilder`
   - creates the fixed direct-output prompt and exact preservation hints.
 - `TerminologyNormalizer`
@@ -249,6 +259,10 @@ The current Settings window exposes:
 
 - account and permission state;
 - dictation and text polish;
+- a default Voice Mode plus optional exact bundle-identifier application
+  rules, including an installed-application picker and explicit warnings when
+  a non-Direct mode cannot run because AI Polish is off or ChatGPT is not
+  connected;
 - history/recovery entry points;
 - terminology entry points;
 - paste behavior;

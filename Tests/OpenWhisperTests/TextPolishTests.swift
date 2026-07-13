@@ -137,6 +137,7 @@ func textPolishPromptRequestsAgentPlanStyleAndLaterIntentWins() {
             TerminologyEntry(canonical: "ExampleSDK", aliases: ["Example SDK"]),
         ],
         config: TextPolishConfig(),
+        mode: .agentPlan,
         locale: "zh-CN"
     )
 
@@ -169,6 +170,51 @@ func textPolishPromptHandlesChineseResequenceInstruction() {
     #expect(joined.contains("三"))
     #expect(joined.contains("把大象放进去"))
     #expect(joined.contains("后面"))
+}
+
+@Test
+func textPolishPromptAppliesModeSpecificWritingContract() {
+    let builder = TextPolishPromptBuilder()
+    let email = builder.buildMessages(
+        transcript: "告诉大家明天下午三点开会。",
+        terminologyEntries: [],
+        config: TextPolishConfig(),
+        mode: .email,
+        locale: "zh-CN"
+    )
+    let codePrompt = builder.buildMessages(
+        transcript: "修改 Sources/OpenWhisper/AppConfig.swift。",
+        terminologyEntries: [],
+        config: TextPolishConfig(),
+        mode: .codePrompt,
+        locale: "zh-CN"
+    )
+    let translation = builder.buildMessages(
+        transcript: "把这段内容翻译成英文。",
+        terminologyEntries: [],
+        config: TextPolishConfig(),
+        mode: .translate,
+        locale: "zh-CN"
+    )
+
+    #expect(email.map(\.content).joined().contains("Voice Mode: Email"))
+    #expect(email.map(\.content).joined().contains("subject line"))
+    #expect(
+        codePrompt.map(\.content).joined()
+            .contains("Voice Mode: Code Prompt")
+    )
+    #expect(
+        codePrompt.map(\.content).joined()
+            .contains("class and method names")
+    )
+    #expect(
+        translation.map(\.content).joined()
+            .contains("Voice Mode: Translate")
+    )
+    #expect(
+        translation.map(\.content).joined()
+            .contains("predominantly Chinese")
+    )
 }
 
 @Test

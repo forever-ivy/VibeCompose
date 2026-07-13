@@ -243,9 +243,10 @@ struct AudioRecorderTests {
         recorder.configure(maxDurationSeconds: 1)
         try await recorder.startRecording()
 
-        try await Task.sleep(nanoseconds: 1_100_000_000)
-        await Task.yield()
-        await Task.yield()
+        let timeout = ContinuousClock.now + .seconds(2)
+        while session.stopCallCount == 0, ContinuousClock.now < timeout {
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
         let audio = try recorder.stopRecording()
 
         #expect(session.stopCallCount >= 2)

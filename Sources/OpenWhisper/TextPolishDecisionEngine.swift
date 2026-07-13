@@ -1,14 +1,5 @@
 import Foundation
 
-enum DictationMode: String, Codable, Sendable, Equatable, CaseIterable {
-    case direct
-    case reply
-    case email
-    case agentPlan
-    case codePrompt
-    case translate
-}
-
 enum TextPolishDecisionReason: String, Codable, Sendable, Equatable, CaseIterable {
     case disabled
     case providerUnavailable = "provider_unavailable"

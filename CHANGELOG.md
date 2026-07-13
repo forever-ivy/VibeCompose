@@ -11,6 +11,11 @@
 - Added an Auto Polish decision engine that skips short, low-complexity
   dictation, runs for corrections/structured/translation/email/long-form
   intent, and records only a bounded decision reason in local diagnostics.
+- Added application-aware Voice Modes for Direct, Reply, Email, Agent Plan,
+  Code Prompt, and Translate. Settings can choose a default mode or assign
+  exact bundle-identifier rules without reading window or document content;
+  runtime configuration freezes the selected mode at recording time and
+  strips the full rule list before provider use.
 - Isolated automated Settings, Onboarding, History, Terminology, and Quick Add
   snapshots from live configuration, account sessions, API credentials,
   transcripts, recovery records, and terminology.
