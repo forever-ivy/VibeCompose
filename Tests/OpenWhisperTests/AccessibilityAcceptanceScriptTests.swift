@@ -17,7 +17,27 @@ func accessibilityAcceptanceCoversEveryPrimaryProductSurface() throws {
     #expect(source.contains("settings-paste"))
     #expect(source.contains("settings-privacy"))
     #expect(source.contains("settings-advanced"))
-    #expect(source.contains("\"onboarding\" \"--open-onboarding\""))
+    #expect(
+        source.contains(
+            "\"onboarding-welcome\" \"--open-onboarding\" \"welcome\""
+        )
+    )
+    #expect(
+        source.contains(
+            "\"onboarding-connect\" \"--open-onboarding\" \"connect\""
+        )
+    )
+    #expect(
+        source.contains(
+            "\"onboarding-microphone\" \"--open-onboarding\" \"microphone\""
+        )
+    )
+    #expect(
+        source.contains(
+            "\"onboarding-practice\" \"--open-onboarding\" \"practice\""
+        )
+    )
+    #expect(source.contains("--onboarding-step"))
     #expect(source.contains("\"history\" \"--open-history\""))
     #expect(source.contains("\"terminology\" \"--open-terminology\""))
     #expect(source.contains("\"quick-add\" \"--open-quick-add\""))

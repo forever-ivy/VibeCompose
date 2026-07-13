@@ -313,9 +313,16 @@ The same privacy boundary applies to
 accessibility interface for the transient process, walks the SwiftUI virtual
 accessibility tree, and records only roles, control names, identifiers, action
 names, and standard subroles. The installed-app harness covers all six Settings
-panes, Onboarding, History, Terminology, and Quick Add and fails when an
-actionable control has neither an explicit/associated name nor a standard
-AppKit subrole description. Values and user content are not exported.
+panes, all four Onboarding steps, History, Terminology, and Quick Add and fails
+when an actionable control has neither an explicit/associated name nor a
+standard AppKit subrole description. Values and user content are not exported.
+
+`--interaction-acceptance` extends the same privacy boundary to long-lived
+installed-app sessions used by official Computer Use. It presents default
+configuration, empty in-memory credentials and empty records, suppresses
+configuration/data writes, and does not persist Onboarding completion.
+`scripts/interaction_acceptance.sh` launches one requested product surface and
+restores the normal installed menu bar runtime after acceptance.
 
 Ad-hoc signing is allowed only for local development. Commercial distribution still requires strict environment parsing, a fixed Developer ID/Team ID, Hardened Runtime, notarization and stapling, fail-closed Gatekeeper checks, staged atomic installation with rollback, fixed artifact SHA-256 values, and a signed updater.
 

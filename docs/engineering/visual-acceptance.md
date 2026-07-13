@@ -30,16 +30,32 @@ Run the installed-app SwiftUI accessibility audit with:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-It covers Account, Dictation, AI Polish, Paste, Privacy, Advanced,
-Onboarding, History, Terminology, and Quick Add. Each transient process uses
-default configuration and empty in-memory user data, enables AppKit's enhanced
-accessibility tree, and fails if the surface has no actionable controls or an
-actionable element has no usable accessible name.
+It covers Account, Dictation, AI Polish, Paste, Privacy, Advanced, all four
+Onboarding steps, History, Terminology, and Quick Add. Each transient process
+uses default configuration and empty in-memory user data, enables AppKit's
+enhanced accessibility tree, and fails if the surface has no actionable
+controls or an actionable element has no usable accessible name.
 
 The generated JSON is structural evidence only. It does not prove Tab order,
 keyboard activation, VoiceOver speech output, focus timing, system permission
 dialogs, or high-contrast appearance; those remain official Computer Use
 interaction requirements.
+
+Launch a privacy-isolated installed surface for those interaction checks with:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
+  ./scripts/interaction_acceptance.sh --install settings account
+```
+
+Replace `settings account` with another supported Settings pane, Onboarding
+step, History, Terminology, or Quick Add. The process uses default presentation
+data and does not persist changes or Onboarding completion. When the Computer
+Use pass is complete, restore the normal installed runtime with:
+
+```bash
+./scripts/interaction_acceptance.sh --restore
+```
 
 The script intentionally stops each transient overlay-demo process between HUD states. That cleanup is not the final user-review state. A successful run must relaunch the normal installed app from `/Applications/OpenWhisper.app`, verify that OpenWhisper is running, and leave it running.
 

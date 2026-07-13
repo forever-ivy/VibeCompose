@@ -18,6 +18,13 @@ struct OnboardingStateStore {
     func markCompleted() {
         defaults.set(Self.currentFlowVersion, forKey: Self.completionKey)
     }
+
+    func markCompleted(if shouldPersist: Bool) {
+        guard shouldPersist else {
+            return
+        }
+        markCompleted()
+    }
 }
 
 @MainActor
@@ -26,6 +33,8 @@ final class OnboardingWindowController: NSWindowController {
 
     init(
         authManager: ChatGPTAuthManager,
+        initialStep: OnboardingStep = .welcome,
+        persistCompletion: Bool = true,
         stateStore: OnboardingStateStore = OnboardingStateStore(),
         onRequestMicrophoneAccess: @escaping () async -> Result<Void, any Error>,
         onCompleted: @escaping () -> Void
@@ -34,6 +43,7 @@ final class OnboardingWindowController: NSWindowController {
 
         let placeholder = OnboardingView(
             authManager: authManager,
+            initialStep: initialStep,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onComplete: {}
         )
@@ -58,12 +68,13 @@ final class OnboardingWindowController: NSWindowController {
 
         hostingController.rootView = OnboardingView(
             authManager: authManager,
+            initialStep: initialStep,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onComplete: { [weak self] in
                 guard let self else {
                     return
                 }
-                self.stateStore.markCompleted()
+                self.stateStore.markCompleted(if: persistCompletion)
                 self.window?.orderOut(nil)
                 onCompleted()
             }
@@ -118,13 +129,45 @@ private final class OnboardingWindow: NSWindow {
     }
 }
 
-private enum OnboardingStep: Int, CaseIterable, Identifiable {
+enum OnboardingStep: Int, CaseIterable, Identifiable {
     case welcome
     case connect
     case microphone
     case practice
 
     var id: Int { rawValue }
+
+    var launchArgumentValue: String {
+        switch self {
+        case .welcome:
+            return "welcome"
+        case .connect:
+            return "connect"
+        case .microphone:
+            return "microphone"
+        case .practice:
+            return "practice"
+        }
+    }
+
+    static func fromLaunchArgument(_ value: String) -> OnboardingStep? {
+        switch value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+        {
+        case "welcome":
+            return .welcome
+        case "connect", "account":
+            return .connect
+        case "microphone", "mic":
+            return .microphone
+        case "practice", "paste", "paste-and-practice":
+            return .practice
+        default:
+            return nil
+        }
+    }
 
     var title: String {
         switch self {
@@ -154,7 +197,7 @@ private enum OnboardingStep: Int, CaseIterable, Identifiable {
 }
 
 private struct OnboardingView: View {
-    @State private var step: OnboardingStep = .welcome
+    @State private var step: OnboardingStep
     @State private var authSnapshot: ChatGPTAuthSnapshot
     @StateObject private var permissionMonitor = PermissionStatusMonitor()
     @State private var isConnecting = false
@@ -169,12 +212,14 @@ private struct OnboardingView: View {
 
     init(
         authManager: ChatGPTAuthManager,
+        initialStep: OnboardingStep = .welcome,
         onRequestMicrophoneAccess: @escaping () async -> Result<Void, any Error>,
         onComplete: @escaping () -> Void
     ) {
         self.authManager = authManager
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onComplete = onComplete
+        _step = State(initialValue: initialStep)
         _authSnapshot = State(initialValue: authManager.authSnapshot())
     }
 

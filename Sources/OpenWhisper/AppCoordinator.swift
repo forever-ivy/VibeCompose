@@ -306,11 +306,14 @@ final class AppCoordinator {
                     }
                 }
                 if launchMode == .onboarding {
-                    openOnboarding()
+                    let onboardingStep = AppLaunchMode.onboardingStep(
+                        arguments: ProcessInfo.processInfo.arguments
+                    ) ?? .welcome
+                    openOnboarding(initialStep: onboardingStep)
                     scheduleOnboardingSnapshotIfRequested()
                     scheduleAccessibilityAuditIfRequested(
                         window: onboardingWindowController?.window,
-                        surface: "onboarding"
+                        surface: "onboarding-\(onboardingStep.launchArgumentValue)"
                     )
                 }
                 if launchMode == .history {
@@ -1235,13 +1238,17 @@ final class AppCoordinator {
         }
     }
 
-    private func openOnboarding() {
+    private func openOnboarding(
+        initialStep: OnboardingStep = .welcome
+    ) {
         if onboardingWindowController == nil {
             let authManager = snapshotPrivacyMode.presentationAuthManager(
                 liveAuthManager: self.authManager
             )
             onboardingWindowController = OnboardingWindowController(
                 authManager: authManager,
+                initialStep: initialStep,
+                persistCompletion: !snapshotPrivacyMode.isEnabled,
                 onRequestMicrophoneAccess: { [weak self] in
                     guard let self else {
                         return .failure(

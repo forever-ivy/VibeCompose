@@ -82,10 +82,23 @@ Installed accessibility structure precheck:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-This checks all six Settings panes plus Onboarding, History, Terminology, and
-Quick Add for a non-empty SwiftUI accessibility tree and named actionable
-controls. It complements—but does not replace—keyboard and VoiceOver
-interaction acceptance.
+This checks all six Settings panes, every one of the four Onboarding steps,
+History, Terminology, and Quick Add for a non-empty SwiftUI accessibility tree
+and named actionable controls. It complements—but does not replace—keyboard
+and VoiceOver interaction acceptance.
+
+For official Computer Use interaction acceptance without loading the user's
+live configuration, credentials, history, Recovery data, or terminology:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
+  ./scripts/interaction_acceptance.sh --install settings account
+./scripts/interaction_acceptance.sh --restore
+```
+
+The first command leaves the requested installed-app surface open in a private,
+non-persistent presentation mode. The restore command closes the transient
+acceptance process and relaunches the normal installed menu bar app.
 
 ## Runtime Data
 

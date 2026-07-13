@@ -181,9 +181,33 @@ enum AppLaunchMode: Equatable {
         )
     }
 
+    static func interactionAcceptanceRequested(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> Bool {
+        let environmentValue = environment[
+            "OPENWHISPER_INTERACTION_ACCEPTANCE"
+        ]?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        if ["1", "true", "yes", "acceptance"].contains(
+            environmentValue ?? ""
+        ) {
+            return true
+        }
+
+        return arguments.contains("--interaction-acceptance")
+            || arguments.contains("--private-acceptance")
+    }
+
     static func settingsPane(arguments: [String]) -> SettingsPane? {
         requestedSettingsPane(arguments: arguments)
             .flatMap(SettingsPane.fromLaunchArgument)
+    }
+
+    static func onboardingStep(arguments: [String]) -> OnboardingStep? {
+        requestedOnboardingStep(arguments: arguments)
+            .flatMap(OnboardingStep.fromLaunchArgument)
     }
 
     static func settingsSnapshotOutputURL(
@@ -316,6 +340,29 @@ enum AppLaunchMode: Equatable {
                 return String(argument.dropFirst("--settings-pane=".count))
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .lowercased()
+            }
+        }
+
+        return nil
+    }
+
+    private static func requestedOnboardingStep(
+        arguments: [String]
+    ) -> String? {
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--onboarding-step",
+               index + 1 < arguments.count {
+                return arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+            }
+
+            if argument.hasPrefix("--onboarding-step=") {
+                return String(
+                    argument.dropFirst("--onboarding-step=".count)
+                )
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
             }
         }
 

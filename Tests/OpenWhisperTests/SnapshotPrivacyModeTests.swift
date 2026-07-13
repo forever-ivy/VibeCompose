@@ -11,8 +11,10 @@ func snapshotPrivacyModeRecognizesEveryProductSurfaceCapture() {
         (["OPENWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT": "/tmp/terminology.png"], []),
         (["OPENWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT": "/tmp/quick-add.png"], []),
         (["OPENWHISPER_ACCESSIBILITY_AUDIT_OUTPUT": "/tmp/audit.json"], []),
+        (["OPENWHISPER_INTERACTION_ACCEPTANCE": "true"], []),
         ([:], ["--settings-snapshot-output=/tmp/settings.png"]),
         ([:], ["--history-snapshot-output", "/tmp/history.png"]),
+        ([:], ["--open-settings", "--interaction-acceptance"]),
     ]
 
     for (environment, arguments) in cases {

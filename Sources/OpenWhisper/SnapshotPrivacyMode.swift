@@ -9,7 +9,7 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
         environment: [String: String],
         arguments: [String]
     ) -> SnapshotPrivacyMode {
-        let hasSnapshotOutput =
+        let hasPrivateAcceptanceSurface =
             AppLaunchMode.settingsSnapshotOutputURL(
                 environment: environment,
                 arguments: arguments
@@ -34,8 +34,14 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
                 environment: environment,
                 arguments: arguments
             ) != nil
+            || AppLaunchMode.interactionAcceptanceRequested(
+                environment: environment,
+                arguments: arguments
+            )
 
-        return SnapshotPrivacyMode(isEnabled: hasSnapshotOutput)
+        return SnapshotPrivacyMode(
+            isEnabled: hasPrivateAcceptanceSurface
+        )
     }
 
     func presentationConfig(liveConfig: AppConfig) -> AppConfig {

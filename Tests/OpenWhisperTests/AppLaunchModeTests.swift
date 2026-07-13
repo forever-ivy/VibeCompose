@@ -43,6 +43,32 @@ struct AppLaunchModeTests {
     }
 
     @Test
+    func interactionAcceptanceRequiresAnExplicitPrivateModeFlag() {
+        #expect(
+            AppLaunchMode.interactionAcceptanceRequested(
+                environment: [:],
+                arguments: ["OpenWhisper", "--open-settings"]
+            ) == false
+        )
+        #expect(
+            AppLaunchMode.interactionAcceptanceRequested(
+                environment: [
+                    "OPENWHISPER_INTERACTION_ACCEPTANCE": "true",
+                ]
+            )
+        )
+        #expect(
+            AppLaunchMode.interactionAcceptanceRequested(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--private-acceptance",
+                ]
+            )
+        )
+    }
+
+    @Test
     func settingsModeAcceptsLaunchServicesArgument() {
         #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--settings"]) == .settings)
         #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--open-settings"]) == .settings)
@@ -65,6 +91,23 @@ struct AppLaunchModeTests {
                     "/tmp/openwhisper-onboarding.png",
                 ]
             ) == URL(fileURLWithPath: "/tmp/openwhisper-onboarding.png")
+        )
+        #expect(
+            AppLaunchMode.onboardingStep(
+                arguments: [
+                    "OpenWhisper",
+                    "--onboarding-step=connect",
+                ]
+            ) == .connect
+        )
+        #expect(
+            AppLaunchMode.onboardingStep(
+                arguments: [
+                    "OpenWhisper",
+                    "--onboarding-step",
+                    "practice",
+                ]
+            ) == .practice
         )
     }
 

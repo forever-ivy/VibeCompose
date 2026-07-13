@@ -69,7 +69,11 @@ capture_audit() {
     "$temporary_file"
   )
   if [[ -n "$pane" ]]; then
-    args+=("--settings-pane" "$pane")
+    if [[ "$surface" == settings-* ]]; then
+      args+=("--settings-pane" "$pane")
+    elif [[ "$surface" == onboarding-* ]]; then
+      args+=("--onboarding-step" "$pane")
+    fi
   fi
 
   /usr/bin/open -W -n "$APP_DIR" --args "${args[@]}"
@@ -87,7 +91,10 @@ capture_audit "settings-ai-polish" "--open-settings" "ai-polish"
 capture_audit "settings-paste" "--open-settings" "paste"
 capture_audit "settings-privacy" "--open-settings" "privacy"
 capture_audit "settings-advanced" "--open-settings" "advanced"
-capture_audit "onboarding" "--open-onboarding"
+capture_audit "onboarding-welcome" "--open-onboarding" "welcome"
+capture_audit "onboarding-connect" "--open-onboarding" "connect"
+capture_audit "onboarding-microphone" "--open-onboarding" "microphone"
+capture_audit "onboarding-practice" "--open-onboarding" "practice"
 capture_audit "history" "--open-history"
 capture_audit "terminology" "--open-terminology"
 capture_audit "quick-add" "--open-quick-add"
@@ -105,7 +112,10 @@ expected = {
     "settings-paste",
     "settings-privacy",
     "settings-advanced",
-    "onboarding",
+    "onboarding-welcome",
+    "onboarding-connect",
+    "onboarding-microphone",
+    "onboarding-practice",
     "history",
     "terminology",
     "quick-add",
@@ -159,7 +169,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_DIR\`
-- Surfaces: six Settings panes, Onboarding, History, Terminology, Quick Add
+- Surfaces: six Settings panes, four Onboarding steps, History, Terminology, Quick Add
 - Validation: SwiftUI enhanced accessibility tree, actionable names, non-empty control surface
 - Privacy: capture mode uses default configuration and empty in-memory user data
 - Final live state: normal installed OpenWhisper relaunched and left running as PID \`$RUNNING_PID\`

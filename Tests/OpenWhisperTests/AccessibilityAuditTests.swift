@@ -106,4 +106,21 @@ func accessibilityAuditOutputAndSettingsPaneArgumentsAreParsed() {
             ]
         ) == .dictation
     )
+    #expect(
+        AppLaunchMode.onboardingStep(
+            arguments: [
+                "OpenWhisper",
+                "--onboarding-step=paste-and-practice",
+            ]
+        ) == .practice
+    )
+    #expect(
+        AppLaunchMode.onboardingStep(
+            arguments: [
+                "OpenWhisper",
+                "--onboarding-step",
+                "microphone",
+            ]
+        ) == .microphone
+    )
 }

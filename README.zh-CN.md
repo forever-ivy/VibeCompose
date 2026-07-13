@@ -68,7 +68,17 @@ Ad-hoc 签名只适合本地验证，可能导致 macOS 辅助功能设置中无
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-该命令覆盖六个设置页面、Onboarding、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
+该命令覆盖六个设置页面、Onboarding 的全部四个步骤、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
+
+使用官方 Computer Use 做安装版交互验收时，可以启用不读取真实配置、凭据、History、Recovery 或术语的隔离模式：
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
+  ./scripts/interaction_acceptance.sh --install settings account
+./scripts/interaction_acceptance.sh --restore
+```
+
+第一条命令会保持指定安装版界面打开，所有修改仅作用于非持久化展示数据；第二条命令结束临时验收进程并恢复正常菜单栏运行状态。
 
 ## 本地数据
 

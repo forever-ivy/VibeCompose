@@ -19,6 +19,24 @@ func onboardingStateShowsUntilTheCurrentFlowIsCompleted() throws {
 }
 
 @Test
+func privateAcceptanceDoesNotPersistOnboardingCompletion() throws {
+    let suiteName =
+        "OpenWhisperTests.Onboarding.Private.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let store = OnboardingStateStore(defaults: defaults)
+    store.markCompleted(if: false)
+
+    #expect(store.shouldPresent())
+    #expect(
+        defaults.object(
+            forKey: OnboardingStateStore.completionKey
+        ) == nil
+    )
+}
+
+@Test
 func onboardingSourceKeepsPermissionsRequiredAndOptional() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
@@ -40,4 +58,19 @@ func onboardingSourceKeepsPermissionsRequiredAndOptional() throws {
     #expect(source.contains("TextEditor(text: $practiceText)"))
     #expect(source.contains("onRequestMicrophoneAccess"))
     #expect(source.contains("AccessibilityPermission.guideAccess()"))
+}
+
+@Test
+func onboardingStepsExposeStableAcceptanceArguments() {
+    #expect(OnboardingStep.welcome.launchArgumentValue == "welcome")
+    #expect(OnboardingStep.connect.launchArgumentValue == "connect")
+    #expect(OnboardingStep.microphone.launchArgumentValue == "microphone")
+    #expect(OnboardingStep.practice.launchArgumentValue == "practice")
+    #expect(OnboardingStep.fromLaunchArgument("account") == .connect)
+    #expect(OnboardingStep.fromLaunchArgument("mic") == .microphone)
+    #expect(
+        OnboardingStep.fromLaunchArgument("paste_and_practice")
+            == .practice
+    )
+    #expect(OnboardingStep.fromLaunchArgument("unknown") == nil)
 }
