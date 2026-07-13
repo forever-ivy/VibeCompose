@@ -84,7 +84,7 @@ func recoveryConnectionTestSendsOnlySyntheticSilenceAndModel() async throws {
 
 @Test
 func recoveryConnectionTestRedactsCredentialsFromProviderErrors() async {
-    let secret = "sk-super-secret-recovery-key"
+    let secret = "test-recovery-key-do-not-use"
     let store = InMemoryOpenAICompatibleCredentialStore(apiKey: secret)
     let tester = OpenAICompatibleConnectionTester(
         credentialStore: store,

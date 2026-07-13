@@ -86,6 +86,7 @@ macOS 首发策略：
 - Homebrew Cask 从 `sha256 :no_check` 改为未发布时全零 fail-closed，并由发布脚本写入精确 ZIP 哈希；
 - 安装器新增 build 与 Developer ID Team ID 校验；
 - PermissionFlow 与 Sparkle 的精确 source/revision/version、许可证全文和 SHA-256 已进入机器可读清单；Build、Package、Packaged App 和商业 release gate 会校验 `Package.resolved` 全覆盖与 App 内资源一致性；
+- 仓库卫生门禁已接入 Check、Package 和商业 release gate：阻断旧产品身份字面量、常见已提交密钥模式、缺失/重复简中本地化 key 和失效的本地 Markdown 链接；
 - Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
 - Provider Capability Policy 使用独立 Ed25519 公钥、HTTPS 固定地址、31 天硬到期、build 范围和单调 revision；在读取音频/Token/文本前阻断受影响能力；
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
@@ -680,10 +681,10 @@ PR：
 
 - Swift build/test；
 - lint/format；
-- secret scan；
+- secret scan（常见已提交密钥模式已由仓库卫生门禁覆盖）；
 - dependency license scan（已由 `verify_dependency_licenses.swift` 接入本地和发布检查）；
-- localization key consistency；
-- docs links；
+- localization key consistency（字面量缺失和重复 key 已由仓库卫生门禁覆盖）；
+- docs links（本地 Markdown 目标已由仓库卫生门禁覆盖）；
 - landing content contract。
 
 Release：

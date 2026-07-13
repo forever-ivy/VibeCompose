@@ -13,6 +13,7 @@ load_version_env "$VERSION_ENV"
 
 swift "$ROOT/scripts/verify_dependency_licenses.swift" \
   --root "$ROOT"
+python3 "$ROOT/scripts/verify_repository_hygiene.py"
 
 : "${OPENWHISPER_APP_NAME:?OPENWHISPER_APP_NAME is required}"
 : "${OPENWHISPER_BUNDLE_ID:?OPENWHISPER_BUNDLE_ID is required}"

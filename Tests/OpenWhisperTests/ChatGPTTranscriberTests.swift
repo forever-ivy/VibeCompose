@@ -461,7 +461,7 @@ func openAICompatibleRouteRejectsEnvironmentOnlyCredential() async throws {
 
 @Test
 func openAICompatibleRouteRedactsKeyFromProviderError() async throws {
-    let secret = "sk-recovery-provider-secret"
+    let secret = "test-provider-secret-do-not-use"
     var config = AppConfig().transcription
     config.provider = .openAICompatible
     let transcriber = ChatGPTTranscriber(

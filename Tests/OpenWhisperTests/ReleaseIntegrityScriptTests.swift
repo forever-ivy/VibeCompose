@@ -62,6 +62,7 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
 
     #expect(packageScript.contains("load_product_env \"$PRODUCT_ENV\""))
     #expect(packageScript.contains("load_version_env \"$VERSION_ENV\""))
+    #expect(packageScript.contains("verify_repository_hygiene.py"))
     #expect(!packageScript.contains("source \"$PRODUCT_ENV\""))
     #expect(!packageScript.contains("source \"$VERSION_ENV\""))
     #expect(packageScript.contains("OPENWHISPER_REQUIRE_DEVELOPER_ID"))
@@ -382,6 +383,7 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(updateCaskScript.contains("^[0-9a-f]{64}$"))
     #expect(updateCaskScript.contains("must not use the unreleased fail-closed value"))
     #expect(releaseGate.contains("Developer ID Application:"))
+    #expect(releaseGate.contains("verify_repository_hygiene.py"))
     #expect(releaseGate.contains("TeamIdentifier=$EXPECTED_TEAM_ID"))
     #expect(releaseGate.contains("stapler validate"))
     #expect(releaseGate.contains("spctl --assess"))

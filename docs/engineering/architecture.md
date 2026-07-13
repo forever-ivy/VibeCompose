@@ -324,6 +324,12 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ./scripts/check_packaged_app.sh
 ```
 
+`scripts/verify_repository_hygiene.py` runs from the normal check, packaging,
+and commercial release paths. It fails closed when tracked product text
+reintroduces a legacy identity marker, matches a common committed-secret
+pattern, leaves a literal `L10n` key untranslated or duplicated in Simplified
+Chinese, or points a local Markdown link at a missing target.
+
 HUD visual acceptance launches the installed app once per required state and
 asks the app to self-render its panel into PNG. CoreGraphics window capture
 remains a fallback, so automated visual evidence does not depend on granting

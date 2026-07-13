@@ -16,6 +16,10 @@
   exact bundle-identifier rules without reading window or document content;
   runtime configuration freezes the selected mode at recording time and
   strips the full rule list before provider use.
+- Added a repository hygiene release precheck that fails on legacy product
+  identity markers, common committed-secret patterns, missing Simplified
+  Chinese literals, duplicate localization keys, or broken local Markdown
+  links.
 - Isolated automated Settings, Onboarding, History, Terminology, and Quick Add
   snapshots from live configuration, account sessions, API credentials,
   transcripts, recovery records, and terminology.

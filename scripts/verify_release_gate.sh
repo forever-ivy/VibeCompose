@@ -27,6 +27,7 @@ CAPABILITY_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-cap
 swift "$ROOT/scripts/verify_dependency_licenses.swift" \
   --root "$ROOT" \
   --app-resources "$APP/Contents/Resources"
+python3 "$ROOT/scripts/verify_repository_hygiene.py"
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 SIGNATURE_DETAILS="$(/usr/bin/codesign -dvvv "$APP" 2>&1)"

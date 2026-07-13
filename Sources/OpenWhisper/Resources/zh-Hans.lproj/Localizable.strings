@@ -240,7 +240,6 @@
 "OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app." = "OpenWhisper 仍无法确认麦克风权限。请点击“刷新权限状态”或重新打开应用。";
 "Auto-paste is ready." = "自动粘贴已就绪。";
 "Allow Microphone Access" = "允许使用麦克风";
-"Open Microphone Settings" = "打开麦克风设置";
 "Guide Accessibility Access" = "引导开启辅助功能权限";
 "Open Accessibility Settings" = "打开辅助功能设置";
 "Refresh Status" = "刷新权限状态";
@@ -479,7 +478,6 @@
 "Cancel and discard this recording (Esc)" = "取消并丢弃本次录音（Esc）";
 "Retry transcription" = "重试转写";
 "Enable Microphone Access" = "开启麦克风权限";
-"Allow microphone access" = "允许访问麦克风";
 "OpenWhisper needs microphone access before it can record your first dictation. Click Continue and macOS should show the microphone permission prompt next." = "OpenWhisper 需要麦克风权限才能开始首次听写。点击“继续”后，macOS 将显示麦克风权限请求。";
 "Installed app path: /Applications/OpenWhisper.app" = "已安装应用路径：/Applications/OpenWhisper.app";
 "First-run permission is requested only once from a clean TCC state" = "首次权限请求只会在未决定的干净 TCC 状态下触发一次";
@@ -600,3 +598,15 @@
 "Enter a valid bundle identifier such as com.apple.Notes." = "请输入有效的 Bundle Identifier，例如 com.apple.Notes。";
 "Choose the writing shape for each app and control when AI Polish rewrites a transcript." = "为不同应用选择输出文本形式，并控制 AI 润色何时重写转写结果。";
 "Reply, Email, Agent Plan, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it." = "回复、邮件、Agent 计划、代码提示词和翻译模式需要连接 ChatGPT 账号才能使用 AI 润色。未连接时，直述听写和转写恢复路径仍可继续使用。";
+
+/* Remaining runtime and recovery errors */
+"Browser login sent the callback parameter %@ more than once." = "浏览器登录回调重复发送了参数 %@。";
+"OpenWhisper blocked a non-approved endpoint for the managed ChatGPT session." = "OpenWhisper 已阻止托管 ChatGPT 会话访问未经批准的端点。";
+"OpenWhisper blocked a symbolic link in recovery storage." = "OpenWhisper 已阻止恢复存储中的符号链接。";
+"OpenWhisper blocked an unsafe recovery audio path." = "OpenWhisper 已阻止不安全的恢复音频路径。";
+"OpenWhisper setup required" = "需要设置 OpenWhisper";
+"Saved recovery audio is not a regular file." = "保存的恢复音频不是普通文件。";
+"Saved recovery audio is not a valid WAV file." = "保存的恢复音频不是有效的 WAV 文件。";
+"Saved recovery audio is too large to retry." = "保存的恢复音频过大，无法重试。";
+"The configured endpoint is invalid: %@" = "配置的端点无效：%@";
+"The maximum recording duration is invalid." = "最大录音时长设置无效。";
