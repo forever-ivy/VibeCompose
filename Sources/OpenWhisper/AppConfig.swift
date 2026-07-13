@@ -304,9 +304,11 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     var feedbackSoundsEnabled: Bool = true
     var languagePreference: TranscriptLanguagePreference = .simplifiedChinese
     var punctuationPreference: TranscriptPunctuationPreference = .automatic
-    var voiceModes: VoiceModeConfig = .init()
+    var skills: SkillsConfig = .init()
     var terminology: TerminologyConfig = .init()
     var textPolish: TextPolishConfig = .init()
+    var resolvedSkillPlan:
+        ResolvedSkillExecutionPlan?
 
     init() {}
 
@@ -353,12 +355,37 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
             TranscriptPunctuationPreference.self,
             forKey: .punctuationPreference
         ) ?? .automatic
-        voiceModes = try container.decodeIfPresent(
-            VoiceModeConfig.self,
-            forKey: .voiceModes
-        ) ?? .init()
+        if let decodedSkills =
+            try container.decodeIfPresent(
+                SkillsConfig.self,
+                forKey: .skills
+            )
+        {
+            skills = decodedSkills
+        } else {
+            skills = SkillsConfig(
+                migrating:
+                    try container
+                        .decodeIfPresent(
+                            VoiceModeConfig.self,
+                            forKey: .voiceModes
+                        ) ?? .init()
+            )
+        }
         terminology = try container.decodeIfPresent(TerminologyConfig.self, forKey: .terminology) ?? .init()
         textPolish = try container.decodeIfPresent(TextPolishConfig.self, forKey: .textPolish) ?? .init()
+        resolvedSkillPlan = nil
+    }
+
+    var voiceModes: VoiceModeConfig {
+        get {
+            skills.legacyVoiceModes
+        }
+        set {
+            skills.applyLegacyVoiceModes(
+                newValue
+            )
+        }
     }
 
     var hotkeyKeyCode: UInt32 {
@@ -378,6 +405,98 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         CodingKey
     {
         case hotkeyKeyCode
+    }
+
+    private enum CodingKeys:
+        String,
+        CodingKey
+    {
+        case provider
+        case dictationHotkey
+        case openAITranscriptionURL
+        case openAIModel
+        case sampleRateHz
+        case maxDurationSeconds
+        case hintTerms
+        case speechCleanupEnabled
+        case feedbackSoundsEnabled
+        case languagePreference
+        case punctuationPreference
+        case skills
+        case voiceModes
+        case terminology
+        case textPolish
+    }
+
+    func encode(to encoder: any Encoder)
+        throws
+    {
+        var container =
+            encoder.container(
+                keyedBy: CodingKeys.self
+            )
+        try container.encode(
+            provider,
+            forKey: .provider
+        )
+        try container.encode(
+            dictationHotkey,
+            forKey: .dictationHotkey
+        )
+        try container.encode(
+            openAITranscriptionURL,
+            forKey:
+                .openAITranscriptionURL
+        )
+        try container.encode(
+            openAIModel,
+            forKey: .openAIModel
+        )
+        try container.encode(
+            sampleRateHz,
+            forKey: .sampleRateHz
+        )
+        try container.encode(
+            maxDurationSeconds,
+            forKey:
+                .maxDurationSeconds
+        )
+        try container.encode(
+            hintTerms,
+            forKey: .hintTerms
+        )
+        try container.encode(
+            speechCleanupEnabled,
+            forKey:
+                .speechCleanupEnabled
+        )
+        try container.encode(
+            feedbackSoundsEnabled,
+            forKey:
+                .feedbackSoundsEnabled
+        )
+        try container.encode(
+            languagePreference,
+            forKey:
+                .languagePreference
+        )
+        try container.encode(
+            punctuationPreference,
+            forKey:
+                .punctuationPreference
+        )
+        try container.encode(
+            skills,
+            forKey: .skills
+        )
+        try container.encode(
+            terminology,
+            forKey: .terminology
+        )
+        try container.encode(
+            textPolish,
+            forKey: .textPolish
+        )
     }
 
     var activeDictionaryEntries: [TerminologyEntry] {

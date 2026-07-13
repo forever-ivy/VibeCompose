@@ -183,6 +183,10 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
     let textPolishAttempted: Bool
     let textPolishDecisionReason: String?
     let textPolishErrorPresent: Bool
+    let skillID: String?
+    let skillVersion: String?
+    let skillValidationIssueCodes:
+        [String]
     let estimatedPolishInputTokens: Int
     let estimatedPolishOutputTokens: Int
     let injectMs: Int
@@ -222,6 +226,47 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
             )
         }
         textPolishErrorPresent = sample.textPolishError != nil
+        skillID = sample.skillID.map {
+            Self.allowedValue(
+                $0,
+                allowed: Set(
+                    SkillRegistry.builtIn
+                        .skillIDs
+                )
+            )
+        }
+        skillVersion =
+            sample.skillVersion.map {
+                SkillDefinition.isValidVersion(
+                    $0
+                ) ? $0 : "other"
+            }
+        let allowedValidationIssues =
+            Set(
+                [
+                    SkillValidationIssueCode
+                        .empty,
+                    .tooLong,
+                    .invalidJSON,
+                    .unclosedMarkdownFence,
+                    .missingRequiredSection,
+                    .changedTechnicalLiteral,
+                    .forbiddenPhrase,
+                    .leakedInternalMarker,
+                ].map(\.rawValue)
+            )
+        skillValidationIssueCodes =
+            (sample
+                .skillValidationIssueCodes
+                ?? [])
+            .prefix(20)
+            .map {
+                Self.allowedValue(
+                    $0,
+                    allowed:
+                        allowedValidationIssues
+                )
+            }
         estimatedPolishInputTokens = Self.nonnegative(
             sample.estimatedPolishInputTokens
         )

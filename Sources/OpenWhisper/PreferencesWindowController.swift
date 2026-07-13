@@ -333,12 +333,13 @@ private struct PreferencesView: View {
     @State private var textPolishUsage: [TextPolishProviderID: TextPolishUsage] = [:]
     @State private var textPolishMessage: String?
     @State private var textPolishMessageIsError = false
-    @State private var editingVoiceModeRuleID: UUID?
-    @State private var editingVoiceModeAppName = ""
-    @State private var editingVoiceModeBundleIdentifier = ""
-    @State private var editingVoiceMode: DictationMode = .reply
-    @State private var voiceModeMessage: String?
-    @State private var voiceModeMessageIsError = false
+    @State private var editingSkillRuleID: UUID?
+    @State private var editingSkillAppName = ""
+    @State private var editingSkillBundleIdentifier = ""
+    @State private var editingSkillID =
+        SkillRegistry.replySkillID
+    @State private var skillMessage: String?
+    @State private var skillMessageIsError = false
     @State private var recentHistoryRecords: [TranscriptionHistoryRecord] = []
     @State private var recentRecoveryRecords: [RecoveryRecord] = []
     @State private var selectedRecoveryKind: RecoveryHistoryKind = .audio
@@ -813,7 +814,7 @@ private struct PreferencesView: View {
             )
         case .polish:
             return L10n.text(
-                "Choose the writing shape for each app and control when AI Polish rewrites a transcript."
+                "Choose a Skill for each app and control when AI Polish transforms a transcript."
             )
         case .paste:
             return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
@@ -2566,7 +2567,7 @@ private struct PreferencesView: View {
                 if !licenseSnapshot.allows(.voiceModes) {
                     HStack(alignment: .center, spacing: 10) {
                         Label(
-                            L10n.text("Voice Modes require OpenWhisper Pro"),
+                            L10n.text("Skills require OpenWhisper Pro"),
                             systemImage: "lock.fill"
                         )
                         .font(.system(size: 11, weight: .semibold))
@@ -2579,7 +2580,7 @@ private struct PreferencesView: View {
                     }
                 }
 
-                voiceModeSection
+                skillSection
                     .disabled(
                         !licenseSnapshot.allows(.voiceModes)
                     )
@@ -2625,10 +2626,10 @@ private struct PreferencesView: View {
         }
     }
 
-    private var voiceModeSection: some View {
+    private var skillSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text(L10n.text("Voice Modes"))
+                Text(L10n.text("Skills"))
                     .font(.system(size: 13, weight: .semibold))
                 Text(
                     licenseSnapshot.state == .preview
@@ -2648,48 +2649,52 @@ private struct PreferencesView: View {
 
             Text(
                 L10n.text(
-                    "Choose a default writing shape and optionally override it for exact macOS bundle identifiers. OpenWhisper uses only the app name and bundle identifier—not window or document content—to select a mode."
+                    "Choose a default Skill and optionally override it for exact macOS bundle identifiers. OpenWhisper uses only the app name and bundle identifier—not window or document content—to resolve a Skill."
                 )
             )
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-            LabeledContent(L10n.text("Default Voice Mode")) {
+            LabeledContent(L10n.text("Default Skill")) {
                 Picker(
-                    L10n.text("Default Voice Mode"),
-                    selection: $config.transcription.voiceModes.defaultMode
+                    L10n.text("Default Skill"),
+                    selection:
+                        $config.transcription.skills.defaultSkillID
                 ) {
-                    ForEach(DictationMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                    ForEach(
+                        SkillRegistry.builtIn.orderedDefinitions
+                    ) { skill in
+                        Text(skill.localizedName)
+                            .tag(skill.id)
                     }
                 }
                 .labelsHidden()
                 .frame(width: 210)
             }
 
-            Text(config.transcription.voiceModes.defaultMode.caption)
+            Text(defaultSkillCaption)
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if config.transcription.voiceModes.requiresTextPolish,
+            if config.transcription.skills.requiresTextPolish,
                config.transcription.textPolish.mode == .disabled
             {
                 Label(
                     L10n.text(
-                        "This Voice Mode needs AI Polish. Turn rewrite mode to Auto or Always rewrite to apply it."
+                        "This Skill needs AI Polish. Turn rewrite mode to Auto or Always rewrite to apply it."
                     ),
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.orange)
-            } else if config.transcription.voiceModes.requiresTextPolish,
+            } else if config.transcription.skills.requiresTextPolish,
                       authSnapshot.state != .ready
             {
                 Label(
                     L10n.text(
-                        "Reply, Email, Agent Plan, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."
+                        "Reply, Email, Backend Prompt, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."
                     ),
                     systemImage: "person.crop.circle.badge.exclamationmark"
                 )
@@ -2706,7 +2711,7 @@ private struct PreferencesView: View {
 
                 HStack(spacing: 8) {
                     Button(L10n.text("Choose App…")) {
-                        chooseVoiceModeApplication()
+                        chooseSkillApplication()
                     }
                     .buttonStyle(.bordered)
 
@@ -2722,14 +2727,14 @@ private struct PreferencesView: View {
                 HStack(spacing: 8) {
                     TextField(
                         L10n.text("App name (optional)"),
-                        text: $editingVoiceModeAppName
+                        text: $editingSkillAppName
                     )
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 150)
 
                     TextField(
                         L10n.text("Bundle identifier"),
-                        text: $editingVoiceModeBundleIdentifier,
+                        text: $editingSkillBundleIdentifier,
                         prompt: Text("com.apple.Notes")
                     )
                     .textFieldStyle(.roundedBorder)
@@ -2738,36 +2743,39 @@ private struct PreferencesView: View {
 
                 HStack(spacing: 8) {
                     Picker(
-                        L10n.text("Voice Mode"),
-                        selection: $editingVoiceMode
+                        L10n.text("Skill"),
+                        selection: $editingSkillID
                     ) {
-                        ForEach(DictationMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
+                        ForEach(
+                            SkillRegistry.builtIn.orderedDefinitions
+                        ) { skill in
+                            Text(skill.localizedName)
+                                .tag(skill.id)
                         }
                     }
                     .frame(width: 210)
 
                     Button(
                         L10n.text(
-                            editingVoiceModeRuleID == nil
+                            editingSkillRuleID == nil
                                 ? "Add Rule"
                                 : "Save Rule"
                         )
                     ) {
-                        saveVoiceModeRule()
+                        saveSkillRule()
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(
-                        editingVoiceModeBundleIdentifier
+                        editingSkillBundleIdentifier
                             .trimmingCharacters(
                                 in: .whitespacesAndNewlines
                             )
                             .isEmpty
                     )
 
-                    if editingVoiceModeRuleID != nil {
+                    if editingSkillRuleID != nil {
                         Button(L10n.text("Cancel")) {
-                            resetVoiceModeRuleEditor()
+                            resetSkillRuleEditor()
                         }
                         .buttonStyle(.bordered)
                     }
@@ -2775,19 +2783,19 @@ private struct PreferencesView: View {
                     Spacer()
                 }
 
-                if let voiceModeMessage {
-                    Text(voiceModeMessage)
+                if let skillMessage {
+                    Text(skillMessage)
                         .font(.system(size: 11))
                         .foregroundStyle(
-                            voiceModeMessageIsError ? .red : .secondary
+                            skillMessageIsError ? .red : .secondary
                         )
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if config.transcription.voiceModes.applicationRules.isEmpty {
+                if config.transcription.skills.applicationRules.isEmpty {
                     Text(
                         L10n.text(
-                            "No application rules. The default Voice Mode applies everywhere."
+                            "No application rules. The default Skill applies everywhere."
                         )
                     )
                     .font(.system(size: 11))
@@ -2796,9 +2804,9 @@ private struct PreferencesView: View {
                 } else {
                     VStack(spacing: 6) {
                         ForEach(
-                            config.transcription.voiceModes.applicationRules
+                            config.transcription.skills.applicationRules
                         ) { rule in
-                            voiceModeRuleRow(rule)
+                            skillRuleRow(rule)
                         }
                     }
                 }
@@ -2806,19 +2814,31 @@ private struct PreferencesView: View {
         }
     }
 
-    private func voiceModeRuleRow(
-        _ rule: AppModeRule
+    private var defaultSkillCaption: String {
+        guard
+            let skill = SkillRegistry.builtIn.definition(
+                id: config.transcription.skills.defaultSkillID
+            )
+        else {
+            return DictationMode.direct.caption
+        }
+        return skill.legacyMode?.caption
+            ?? skill.promptInstruction
+    }
+
+    private func skillRuleRow(
+        _ rule: AppSkillRule
     ) -> some View {
         HStack(alignment: .center, spacing: 10) {
             Toggle(
                 L10n.format(
-                    "Enable Voice Mode rule for %@",
+                    "Enable Skill rule for %@",
                     rule.appName ?? rule.bundleIdentifier
                 ),
                 isOn: Binding(
                     get: { rule.isEnabled },
                     set: { isEnabled in
-                        updateVoiceModeRule(rule.id) {
+                        updateSkillRule(rule.id) {
                             $0.isEnabled = isEnabled
                         }
                     }
@@ -2836,13 +2856,18 @@ private struct PreferencesView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(rule.mode.title)
+            Text(
+                SkillRegistry.builtIn
+                    .definition(id: rule.skillID)?
+                    .localizedName
+                    ?? L10n.text("Direct")
+            )
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(rule.isEnabled ? .primary : .secondary)
                 .frame(width: 100, alignment: .trailing)
 
             Button {
-                startEditingVoiceModeRule(rule)
+                startEditingSkillRule(rule)
             } label: {
                 Image(systemName: "pencil")
                     .frame(width: 12, height: 12)
@@ -2852,20 +2877,20 @@ private struct PreferencesView: View {
             .help(L10n.text("Edit"))
             .accessibilityLabel(
                 L10n.format(
-                    "Edit Voice Mode rule for %@",
+                    "Edit Skill rule for %@",
                     rule.appName ?? rule.bundleIdentifier
                 )
             )
 
             Button(role: .destructive) {
-                config.transcription.voiceModes.remove(id: rule.id)
-                if editingVoiceModeRuleID == rule.id {
-                    resetVoiceModeRuleEditor()
+                config.transcription.skills.remove(id: rule.id)
+                if editingSkillRuleID == rule.id {
+                    resetSkillRuleEditor()
                 }
-                voiceModeMessage = L10n.text(
-                    "Application Voice Mode rule removed."
+                skillMessage = L10n.text(
+                    "Application Skill rule removed."
                 )
-                voiceModeMessageIsError = false
+                skillMessageIsError = false
             } label: {
                 Image(systemName: "trash")
                     .frame(width: 12, height: 12)
@@ -2875,7 +2900,7 @@ private struct PreferencesView: View {
             .help(L10n.text("Delete"))
             .accessibilityLabel(
                 L10n.format(
-                    "Delete Voice Mode rule for %@",
+                    "Delete Skill rule for %@",
                     rule.appName ?? rule.bundleIdentifier
                 )
             )
@@ -2886,35 +2911,35 @@ private struct PreferencesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
-    private func saveVoiceModeRule() {
+    private func saveSkillRule() {
         do {
-            let existingRule = editingVoiceModeRuleID.flatMap { id in
-                config.transcription.voiceModes.applicationRules.first {
+            let existingRule = editingSkillRuleID.flatMap { id in
+                config.transcription.skills.applicationRules.first {
                     $0.id == id
                 }
             }
-            let rule = try AppModeRule.validated(
+            let rule = try AppSkillRule.validated(
                 id: existingRule?.id ?? UUID(),
-                appName: editingVoiceModeAppName,
-                bundleIdentifier: editingVoiceModeBundleIdentifier,
-                mode: editingVoiceMode,
+                appName: editingSkillAppName,
+                bundleIdentifier: editingSkillBundleIdentifier,
+                skillID: editingSkillID,
                 isEnabled: existingRule?.isEnabled ?? true
             )
-            config.transcription.voiceModes.upsert(rule)
-            voiceModeMessage = L10n.format(
-                "Voice Mode rule saved for %@.",
+            config.transcription.skills.upsert(rule)
+            skillMessage = L10n.format(
+                "Skill rule saved for %@.",
                 rule.appName ?? rule.bundleIdentifier
             )
-            voiceModeMessageIsError = false
-            resetVoiceModeRuleEditor(clearMessage: false)
+            skillMessageIsError = false
+            resetSkillRuleEditor(clearMessage: false)
         } catch {
-            voiceModeMessage = error.localizedDescription
-            voiceModeMessageIsError = true
+            skillMessage = error.localizedDescription
+            skillMessageIsError = true
             NSSound.beep()
         }
     }
 
-    private func chooseVoiceModeApplication() {
+    private func chooseSkillApplication() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -2927,7 +2952,7 @@ private struct PreferencesView: View {
         )
         panel.title = L10n.text("Choose an Application")
         panel.message = L10n.text(
-            "OpenWhisper stores only the selected app name and bundle identifier for this Voice Mode rule."
+            "OpenWhisper stores only the selected app name and bundle identifier for this Skill rule."
         )
         panel.prompt = L10n.text("Choose App")
 
@@ -2939,18 +2964,18 @@ private struct PreferencesView: View {
             AppModeRule.isValidBundleIdentifier(bundleIdentifier)
         else {
             if panel.url != nil {
-                voiceModeMessage = L10n.text(
+                skillMessage = L10n.text(
                     "The selected application does not expose a valid bundle identifier."
                 )
-                voiceModeMessageIsError = true
+                skillMessageIsError = true
                 NSSound.beep()
             }
             return
         }
 
-        editingVoiceModeBundleIdentifier =
+        editingSkillBundleIdentifier =
             AppModeRule.normalizedBundleIdentifier(bundleIdentifier)
-        editingVoiceModeAppName = (
+        editingSkillAppName = (
             bundle.object(
                 forInfoDictionaryKey: "CFBundleDisplayName"
             ) as? String
@@ -2959,44 +2984,45 @@ private struct PreferencesView: View {
                 forInfoDictionaryKey: "CFBundleName"
             ) as? String
         ) ?? appURL.deletingPathExtension().lastPathComponent
-        voiceModeMessage = nil
-        voiceModeMessageIsError = false
+        skillMessage = nil
+        skillMessageIsError = false
     }
 
-    private func startEditingVoiceModeRule(_ rule: AppModeRule) {
-        editingVoiceModeRuleID = rule.id
-        editingVoiceModeAppName = rule.appName ?? ""
-        editingVoiceModeBundleIdentifier = rule.bundleIdentifier
-        editingVoiceMode = rule.mode
-        voiceModeMessage = nil
-        voiceModeMessageIsError = false
+    private func startEditingSkillRule(_ rule: AppSkillRule) {
+        editingSkillRuleID = rule.id
+        editingSkillAppName = rule.appName ?? ""
+        editingSkillBundleIdentifier = rule.bundleIdentifier
+        editingSkillID = rule.skillID
+        skillMessage = nil
+        skillMessageIsError = false
     }
 
-    private func resetVoiceModeRuleEditor(
+    private func resetSkillRuleEditor(
         clearMessage: Bool = true
     ) {
-        editingVoiceModeRuleID = nil
-        editingVoiceModeAppName = ""
-        editingVoiceModeBundleIdentifier = ""
-        editingVoiceMode = .reply
+        editingSkillRuleID = nil
+        editingSkillAppName = ""
+        editingSkillBundleIdentifier = ""
+        editingSkillID =
+            SkillRegistry.replySkillID
         if clearMessage {
-            voiceModeMessage = nil
-            voiceModeMessageIsError = false
+            skillMessage = nil
+            skillMessageIsError = false
         }
     }
 
-    private func updateVoiceModeRule(
+    private func updateSkillRule(
         _ id: UUID,
-        update: (inout AppModeRule) -> Void
+        update: (inout AppSkillRule) -> Void
     ) {
         guard
-            var rule = config.transcription.voiceModes
+            var rule = config.transcription.skills
                 .applicationRules.first(where: { $0.id == id })
         else {
             return
         }
         update(&rule)
-        config.transcription.voiceModes.upsert(rule)
+        config.transcription.skills.upsert(rule)
     }
 
     private var recoveryHistoryCard: some View {

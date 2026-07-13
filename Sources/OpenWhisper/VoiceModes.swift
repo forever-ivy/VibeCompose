@@ -19,7 +19,7 @@ enum DictationMode: String, Codable, Sendable, Equatable, CaseIterable, Identifi
         case .email:
             return L10n.text("Email")
         case .agentPlan:
-            return L10n.text("Agent Plan")
+            return L10n.text("Backend Prompt")
         case .codePrompt:
             return L10n.text("Code Prompt")
         case .translate:
@@ -43,7 +43,7 @@ enum DictationMode: String, Codable, Sendable, Equatable, CaseIterable, Identifi
             )
         case .agentPlan:
             return L10n.text(
-                "Organize the request into goals, constraints, implementation steps, and acceptance criteria."
+                "Turn spoken intent into an implementation-ready backend task with goals, constraints, steps, edge cases, and acceptance criteria."
             )
         case .codePrompt:
             return L10n.text(
@@ -65,7 +65,7 @@ enum DictationMode: String, Codable, Sendable, Equatable, CaseIterable, Identifi
         case .email:
             return "Voice Mode: Email. Produce a polished email body with a clear purpose and complete sentences. Preserve every named person, date, attachment, request, constraint, and follow-up. Add a subject line only when the speaker asks for one."
         case .agentPlan:
-            return "Voice Mode: Agent Plan. Organize the request into short bullets / 分点 with explicit goals, constraints, implementation steps, edge cases, and acceptance criteria whenever those concepts are present. Keep the result directly executable by a coding or task agent."
+            return "Skill: Backend Prompt Composer. Organize the request into short bullets / 分点 with explicit goals, constraints, implementation steps, edge cases, and acceptance criteria. Keep the result directly executable by a coding or task agent."
         case .codePrompt:
             return "Voice Mode: Code Prompt. Produce an implementation-ready coding request. Preserve all paths, commands, flags, APIs, class and method names, versions, identifiers, error messages, and quoted literals exactly."
         case .translate:
@@ -349,14 +349,18 @@ extension TranscriptionConfig {
         voiceModesAllowed: Bool = true
     ) -> TranscriptionConfig {
         var resolved = self
-        resolved.voiceModes = voiceModesAllowed
-            ? voiceModes.runtimeConfiguration(
-                for: launchAppContext
+        let plan = SkillResolver().resolve(
+            config: skills,
+            launchAppContext:
+                launchAppContext,
+            skillsAllowed:
+                voiceModesAllowed
+        )
+        resolved.skills =
+            skills.runtimeConfiguration(
+                for: plan
             )
-            : VoiceModeConfig(
-                defaultMode: .direct,
-                applicationRules: []
-            )
+        resolved.resolvedSkillPlan = plan
         return resolved
     }
 }

@@ -154,8 +154,17 @@ final class AppCoordinator {
             providerCapabilityPolicy,
             recoveryCredentialStore in
             let textPolishConfig = transcriptionConfig.textPolish
+            let skillPlan =
+                transcriptionConfig
+                    .resolvedSkillPlan
+                ?? SkillResolver().resolve(
+                    config:
+                        transcriptionConfig
+                            .skills,
+                    launchAppContext: nil
+                )
             let dictationMode =
-                transcriptionConfig.voiceModes.defaultMode
+                skillPlan.legacyMode
             let chatGPTAuthAvailable =
                 authManager.authSnapshot().state == .ready
             let textPolishAvailable = TextPolishProviderSelector()
@@ -167,6 +176,7 @@ final class AppCoordinator {
                 ? OpenAICompatibleTextPolisher(
                     config: textPolishConfig,
                     dictationMode: dictationMode,
+                    skillPlan: skillPlan,
                     chatGPTAuthProvider: authManager,
                     chatGPTAuthAvailable: chatGPTAuthAvailable,
                     providerCapabilityPolicy: providerCapabilityPolicy,
@@ -194,7 +204,8 @@ final class AppCoordinator {
                 hintTerms: transcriptionConfig.hintTerms,
                 textPolisher: textPolisher,
                 textPolishConfig: textPolishConfig,
-                dictationMode: dictationMode
+                dictationMode: dictationMode,
+                skillPlan: skillPlan
             )
         },
         launchAppContextProvider: @escaping LaunchAppContextProvider = { LaunchAppContext.current() }
@@ -972,7 +983,7 @@ final class AppCoordinator {
         let processingStarted = DispatchTime.now().uptimeNanoseconds
         let initialAudioBytes = Self.audioFileSize(at: audio.fileURL)
         logger.info(
-            "Processing started session=\(sessionID.uuidString, privacy: .public) provider=\(transcriptionConfig.provider.rawValue, privacy: .public) voiceMode=\(transcriptionConfig.voiceModes.defaultMode.rawValue, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(initialAudioBytes, privacy: .public) cloudflareAttempts=\(attemptPolicy.cloudflareChallengeMaxAttempts, privacy: .public)"
+            "Processing started session=\(sessionID.uuidString, privacy: .public) provider=\(transcriptionConfig.provider.rawValue, privacy: .public) skill=\(transcriptionConfig.resolvedSkillPlan?.skill.id ?? transcriptionConfig.skills.defaultSkillID, privacy: .public) durationMs=\(audio.durationMs, privacy: .public) audioBytes=\(initialAudioBytes, privacy: .public) cloudflareAttempts=\(attemptPolicy.cloudflareChallengeMaxAttempts, privacy: .public)"
         )
 
         processingTask?.cancel()
@@ -2455,6 +2466,16 @@ final class AppCoordinator {
             normalizationMs: 0,
             polishMs: 0,
             textPolishDecisionReason: nil,
+            skillID:
+                transcriptionConfig
+                    .resolvedSkillPlan?
+                    .skill.id
+                ?? transcriptionConfig
+                    .skills.defaultSkillID,
+            skillVersion:
+                transcriptionConfig
+                    .resolvedSkillPlan?
+                    .skill.version,
             estimatedPolishInputTokens: 0,
             estimatedPolishOutputTokens: 0,
             injectMs: 0,
@@ -2531,6 +2552,13 @@ final class AppCoordinator {
             textPolishDecisionReason:
                 prepared.metrics.textPolishDecisionReason?.rawValue,
             textPolishError: prepared.metrics.textPolishErrorMessage,
+            skillID:
+                prepared.metrics.skillID,
+            skillVersion:
+                prepared.metrics.skillVersion,
+            skillValidationIssueCodes:
+                prepared.metrics
+                    .skillValidationIssueCodes,
             estimatedPolishInputTokens: prepared.metrics.estimatedPolishInputTokens,
             estimatedPolishOutputTokens: prepared.metrics.estimatedPolishOutputTokens,
             injectMs: injectMs,
@@ -2594,7 +2622,12 @@ final class AppCoordinator {
                 appName: launchAppContext?.localizedName,
                 appBundleIdentifier: launchAppContext?.bundleIdentifier,
                 outcome: latencyResultStatus(for: outcome),
-                textPolishProvider: prepared.metrics.textPolishProvider?.rawValue
+                textPolishProvider: prepared.metrics.textPolishProvider?.rawValue,
+                skillID:
+                    prepared.metrics.skillID,
+                skillVersion:
+                    prepared.metrics
+                        .skillVersion
             ),
             retention: config.privacy.historyRetentionPolicy()
         )

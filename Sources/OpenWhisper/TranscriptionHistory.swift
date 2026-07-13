@@ -9,6 +9,8 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
     let appBundleIdentifier: String?
     let outcome: String
     let textPolishProvider: String?
+    let skillID: String?
+    let skillVersion: String?
 
     init(
         id: UUID = UUID(),
@@ -18,7 +20,9 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
         appName: String?,
         appBundleIdentifier: String?,
         outcome: String,
-        textPolishProvider: String? = nil
+        textPolishProvider: String? = nil,
+        skillID: String? = nil,
+        skillVersion: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -28,6 +32,8 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
         self.appBundleIdentifier = appBundleIdentifier
         self.outcome = outcome
         self.textPolishProvider = textPolishProvider
+        self.skillID = skillID
+        self.skillVersion = skillVersion
     }
 
     init(from decoder: any Decoder) throws {
@@ -46,6 +52,15 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
             String.self,
             forKey: .textPolishProvider
         )
+        skillID = try container.decodeIfPresent(
+            String.self,
+            forKey: .skillID
+        )
+        skillVersion =
+            try container.decodeIfPresent(
+                String.self,
+                forKey: .skillVersion
+            )
         id = decodedID ?? StableIdentifier.uuid(
             namespace: "OpenWhisper.TranscriptionHistoryRecord",
             components: [
@@ -56,6 +71,8 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
                 appBundleIdentifier,
                 outcome,
                 textPolishProvider,
+                skillID,
+                skillVersion,
             ]
         )
     }
@@ -70,6 +87,14 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
         try container.encodeIfPresent(appBundleIdentifier, forKey: .appBundleIdentifier)
         try container.encode(outcome, forKey: .outcome)
         try container.encodeIfPresent(textPolishProvider, forKey: .textPolishProvider)
+        try container.encodeIfPresent(
+            skillID,
+            forKey: .skillID
+        )
+        try container.encodeIfPresent(
+            skillVersion,
+            forKey: .skillVersion
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -81,6 +106,8 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
         case appBundleIdentifier
         case outcome
         case textPolishProvider
+        case skillID
+        case skillVersion
     }
 }
 

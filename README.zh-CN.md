@@ -16,7 +16,7 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 简体中文和英文界面
 - 浏览器连接 ChatGPT，Keychain 保存本机会话
 - 语音转写、术语对齐和可选 AI 润色；自动模式会跳过短且低复杂度的听写，避免不必要的等待
-- 应用感知语音模式：支持直述、回复、邮件、Agent 计划、代码提示词和翻译；应用规则只使用应用名称和精确 Bundle Identifier
+- 版本化声明式 Skill Runtime：支持直述、回复、邮件、后端任务提示词、代码提示词和翻译；应用规则只使用应用名称和精确 Bundle Identifier，录音开始时冻结本次技能解析，模型输出未通过本地校验时会在投递前安全回退
 - 保守自动粘贴与剪贴板兜底
 - Retry 结果默认只复制、要求用户手动粘贴
 - 麦克风和辅助功能权限诊断
@@ -137,6 +137,7 @@ docs/design/                  视觉规范
 - [当前安全基线](docs/audits/security-baseline-2026-07-13.md)
 - [UI 对标调研](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [架构说明](docs/engineering/architecture.md)
+- [Skill Runtime](docs/engineering/skill-runtime.md)
 - [发布流程](docs/engineering/release.md)
 - [更新器选型](docs/engineering/updater.md)
 - [隐私政策](docs/legal/privacy-policy.zh-CN.md)

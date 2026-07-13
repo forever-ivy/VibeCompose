@@ -559,23 +559,24 @@
 "Preserve punctuation" = "保留原标点";
 "Technical literals such as paths, URLs, filenames, versions, commands, flags, and code spans are preserved byte-for-byte." = "路径、URL、文件名、版本号、命令、参数和代码片段等技术字面量会逐字保留。";
 
-/* Voice Modes */
-"Voice Modes" = "语音模式";
+/* Skills */
+"Skills" = "技能";
 "Preview" = "预览";
 "Direct" = "直述";
 "Reply" = "回复";
 "Email" = "邮件";
-"Agent Plan" = "Agent 计划";
+"Backend Prompt" = "后端任务提示词";
 "Code Prompt" = "代码提示词";
 "Translate" = "翻译";
-"Default Voice Mode" = "默认语音模式";
-"Voice Mode" = "语音模式";
+"Default Skill" = "默认技能";
+"Skill" = "技能";
 "Application Rules" = "应用规则";
 "Choose App…" = "选择应用…";
 "Choose an installed app or enter its exact bundle identifier." = "选择一个已安装应用，或输入其精确的 Bundle Identifier。";
 "Choose an Application" = "选择应用";
-"OpenWhisper stores only the selected app name and bundle identifier for this Voice Mode rule." = "OpenWhisper 只会为此语音模式规则保存所选应用的名称和 Bundle Identifier。";
+"OpenWhisper stores only the selected app name and bundle identifier for this Skill rule." = "OpenWhisper 只会为此技能规则保存所选应用的名称和 Bundle Identifier。";
 "Choose App" = "选择应用";
+"Choose an installed OpenWhisper Skill." = "请选择一个已安装的 OpenWhisper 技能。";
 "The selected application does not expose a valid bundle identifier." = "所选应用没有提供有效的 Bundle Identifier。";
 "App name (optional)" = "应用名称（可选）";
 "Bundle identifier" = "Bundle Identifier";
@@ -584,20 +585,21 @@
 "Keep the speaker's wording and order, remove filler and superseded corrections, and avoid unnecessary restructuring." = "尽量保留口述措辞和顺序，移除口头禅及已被后续更正取代的内容，避免不必要的重组。";
 "Create a concise, natural conversational reply without adding facts or a preamble." = "整理为简洁、自然、可直接发送的对话回复，不添加事实或前言。";
 "Shape the dictation into a clear, complete email while preserving names, dates, requests, and constraints." = "整理为清晰完整的邮件，同时保留姓名、日期、请求和约束。";
-"Organize the request into goals, constraints, implementation steps, and acceptance criteria." = "把需求整理为目标、约束、实施步骤和验收标准。";
+"Turn spoken intent into an implementation-ready backend task with goals, constraints, steps, edge cases, and acceptance criteria." = "把口述意图整理为可直接实施的后端任务，包含目标、约束、步骤、边界情况和验收标准。";
 "Create an implementation-ready coding prompt while preserving paths, commands, symbols, versions, and quoted literals." = "生成可直接实施的代码提示词，同时保留路径、命令、符号、版本和引用字面量。";
 "Translate into the language named in the dictation; when none is named, translate Chinese to English and other input to Simplified Chinese." = "翻译为口述中指定的语言；未指定时，中文翻译为英文，其他语言翻译为简体中文。";
-"Choose a default writing shape and optionally override it for exact macOS bundle identifiers. OpenWhisper uses only the app name and bundle identifier—not window or document content—to select a mode." = "选择默认的文本输出方式，也可按精确的 macOS Bundle Identifier 设置覆盖规则。OpenWhisper 选择模式时只使用应用名称和 Bundle Identifier，不读取窗口或文档内容。";
-"This Voice Mode needs AI Polish. Turn rewrite mode to Auto or Always rewrite to apply it." = "此语音模式需要 AI 润色。请把重写模式设为“自动”或“始终重写”后再使用。";
-"No application rules. The default Voice Mode applies everywhere." = "尚无应用规则，默认语音模式会应用于所有应用。";
-"Enable Voice Mode rule for %@" = "启用 %@ 的语音模式规则";
-"Edit Voice Mode rule for %@" = "编辑 %@ 的语音模式规则";
-"Delete Voice Mode rule for %@" = "删除 %@ 的语音模式规则";
-"Application Voice Mode rule removed." = "已移除应用语音模式规则。";
-"Voice Mode rule saved for %@." = "已保存 %@ 的语音模式规则。";
+"Choose a default Skill and optionally override it for exact macOS bundle identifiers. OpenWhisper uses only the app name and bundle identifier—not window or document content—to resolve a Skill." = "选择默认技能，也可按精确的 macOS Bundle Identifier 设置覆盖规则。OpenWhisper 解析技能时只使用应用名称和 Bundle Identifier，不读取窗口或文档内容。";
+"This Skill needs AI Polish. Turn rewrite mode to Auto or Always rewrite to apply it." = "此技能需要 AI 润色。请把重写模式设为“自动”或“始终重写”后再使用。";
+"No application rules. The default Skill applies everywhere." = "尚无应用规则，默认技能会应用于所有应用。";
+"Enable Skill rule for %@" = "启用 %@ 的技能规则";
+"Edit Skill rule for %@" = "编辑 %@ 的技能规则";
+"Delete Skill rule for %@" = "删除 %@ 的技能规则";
+"Application Skill rule removed." = "已移除应用技能规则。";
+"Skill rule saved for %@." = "已保存 %@ 的技能规则。";
 "Enter a valid bundle identifier such as com.apple.Notes." = "请输入有效的 Bundle Identifier，例如 com.apple.Notes。";
-"Choose the writing shape for each app and control when AI Polish rewrites a transcript." = "为不同应用选择输出文本形式，并控制 AI 润色何时重写转写结果。";
-"Reply, Email, Agent Plan, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it." = "回复、邮件、Agent 计划、代码提示词和翻译模式需要连接 ChatGPT 账号才能使用 AI 润色。未连接时，直述听写和转写恢复路径仍可继续使用。";
+"Choose a Skill for each app and control when AI Polish transforms a transcript." = "为不同应用选择技能，并控制 AI 润色何时转换转写结果。";
+"Reply, Email, Backend Prompt, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it." = "回复、邮件、后端任务提示词、代码提示词和翻译技能需要连接 ChatGPT 账号才能使用 AI 润色。未连接时，直述听写和转写恢复路径仍可继续使用。";
+"Skill output failed local validation (%@); OpenWhisper used the normalized transcript instead." = "技能输出未通过本地校验（%@）；OpenWhisper 已改用规范化后的转写文本。";
 
 /* Remaining runtime and recovery errors */
 "Browser login sent the callback parameter %@ more than once." = "浏览器登录回调重复发送了参数 %@。";
@@ -655,7 +657,7 @@
 "This removes only the local activation receipt. Community dictation remains available, and the license can be activated again subject to its device limit." = "此操作只移除本地激活收据。社区版听写仍可使用，并可在设备数量限制范围内重新激活许可证。";
 "Update Entitlement Required" = "需要更新权益";
 "Verification due" = "下次验证时间";
-"Voice Modes require OpenWhisper Pro" = "Voice Modes 需要 OpenWhisper Pro";
+"Skills require OpenWhisper Pro" = "技能需要 OpenWhisper Pro";
 "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, settings, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID from this Mac. This action cannot be undone." = "此操作会从此 Mac 删除转写、失败录音、诊断、产品指标、术语、设置、已保存的 ChatGPT 会话、OpenAI-Compatible API 密钥、Pro 许可证收据和本地许可证设备 ID，且无法撤销。";
 "Deletes settings, terminology, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID." = "删除设置、术语、历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话、OpenAI-Compatible API 密钥、Pro 许可证收据和本地许可证设备 ID。";
 

@@ -68,16 +68,17 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
             == "查看第三方许可证…"
     )
     #expect(strings["Third-Party Licenses"] == "第三方许可证")
-    #expect(strings["Voice Modes"] == "语音模式")
-    #expect(strings["Default Voice Mode"] == "默认语音模式")
-    #expect(strings["Agent Plan"] == "Agent 计划")
+    #expect(strings["Skills"] == "技能")
+    #expect(strings["Default Skill"] == "默认技能")
+    #expect(strings["Backend Prompt"] == "后端任务提示词")
     #expect(strings["Code Prompt"] == "代码提示词")
     #expect(strings["Application Rules"] == "应用规则")
+    #expect(strings["Skills require OpenWhisper Pro"] == "技能需要 OpenWhisper Pro")
     #expect(
         strings[
-            "Reply, Email, Agent Plan, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."
+            "Reply, Email, Backend Prompt, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."
         ]
-            == "回复、邮件、Agent 计划、代码提示词和翻译模式需要连接 ChatGPT 账号才能使用 AI 润色。未连接时，直述听写和转写恢复路径仍可继续使用。"
+            == "回复、邮件、后端任务提示词、代码提示词和翻译技能需要连接 ChatGPT 账号才能使用 AI 润色。未连接时，直述听写和转写恢复路径仍可继续使用。"
     )
 }
 

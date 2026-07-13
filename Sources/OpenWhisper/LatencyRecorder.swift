@@ -13,6 +13,10 @@ struct LatencySample: Codable, Sendable, Equatable {
     let textPolishAttempted: Bool?
     let textPolishDecisionReason: String?
     let textPolishError: String?
+    let skillID: String?
+    let skillVersion: String?
+    let skillValidationIssueCodes:
+        [String]?
     let estimatedPolishInputTokens: Int
     let estimatedPolishOutputTokens: Int
     let injectMs: Int
@@ -33,6 +37,10 @@ struct LatencySample: Codable, Sendable, Equatable {
         textPolishAttempted: Bool? = nil,
         textPolishDecisionReason: String? = nil,
         textPolishError: String? = nil,
+        skillID: String? = nil,
+        skillVersion: String? = nil,
+        skillValidationIssueCodes:
+            [String]? = nil,
         estimatedPolishInputTokens: Int = 0,
         estimatedPolishOutputTokens: Int = 0,
         injectMs: Int,
@@ -52,6 +60,10 @@ struct LatencySample: Codable, Sendable, Equatable {
         self.textPolishAttempted = textPolishAttempted
         self.textPolishDecisionReason = textPolishDecisionReason
         self.textPolishError = textPolishError
+        self.skillID = skillID
+        self.skillVersion = skillVersion
+        self.skillValidationIssueCodes =
+            skillValidationIssueCodes
         self.estimatedPolishInputTokens = estimatedPolishInputTokens
         self.estimatedPolishOutputTokens = estimatedPolishOutputTokens
         self.injectMs = injectMs

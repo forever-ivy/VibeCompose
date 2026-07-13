@@ -26,6 +26,10 @@ struct DictationMetrics: Sendable, Equatable {
     let textPolishErrorMessage: String?
     let estimatedPolishInputTokens: Int
     let estimatedPolishOutputTokens: Int
+    let skillID: String?
+    let skillVersion: String?
+    let skillValidationIssueCodes:
+        [String]
 
     init(
         transcription: TranscriptionMetrics,
@@ -36,7 +40,11 @@ struct DictationMetrics: Sendable, Equatable {
         textPolishProvider: TextPolishProviderID? = nil,
         textPolishErrorMessage: String? = nil,
         estimatedPolishInputTokens: Int = 0,
-        estimatedPolishOutputTokens: Int = 0
+        estimatedPolishOutputTokens: Int = 0,
+        skillID: String? = nil,
+        skillVersion: String? = nil,
+        skillValidationIssueCodes:
+            [String] = []
     ) {
         self.transcription = transcription
         self.normalizationMs = normalizationMs
@@ -47,6 +55,10 @@ struct DictationMetrics: Sendable, Equatable {
         self.textPolishErrorMessage = textPolishErrorMessage
         self.estimatedPolishInputTokens = estimatedPolishInputTokens
         self.estimatedPolishOutputTokens = estimatedPolishOutputTokens
+        self.skillID = skillID
+        self.skillVersion = skillVersion
+        self.skillValidationIssueCodes =
+            skillValidationIssueCodes
     }
 }
 
@@ -69,9 +81,21 @@ struct DictationPipeline: DictationPreparing {
     var textPolishDecisionEngine: any TextPolishDeciding =
         TextPolishDecisionEngine()
     var dictationMode: DictationMode = .direct
+    var skillPlan:
+        ResolvedSkillExecutionPlan?
     var literalTokenizer: TechnicalLiteralTokenizer = .init()
+    var skillValidator:
+        SkillValidatorEngine = .init()
 
     func prepare(audio: RecordedAudio) async throws -> PreparedDictation {
+        let executionPlan =
+            skillPlan
+            ?? SkillResolver().resolve(
+                manualSkillID:
+                    dictationMode.skillID,
+                config: SkillsConfig(),
+                launchAppContext: nil
+            )
         let transcription = try await transcriber.transcribe(audio)
         let normalizationStarted = DispatchTime.now().uptimeNanoseconds
         let prePolish = normalizer.normalize(
@@ -88,11 +112,13 @@ struct DictationPipeline: DictationPreparing {
         var estimatedPolishInputTokens = 0
         var estimatedPolishOutputTokens = 0
         var polishMs = 0
+        var skillValidationIssueCodes:
+            [String] = []
 
         let textPolishDecision = textPolishDecisionEngine.decide(
             normalizedText: prePolish.text,
             audioDurationMs: transcription.metrics.audioDurationMs,
-            mode: dictationMode,
+            mode: executionPlan.legacyMode,
             config: textPolishConfig,
             providerAvailable: textPolisher != nil
         )
@@ -128,7 +154,10 @@ struct DictationPipeline: DictationPreparing {
                         textPolishDecisionReason: textPolishDecision.reason,
                         textPolishErrorMessage: textPolishErrorMessage,
                         estimatedPolishInputTokens: estimatedPolishInputTokens,
-                        estimatedPolishOutputTokens: estimatedPolishOutputTokens
+                        estimatedPolishOutputTokens: estimatedPolishOutputTokens,
+                        executionPlan: executionPlan,
+                        skillValidationIssueCodes:
+                            skillValidationIssueCodes
                     )
                 }
 
@@ -147,7 +176,10 @@ struct DictationPipeline: DictationPreparing {
                         textPolishDecisionReason: textPolishDecision.reason,
                         textPolishErrorMessage: textPolishErrorMessage,
                         estimatedPolishInputTokens: estimatedPolishInputTokens,
-                        estimatedPolishOutputTokens: estimatedPolishOutputTokens
+                        estimatedPolishOutputTokens: estimatedPolishOutputTokens,
+                        executionPlan: executionPlan,
+                        skillValidationIssueCodes:
+                            skillValidationIssueCodes
                     )
                 }
 
@@ -160,6 +192,48 @@ struct DictationPipeline: DictationPreparing {
                     hintTerms: hintTerms
                 )
                 normalizationMs += elapsedMilliseconds(since: postPolishStarted)
+                let validation =
+                    skillValidator.validate(
+                        output: postPolish.text,
+                        originalText:
+                            prePolish.text,
+                        plan: executionPlan
+                    )
+                skillValidationIssueCodes =
+                    validation.issues.map {
+                        $0.code.rawValue
+                    }
+                guard validation.isValid else {
+                    textPolishErrorMessage =
+                        L10n.format(
+                            "Skill output failed local validation (%@); OpenWhisper used the normalized transcript instead.",
+                            skillValidationIssueCodes
+                                .joined(
+                                    separator: ", "
+                                )
+                        )
+                    return fallbackPreparedDictation(
+                        transcription:
+                            transcription,
+                        prePolish: prePolish,
+                        normalizationMs:
+                            normalizationMs,
+                        polishMs: polishMs,
+                        textPolishDecisionReason:
+                            textPolishDecision
+                                .reason,
+                        textPolishErrorMessage:
+                            textPolishErrorMessage,
+                        estimatedPolishInputTokens:
+                            estimatedPolishInputTokens,
+                        estimatedPolishOutputTokens:
+                            estimatedPolishOutputTokens,
+                        executionPlan:
+                            executionPlan,
+                        skillValidationIssueCodes:
+                            skillValidationIssueCodes
+                    )
+                }
                 finalText = postPolish.text
             } catch {
                 polishMs = elapsedMilliseconds(since: polishStarted)
@@ -182,7 +256,13 @@ struct DictationPipeline: DictationPreparing {
                 textPolishProvider: textPolishProvider,
                 textPolishErrorMessage: textPolishErrorMessage,
                 estimatedPolishInputTokens: estimatedPolishInputTokens,
-                estimatedPolishOutputTokens: estimatedPolishOutputTokens
+                estimatedPolishOutputTokens: estimatedPolishOutputTokens,
+                skillID:
+                    executionPlan.skill.id,
+                skillVersion:
+                    executionPlan.skill.version,
+                skillValidationIssueCodes:
+                    skillValidationIssueCodes
             )
         )
     }
@@ -195,7 +275,11 @@ struct DictationPipeline: DictationPreparing {
         textPolishDecisionReason: TextPolishDecisionReason?,
         textPolishErrorMessage: String?,
         estimatedPolishInputTokens: Int,
-        estimatedPolishOutputTokens: Int
+        estimatedPolishOutputTokens: Int,
+        executionPlan:
+            ResolvedSkillExecutionPlan,
+        skillValidationIssueCodes:
+            [String]
     ) -> PreparedDictation {
         PreparedDictation(
             rawText: transcription.text,
@@ -212,7 +296,13 @@ struct DictationPipeline: DictationPreparing {
                 textPolishProvider: nil,
                 textPolishErrorMessage: textPolishErrorMessage,
                 estimatedPolishInputTokens: estimatedPolishInputTokens,
-                estimatedPolishOutputTokens: estimatedPolishOutputTokens
+                estimatedPolishOutputTokens: estimatedPolishOutputTokens,
+                skillID:
+                    executionPlan.skill.id,
+                skillVersion:
+                    executionPlan.skill.version,
+                skillValidationIssueCodes:
+                    skillValidationIssueCodes
             )
         )
     }

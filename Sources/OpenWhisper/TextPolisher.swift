@@ -66,6 +66,9 @@ struct TextPolishProviderSelector: Sendable {
 }
 
 struct TextPolishPromptBuilder: Sendable {
+    var compiler: SkillPromptCompiler =
+        .init()
+
     func buildMessages(
         transcript: String,
         terminologyEntries: [TerminologyEntry],
@@ -73,57 +76,41 @@ struct TextPolishPromptBuilder: Sendable {
         mode: DictationMode = .direct,
         locale: String = Locale.preferredLanguages.first ?? "zh-CN"
     ) -> [TextPolishMessage] {
-        let glossary = clippedGlossary(
+        buildMessages(
+            transcript: transcript,
             terminologyEntries: terminologyEntries,
-            budget: config.glossaryBudgetCharacters
+            config: config,
+            plan: SkillResolver().resolve(
+                manualSkillID: mode.skillID,
+                config: SkillsConfig(),
+                launchAppContext: nil
+            ),
+            locale: locale
         )
-        var systemLines = [
-            "You are OpenWhisper's post-ASR rewrite engine for macOS dictation.",
-            "Rewrite Chinese or mixed Chinese/English speech into concise, directly usable text.",
-            "Follow the Voice Mode contract below. When the speaker explicitly requests a format, language, or structure, honor that request within the selected mode.",
-            "Do not summarize away requirements. Preserve every concrete request, constraint, correction, and acceptance point unless a later statement explicitly contradicts it.",
-            "For short commands, keep one compact sentence instead of forcing bullets.",
-            "Remove Chinese filler words and口头禅 such as 嗯, 呃, 啊, 然后, 就是, 那个, 这个, 怎么说, 反正, basically, like when they add no meaning.",
-            "If the speaker corrects themselves or contradicts earlier text, the later intent wins / 后面为主; delete the superseded earlier intent.",
-            "Preserve URLs, file paths, commands, flags, version numbers, emails, filenames, code symbols, and exact quoted literals.",
-            "Tokens shaped like ⟪OW_LITERAL_0000⟫ are immutable placeholders: copy every token exactly once and never edit, delete, duplicate, or reorder it.",
-            "Respect terminology casing and spelling from the glossary. Maximize recall for likely ASR/accent mistakes.",
-            mode.promptInstruction,
-            "Output only the final polished text. Locale: \(locale).",
-        ]
-
-        if !glossary.isEmpty {
-            systemLines.append("Glossary terms and aliases:")
-            systemLines.append(contentsOf: glossary.map { "- \($0)" })
-        }
-
-        return [
-            TextPolishMessage(role: "system", content: systemLines.joined(separator: "\n")),
-            TextPolishMessage(role: "user", content: transcript),
-        ]
     }
 
-    private func clippedGlossary(terminologyEntries: [TerminologyEntry], budget: Int) -> [String] {
-        var output: [String] = []
-        var seen = Set<String>()
-        var count = 0
-
-        for entry in terminologyEntries where entry.isEnabled {
-            let aliases = entry.aliases.isEmpty ? "" : " aliases: \(entry.aliases.joined(separator: ", "))"
-            let line = "\(entry.canonical)\(aliases)"
-            let key = line.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            guard seen.insert(key).inserted else {
-                continue
-            }
-            let nextCount = count + line.count
-            guard nextCount <= budget else {
-                break
-            }
-            output.append(line)
-            count = nextCount
-        }
-
-        return output
+    func buildMessages(
+        transcript: String,
+        terminologyEntries:
+            [TerminologyEntry],
+        config: TextPolishConfig,
+        plan:
+            ResolvedSkillExecutionPlan,
+        context: SkillPromptContext =
+            .init(),
+        locale: String =
+            Locale.preferredLanguages
+                .first ?? "zh-CN"
+    ) -> [TextPolishMessage] {
+        compiler.compile(
+            transcript: transcript,
+            terminologyEntries:
+                terminologyEntries,
+            config: config,
+            plan: plan,
+            context: context,
+            locale: locale
+        )
     }
 }
 
@@ -154,6 +141,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
 
     let config: TextPolishConfig
     let dictationMode: DictationMode
+    let skillPlan:
+        ResolvedSkillExecutionPlan
     let chatGPTAuthProvider: (any ChatGPTAuthProviding)?
     let chatGPTAuthAvailable: Bool
     let providerCapabilityPolicy: any ProviderCapabilityChecking
@@ -169,6 +158,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
     init(
         config: TextPolishConfig,
         dictationMode: DictationMode = .direct,
+        skillPlan:
+            ResolvedSkillExecutionPlan? = nil,
         chatGPTAuthProvider: (any ChatGPTAuthProviding)? = nil,
         chatGPTAuthAvailable: Bool,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
@@ -192,6 +183,14 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
     ) {
         self.config = config
         self.dictationMode = dictationMode
+        self.skillPlan =
+            skillPlan
+            ?? SkillResolver().resolve(
+                manualSkillID:
+                    dictationMode.skillID,
+                config: SkillsConfig(),
+                launchAppContext: nil
+            )
         self.chatGPTAuthProvider = chatGPTAuthProvider
         self.chatGPTAuthAvailable = chatGPTAuthAvailable
         self.providerCapabilityPolicy = providerCapabilityPolicy
@@ -241,7 +240,7 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
                 transcript: text,
                 terminologyEntries: allEntries,
                 config: config,
-                mode: dictationMode
+                plan: skillPlan
             )
         )
         return TextPolishResult(

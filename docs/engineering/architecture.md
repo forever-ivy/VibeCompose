@@ -116,21 +116,42 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `TextPolishDecisionEngine`
   - skips short, low-complexity Direct dictation;
   - runs for explicit correction, structure, email, translation, long-form,
-    or an explicit non-Direct Voice Mode;
+    or an explicit non-Direct Skill;
   - emits a bounded reason such as `skip_short_direct`,
     `run_self_correction`, or `run_long_dictation` without retaining text.
-- `VoiceModeConfig` and `AppModeRule`
-  - provide Direct, Reply, Email, Agent Plan, Code Prompt, and Translate;
-  - resolve an optional application rule from the exact normalized bundle
-    identifier captured when recording begins;
-  - store only the selected app name and bundle identifier, never window or
-    document content;
+- `SkillRegistry`, `SkillsConfig`, and `AppSkillRule`
+  - provide stable, versioned declarations for Direct, Reply, Email, Backend
+    Prompt, Code Prompt, and Translate;
+  - migrate legacy `VoiceModeConfig` and `AppModeRule` values without writing
+    the old `voiceModes` key back to new configuration files;
   - normalize, bound, and de-duplicate decoded rules so malformed local
     configuration cannot create ambiguous SwiftUI identities;
-  - freeze the resolved mode into the per-session transcription
-    configuration and remove the complete rule list before provider use.
-  - are forced to Direct at the runtime boundary when the current signed
-    commercial entitlement does not allow Voice Modes.
+  - store only the selected app name and exact bundle identifier, never
+    window or document content.
+- `SkillResolver`
+  - resolves manual selection, exact bundle-identifier rules, global default,
+    then Direct fallback;
+  - freezes the selected Skill ID, version, source, and matched rule when
+    recording begins;
+  - removes the complete rule list from the per-session runtime
+    configuration before provider use;
+  - resolves to Direct at the runtime boundary when the current signed
+    commercial entitlement does not allow Skills.
+- `SkillPromptCompiler`
+  - compiles the fixed system safety and factual-fidelity boundary before the
+    output contract, Skill declaration, optional style/context data,
+    terminology, and transcript;
+  - treats Skill, terminology, style, selected text, and transcript content as
+    untrusted data that cannot grant permissions, change providers, execute
+    code, or weaken local delivery policy.
+- `SkillValidatorEngine`
+  - validates non-empty and bounded output, JSON, Markdown fences, required
+    sections, protected technical literals, forbidden phrases, and internal
+    marker leakage;
+  - causes `DictationPipeline` to fall back to normalized ASR before delivery
+    when model output fails the local contract;
+  - records only bounded Skill IDs, semantic versions, and validation issue
+    codes in History and redacted diagnostics.
 - `TranscriptionPromptBuilder`
   - creates the fixed direct-output prompt and exact preservation hints.
 - `TerminologyNormalizer`
@@ -287,9 +308,9 @@ The current Settings window exposes:
 - signed Pro license state, random Device ID, bounded receipt import/removal,
   update-build entitlement, and offline-grace recovery guidance;
 - dictation and text polish;
-- a default Voice Mode plus optional exact bundle-identifier application
-  rules, including an installed-application picker and explicit warnings when
-  a non-Direct mode cannot run because AI Polish is off or ChatGPT is not
+- a default Skill plus optional exact bundle-identifier application rules,
+  including an installed-application picker and explicit warnings when a
+  non-Direct Skill cannot run because AI Polish is off or ChatGPT is not
   connected;
 - history/recovery entry points;
 - terminology entry points;
