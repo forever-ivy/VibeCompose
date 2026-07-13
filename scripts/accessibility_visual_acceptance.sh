@@ -199,6 +199,12 @@ capture_surface \
   "settings" \
   "ai-polish"
 capture_surface \
+  "settings-context" \
+  "--open-settings" \
+  "settings-snapshot-output" \
+  "settings" \
+  "context"
+capture_surface \
   "settings-paste" \
   "--open-settings" \
   "settings-snapshot-output" \

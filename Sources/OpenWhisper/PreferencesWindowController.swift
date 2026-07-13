@@ -170,6 +170,8 @@ private extension SettingsPane {
             return "sparkles"
         case .polish:
             return "wand.and.stars"
+        case .context:
+            return "selection.pin.in.out"
         case .paste:
             return "doc.on.clipboard"
         case .privacy:
@@ -816,6 +818,10 @@ private struct PreferencesView: View {
             return L10n.text(
                 "Choose a Skill for each app and control when AI Polish transforms a transcript."
             )
+        case .context:
+            return L10n.text(
+                "Control which Skills may read only the text you explicitly select."
+            )
         case .paste:
             return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
         case .privacy:
@@ -836,6 +842,8 @@ private struct PreferencesView: View {
             appearanceAndFeedbackCard
         case .polish:
             aiPolishCard
+        case .context:
+            contextCard
         case .paste:
             settingsCard(title: "Paste & Clipboard") {
                 Toggle(
@@ -2559,6 +2567,192 @@ private struct PreferencesView: View {
         .padding(9)
         .background(Color(nsColor: .textBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var contextCard: some View {
+        settingsCard(title: "Selected Text Context") {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle(
+                    L10n.text(
+                        "Allow selected-text context"
+                    ),
+                    isOn:
+                        $config.context
+                            .selectionEnabled
+                )
+
+                Text(
+                    L10n.text(
+                        "OpenWhisper reads selected text only after the active Skill has permission. It never reads the rest of the window, document, clipboard, or screen through this capability."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+                LabeledContent(
+                    L10n.text(
+                        "Maximum selected text"
+                    )
+                ) {
+                    Picker(
+                        L10n.text(
+                            "Maximum selected text"
+                        ),
+                        selection:
+                            $config.context
+                                .maximumSelectionCharacters
+                    ) {
+                        Text(
+                            L10n.text(
+                                "2,000 characters"
+                            )
+                        ).tag(2_000)
+                        Text(
+                            L10n.text(
+                                "6,000 characters"
+                            )
+                        ).tag(6_000)
+                        Text(
+                            L10n.text(
+                                "12,000 characters"
+                            )
+                        ).tag(12_000)
+                    }
+                    .labelsHidden()
+                    .frame(width: 190)
+                }
+                .disabled(
+                    !config.context
+                        .selectionEnabled
+                )
+
+                Divider()
+
+                Text(
+                    L10n.text(
+                        "Skill Permissions"
+                    )
+                )
+                .font(
+                    .system(
+                        size: 12,
+                        weight: .semibold
+                    )
+                )
+
+                ForEach(
+                    SkillRegistry.builtIn
+                        .orderedDefinitions
+                        .filter {
+                            $0.allCapabilities
+                                .contains(
+                                    .selection
+                                )
+                        }
+                ) { skill in
+                    HStack(spacing: 12) {
+                        VStack(
+                            alignment: .leading,
+                            spacing: 3
+                        ) {
+                            Text(
+                                skill.localizedName
+                            )
+                            .font(
+                                .system(
+                                    size: 12,
+                                    weight:
+                                        .medium
+                                )
+                            )
+                            Text(
+                                L10n.text(
+                                    "May use the current explicit selection only."
+                                )
+                            )
+                            .font(.system(size: 10))
+                            .foregroundStyle(
+                                .secondary
+                            )
+                        }
+                        Spacer()
+                        Picker(
+                            skill.localizedName,
+                            selection: Binding(
+                                get: {
+                                    config.context
+                                        .scope(
+                                            skillID:
+                                                skill.id,
+                                            capability:
+                                                .selection
+                                        )
+                                },
+                                set: { scope in
+                                    config.context
+                                        .setScope(
+                                            scope,
+                                            skillID:
+                                                skill.id,
+                                            capability:
+                                                .selection
+                                        )
+                                }
+                            )
+                        ) {
+                            ForEach(
+                                SkillPermissionScope
+                                    .allCases
+                            ) { scope in
+                                Text(scope.title)
+                                    .tag(scope)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 150)
+                    }
+                    .padding(
+                        .vertical,
+                        4
+                    )
+                }
+                .disabled(
+                    !config.context
+                        .selectionEnabled
+                )
+
+                HStack(spacing: 10) {
+                    Label(
+                        L10n.text(
+                            "Sensitive apps never expose selected text to Skills."
+                        ),
+                        systemImage:
+                            "hand.raised.fill"
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(
+                        L10n.text(
+                            "Reset Permissions"
+                        )
+                    ) {
+                        config.context
+                            .revokeAll()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        config.context
+                            .permissionGrants
+                            .isEmpty
+                    )
+                }
+            }
+        }
     }
 
     private var aiPolishCard: some View {

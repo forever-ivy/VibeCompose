@@ -19,12 +19,15 @@ The current product line is macOS-only. The installed application at `/Applicati
 
 ## 2. Trust-Boundary Rules
 
-The implementation follows four fail-safe rules:
+The implementation follows five fail-safe rules:
 
 1. A previously active application can be reactivated, but old launch context is never proof that the current focused control is editable.
 2. A managed ChatGPT token can only be attached to the built-in approved HTTPS origins and paths.
 3. Recovery metadata cannot choose an arbitrary file path.
 4. An asynchronous result may mutate UI, storage, retry state, or paste state only while its dictation session is still current.
+5. Selected text is read only after per-Skill authorization, and replacement
+   is allowed only while the original AX target, selection range, and text
+   digest remain unchanged.
 
 When OpenWhisper cannot prove a safe insertion target, the transcript remains in the clipboard. HUD Retry and saved Recovery Retry are copy-only by default.
 
@@ -152,6 +155,20 @@ The long-term target remains a dedicated `DictationSession` model rather than co
     when model output fails the local contract;
   - records only bounded Skill IDs, semantic versions, and validation issue
     codes in History and redacted diagnostics.
+- `ContextBroker` and `SelectionContextProvider`
+  - support only explicit selected-text context in the current phase;
+  - evaluate per-Skill Ask/Always/Never grants before reading text;
+  - deny built-in and user-configured sensitive applications before capture;
+  - enforce a bounded character budget and freeze a transient AX target,
+    UTF-16 range, selected text, and SHA-256 digest for the session;
+  - clear selected text from retained retry configuration and never add it to
+    History, Recovery, product metrics, or support diagnostics.
+- `OutputRouter` and `PreviewWindowController`
+  - preserve Direct automatic delivery while routing structured,
+    selection-backed, and high-risk output through local Preview;
+  - show source/result/Diff, Skill ID/version, validation state, context
+    category, Copy, Replace Selection, Paste to Target, and Cancel;
+  - do not perform another provider request merely to render Preview.
 - `TranscriptionPromptBuilder`
   - creates the fixed direct-output prompt and exact preservation hints.
 - `TerminologyNormalizer`
@@ -162,6 +179,12 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - requires each model-safe token to survive exactly once before restoring original literals.
 - `OpenAICompatibleTextPolisher`
   - performs the optional post-ASR rewrite through the managed ChatGPT responses route and fails open to usable ASR.
+- `TextInjector`
+  - revalidates the same AX element, selected UTF-16 range, and selected-text
+    digest immediately before selection replacement;
+  - falls back to `Copied — selection changed` when any proof is missing;
+  - retains the existing post-paste value/range verification and clipboard
+    ownership rules.
 
 ### Authentication and network
 
@@ -312,6 +335,8 @@ The current Settings window exposes:
   including an installed-application picker and explicit warnings when a
   non-Direct Skill cannot run because AI Polish is off or ChatGPT is not
   connected;
+- selected-text context enablement, character budget, per-Skill
+  Ask/Always/Never grants, sensitive-app explanation, and permission reset;
 - history/recovery entry points;
 - terminology entry points;
 - paste behavior;
@@ -326,7 +351,7 @@ ChatGPT session.
 
 History and Terminology now use separate native management windows. History supports filtering, details, copy/retry, audio actions, deletion, and automatic refresh. Terminology uses stable entry identifiers and supports search, sorting, editing, enable/disable, deletion, CSV import/export, import conflict preview, and a global Quick Add panel.
 
-Settings uses a native resizable `NavigationSplitView` and immediately
+Settings uses a native resizable `NavigationSplitView` with eight panes and immediately
 persists configuration changes. Remaining productization work is full
 keyboard/VoiceOver/high-contrast acceptance across Settings and the
 management windows.
@@ -403,7 +428,7 @@ The same privacy boundary applies to
 `--accessibility-audit-output`. `AccessibilityAudit` enables AppKit's enhanced
 accessibility interface for the transient process, walks the SwiftUI virtual
 accessibility tree, and records only roles, control names, identifiers, action
-names, and standard subroles. The installed-app harness covers all seven Settings
+names, and standard subroles. The installed-app harness covers all eight Settings
 panes, all four Onboarding steps, History, Terminology, and Quick Add and fails
 when an actionable control has neither an explicit/associated name nor a
 standard AppKit subrole description. Values and user content are not exported.

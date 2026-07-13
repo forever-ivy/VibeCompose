@@ -5,6 +5,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     case dictation = "Dictation"
     case appearance = "Appearance & Feedback"
     case polish = "AI Polish"
+    case context = "Context"
     case paste = "Paste"
     case privacy = "Privacy"
     case advanced = "Advanced"
@@ -21,6 +22,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return "appearance"
         case .polish:
             return "ai-polish"
+        case .context:
+            return "context"
         case .paste:
             return "paste"
         case .privacy:
@@ -46,6 +49,9 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return .appearance
         case "polish", "ai-polish", "aipolish":
             return .polish
+        case "context",
+             "selected-text":
+            return .context
         case "paste":
             return .paste
         case "privacy":

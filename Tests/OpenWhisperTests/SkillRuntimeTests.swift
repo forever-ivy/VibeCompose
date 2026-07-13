@@ -14,10 +14,12 @@ func builtInSkillRegistryExposesStableVersionedDeclarations() {
             SkillRegistry.agentPlanSkillID,
             SkillRegistry.codePromptSkillID,
             SkillRegistry.translateSkillID,
+            SkillRegistry.contextRewriteSkillID,
+            SkillRegistry.contextReplySkillID,
         ]
     )
     #expect(
-        Set(registry.skillIDs).count == 6
+        Set(registry.skillIDs).count == 8
     )
 
     for skill in

@@ -79,6 +79,8 @@ enum ClipboardFallbackReason: Sendable, Equatable {
     case accessibilityPermissionRequired
     case noEditableTarget
     case retryRequiresManualPaste
+    case deliveryRequiresManualPaste
+    case selectionChanged
 
     var statusDetail: String {
         switch self {
@@ -88,6 +90,10 @@ enum ClipboardFallbackReason: Sendable, Equatable {
             return L10n.text("Copied to clipboard")
         case .retryRequiresManualPaste:
             return L10n.text("Retry completed and was copied to the clipboard.")
+        case .deliveryRequiresManualPaste:
+            return L10n.text("Copied after preview.")
+        case .selectionChanged:
+            return L10n.text("Copied — selection changed")
         }
     }
 
@@ -99,6 +105,10 @@ enum ClipboardFallbackReason: Sendable, Equatable {
             return L10n.text("No editable cursor was found. Paste manually.")
         case .retryRequiresManualPaste:
             return L10n.text("For safety, retry results are copied instead of pasted automatically.")
+        case .deliveryRequiresManualPaste:
+            return L10n.text("The result was copied for manual paste.")
+        case .selectionChanged:
+            return L10n.text("The original selection changed, so OpenWhisper did not replace it.")
         }
     }
 }
@@ -260,7 +270,11 @@ protocol TextInjecting: AnyObject {
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
-        automaticPasteAllowed: Bool
+        automaticPasteAllowed: Bool,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
     ) async throws -> InjectionOutcome
 }
 
@@ -303,10 +317,16 @@ final class TextInjector: TextInjecting {
         hasEditableTextFocus: Bool,
         hasFallbackEditableTextFocus: Bool,
         hasLaunchAppContext _: Bool = false,
-        automaticPasteAllowed: Bool = true
+        automaticPasteAllowed: Bool = true,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason =
+                .retryRequiresManualPaste
     ) -> TextInsertionPlan {
         guard automaticPasteAllowed else {
-            return .clipboardFallback(reason: .retryRequiresManualPaste)
+            return .clipboardFallback(
+                reason:
+                    automaticPasteFallbackReason
+            )
         }
         guard accessibilityTrusted else {
             return .clipboardFallback(reason: .accessibilityPermissionRequired)
@@ -319,12 +339,25 @@ final class TextInjector: TextInjecting {
         return .keyPressPaste
     }
 
+    nonisolated static func selectionFallbackReason(
+        verification:
+            SelectionContextVerification
+    ) -> ClipboardFallbackReason? {
+        verification == .unchanged
+            ? nil
+            : .selectionChanged
+    }
+
     func inject(
         text: String,
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
-        automaticPasteAllowed: Bool
+        automaticPasteAllowed: Bool,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
     ) async throws -> InjectionOutcome {
         clipboardRestoreTask?.cancel()
         clipboardRestoreTask = nil
@@ -345,7 +378,9 @@ final class TextInjector: TextInjecting {
             hasEditableTextFocus: launchAppContext == nil && hasCurrentEditableTextFocus,
             hasFallbackEditableTextFocus: hasMatchingLaunchTarget,
             hasLaunchAppContext: launchAppContext != nil,
-            automaticPasteAllowed: automaticPasteAllowed
+            automaticPasteAllowed: automaticPasteAllowed,
+            automaticPasteFallbackReason:
+                automaticPasteFallbackReason
         )
 
         logger.info(
@@ -361,7 +396,9 @@ final class TextInjector: TextInjecting {
                 text: text,
                 preserveClipboard: preserveClipboard,
                 restoreDelayMilliseconds: restoreDelayMilliseconds,
-                launchAppContext: launchAppContext
+                launchAppContext: launchAppContext,
+                expectedSelectionContext:
+                    expectedSelectionContext
             )
         }
     }
@@ -370,7 +407,9 @@ final class TextInjector: TextInjecting {
         text: String,
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
-        launchAppContext: LaunchAppContext?
+        launchAppContext: LaunchAppContext?,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
     ) async throws -> InjectionOutcome {
         let pasteboard = NSPasteboard.general
         let snapshot = preserveClipboard ? PasteboardSnapshot.capture(from: pasteboard) : nil
@@ -380,6 +419,26 @@ final class TextInjector: TextInjecting {
             logger.error("Paste target did not become frontmost before timeout; leaving transcript in clipboard")
             copyToPasteboard(text)
             return .copiedToClipboard(reason: .noEditableTarget)
+        }
+
+        if
+            let expectedSelectionContext,
+            let reason =
+                Self.selectionFallbackReason(
+                    verification:
+                        FocusedElementInspector
+                            .verifySelectionContext(
+                                expectedSelectionContext
+                            )
+                )
+        {
+            logger.info(
+                "Selection changed before paste; copying result without replacement"
+            )
+            copyToPasteboard(text)
+            return .copiedToClipboard(
+                reason: reason
+            )
         }
 
         let ownedChangeCount = copyToPasteboard(text)
@@ -408,6 +467,24 @@ final class TextInjector: TextInjecting {
         guard FocusedElementInspector.isCurrentTarget(targetCapture.target) else {
             logger.error("Paste target changed immediately before dispatch; leaving transcript in clipboard")
             return .copiedToClipboard(reason: .noEditableTarget)
+        }
+        if
+            let expectedSelectionContext,
+            let reason =
+                Self.selectionFallbackReason(
+                    verification:
+                        FocusedElementInspector
+                            .verifySelectionContext(
+                                expectedSelectionContext
+                            )
+                )
+        {
+            logger.info(
+                "Selection changed immediately before paste dispatch; retaining result in clipboard"
+            )
+            return .copiedToClipboard(
+                reason: reason
+            )
         }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)

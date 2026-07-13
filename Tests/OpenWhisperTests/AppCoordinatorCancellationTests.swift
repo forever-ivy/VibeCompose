@@ -135,8 +135,14 @@ private final class FakeCoordinatorInjector: TextInjecting {
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
-        automaticPasteAllowed: Bool
+        automaticPasteAllowed: Bool,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
     ) async throws -> InjectionOutcome {
+        _ = automaticPasteFallbackReason
+        _ = expectedSelectionContext
         injectCallCount += 1
         launchContexts.append(launchAppContext)
         automaticPastePermissions.append(automaticPasteAllowed)
@@ -156,13 +162,46 @@ private final class BlockingCoordinatorInjector: TextInjecting {
         preserveClipboard: Bool,
         restoreDelayMilliseconds: UInt64,
         launchAppContext: LaunchAppContext?,
-        automaticPasteAllowed: Bool
+        automaticPasteAllowed: Bool,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
     ) async throws -> InjectionOutcome {
+        _ = automaticPasteFallbackReason
+        _ = expectedSelectionContext
         didStart = true
         try await Task.sleep(for: .seconds(5))
         didComplete = true
         return .insertedAndVerified
     }
+}
+
+@MainActor
+private final class FakePreviewPresenter:
+    PreviewPresenting
+{
+    var decision:
+        PreviewDecision
+    private(set) var requests:
+        [PreviewRequest] = []
+
+    init(
+        decision:
+            PreviewDecision =
+                .pasteToTarget
+    ) {
+        self.decision = decision
+    }
+
+    func present(
+        _ request: PreviewRequest
+    ) async -> PreviewDecision {
+        requests.append(request)
+        return decision
+    }
+
+    func dismiss() {}
 }
 
 private func minimalCoordinatorWaveData() -> Data {
@@ -744,7 +783,9 @@ struct AppCoordinatorCancellationTests {
                 capture.append(transcriptionConfig)
                 return FakeCoordinatorPipeline()
             },
-            launchAppContextProvider: { launchContext }
+            launchAppContextProvider: { launchContext },
+            previewPresenter:
+                FakePreviewPresenter()
         )
         coordinator.recorder = recorder
         coordinator.statusMenu = statusMenu

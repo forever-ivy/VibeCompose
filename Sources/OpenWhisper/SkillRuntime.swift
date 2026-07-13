@@ -175,6 +175,13 @@ struct SkillDefinition:
         L10n.text(name)
     }
 
+    var allCapabilities:
+        [SkillCapability]
+    {
+        requiredCapabilities
+            + optionalCapabilities
+    }
+
     static func isValidIdentifier(
         _ value: String
     ) -> Bool {
@@ -223,6 +230,10 @@ struct SkillRegistry:
         "app.openwhisper.skill.code-prompt"
     static let translateSkillID =
         "app.openwhisper.skill.translate"
+    static let contextRewriteSkillID =
+        "app.openwhisper.skill.context-rewrite"
+    static let contextReplySkillID =
+        "app.openwhisper.skill.context-reply"
 
     static let builtIn = SkillRegistry(
         definitions: [
@@ -336,6 +347,45 @@ struct SkillRegistry:
                     risk: .medium
                 ),
                 legacyMode: .translate
+            ),
+            SkillDefinition(
+                id: contextRewriteSkillID,
+                version: "1.0.0",
+                name: "Context Rewrite",
+                optionalCapabilities: [
+                    .selection,
+                ],
+                promptInstruction:
+                    "Rewrite the selected text according to the speaker's instruction. Preserve every date, number, path, command, identifier, proper noun, and factual claim unless the speaker explicitly asks to change it. If no selection was authorized, transform only the spoken text and do not claim that source text was available.",
+                output:
+                    SkillOutputContract(
+                        format: .plainText,
+                        delivery:
+                            .previewThenPaste,
+                        risk: .medium
+                    )
+            ),
+            SkillDefinition(
+                id: contextReplySkillID,
+                version: "1.0.0",
+                name: "Context Reply",
+                optionalCapabilities: [
+                    .selection,
+                ],
+                promptInstruction:
+                    "Draft a concise reply to the selected text using only the speaker's stated intent and facts present in the authorized selection. Do not invent commitments, dates, attachments, actions already completed, greetings, or sign-offs that were not requested. If no selection was authorized, produce a reply from the spoken intent only.",
+                output:
+                    SkillOutputContract(
+                        format: .plainText,
+                        delivery:
+                            .previewThenPaste,
+                        risk: .medium
+                    ),
+                validators:
+                    SkillValidatorPolicy(
+                        preserveTechnicalLiterals:
+                            false
+                    )
             ),
         ]
     )
@@ -1173,6 +1223,9 @@ struct SkillPromptCompiler: Sendable {
         }
 
         if
+            plan.skill
+                .allCapabilities
+                .contains(.selection),
             let selection =
                 normalizedOptionalText(
                     context.selection,

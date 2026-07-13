@@ -191,7 +191,11 @@ enum PasteAcceptanceRunner {
                 preserveClipboard: true,
                 restoreDelayMilliseconds: 100,
                 launchAppContext: launchContext,
-                automaticPasteAllowed: true
+                automaticPasteAllowed: true,
+                automaticPasteFallbackReason:
+                    .deliveryRequiresManualPaste,
+                expectedSelectionContext:
+                    nil
             )
 
             var executionProofObserved = false

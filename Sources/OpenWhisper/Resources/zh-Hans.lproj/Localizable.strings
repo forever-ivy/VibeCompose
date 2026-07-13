@@ -568,6 +568,8 @@
 "Backend Prompt" = "后端任务提示词";
 "Code Prompt" = "代码提示词";
 "Translate" = "翻译";
+"Context Rewrite" = "选区改写";
+"Context Reply" = "选区回复";
 "Default Skill" = "默认技能";
 "Skill" = "技能";
 "Application Rules" = "应用规则";
@@ -600,6 +602,50 @@
 "Choose a Skill for each app and control when AI Polish transforms a transcript." = "为不同应用选择技能，并控制 AI 润色何时转换转写结果。";
 "Reply, Email, Backend Prompt, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it." = "回复、邮件、后端任务提示词、代码提示词和翻译技能需要连接 ChatGPT 账号才能使用 AI 润色。未连接时，直述听写和转写恢复路径仍可继续使用。";
 "Skill output failed local validation (%@); OpenWhisper used the normalized transcript instead." = "技能输出未通过本地校验（%@）；OpenWhisper 已改用规范化后的转写文本。";
+
+/* Context and Preview */
+"Context" = "上下文";
+"Control which Skills may read only the text you explicitly select." = "控制哪些技能可以读取你明确选中的文本。";
+"Selected Text Context" = "选中文本上下文";
+"Allow selected-text context" = "允许使用选中文本上下文";
+"OpenWhisper reads selected text only after the active Skill has permission. It never reads the rest of the window, document, clipboard, or screen through this capability." = "只有当前技能获得权限后，OpenWhisper 才会读取选中的文本；此能力不会读取窗口其余内容、完整文档、剪贴板或屏幕。";
+"Maximum selected text" = "选中文本上限";
+"2,000 characters" = "2,000 个字符";
+"6,000 characters" = "6,000 个字符";
+"12,000 characters" = "12,000 个字符";
+"Skill Permissions" = "技能权限";
+"May use the current explicit selection only." = "仅可使用当前明确选中的文本。";
+"Ask every time" = "每次询问";
+"Always allow" = "始终允许";
+"Never allow" = "永不允许";
+"Sensitive apps never expose selected text to Skills." = "敏感应用绝不会向技能提供选中文本。";
+"Reset Permissions" = "重置权限";
+"%@ wants to use selected text" = "%@ 想要使用选中的文本";
+"the current app" = "当前应用";
+"OpenWhisper will read only the text you selected in %@, up to %ld characters. It will not read the rest of the window, document, clipboard, or screen." = "OpenWhisper 只会读取你在 %@ 中选中的文本，最多 %ld 个字符；不会读取窗口其余内容、完整文档、剪贴板或屏幕。";
+"Allow Once" = "仅允许一次";
+"Always Allow" = "始终允许";
+"Voice Only" = "仅使用语音";
+"Checking selected text access" = "正在检查选中文本权限";
+"Waiting for preview" = "等待预览确认";
+"Preview cancelled" = "已取消预览";
+"OpenWhisper Preview" = "OpenWhisper 预览";
+"Preview content" = "预览内容";
+"Diff" = "差异";
+"Result" = "结果";
+"Source" = "来源";
+"Skill %@ · version %@" = "技能 %@ · 版本 %@";
+"Validated" = "已通过校验";
+"Validation failed" = "校验失败";
+"%ld additions · %ld removals" = "新增 %ld 处 · 删除 %ld 处";
+"Selected text only" = "仅使用选中文本";
+"Replace Selection" = "替换选区";
+"Paste to Target" = "粘贴到目标";
+"Copied after preview." = "预览后已复制。";
+"Copied — selection changed" = "已复制 — 选区已变化";
+"The result was copied for manual paste." = "结果已复制，请手动粘贴。";
+"The original selection changed, so OpenWhisper did not replace it." = "原始选区已发生变化，因此 OpenWhisper 没有替换它。";
+"Keep the same tone, shorten it, and preserve the release date and API version." = "保持相同语气，缩短内容，并保留发布日期和 API 版本。";
 
 /* Remaining runtime and recovery errors */
 "Browser login sent the callback parameter %@ more than once." = "浏览器登录回调重复发送了参数 %@。";

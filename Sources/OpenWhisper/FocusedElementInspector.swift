@@ -163,6 +163,153 @@ enum FocusedElementInspector {
         return .captured(snapshot)
     }
 
+    static func captureSelectionContext(
+        in launchAppContext:
+            LaunchAppContext?,
+        maximumCharacters: Int
+    ) -> SelectionContextCaptureResult {
+        guard
+            AXIsProcessTrusted(),
+            let launchAppContext,
+            launchAppContext
+                .processIdentifier > 0,
+            let expectedTarget =
+                launchAppContext.focusedTarget,
+            let currentElement =
+                focusedElement(
+                    in: launchAppContext
+                        .processIdentifier
+                ),
+            matches(
+                currentElement:
+                    currentElement,
+                expectedTarget:
+                    expectedTarget,
+                processIdentifier:
+                    launchAppContext
+                        .processIdentifier
+            )
+        else {
+            return launchAppContext?
+                .focusedTarget == nil
+                ? .unavailable
+                : .targetChanged
+        }
+
+        guard
+            let snapshot =
+                editableTextSnapshot(
+                    from: currentElement
+                )
+        else {
+            return .unavailable
+        }
+        guard
+            snapshot.selectedRange.length > 0
+        else {
+            return .noSelection
+        }
+        guard
+            let selectedText =
+                selectedText(
+                    from: snapshot
+                )
+        else {
+            return .unavailable
+        }
+
+        let boundedMaximum =
+            min(
+                20_000,
+                max(
+                    100,
+                    maximumCharacters
+                )
+            )
+        guard selectedText.count
+            <= boundedMaximum
+        else {
+            return .tooLarge(
+                actual:
+                    selectedText.count,
+                maximum:
+                    boundedMaximum
+            )
+        }
+
+        return .captured(
+            SelectionContextSnapshot(
+                target: expectedTarget,
+                selectedRange:
+                    snapshot
+                        .selectedRange,
+                selectedText:
+                    selectedText,
+                textDigest:
+                    SelectionContextSnapshot
+                        .digest(
+                            for:
+                                selectedText
+                        )
+            )
+        )
+    }
+
+    static func verifySelectionContext(
+        _ expected:
+            SelectionContextSnapshot
+    ) -> SelectionContextVerification {
+        guard
+            AXIsProcessTrusted(),
+            expected.target
+                .processIdentifier > 0,
+            let currentElement =
+                focusedElement(
+                    in: expected.target
+                        .processIdentifier
+                ),
+            matches(
+                currentElement:
+                    currentElement,
+                expectedTarget:
+                    expected.target,
+                processIdentifier:
+                    expected.target
+                        .processIdentifier
+            )
+        else {
+            return .changed
+        }
+
+        guard
+            let snapshot =
+                editableTextSnapshot(
+                    from: currentElement
+                ),
+            let selectedText =
+                selectedText(
+                    from: snapshot
+                )
+        else {
+            return .unavailable
+        }
+
+        guard
+            snapshot.selectedRange.location
+                == expected
+                    .selectedRange.location,
+            snapshot.selectedRange.length
+                == expected
+                    .selectedRange.length,
+            SelectionContextSnapshot.digest(
+                for: selectedText
+            ) == expected.textDigest
+        else {
+            return .changed
+        }
+        return .unchanged
+    }
+
     static func isCurrentTarget(_ expectedTarget: FocusedAXElementReference) -> Bool {
         guard
             AXIsProcessTrusted(),
@@ -307,6 +454,33 @@ enum FocusedElementInspector {
         return EditableTextSnapshot(
             value: value,
             selectedRange: selectedRange
+        )
+    }
+
+    private static func selectedText(
+        from snapshot:
+            EditableTextSnapshot
+    ) -> String? {
+        let value =
+            snapshot.value as NSString
+        let range = snapshot.selectedRange
+        guard
+            range.location >= 0,
+            range.length >= 0,
+            range.location <= value.length,
+            range.length
+                <= value.length
+                    - range.location
+        else {
+            return nil
+        }
+        return value.substring(
+            with: NSRange(
+                location:
+                    range.location,
+                length:
+                    range.length
+            )
         )
     }
 

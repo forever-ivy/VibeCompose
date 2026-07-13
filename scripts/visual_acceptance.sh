@@ -168,6 +168,50 @@ capture_state() {
   fi
 }
 
+capture_preview() {
+  local output_file="$1"
+  local launch_log_file
+  local self_capture_file
+  launch_log_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-preview-demo.XXXXXX")"
+  self_capture_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-preview-snapshot.XXXXXX")"
+  rm -f "$self_capture_file"
+
+  pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+  if ! wait_for_app_exit; then
+    echo "Timed out waiting for the previous $APP_NAME preview process to exit" >&2
+    exit 1
+  fi
+  sleep 1
+
+  open -W -n -g \
+      --stdout "$launch_log_file" \
+      --stderr "$launch_log_file" \
+      "$APP_DIR" \
+      --args \
+      --preview-demo \
+      --preview-snapshot-output "$self_capture_file" &
+  OPEN_PID=$!
+
+  local attempt
+  for attempt in {1..80}; do
+    if [[ -s "$self_capture_file" ]]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [[ ! -s "$self_capture_file" ]]; then
+    echo "Missing self-rendered Preview snapshot" >&2
+    cat "$launch_log_file" >&2 || true
+    exit 1
+  fi
+  cp "$self_capture_file" "$OUT_DIR/$output_file"
+  wait "$OPEN_PID" >/dev/null 2>&1 || true
+  OPEN_PID=""
+  cp "$launch_log_file" "$OUT_DIR/openwhisper-preview-demo.log"
+  rm -f "$launch_log_file" "$self_capture_file"
+}
+
 capture_state "recording" "01-recording.png" "baseline"
 capture_state "processing" "02-processing.png" "baseline"
 capture_state "result" "03-result.png" "baseline"
@@ -184,6 +228,7 @@ capture_state \
   "retryable-error" \
   "10-retryable-error-increase-contrast.png" \
   "increase-contrast"
+capture_preview "11-diff-preview.png"
 
 trap - EXIT
 
@@ -218,6 +263,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 - Run ID: \`$RUN_ID\`
 - App: \`$APP_BINARY\`
 - Demo flag: \`--overlay-demo-state\`
+- Preview demo flag: \`--preview-demo\`
 - Accessibility profiles: explicit baseline, Reduce Motion and Increase Contrast launch overrides
 - Capture: installed-app self-rendered HUD PNG, with CoreGraphics + \`screencapture -l\` fallback
 - Final live state: normal installed app relaunched and left running as PID \`$RUNNING_PID\`
@@ -232,9 +278,11 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
   - \`08-processing-reduced-motion.png\`
   - \`09-processing-reduced-motion-followup.png\`
   - \`10-retryable-error-increase-contrast.png\`
+  - \`11-diff-preview.png\`
   - \`verification.txt\`
   - \`feedback-mode-acceptance.txt\`
   - \`openwhisper-overlay-demo-*.log\`
+  - \`openwhisper-preview-demo.log\`
 
 SUMMARY
 

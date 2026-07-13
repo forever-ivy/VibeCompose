@@ -13,7 +13,7 @@ APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 usage() {
   cat >&2 <<USAGE
 Usage:
-  $0 [--install] settings [account|dictation|ai-polish|paste|privacy|advanced]
+  $0 [--install] settings [account|dictation|appearance|ai-polish|context|paste|privacy|advanced]
   $0 [--install] onboarding [welcome|connect|microphone|practice]
   $0 [--install] history
   $0 [--install] terminology
@@ -84,7 +84,7 @@ case "$SURFACE" in
   settings)
     DETAIL="${DETAIL:-account}"
     case "$DETAIL" in
-      account|dictation|ai-polish|paste|privacy|advanced) ;;
+      account|dictation|appearance|ai-polish|context|paste|privacy|advanced) ;;
       *) usage ;;
     esac
     ARGS+=("--open-settings" "--settings-pane" "$DETAIL")

@@ -24,6 +24,7 @@
 - [Visual acceptance](engineering/visual-acceptance.md)
 - [Hotkey and feedback architecture](engineering/hotkey-and-feedback.md)
 - [Skill Runtime](engineering/skill-runtime.md)
+- [Context and Preview](engineering/context-and-preview.md)
 - [HUD visual specification](design/hud-visual-spec.md)
 
 ## Legal, Privacy, and Support

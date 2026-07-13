@@ -99,6 +99,11 @@ func accessibilityAuditOutputAndSettingsPaneArgumentsAreParsed() {
     )
     #expect(
         AppLaunchMode.settingsPane(
+            arguments: ["OpenWhisper", "--settings-pane=context"]
+        ) == .context
+    )
+    #expect(
+        AppLaunchMode.settingsPane(
             arguments: [
                 "OpenWhisper",
                 "--settings-pane",

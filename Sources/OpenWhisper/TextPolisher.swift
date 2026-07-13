@@ -143,6 +143,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
     let dictationMode: DictationMode
     let skillPlan:
         ResolvedSkillExecutionPlan
+    let skillPromptContext:
+        SkillPromptContext
     let chatGPTAuthProvider: (any ChatGPTAuthProviding)?
     let chatGPTAuthAvailable: Bool
     let providerCapabilityPolicy: any ProviderCapabilityChecking
@@ -160,6 +162,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         dictationMode: DictationMode = .direct,
         skillPlan:
             ResolvedSkillExecutionPlan? = nil,
+        skillPromptContext:
+            SkillPromptContext = .init(),
         chatGPTAuthProvider: (any ChatGPTAuthProviding)? = nil,
         chatGPTAuthAvailable: Bool,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
@@ -191,6 +195,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
                 config: SkillsConfig(),
                 launchAppContext: nil
             )
+        self.skillPromptContext =
+            skillPromptContext
         self.chatGPTAuthProvider = chatGPTAuthProvider
         self.chatGPTAuthAvailable = chatGPTAuthAvailable
         self.providerCapabilityPolicy = providerCapabilityPolicy
@@ -240,7 +246,9 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
                 transcript: text,
                 terminologyEntries: allEntries,
                 config: config,
-                plan: skillPlan
+                plan: skillPlan,
+                context:
+                    skillPromptContext
             )
         )
         return TextPolishResult(

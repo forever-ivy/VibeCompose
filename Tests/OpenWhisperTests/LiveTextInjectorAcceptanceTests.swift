@@ -58,7 +58,10 @@ func liveTextInjectorPastesIntoLaunchAppEditorAfterFocusMovesAway() async throws
         preserveClipboard: false,
         restoreDelayMilliseconds: 50,
         launchAppContext: launchAppContext,
-        automaticPasteAllowed: true
+        automaticPasteAllowed: true,
+        automaticPasteFallbackReason:
+            .deliveryRequiresManualPaste,
+        expectedSelectionContext: nil
     )
     #expect(outcome == .insertedAndVerified)
 
@@ -111,7 +114,10 @@ func liveTextInjectorPastesIntoCodexComposerAfterFocusMovesAway() async throws {
         preserveClipboard: false,
         restoreDelayMilliseconds: 50,
         launchAppContext: launchAppContext,
-        automaticPasteAllowed: true
+        automaticPasteAllowed: true,
+        automaticPasteFallbackReason:
+            .deliveryRequiresManualPaste,
+        expectedSelectionContext: nil
     )
     #expect(
         outcome == .insertedAndVerified ||

@@ -45,6 +45,35 @@ struct AppLaunchModeTests {
     }
 
     @Test
+    func previewDemoModeAndSnapshotOutputRequireExplicitArguments() {
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--preview-demo",
+                    "--preview-snapshot-output",
+                    "/tmp/preview.png",
+                ]
+            ) == .previewDemo
+        )
+        #expect(
+            AppLaunchMode
+                .previewSnapshotOutputURL(
+                    environment: [:],
+                    arguments: [
+                        "OpenWhisper",
+                        "--preview-snapshot-output=/tmp/preview.png",
+                    ]
+                )
+                == URL(
+                    fileURLWithPath:
+                        "/tmp/preview.png"
+                )
+        )
+    }
+
+    @Test
     func overlayDemoModeAcceptsCommonTruthyFlags() {
         #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "1"]) == .overlayDemo)
         #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "true"]) == .overlayDemo)

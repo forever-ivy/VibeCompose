@@ -113,6 +113,17 @@ enum SensitiveAppPolicy {
         return !builtInBundleIdentifiers.contains(normalized) && !additional.contains(normalized)
     }
 
+    static func permitsContext(
+        bundleIdentifier: String?,
+        privacy: PrivacyConfig
+    ) -> Bool {
+        permitsPersistence(
+            bundleIdentifier:
+                bundleIdentifier,
+            privacy: privacy
+        )
+    }
+
     private static func normalizedBundleIdentifier(_ value: String?) -> String? {
         guard let value else {
             return nil

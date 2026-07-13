@@ -24,6 +24,9 @@ The current implementation already includes:
   Prompt, Code Prompt, and Translate; app rules use only the application name
   and exact bundle identifier, Skill resolution is frozen when recording
   starts, and invalid model output falls back before delivery
+- opt-in selected-text context for Context Rewrite and Context Reply, with
+  per-Skill Ask/Always/Never permissions, sensitive-app blocking, a local Diff
+  Preview, and exact target/range/text verification before replacement
 - conservative paste behavior with clipboard fallback
 - retry results that are copied for manual paste instead of being injected automatically
 - microphone and Accessibility permission diagnostics
@@ -186,6 +189,7 @@ docs/design/                  visual specifications
 - [UI comparison research](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [Architecture](docs/engineering/architecture.md)
 - [Skill Runtime](docs/engineering/skill-runtime.md)
+- [Context and Preview](docs/engineering/context-and-preview.md)
 - [Release process](docs/engineering/release.md)
 - [Updater decision](docs/engineering/updater.md)
 - [Privacy Policy](docs/legal/privacy-policy.md)

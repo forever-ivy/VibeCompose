@@ -89,6 +89,7 @@ capture_audit "settings-account" "--open-settings" "account"
 capture_audit "settings-dictation" "--open-settings" "dictation"
 capture_audit "settings-appearance" "--open-settings" "appearance"
 capture_audit "settings-ai-polish" "--open-settings" "ai-polish"
+capture_audit "settings-context" "--open-settings" "context"
 capture_audit "settings-paste" "--open-settings" "paste"
 capture_audit "settings-privacy" "--open-settings" "privacy"
 capture_audit "settings-advanced" "--open-settings" "advanced"
@@ -111,6 +112,7 @@ expected = {
     "settings-dictation",
     "settings-appearance",
     "settings-ai-polish",
+    "settings-context",
     "settings-paste",
     "settings-privacy",
     "settings-advanced",

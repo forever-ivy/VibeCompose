@@ -25,6 +25,7 @@ enum AppLaunchMode: Equatable {
     case history
     case terminology
     case quickAdd
+    case previewDemo
     case overlayDemo
     case overlayDemoState(OverlayDemoState)
     case pasteAcceptance
@@ -75,6 +76,14 @@ enum AppLaunchMode: Equatable {
 
         if arguments.contains("--quick-add") || arguments.contains("--open-quick-add") {
             return .quickAdd
+        }
+
+        if arguments.contains("--preview-demo")
+            || arguments.contains(
+                "--openwhisper-preview-demo"
+            )
+        {
+            return .previewDemo
         }
 
         if requestedSettingsPane(arguments: arguments) == "privacy" {
@@ -425,6 +434,20 @@ enum AppLaunchMode: Equatable {
             arguments: arguments,
             environmentKey: "OPENWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT",
             argumentName: "--quick-add-snapshot-output"
+        )
+    }
+
+    static func previewSnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey:
+                "OPENWHISPER_PREVIEW_SNAPSHOT_OUTPUT",
+            argumentName:
+                "--preview-snapshot-output"
         )
     }
 

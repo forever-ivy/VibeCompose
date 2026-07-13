@@ -55,6 +55,9 @@ func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
     #expect(script.contains("--overlay-demo-state"))
     #expect(script.contains("--visual-acceptance-reduce-motion"))
     #expect(script.contains("--visual-acceptance-increase-contrast"))
+    #expect(script.contains("--preview-demo"))
+    #expect(script.contains("--preview-snapshot-output"))
+    #expect(script.contains("11-diff-preview.png"))
     #expect(script.contains("--visual-acceptance-followup-output"))
     #expect(script.contains("08-processing-reduced-motion.png"))
     #expect(script.contains("09-processing-reduced-motion-followup.png"))
@@ -170,6 +173,7 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
         "settings-dictation",
         "settings-appearance",
         "settings-ai-polish",
+        "settings-context",
         "settings-paste",
         "settings-privacy",
         "settings-advanced",

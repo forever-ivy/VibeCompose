@@ -74,6 +74,11 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Code Prompt"] == "代码提示词")
     #expect(strings["Application Rules"] == "应用规则")
     #expect(strings["Skills require OpenWhisper Pro"] == "技能需要 OpenWhisper Pro")
+    #expect(strings["Context"] == "上下文")
+    #expect(strings["Context Rewrite"] == "选区改写")
+    #expect(strings["Context Reply"] == "选区回复")
+    #expect(strings["Replace Selection"] == "替换选区")
+    #expect(strings["Ask every time"] == "每次询问")
     #expect(
         strings[
             "Reply, Email, Backend Prompt, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."

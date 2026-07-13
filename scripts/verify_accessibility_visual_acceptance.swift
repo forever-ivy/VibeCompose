@@ -73,6 +73,7 @@ let expectedSurfaces = [
     "settings-dictation",
     "settings-appearance",
     "settings-ai-polish",
+    "settings-context",
     "settings-paste",
     "settings-privacy",
     "settings-advanced",

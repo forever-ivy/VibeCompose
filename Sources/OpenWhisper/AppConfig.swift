@@ -6,6 +6,7 @@ struct AppConfig: Codable, Sendable, Equatable {
     var auth: AuthConfig = .init()
     var privacy: PrivacyConfig = .init()
     var visualFeedback: VisualFeedbackConfig = .init()
+    var context: ContextConfig = .init()
 
     init() {}
 
@@ -18,6 +19,10 @@ struct AppConfig: Codable, Sendable, Equatable {
         visualFeedback = try container.decodeIfPresent(
             VisualFeedbackConfig.self,
             forKey: .visualFeedback
+        ) ?? .init()
+        context = try container.decodeIfPresent(
+            ContextConfig.self,
+            forKey: .context
         ) ?? .init()
     }
 }
@@ -309,6 +314,8 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     var textPolish: TextPolishConfig = .init()
     var resolvedSkillPlan:
         ResolvedSkillExecutionPlan?
+    var skillPromptContext =
+        SkillPromptContext()
 
     init() {}
 
@@ -375,6 +382,8 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         terminology = try container.decodeIfPresent(TerminologyConfig.self, forKey: .terminology) ?? .init()
         textPolish = try container.decodeIfPresent(TextPolishConfig.self, forKey: .textPolish) ?? .init()
         resolvedSkillPlan = nil
+        skillPromptContext =
+            SkillPromptContext()
     }
 
     var voiceModes: VoiceModeConfig {

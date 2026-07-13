@@ -187,6 +187,9 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
     let skillVersion: String?
     let skillValidationIssueCodes:
         [String]
+    let contextCapabilityCodes:
+        [String]
+    let selectionCharacterCount: Int
     let estimatedPolishInputTokens: Int
     let estimatedPolishOutputTokens: Int
     let injectMs: Int
@@ -267,6 +270,38 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
                         allowedValidationIssues
                 )
             }
+        let allowedContextCapabilities =
+            Set(
+                [
+                    SkillCapability
+                        .selection,
+                    .focusedParagraph,
+                    .conversationWindow,
+                    .clipboard,
+                    .styleCapsule,
+                ].map(\.rawValue)
+            )
+        contextCapabilityCodes =
+            (sample
+                .contextCapabilityCodes
+                ?? [])
+            .prefix(10)
+            .map {
+                Self.allowedValue(
+                    $0,
+                    allowed:
+                        allowedContextCapabilities
+                )
+            }
+        selectionCharacterCount =
+            min(
+                20_000,
+                Self.nonnegative(
+                    sample
+                        .selectionCharacterCount
+                        ?? 0
+                )
+            )
         estimatedPolishInputTokens = Self.nonnegative(
             sample.estimatedPolishInputTokens
         )
@@ -294,6 +329,7 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
                     "transcribe.invalid_response",
                     "transcribe.unknown",
                     "inject",
+                    "preview_cancelled",
                 ]
             )
         }

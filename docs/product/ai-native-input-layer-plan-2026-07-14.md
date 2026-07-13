@@ -1,14 +1,14 @@
 # OpenWhisper AI-native 输入层完整方案
 
 > 日期：2026-07-14
-> 状态：产品与技术方案 v1；Phase 1–2 已落地
+> 状态：产品与技术方案 v1；Phase 1–3 已落地
 > 当前基线：`0.1.0 Alpha`
 > 范围：macOS 原生客户端、Skills、上下文、个性化、视觉反馈与可自定义全局热键
 > 与现有计划的关系：本方案是当前 V1 听写闭环之上的下一阶段产品方向，不替代签名、公证、更新、权限和安全粘贴等发布门禁。
 
 ## 实施进度更新
 
-截至 2026-07-14，本方案已完成 Phase 0 决策确认、Phase 1 交互基础和 Phase 2 Skill Runtime 内核：
+截至 2026-07-14，本方案已完成 Phase 0 决策确认、Phase 1 交互基础、Phase 2 Skill Runtime 内核和 Phase 3 选区上下文与 Preview：
 
 - `HotkeyBinding`、旧配置迁移、快捷键录制控件、组合校验；
 - 候选快捷键预注册、配置持久化、失败回滚、启动时 F5 回退；
@@ -31,15 +31,27 @@
 - Validator 失败时在投递前回退规范化 ASR；
 - History 与脱敏诊断中的受限 Skill ID、版本和校验问题码；
 - Settings、中文本地化、README 与工程文档完成 Skills 术语迁移。
+- `ContextConfig`、按 Skill 的每次询问 / 始终允许 / 永不允许；
+- 未授权前不读取选区，敏感应用在捕获前直接拒绝；
+- 选区字符预算、AX 目标、UTF-16 范围和 SHA-256 摘要冻结；
+- Context Rewrite 与 Context Reply；
+- 本地 Source / Result / Diff Preview；
+- `OutputRouter` 对 automatic、preview 和 copy-only 的本地强制；
+- 替换前再次校验同一 AX 元素、选区范围和原文摘要；
+- 选区变化时只复制并显示 `Copied — selection changed`；
+- Retry 配置主动清除选区正文；
+- 脱敏诊断只记录上下文能力枚举和字符数；
+- 安装版视觉验收增加 Diff Preview 截图。
 
 对应实现与验收说明见：
 
 - `docs/engineering/hotkey-and-feedback.md`
 - `docs/engineering/skill-runtime.md`
+- `docs/engineering/context-and-preview.md`
 - `scripts/feedback_mode_acceptance.sh`
 - `scripts/visual_acceptance.sh`
 
-Phase 3–6 仍按本文顺序执行。当前实现没有声称已经开放 Skill 包、选区上下文、Style Capsule、社区 Registry 或 Action Skills。
+Phase 4–6 仍按本文顺序执行。当前实现没有声称已经开放 Style Capsule、Terminology Packs、社区 Registry 或 Action Skills。
 
 ## 0. 执行结论
 
@@ -1301,7 +1313,7 @@ struct VisualFeedbackConfig: Codable {
 - Skill 不能绕过输出和隐私规则；
 - Golden tests 全绿。
 
-### Phase 3 — 选区上下文与 Preview
+### Phase 3 — 选区上下文与 Preview（已完成）
 
 交付：
 
@@ -1595,10 +1607,9 @@ struct VisualFeedbackConfig: Codable {
 
 ## 23. 推荐下一步
 
-Phase 1–2 已完成。后续仍按依赖和风险执行：
+Phase 1–3 已完成。后续仍按依赖和风险执行：
 
-1. 实现选区权限、同目标安全替换与 Diff Preview；
-2. 在选区安全边界稳定后实现 Style Capsule 和 Terminology Packs；
-3. 最后实现 `.openwhisperskill` 本地导入、包安全校验和社区分发研究。
+1. 在已完成的选区安全边界上实现 Style Capsule 和 Terminology Packs；
+2. 最后实现 `.openwhisperskill` 本地导入、包安全校验和社区分发研究。
 
-已落地的 Phase 1–2 已解决**触发方式不够自由**、**录音反馈不够高级**和**固定 Voice Mode 无法形成可验证运行时契约**。下一阶段必须继续以安全选区、可撤销权限和预览投递为中心，不能让上下文能力绕过现有隐私与投递边界。
+已落地的 Phase 1–3 已解决**触发方式不够自由**、**录音反馈不够高级**、**固定 Voice Mode 无法形成可验证运行时契约**和**选区改写缺少安全替换证明**。下一阶段必须让个人风格和领域术语继续服从已建立的权限、Prompt、Validator、Preview 和安全投递边界。

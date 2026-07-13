@@ -15,7 +15,10 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
         )
         let hasPrivateAcceptanceLaunchMode: Bool
         switch launchMode {
-        case .overlayDemo, .overlayDemoState, .pasteAcceptance:
+        case .previewDemo,
+             .overlayDemo,
+             .overlayDemoState,
+             .pasteAcceptance:
             hasPrivateAcceptanceLaunchMode = true
         default:
             hasPrivateAcceptanceLaunchMode = false
@@ -39,6 +42,10 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
                 arguments: arguments
             ) != nil
             || AppLaunchMode.quickAddSnapshotOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
+            || AppLaunchMode.previewSnapshotOutputURL(
                 environment: environment,
                 arguments: arguments
             ) != nil

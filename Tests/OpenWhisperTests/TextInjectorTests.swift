@@ -226,6 +226,25 @@ func retryInjectionPlanAlwaysUsesClipboardEvenWithEditableFocus() {
 }
 
 @Test
+func changedOrUnavailableSelectionAlwaysFallsBackToClipboard() {
+    #expect(
+        TextInjector.selectionFallbackReason(
+            verification: .unchanged
+        ) == nil
+    )
+    #expect(
+        TextInjector.selectionFallbackReason(
+            verification: .changed
+        ) == .selectionChanged
+    )
+    #expect(
+        TextInjector.selectionFallbackReason(
+            verification: .unavailable
+        ) == .selectionChanged
+    )
+}
+
+@Test
 func injectionPlanIgnoresStaleSnapshotsWithoutEditableFocusSignal() {
     let snapshot = EditableTextSnapshot(
         value: "stale editor text",

@@ -30,6 +30,9 @@ struct DictationMetrics: Sendable, Equatable {
     let skillVersion: String?
     let skillValidationIssueCodes:
         [String]
+    let contextCapabilityCodes:
+        [String]
+    let selectionCharacterCount: Int
 
     init(
         transcription: TranscriptionMetrics,
@@ -44,7 +47,10 @@ struct DictationMetrics: Sendable, Equatable {
         skillID: String? = nil,
         skillVersion: String? = nil,
         skillValidationIssueCodes:
-            [String] = []
+            [String] = [],
+        contextCapabilityCodes:
+            [String] = [],
+        selectionCharacterCount: Int = 0
     ) {
         self.transcription = transcription
         self.normalizationMs = normalizationMs
@@ -59,6 +65,13 @@ struct DictationMetrics: Sendable, Equatable {
         self.skillVersion = skillVersion
         self.skillValidationIssueCodes =
             skillValidationIssueCodes
+        self.contextCapabilityCodes =
+            contextCapabilityCodes
+        self.selectionCharacterCount =
+            max(
+                0,
+                selectionCharacterCount
+            )
     }
 }
 
@@ -83,6 +96,8 @@ struct DictationPipeline: DictationPreparing {
     var dictationMode: DictationMode = .direct
     var skillPlan:
         ResolvedSkillExecutionPlan?
+    var skillPromptContext:
+        SkillPromptContext = .init()
     var literalTokenizer: TechnicalLiteralTokenizer = .init()
     var skillValidator:
         SkillValidatorEngine = .init()
@@ -118,7 +133,19 @@ struct DictationPipeline: DictationPreparing {
         let textPolishDecision = textPolishDecisionEngine.decide(
             normalizedText: prePolish.text,
             audioDurationMs: transcription.metrics.audioDurationMs,
-            mode: executionPlan.legacyMode,
+            mode:
+                executionPlan.skill.id
+                    == SkillRegistry
+                        .directSkillID
+                    ? .direct
+                    : (
+                        executionPlan
+                            .legacyMode
+                            == .direct
+                            ? .reply
+                            : executionPlan
+                                .legacyMode
+                    ),
             config: textPolishConfig,
             providerAvailable: textPolisher != nil
         )
@@ -196,7 +223,10 @@ struct DictationPipeline: DictationPreparing {
                     skillValidator.validate(
                         output: postPolish.text,
                         originalText:
-                            prePolish.text,
+                            validationSourceText(
+                                transcript:
+                                    prePolish.text
+                            ),
                         plan: executionPlan
                     )
                 skillValidationIssueCodes =
@@ -262,7 +292,13 @@ struct DictationPipeline: DictationPreparing {
                 skillVersion:
                     executionPlan.skill.version,
                 skillValidationIssueCodes:
-                    skillValidationIssueCodes
+                    skillValidationIssueCodes,
+                contextCapabilityCodes:
+                    contextCapabilityCodes,
+                selectionCharacterCount:
+                    skillPromptContext
+                        .selection?
+                        .count ?? 0
             )
         )
     }
@@ -302,9 +338,54 @@ struct DictationPipeline: DictationPreparing {
                 skillVersion:
                     executionPlan.skill.version,
                 skillValidationIssueCodes:
-                    skillValidationIssueCodes
+                    skillValidationIssueCodes,
+                contextCapabilityCodes:
+                    contextCapabilityCodes,
+                selectionCharacterCount:
+                    skillPromptContext
+                        .selection?
+                        .count ?? 0
             )
         )
+    }
+
+    private func validationSourceText(
+        transcript: String
+    ) -> String {
+        guard
+            let selection =
+                skillPromptContext
+                    .selection,
+            !selection.isEmpty
+        else {
+            return transcript
+        }
+        return transcript + "\n" + selection
+    }
+
+    private var contextCapabilityCodes:
+        [String]
+    {
+        var values: [String] = []
+        if skillPromptContext
+            .selection != nil
+        {
+            values.append(
+                SkillCapability
+                    .selection
+                    .rawValue
+            )
+        }
+        if skillPromptContext
+            .styleCapsule != nil
+        {
+            values.append(
+                SkillCapability
+                    .styleCapsule
+                    .rawValue
+            )
+        }
+        return values
     }
 
     private func elapsedMilliseconds(since start: UInt64) -> Int {

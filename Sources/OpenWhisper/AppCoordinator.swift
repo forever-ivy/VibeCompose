@@ -63,6 +63,12 @@ final class AppCoordinator {
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
     let launchAppContextProvider: LaunchAppContextProvider
+    let contextBroker: ContextBroker
+    let contextPermissionPrompter:
+        any ContextPermissionPrompting
+    let previewPresenter:
+        any PreviewPresenting
+    let outputRouter: OutputRouter
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? ProductIdentity.defaultBundleIdentifier,
         category: "AppCoordinator"
@@ -87,6 +93,8 @@ final class AppCoordinator {
     private var activeSessionID: UUID?
     private var recordingStartedAt: DispatchTime?
     private var recordingTranscriptionConfig: TranscriptionConfig?
+    private var recordingPreparedContext =
+        PreparedSkillContext()
     private var pendingRetry: PendingRetry?
     private var pendingRetryExpiryTask: Task<Void, Never>?
     private var authStateObserver: NSObjectProtocol?
@@ -94,6 +102,8 @@ final class AppCoordinator {
     private var snapshotPrivacyMode = SnapshotPrivacyMode.disabled
     private var hotkeyRegistrationIssue: String?
     private var visualFeedbackPreviewTask:
+        Task<Void, Never>?
+    private var previewDemoTask:
         Task<Void, Never>?
 
     private struct PendingRetry {
@@ -177,6 +187,9 @@ final class AppCoordinator {
                     config: textPolishConfig,
                     dictationMode: dictationMode,
                     skillPlan: skillPlan,
+                    skillPromptContext:
+                        transcriptionConfig
+                            .skillPromptContext,
                     chatGPTAuthProvider: authManager,
                     chatGPTAuthAvailable: chatGPTAuthAvailable,
                     providerCapabilityPolicy: providerCapabilityPolicy,
@@ -205,10 +218,19 @@ final class AppCoordinator {
                 textPolisher: textPolisher,
                 textPolishConfig: textPolishConfig,
                 dictationMode: dictationMode,
-                skillPlan: skillPlan
+                skillPlan: skillPlan,
+                skillPromptContext:
+                    transcriptionConfig
+                        .skillPromptContext
             )
         },
-        launchAppContextProvider: @escaping LaunchAppContextProvider = { LaunchAppContext.current() }
+        launchAppContextProvider: @escaping LaunchAppContextProvider = { LaunchAppContext.current() },
+        contextBroker: ContextBroker = .init(),
+        contextPermissionPrompter:
+            (any ContextPermissionPrompting)? = nil,
+        previewPresenter:
+            (any PreviewPresenting)? = nil,
+        outputRouter: OutputRouter = .init()
     ) {
         self.configStore = configStore
         self.config = config
@@ -238,6 +260,14 @@ final class AppCoordinator {
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
         self.launchAppContextProvider = launchAppContextProvider
+        self.contextBroker = contextBroker
+        self.contextPermissionPrompter =
+            contextPermissionPrompter
+            ?? ContextPermissionPromptController()
+        self.previewPresenter =
+            previewPresenter
+            ?? PreviewWindowController()
+        self.outputRouter = outputRouter
         self.overlay.onCancel = { [weak self] source in
             self?.cancelCurrentSession(source: source)
         }
@@ -403,6 +433,9 @@ final class AppCoordinator {
                         self?.openOnboarding()
                     }
                 }
+            case .previewDemo:
+                runPreviewDemo()
+                return
             case .overlayDemo:
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
@@ -603,6 +636,8 @@ final class AppCoordinator {
         }
         visualFeedbackPreviewTask?.cancel()
         visualFeedbackPreviewTask = nil
+        previewDemoTask?.cancel()
+        previewDemoTask = nil
         overlay.hide()
         overlay.updateVisualFeedbackConfiguration(
             config.visualFeedback
@@ -691,6 +726,7 @@ final class AppCoordinator {
         startRecordingTask = nil
         processingTask?.cancel()
         processingTask = nil
+        previewPresenter.dismiss()
         stopRecordingLevelUpdates()
         clearPendingRetry()
 
@@ -707,6 +743,8 @@ final class AppCoordinator {
         activeSessionID = nil
         recordingStartedAt = nil
         recordingTranscriptionConfig = nil
+        recordingPreparedContext =
+            PreparedSkillContext()
         launchAppContext = nil
         overlay.hide()
         refreshReadyState()
@@ -721,6 +759,7 @@ final class AppCoordinator {
         startRecordingTask = nil
         processingTask?.cancel()
         processingTask = nil
+        previewPresenter.dismiss()
         pendingRetryExpiryTask?.cancel()
         pendingRetryExpiryTask = nil
         stopRecordingLevelUpdates()
@@ -738,6 +777,8 @@ final class AppCoordinator {
         activeSessionID = nil
         recordingStartedAt = nil
         recordingTranscriptionConfig = nil
+        recordingPreparedContext =
+            PreparedSkillContext()
         launchAppContext = nil
         overlay.hide()
     }
@@ -751,6 +792,8 @@ final class AppCoordinator {
         logger.info("Allocated recording session \(sessionID.uuidString, privacy: .public)")
         activeSessionID = sessionID
         launchAppContext = launchAppContextProvider()
+        recordingPreparedContext =
+            PreparedSkillContext()
         recordingTranscriptionConfig = config.transcription
             .resolvingVoiceMode(
                 for: launchAppContext,
@@ -799,6 +842,8 @@ final class AppCoordinator {
                     self.state = .idle
                     self.activeSessionID = nil
                     self.recordingTranscriptionConfig = nil
+                    self.recordingPreparedContext =
+                        PreparedSkillContext()
                     self.statusMenu?.update(state: .setupRequired, detail: message)
                     self.overlay.showError(message)
                     self.notifier.notify(title: L10n.text("OpenWhisper setup required"), body: message)
@@ -809,6 +854,72 @@ final class AppCoordinator {
                     )
                     self.openSettings()
                     return
+                }
+
+                let resolvedPlan =
+                    self.recordingTranscriptionConfig?
+                        .resolvedSkillPlan
+                    ?? .direct
+                self.statusMenu?.update(
+                    state: .processing,
+                    detail: L10n.text(
+                        "Checking selected text access"
+                    )
+                )
+                let preparedContext =
+                    await self.contextBroker.prepare(
+                        plan: resolvedPlan,
+                        launchAppContext:
+                            self.launchAppContext,
+                        contextConfig:
+                            self.config.context,
+                        privacyConfig:
+                            self.config.privacy,
+                        permissionPrompter:
+                            self.contextPermissionPrompter
+                    )
+                guard
+                    self.shouldContinue(
+                        sessionID: sessionID
+                    )
+                else {
+                    return
+                }
+                if preparedContext.shouldCancel {
+                    self.cancelCurrentSession()
+                    return
+                }
+                if
+                    let grant =
+                        preparedContext
+                            .persistentGrant
+                {
+                    self.config.context.setScope(
+                        grant.scope,
+                        skillID:
+                            grant.skillID,
+                        capability:
+                            grant.capability
+                    )
+                    if !self.snapshotPrivacyMode
+                        .isEnabled
+                    {
+                        try? self.configStore
+                            .save(self.config)
+                    }
+                }
+                self.recordingPreparedContext =
+                    preparedContext
+                if
+                    var frozenConfig =
+                        self.recordingTranscriptionConfig
+                {
+                    frozenConfig
+                        .skillPromptContext =
+                        preparedContext
+                            .promptContext
+                    self.recordingTranscriptionConfig =
+                        frozenConfig
                 }
 
                 logger.info("Runtime preflight passed; starting recording session")
@@ -855,6 +966,8 @@ final class AppCoordinator {
                 self.activeSessionID = nil
                 self.recordingStartedAt = nil
                 self.recordingTranscriptionConfig = nil
+                self.recordingPreparedContext =
+                    PreparedSkillContext()
                 self.refreshReadyState(detailOverride: error.localizedDescription, state: .error)
                 self.overlay.showError(error.localizedDescription)
                 self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
@@ -906,6 +1019,10 @@ final class AppCoordinator {
                         .allows(.voiceModes)
                 )
             recordingTranscriptionConfig = nil
+            let preparedContext =
+                recordingPreparedContext
+            recordingPreparedContext =
+                PreparedSkillContext()
             let injectionConfig = config.injection
             startProcessing(
                 audio: audio,
@@ -915,7 +1032,9 @@ final class AppCoordinator {
                 launchAppContext: launchAppContext,
                 attemptPolicy: .automatic,
                 deleteAudioWhenFinished: true,
-                automaticPasteAllowed: true
+                automaticPasteAllowed: true,
+                preparedSkillContext:
+                    preparedContext
             )
         } catch {
             logger.error("Stopping recording failed: \(error.localizedDescription, privacy: .public)")
@@ -924,6 +1043,8 @@ final class AppCoordinator {
             activeSessionID = nil
             recordingStartedAt = nil
             recordingTranscriptionConfig = nil
+            recordingPreparedContext =
+                PreparedSkillContext()
             statusMenu?.update(state: .error, detail: error.localizedDescription)
             overlay.showError(error.localizedDescription)
             notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
@@ -966,7 +1087,9 @@ final class AppCoordinator {
             launchAppContext: pendingRetry.launchAppContext,
             attemptPolicy: .manualRetry,
             deleteAudioWhenFinished: false,
-            automaticPasteAllowed: false
+            automaticPasteAllowed: false,
+            preparedSkillContext:
+                PreparedSkillContext()
         )
     }
 
@@ -978,7 +1101,9 @@ final class AppCoordinator {
         launchAppContext: LaunchAppContext?,
         attemptPolicy: TranscriptionAttemptPolicy,
         deleteAudioWhenFinished: Bool,
-        automaticPasteAllowed: Bool
+        automaticPasteAllowed: Bool,
+        preparedSkillContext:
+            PreparedSkillContext
     ) {
         let processingStarted = DispatchTime.now().uptimeNanoseconds
         let initialAudioBytes = Self.audioFileSize(at: audio.fileURL)
@@ -1030,6 +1155,161 @@ final class AppCoordinator {
                 }
                 guard canInject else { return }
 
+                let executionPlan =
+                    transcriptionConfig
+                        .resolvedSkillPlan
+                    ?? SkillResolver().resolve(
+                        config:
+                            transcriptionConfig
+                                .skills,
+                        launchAppContext: nil
+                    )
+                let route =
+                    await MainActor.run {
+                        self.outputRouter.route(
+                            plan:
+                                executionPlan,
+                            automaticPasteAllowed:
+                                automaticPasteAllowed,
+                            hasSelectionContext:
+                                preparedSkillContext
+                                    .selectionSnapshot
+                                    != nil
+                        )
+                    }
+                var deliveryAllowsAutomaticPaste =
+                    route == .automatic
+                var automaticFallbackReason:
+                    ClipboardFallbackReason =
+                        attemptPolicy
+                            == .manualRetry
+                            ? .retryRequiresManualPaste
+                            : .deliveryRequiresManualPaste
+                var expectedSelectionContext:
+                    SelectionContextSnapshot?
+
+                if route == .preview {
+                    await MainActor.run {
+                        self.overlay.hide()
+                        self.statusMenu?.update(
+                            state: .processing,
+                            detail: L10n.text(
+                                "Waiting for preview"
+                            )
+                        )
+                    }
+                    let decision =
+                        await self.previewPresenter
+                            .present(
+                                PreviewRequest(
+                                    skillID:
+                                        executionPlan
+                                            .skill.id,
+                                    skillVersion:
+                                        executionPlan
+                                            .skill.version,
+                                    skillName:
+                                        executionPlan
+                                            .skill
+                                            .localizedName,
+                                    originalTranscript:
+                                        prepared.rawText,
+                                    resultText:
+                                        prepared.finalText,
+                                    selectedText:
+                                        preparedSkillContext
+                                            .promptContext
+                                            .selection,
+                                    contextCapabilities:
+                                        preparedSkillContext
+                                            .grantedCapabilities,
+                                    validationPassed:
+                                        prepared.metrics
+                                            .skillValidationIssueCodes
+                                            .isEmpty,
+                                    allowsSelectionReplacement:
+                                        preparedSkillContext
+                                            .selectionSnapshot
+                                            != nil
+                                )
+                            )
+                    guard !Task.isCancelled else {
+                        return
+                    }
+                    switch decision {
+                    case .replaceSelection:
+                        deliveryAllowsAutomaticPaste =
+                            true
+                        expectedSelectionContext =
+                            preparedSkillContext
+                                .selectionSnapshot
+                    case .pasteToTarget:
+                        deliveryAllowsAutomaticPaste =
+                            true
+                    case .copy:
+                        deliveryAllowsAutomaticPaste =
+                            false
+                        automaticFallbackReason =
+                            .deliveryRequiresManualPaste
+                    case .cancel:
+                        await MainActor.run {
+                            guard
+                                self.shouldContinue(
+                                    sessionID:
+                                        sessionID
+                                )
+                            else {
+                                return
+                            }
+                            let totalProcessingMs =
+                                self.elapsedMilliseconds(
+                                    since:
+                                        processingStarted
+                                )
+                            self.recordLatency(
+                                prepared: prepared,
+                                outcome: nil,
+                                injectMs: 0,
+                                totalProcessingMs:
+                                    totalProcessingMs,
+                                errorCategory:
+                                    "preview_cancelled"
+                            )
+                            self.recordProductMetric(
+                                event:
+                                    .dictationDiscarded,
+                                provider:
+                                    prepared.metrics
+                                        .transcription
+                                        .provider,
+                                audioDurationMs:
+                                    prepared.metrics
+                                        .transcription
+                                        .audioDurationMs,
+                                totalProcessingMs:
+                                    totalProcessingMs
+                            )
+                            self.clearPendingRetry()
+                            self.state = .idle
+                            self.activeSessionID =
+                                nil
+                            self.statusMenu?.update(
+                                state: .ready,
+                                detail: L10n.text(
+                                    "Preview cancelled"
+                                )
+                            )
+                            self.overlay.hide()
+                            self.launchAppContext =
+                                nil
+                        }
+                        return
+                    }
+                } else if route == .copyOnly {
+                    deliveryAllowsAutomaticPaste =
+                        false
+                }
+
                 let injectStarted = DispatchTime.now().uptimeNanoseconds
                 let outcome: InjectionOutcome
                 do {
@@ -1038,7 +1318,12 @@ final class AppCoordinator {
                         preserveClipboard: injectionConfig.preserveClipboard,
                         restoreDelayMilliseconds: injectionConfig.restoreDelayMilliseconds,
                         launchAppContext: launchAppContext,
-                        automaticPasteAllowed: automaticPasteAllowed
+                        automaticPasteAllowed:
+                            deliveryAllowsAutomaticPaste,
+                        automaticPasteFallbackReason:
+                            automaticFallbackReason,
+                        expectedSelectionContext:
+                            expectedSelectionContext
                     )
                 } catch is CancellationError {
                     throw CancellationError()
@@ -1984,7 +2269,9 @@ final class AppCoordinator {
             launchAppContext: launchAppContext,
             attemptPolicy: .manualRetry,
             deleteAudioWhenFinished: false,
-            automaticPasteAllowed: false
+            automaticPasteAllowed: false,
+            preparedSkillContext:
+                PreparedSkillContext()
         )
     }
 
@@ -2082,6 +2369,96 @@ final class AppCoordinator {
 
         logger.info("Calling microphone access request helper")
         try await recorder.ensureRecordingPermission()
+    }
+
+    private func runPreviewDemo() {
+        let request = PreviewRequest(
+            skillID:
+                SkillRegistry
+                    .contextRewriteSkillID,
+            skillVersion: "1.0.0",
+            skillName: L10n.text(
+                "Context Rewrite"
+            ),
+            originalTranscript:
+                L10n.text(
+                    "Keep the same tone, shorten it, and preserve the release date and API version."
+                ),
+            resultText:
+                """
+                Ship the macOS release on July 14, 2026.
+
+                Preserve API v2 compatibility and keep the existing security review gate.
+                """,
+            selectedText:
+                """
+                We are planning to ship the macOS release on July 14, 2026. Please make sure API v2 remains compatible, and do not remove the existing security review gate.
+                """,
+            contextCapabilities: [
+                .selection,
+            ],
+            validationPassed: true,
+            allowsSelectionReplacement:
+                true
+        )
+        previewDemoTask?.cancel()
+        previewDemoTask =
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+                _ = await self.previewPresenter
+                    .present(request)
+            }
+
+        guard
+            let outputURL =
+                AppLaunchMode
+                    .previewSnapshotOutputURL(
+                        environment:
+                            ProcessInfo
+                                .processInfo
+                                .environment,
+                        arguments:
+                            ProcessInfo
+                                .processInfo
+                                .arguments
+                    )
+        else {
+            return
+        }
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 1
+        ) { [weak self] in
+            do {
+                guard
+                    let snapshotter =
+                        self?
+                            .previewPresenter
+                            as? any PreviewSnapshotCapturing
+                else {
+                    throw ProductSurfaceSnapshotError
+                        .missingContentView
+                }
+                try snapshotter
+                    .writePreviewSnapshot(
+                        to: outputURL
+                    )
+                NSApplication.shared
+                    .terminate(nil)
+            } catch {
+                print(
+                    "OpenWhisper Preview self-capture failed: "
+                        + error.localizedDescription
+                )
+            }
+        }
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 10
+        ) {
+            NSApplication.shared
+                .terminate(nil)
+        }
     }
 
     private func runOverlayDemo() {
@@ -2372,6 +2749,11 @@ final class AppCoordinator {
         transcriptionConfig: TranscriptionConfig,
         injectionConfig: InjectionConfig
     ) throws {
+        var retryTranscriptionConfig =
+            transcriptionConfig
+        retryTranscriptionConfig
+            .skillPromptContext =
+            SkillPromptContext()
         let expiration = Date().addingTimeInterval(
             TimeInterval(max(1, config.privacy.failedAudioRetentionHours)) * 60 * 60
         )
@@ -2380,7 +2762,8 @@ final class AppCoordinator {
                 id: UUID(),
                 audio: audio,
                 launchAppContext: launchAppContext,
-                transcriptionConfig: transcriptionConfig,
+                transcriptionConfig:
+                    retryTranscriptionConfig,
                 injectionConfig: injectionConfig,
                 expiresAt: expiration
             )
@@ -2401,7 +2784,8 @@ final class AppCoordinator {
             id: UUID(),
             audio: RecordedAudio(fileURL: retryURL, durationMs: audio.durationMs),
             launchAppContext: launchAppContext,
-            transcriptionConfig: transcriptionConfig,
+            transcriptionConfig:
+                retryTranscriptionConfig,
             injectionConfig: injectionConfig,
             expiresAt: expiration
         )
@@ -2476,6 +2860,21 @@ final class AppCoordinator {
                 transcriptionConfig
                     .resolvedSkillPlan?
                     .skill.version,
+            contextCapabilityCodes:
+                transcriptionConfig
+                    .skillPromptContext
+                    .selection == nil
+                    ? []
+                    : [
+                        SkillCapability
+                            .selection
+                            .rawValue,
+                    ],
+            selectionCharacterCount:
+                transcriptionConfig
+                    .skillPromptContext
+                    .selection?
+                    .count ?? 0,
             estimatedPolishInputTokens: 0,
             estimatedPolishOutputTokens: 0,
             injectMs: 0,
@@ -2559,6 +2958,12 @@ final class AppCoordinator {
             skillValidationIssueCodes:
                 prepared.metrics
                     .skillValidationIssueCodes,
+            contextCapabilityCodes:
+                prepared.metrics
+                    .contextCapabilityCodes,
+            selectionCharacterCount:
+                prepared.metrics
+                    .selectionCharacterCount,
             estimatedPolishInputTokens: prepared.metrics.estimatedPolishInputTokens,
             estimatedPolishOutputTokens: prepared.metrics.estimatedPolishOutputTokens,
             injectMs: injectMs,
