@@ -555,7 +555,7 @@ final class TextInjector: TextInjecting {
     }
 }
 
-private struct PasteboardSnapshot {
+struct PasteboardSnapshot: Equatable {
     let items: [[NSPasteboard.PasteboardType: Data]]
 
     static func capture(from pasteboard: NSPasteboard) -> PasteboardSnapshot {
@@ -578,5 +578,9 @@ private struct PasteboardSnapshot {
             }
             pasteboard.writeObjects([pasteboardItem])
         }
+    }
+
+    func matches(_ pasteboard: NSPasteboard) -> Bool {
+        Self.capture(from: pasteboard) == self
     }
 }

@@ -466,7 +466,13 @@ Sources/OpenWhisper/LatencyRecorder.swift
 - 未发送事件的回退记录为 `clipboard`；
 - 旧版 `pasted` 历史只按“已发送粘贴（旧记录）”展示，不追溯性声称已确认插入。
 
-剩余工作是安装版 Notes/TextEdit/Terminal 和第三方编辑器矩阵，不是继续用单一成功状态覆盖差异。
+安装版自动矩阵现已证明：
+
+- TextEdit 观察到精确 AX value/range 变化，结果为 `inserted_verified`；
+- Terminal 在一次性 HOME/ZDOTDIR、关闭 history 的隔离 shell 中执行生成的 proof 命令；AX 无法证明精确替换时稳定返回 `paste_dispatched`，转写保留在剪贴板，证据采集后恢复用户原剪贴板；
+- 目标进程、proof 文件和临时 HOME 均在验收后删除。
+
+剩余工作是 Notes 和第三方编辑器的隐私安全手动矩阵，不是继续用单一成功状态覆盖差异。自动化不得为了测试而读取或修改用户已有 Notes 内容。
 
 涉及文件：
 

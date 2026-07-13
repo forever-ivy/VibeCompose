@@ -187,7 +187,7 @@ The original clipboard is restored only after `.insertedAndVerified` and only wh
 
 Paste-target waiting is implemented by `AsyncPasteTargetWaiter` with `ContinuousClock` and cancellation-aware `Task.sleep`. Focus checks and application activation briefly execute on MainActor, while the wait itself no longer blocks it. Cancelling the active dictation session also cancels pending insertion and prevents a late outcome from updating HUD or history.
 
-The remaining acceptance boundary is application coverage: targets that expose a stable value/range transition can reach the verified state, while browser composers, Terminal-style controls, and some custom editors may legitimately remain in the “Paste sent” state. Installed-app Notes/TextEdit/Terminal and third-party editor matrices remain release evidence rather than assumptions.
+The remaining acceptance boundary is application coverage: targets that expose a stable value/range transition can reach the verified state, while browser composers, Terminal-style controls, and some custom editors may legitimately remain in the “Paste sent” state. The installed matrix now proves TextEdit as `inserted_verified` and Terminal as `paste_dispatched` with an isolated no-history shell, generated execution proof, retained transcript during the unverified branch, complete clipboard restoration after evidence capture, and no leftover target process or temporary artifact. Notes and third-party editors remain release evidence rather than assumptions because automation must not inspect or mutate personal note data.
 
 ## 6. Storage and Privacy
 
@@ -368,9 +368,9 @@ Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the 
 
 The current alpha must not be described as commercially release-ready while these remain:
 
-- insertion-verified, paste-dispatched, and clipboard results are separate,
-  but the trusted installed-app Notes/TextEdit/Terminal focus matrix remains
-  incomplete;
+- insertion-verified, paste-dispatched, and clipboard results are separate;
+  installed TextEdit and an isolated Terminal process now have reproducible
+  evidence, while Notes and third-party editor coverage remains incomplete;
 - Settings now uses `NavigationSplitView` with immediate persistence, and the
   HUD implementation respects Reduce Motion, strengthens Increase Contrast,
   posts state announcements, and has deterministic installed-app pixel gates

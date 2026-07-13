@@ -40,6 +40,25 @@ struct AppLaunchModeTests {
                 ]
             )?.path == "/tmp/paste.json"
         )
+        #expect(
+            AppLaunchMode.pasteAcceptanceTarget(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--paste-acceptance-target=terminal",
+                ]
+            ) == .terminal
+        )
+        #expect(
+            AppLaunchMode.pasteAcceptanceTarget(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--paste-acceptance-target",
+                    "unknown",
+                ]
+            ) == nil
+        )
     }
 
     @Test

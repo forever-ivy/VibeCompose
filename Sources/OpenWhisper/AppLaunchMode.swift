@@ -201,6 +201,42 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
+    static func pasteAcceptanceTarget(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> PasteAcceptanceTarget? {
+        if let value = environment[
+            "OPENWHISPER_PASTE_ACCEPTANCE_TARGET"
+        ]?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased(),
+            !value.isEmpty
+        {
+            return PasteAcceptanceTarget(rawValue: value)
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--paste-acceptance-target",
+               index + 1 < arguments.count {
+                let value = arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                return PasteAcceptanceTarget(rawValue: value)
+            }
+            if argument.hasPrefix("--paste-acceptance-target=") {
+                let value = String(
+                    argument.dropFirst(
+                        "--paste-acceptance-target=".count
+                    )
+                )
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                return PasteAcceptanceTarget(rawValue: value)
+            }
+        }
+        return .textEdit
+    }
+
     static func accessibilityAuditOutputURL(
         environment: [String: String],
         arguments: [String] = []

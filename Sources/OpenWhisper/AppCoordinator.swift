@@ -1845,11 +1845,21 @@ final class AppCoordinator {
     }
 
     private func runPasteAcceptance() {
-        guard let outputURL = AppLaunchMode.pasteAcceptanceOutputURL(
-            environment: ProcessInfo.processInfo.environment,
-            arguments: ProcessInfo.processInfo.arguments
-        ) else {
-            print("Paste acceptance failed: missing --paste-acceptance-output")
+        let environment = ProcessInfo.processInfo.environment
+        let arguments = ProcessInfo.processInfo.arguments
+        guard
+            let outputURL = AppLaunchMode.pasteAcceptanceOutputURL(
+                environment: environment,
+                arguments: arguments
+            ),
+            let target = AppLaunchMode.pasteAcceptanceTarget(
+                environment: environment,
+                arguments: arguments
+            )
+        else {
+            print(
+                "Paste acceptance failed: missing output or invalid target"
+            )
             NSApplication.shared.terminate(nil)
             return
         }
@@ -1857,6 +1867,7 @@ final class AppCoordinator {
         Task { @MainActor [injector] in
             await PasteAcceptanceRunner.run(
                 injector: injector,
+                target: target,
                 outputURL: outputURL
             )
             NSApplication.shared.terminate(nil)

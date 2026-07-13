@@ -70,7 +70,7 @@ macOS 首发策略：
 当前仍阻断商业发布的事项：
 
 - Developer ID、固定 Team ID、notarization/staple、生产 updater 托管/密钥、真实签名 appcast 和 rollback 实证未完成；
-- 已将“确认插入”“仅发送粘贴并保留剪贴板”“纯剪贴板兜底”拆为三种结果，并用同一 AX target 的前后 value/range 变化验证插入；TextEdit 自动预检已通过，真实 Notes/Terminal/第三方编辑器多应用焦点矩阵仍未完成；
+- 已将“确认插入”“仅发送粘贴并保留剪贴板”“纯剪贴板兜底”拆为三种结果，并用同一 AX target 的前后 value/range 变化验证插入；TextEdit 已证明 `inserted_verified`，隔离 Terminal 已证明 `paste_dispatched`、执行 proof、转写保留和最终原剪贴板恢复；Notes 与第三方编辑器矩阵仍未完成；
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
 - HUD 的 Reduce Motion / Increase Contrast 已加入安装版确定性像素门禁；Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与交互式高对比度验收仍未完成；
 - 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
@@ -353,7 +353,8 @@ Application Support/OpenWhisper
 
 - 无焦点、只读、按钮、密码框、窗口切换、进程重启时均不发送粘贴事件。
 - 失败结果完整留在剪贴板。
-- 自动化测试和真实 TextEdit/Notes/Terminal 场景均通过。
+- 自动化测试、真实安装版 TextEdit 以及隔离无历史 Terminal 场景通过。
+- Notes 必须在不读取或修改用户已有笔记的前提下完成手动验收。
 
 #### OW-SEC-002 Managed Token 目标白名单
 
@@ -536,13 +537,13 @@ Application Support/OpenWhisper
 - `scripts/permission_surface_acceptance.sh` 从 `/Applications/OpenWhisper.app` 生成 Account 权限表面，并用 Vision OCR 要求麦克风和辅助功能两张卡片都显示 `Granted`/`已授权`；该路径读取真实 TCC 状态，但仍使用隐私隔离配置和空用户内容。
 - `OverlayController` 的辅助显示选项已改为可注入 provider；正常运行仍实时读取 macOS Reduce Motion / Increase Contrast，视觉验收则显式固定基线并生成 Reduce Motion 双时点与 Increase Contrast 快照。门禁要求 Reduce Motion 波形跨时点零/近零像素漂移、增强对比度产生明确像素变化且两者都不改变对应 HUD 几何。
 - 本机可用 Keychain 中的 Apple Development 身份仍被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，因此当前构建只能在显式本地调试开关下回退为稳定 designated requirement 的 ad-hoc 签名；这仍然阻断 Developer ID 商业发布。
-- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T111828Z` 安装版证据已在隔离 TextEdit 进程中观察到 marker，结果为 `inserted_verified`，并在验证后恢复原剪贴板。该结果只关闭当前 TextEdit 自动预检，不替代 Notes/Terminal/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
+- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T115507Z` 安装版证据覆盖隔离 TextEdit 与 Terminal：TextEdit 观察到 `inserted_verified`；Terminal 使用一次性 HOME/ZDOTDIR、关闭 history，只执行生成的 marker proof，观察到 `paste_dispatched`、proof 文件、转写剪贴板保留，并在记录后恢复验收前完整剪贴板。两类目标进程和临时文件均已清理。该结果不替代 Notes/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
 
 本轮最新安装版证据：
 
-- 完整检查：2026-07-13 19:09（UTC+8）执行 `OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh`，退出码 `0`；
+- 完整检查：2026-07-13 19:52（UTC+8）执行 `OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh`，退出码 `0`；
 - 已授权权限表面：`dist/permission-surface-acceptance/20260713T111946Z`，麦克风与辅助功能标签均被识别，`已授权` 状态识别数为 `2`；
-- TextEdit 安全粘贴：`dist/paste-acceptance/20260713T111828Z`，结果为 `inserted_verified` 且原剪贴板已恢复；
+- TextEdit / Terminal 安全粘贴矩阵：`dist/paste-acceptance/20260713T115507Z`，分别为 `inserted_verified` 与带执行 proof 的 `paste_dispatched`，两者均在证据采集后恢复验收前剪贴板；
 - 无障碍结构：`dist/accessibility-acceptance/20260713T111949Z`，13 个产品表面均无可操作控件名称缺失；
 - 产品表面高对比度：`dist/accessibility-visual-acceptance/20260713T084453Z`；
 - History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T112011Z`；
@@ -552,7 +553,7 @@ Application Support/OpenWhisper
 
 - clean TCC 首次成功听写；
 - HUD 已完成 Reduce Motion / Increase Contrast 安装版确定性视觉门禁；Settings、Onboarding、History、Terminology 和 Quick Add 已完成安装版无障碍结构预检，但完整键盘/VoiceOver/高对比度交互验收仍未完成；
-- TextEdit 自动安全粘贴预检已通过；真实安装版 F5、ESC、inline close、Retry，以及 Notes/Terminal/第三方编辑器的 paste/clipboard 矩阵仍未完成。
+- TextEdit 与隔离 Terminal 自动安全粘贴预检已通过；真实安装版 F5、ESC、inline close、Retry，以及 Notes/第三方编辑器的 paste/clipboard 矩阵仍未完成。
 
 ## 8. 性能与可靠性
 
@@ -879,7 +880,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-016 | P2 | Product metrics（本地、默认关闭、汇总分析与自愿导出已实现；待真实 Beta 指标验证） | Privacy spec | 无敏感内容事件 |
 | OW-MAC-017 | P2 | Voice Modes（Auto 决策引擎与 Direct 快路径已实现，待模式 UI/商业模块） | Text polish engine | Direct 无额外延迟 |
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
-| OW-MAC-019 | P2 | App compatibility matrix | Closed Beta | 目标 App 成功/降级明确 |
+| OW-MAC-019 | P2 | App compatibility matrix（TextEdit/隔离 Terminal 自动证据已完成） | Closed Beta | Notes 与目标第三方 App 成功/降级明确 |
 | OW-MAC-020 | P2 | Support diagnostics bundle（已实现，待安装版交互验收） | Redaction | 导出包无 Token/正文/音频 |
 | OW-MAC-021 | P1 | 音频 metadata-first 与流式 multipart（已实现） | Provider boundary | 25 MB/symlink 在网络前拒绝，上传不构造内存 body |
 | OW-MAC-022 | P1 | 技术字面量与语言/标点偏好（已实现） | Normalizer/Polish | literal round-trip，token 破坏时安全回退 |

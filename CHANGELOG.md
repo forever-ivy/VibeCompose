@@ -39,5 +39,10 @@
   transcription, and AI Polish: classified failures, one-shot authentication
   refresh, `Retry-After` handling, exponential backoff with jitter, independent
   route circuit breakers, and cancellation-safe half-open probes.
+- Expanded installed paste acceptance from TextEdit to a privacy-isolated
+  TextEdit/Terminal matrix. Terminal uses a disposable HOME with history
+  disabled and a generated proof file, verifies the expected
+  `paste_dispatched` clipboard fallback, removes every temporary artifact, and
+  restores the complete pre-acceptance clipboard snapshot.
 
 OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.

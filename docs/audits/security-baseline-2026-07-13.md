@@ -55,7 +55,7 @@ Managed ASR、Recovery ASR 与 AI Polish 分 route 熔断；half-open 探测取�
 
 | 审计 ID | 状态 | 当前证据 | 残余工作 |
 | --- | --- | --- | --- |
-| OW-AUD-001 错误目标自动粘贴 | 部分关闭 | `TextInjector.injectionPlan` 不再把旧启动上下文视为可编辑证明；Retry/Recovery Retry 强制复制；发送前重新检查当前可编辑焦点与同一 AX target；发送后用 AX value/range 前后快照区分 `inserted_verified`、`paste_dispatched` 和 `clipboard`，无法确认时保留转写剪贴板；安装版 TextEdit 自动验收已观察到 `inserted_verified` 并恢复原剪贴板 | 需完成真实 Notes/Terminal 及第三方编辑器矩阵；不支持可靠 AX 文本快照的目标应稳定落入 `paste_dispatched`，不能误报已确认插入 |
+| OW-AUD-001 错误目标自动粘贴 | 部分关闭 | `TextInjector.injectionPlan` 不再把旧启动上下文视为可编辑证明；Retry/Recovery Retry 强制复制；发送前重新检查当前可编辑焦点与同一 AX target；发送后用 AX value/range 前后快照区分 `inserted_verified`、`paste_dispatched` 和 `clipboard`，无法确认时保留转写剪贴板；安装版 TextEdit 已观察到 `inserted_verified`；隔离 Terminal 使用一次性无历史 HOME 执行生成 proof，稳定得到 `paste_dispatched`、转写保留和验收前剪贴板恢复 | 需完成不读取/修改个人数据的 Notes 手动矩阵及第三方编辑器矩阵；不支持可靠 AX 文本快照的目标应稳定落入 `paste_dispatched`，不能误报已确认插入 |
 | OW-AUD-002 Managed Token 任意 endpoint | 关闭 | `ManagedEndpointPolicy` 固定 `https://chatgpt.com` 两个 path；拒绝 query、fragment、userinfo、非 443 端口；`SecureHTTPClient` 拒绝重定向；自定义 endpoint 只使用独立 Keychain API Key；`OPENAI_API_KEY` 单独存在不能启用或授权 Recovery | 继续保留 managed/user-owned credential 隔离和重定向回归测试 |
 | OW-AUD-003 Recovery 路径逃逸 | 关闭 | 记录只持久化 UUID；文件名由 UUID 派生；Recovery 根目录、JSONL index、Audio 目录与音频文件均检查 symlink；同时检查普通文件、包含关系、25 MB 与 RIFF/WAVE 头；启动时把遗留音频权限收紧为 `0600` | 增加更大规模损坏 JSONL/path fuzz 作为持续门禁 |
 | OW-AUD-004 refresh 竞态/注销复活 | 关闭 | `RefreshFlight` 合并并发 refresh；generation 与原 refresh token 双重提交校验；Sign out 取消 flight 并递增 generation | 可进一步迁移到 actor，减少锁式状态管理复杂度 |
@@ -153,7 +153,7 @@ excludeSensitiveApps = true
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ```
 
-2026-07-13 19:09（UTC+8）本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
+2026-07-13 19:52（UTC+8）本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
 
 同日对 `/Applications/OpenWhisper.app` 的启动清理进行实机检查：原有 Recovery WAV 从 `0644` 被统一收紧为 `0600`，应用以 Settings 模式保持运行。
 
@@ -162,7 +162,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 同日最新安装版自动验收证据：
 
 - `dist/permission-surface-acceptance/20260713T111946Z`：安装版 Settings → Account 黑盒截图中麦克风与辅助功能标签均被 Vision 识别，`已授权` 状态识别数为 `2`；
-- `dist/paste-acceptance/20260713T111828Z`：隔离 TextEdit 进程观察到 `inserted_verified`，目标 marker 存在且原剪贴板已恢复；
+- `dist/paste-acceptance/20260713T115507Z`：隔离 TextEdit 观察到 `inserted_verified`；隔离无历史 Terminal 观察到 `paste_dispatched`、生成 proof 命令执行成功和转写保留；两者均恢复验收前完整剪贴板，且无目标进程或临时文件残留；
 - `dist/accessibility-acceptance/20260713T111949Z`：13 个产品表面的可操作控件均无缺失名称；
 - `dist/accessibility-visual-acceptance/20260713T084453Z`：六个 Settings pane、四步 Onboarding、History、Terminology 和 Quick Add 均输出稳定 2x 成对截图；统一逻辑分辨率上的局部边缘对比度全部提升；
 - `dist/product-surface-acceptance/20260713T112011Z`：History、Terminology 和 Quick Add 渲染、几何及非纯色门禁通过；
@@ -210,7 +210,7 @@ ad-hoc 本地构建，不构成 Developer ID、notarization/staple 或 clean TCC
 ## 8. 下一安全工作序列
 
 1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID、生产 Sparkle 与 Capability Policy 独立密钥/托管地址，完成真实签名、公证、签名 appcast、首份能力策略、更新回滚与事故演练；
-2. 在已通过 TextEdit 自动预检的基础上，完成安全粘贴真实 Notes/Terminal/第三方编辑器矩阵，验证 `inserted_verified`、`paste_dispatched`、`clipboard` 与剪贴板恢复行为均符合实现；
+2. 在已通过 TextEdit/隔离 Terminal 自动预检的基础上，完成不读取或修改个人笔记的 Notes 手动矩阵及第三方编辑器矩阵，验证 `inserted_verified`、`paste_dispatched`、`clipboard` 与剪贴板恢复行为均符合实现；
 3. 完成 clean TCC Onboarding、键盘和 VoiceOver 安装版验收；
 4. 把私有 Alpha 双语政策定稿为带永久运营主体、联系方式和结账条款的公开版本；
 5. 对磁盘满、SIGKILL 后重启、慢网络和大文件取消做持续压力测试。
