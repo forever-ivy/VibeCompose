@@ -56,6 +56,12 @@ final class PreferencesWindowController: NSWindowController {
                 VisualFeedbackPreview,
                 VisualFeedbackConfig
             ) -> Void = { _, _ in },
+        skillPackageStore:
+            SkillPackageStore = .init(),
+        styleCapsuleStore:
+            StyleCapsuleStore = .init(),
+        localAssetAccessEnabled:
+            Bool = true,
         focusPane: SettingsPane? = nil
     ) {
         let view = PreferencesView(
@@ -84,6 +90,12 @@ final class PreferencesWindowController: NSWindowController {
                 onHotkeyCaptureChanged,
             onPreviewVisualFeedback:
                 onPreviewVisualFeedback,
+            skillPackageStore:
+                skillPackageStore,
+            styleCapsuleStore:
+                styleCapsuleStore,
+            localAssetAccessEnabled:
+                localAssetAccessEnabled,
             focusPane: focusPane
         )
         .applyingAccessibilityDisplayOptionsOverride(
@@ -172,6 +184,8 @@ private extension SettingsPane {
             return "wand.and.stars"
         case .context:
             return "selection.pin.in.out"
+        case .terminology:
+            return "text.book.closed"
         case .paste:
             return "doc.on.clipboard"
         case .privacy:
@@ -376,6 +390,8 @@ private struct PreferencesView: View {
     @State private var showsThirdPartyLicenses = false
     @State private var thirdPartyLicenseMessage: String?
     @State private var thirdPartyLicenseMessageIsError = false
+    @State private var communitySkillInventory:
+        CommunitySkillInventory
 
     let authManager: ChatGPTAuthManager
     let onSave: (AppConfig) -> Result<Void, any Error>
@@ -404,6 +420,12 @@ private struct PreferencesView: View {
             VisualFeedbackConfig
         ) -> Void
     let windowStateStore: SettingsWindowStateStore
+    let skillPackageStore:
+        SkillPackageStore
+    let styleCapsuleStore:
+        StyleCapsuleStore
+    let localAssetAccessEnabled:
+        Bool
 
     init(
         initialConfig: AppConfig,
@@ -434,6 +456,12 @@ private struct PreferencesView: View {
                 VisualFeedbackPreview,
                 VisualFeedbackConfig
             ) -> Void,
+        skillPackageStore:
+            SkillPackageStore = .init(),
+        styleCapsuleStore:
+            StyleCapsuleStore = .init(),
+        localAssetAccessEnabled:
+            Bool = true,
         focusPane: SettingsPane? = nil
     ) {
         let windowStateStore = SettingsWindowStateStore()
@@ -444,6 +472,21 @@ private struct PreferencesView: View {
         _persistedConfig = State(
             initialValue: initialConfig
         )
+        _communitySkillInventory =
+            State(
+                initialValue:
+                    localAssetAccessEnabled
+                    ? skillPackageStore
+                        .loadInventory(
+                            config:
+                                initialConfig
+                                    .communitySkills
+                        )
+                    : CommunitySkillInventory(
+                        packages: [],
+                        rejected: []
+                    )
+            )
         _showsAdvancedRecovery = State(initialValue: false)
         _permissionStatusMonitor = StateObject(wrappedValue: PermissionStatusMonitor())
         _terminologyImportMessage = State(initialValue: Self.terminologyStatusMessage(for: initialConfig))
@@ -501,6 +544,12 @@ private struct PreferencesView: View {
             onHotkeyCaptureChanged
         self.onPreviewVisualFeedback =
             onPreviewVisualFeedback
+        self.skillPackageStore =
+            skillPackageStore
+        self.styleCapsuleStore =
+            styleCapsuleStore
+        self.localAssetAccessEnabled =
+            localAssetAccessEnabled
         self.windowStateStore = windowStateStore
     }
 
@@ -689,6 +738,7 @@ private struct PreferencesView: View {
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
             refreshLicenseStatus()
+            refreshCommunitySkillInventory()
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatGPTAuthStateDidChange)) { _ in
             authSnapshot = authManager.authSnapshot()
@@ -702,6 +752,7 @@ private struct PreferencesView: View {
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
             refreshLicenseStatus()
+            refreshCommunitySkillInventory()
         }
         .task {
             providerPolicySnapshot = await providerCapabilityPolicy.refresh(
@@ -726,7 +777,7 @@ private struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, settings, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID from this Mac. This action cannot be undone."
+                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Style Capsules, installed Community Skills, settings, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID from this Mac. This action cannot be undone."
                 )
             )
         }
@@ -769,6 +820,12 @@ private struct PreferencesView: View {
 
     private var activeSection: SettingsPane {
         selectedSection ?? .account
+    }
+
+    private var availableSkillRegistry:
+        SkillRegistry
+    {
+        communitySkillInventory.registry
     }
 
     private var sectionHeader: some View {
@@ -822,6 +879,10 @@ private struct PreferencesView: View {
             return L10n.text(
                 "Control which Skills may read only the text you explicitly select."
             )
+        case .terminology:
+            return L10n.text(
+                "Manage personal terminology, deterministic corrections, Domain Packs, conflicts, and professional-review risk."
+            )
         case .paste:
             return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
         case .privacy:
@@ -844,6 +905,8 @@ private struct PreferencesView: View {
             aiPolishCard
         case .context:
             contextCard
+        case .terminology:
+            terminologyCard
         case .paste:
             settingsCard(title: "Paste & Clipboard") {
                 Toggle(
@@ -977,6 +1040,24 @@ private struct PreferencesView: View {
         textPolishUsage = textPolishUsageDirectoryURL.map {
             Self.loadTextPolishUsage(directoryURL: $0)
         } ?? [:]
+    }
+
+    private func refreshCommunitySkillInventory() {
+        guard localAssetAccessEnabled
+        else {
+            communitySkillInventory =
+                CommunitySkillInventory(
+                    packages: [],
+                    rejected: []
+                )
+            return
+        }
+        communitySkillInventory =
+            skillPackageStore
+                .loadInventory(
+                    config:
+                        config.communitySkills
+                )
     }
 
     private func refreshRecentHistory() {
@@ -1930,7 +2011,7 @@ private struct PreferencesView: View {
                             .font(.system(size: 12, weight: .semibold))
                         Text(
                             L10n.text(
-                                "Deletes settings, terminology, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID."
+                                "Deletes settings, terminology, custom Style Capsules, installed Community Skills, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID."
                             )
                         )
                         .font(.system(size: 11))
@@ -1967,6 +2048,7 @@ private struct PreferencesView: View {
             recoveryMessageIsError = false
             authSnapshot = authManager.authSnapshot()
             browserBridgeSnapshot = authManager.browserBridgeSnapshot()
+            refreshCommunitySkillInventory()
             privacyMessage = L10n.text("All OpenWhisper data was deleted from this Mac.")
             privacyMessageIsError = false
             refreshLicenseStatus()
@@ -2569,6 +2651,25 @@ private struct PreferencesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    private var terminologyCard:
+        some View
+    {
+        settingsCard(
+            title: "Terminology"
+        ) {
+            VStack(
+                alignment: .leading,
+                spacing: 14
+            ) {
+                TerminologyPackSettingsView(
+                    config: $config
+                )
+                Divider()
+                terminologyDictionarySection
+            }
+        }
+    }
+
     private var contextCard: some View {
         settingsCard(title: "Selected Text Context") {
             VStack(alignment: .leading, spacing: 14) {
@@ -2645,7 +2746,7 @@ private struct PreferencesView: View {
                 )
 
                 ForEach(
-                    SkillRegistry.builtIn
+                    availableSkillRegistry
                         .orderedDefinitions
                         .filter {
                             $0.allCapabilities
@@ -2751,6 +2852,17 @@ private struct PreferencesView: View {
                             .isEmpty
                     )
                 }
+
+                Divider()
+
+                StyleCapsuleSettingsView(
+                    config: $config,
+                    registry:
+                        availableSkillRegistry,
+                    store: styleCapsuleStore,
+                    localAssetAccessEnabled:
+                        localAssetAccessEnabled
+                )
             }
         }
     }
@@ -2778,6 +2890,22 @@ private struct PreferencesView: View {
                     .disabled(
                         !licenseSnapshot.allows(.voiceModes)
                     )
+
+                Divider()
+
+                CommunitySkillSettingsView(
+                    config: $config,
+                    inventory:
+                        $communitySkillInventory,
+                    store: skillPackageStore,
+                    localAssetAccessEnabled:
+                        localAssetAccessEnabled
+                )
+                .disabled(
+                    !licenseSnapshot.allows(
+                        .voiceModes
+                    )
+                )
 
                 Divider()
 
@@ -2857,7 +2985,7 @@ private struct PreferencesView: View {
                         $config.transcription.skills.defaultSkillID
                 ) {
                     ForEach(
-                        SkillRegistry.builtIn.orderedDefinitions
+                        availableSkillRegistry.orderedDefinitions
                     ) { skill in
                         Text(skill.localizedName)
                             .tag(skill.id)
@@ -2941,7 +3069,7 @@ private struct PreferencesView: View {
                         selection: $editingSkillID
                     ) {
                         ForEach(
-                            SkillRegistry.builtIn.orderedDefinitions
+                            availableSkillRegistry.orderedDefinitions
                         ) { skill in
                             Text(skill.localizedName)
                                 .tag(skill.id)
@@ -3010,7 +3138,7 @@ private struct PreferencesView: View {
 
     private var defaultSkillCaption: String {
         guard
-            let skill = SkillRegistry.builtIn.definition(
+            let skill = availableSkillRegistry.definition(
                 id: config.transcription.skills.defaultSkillID
             )
         else {
@@ -3051,7 +3179,7 @@ private struct PreferencesView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text(
-                SkillRegistry.builtIn
+                availableSkillRegistry
                     .definition(id: rule.skillID)?
                     .localizedName
                     ?? L10n.text("Direct")
@@ -3117,9 +3245,15 @@ private struct PreferencesView: View {
                 appName: editingSkillAppName,
                 bundleIdentifier: editingSkillBundleIdentifier,
                 skillID: editingSkillID,
-                isEnabled: existingRule?.isEnabled ?? true
+                isEnabled: existingRule?.isEnabled ?? true,
+                registry:
+                    availableSkillRegistry
             )
-            config.transcription.skills.upsert(rule)
+            config.transcription.skills.upsert(
+                rule,
+                registry:
+                    availableSkillRegistry
+            )
             skillMessage = L10n.format(
                 "Skill rule saved for %@.",
                 rule.appName ?? rule.bundleIdentifier
@@ -3216,7 +3350,11 @@ private struct PreferencesView: View {
             return
         }
         update(&rule)
-        config.transcription.skills.upsert(rule)
+        config.transcription.skills.upsert(
+            rule,
+            registry:
+                availableSkillRegistry
+        )
     }
 
     private var recoveryHistoryCard: some View {

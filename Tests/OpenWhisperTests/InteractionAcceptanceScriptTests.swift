@@ -18,6 +18,7 @@ func interactionAcceptanceUsesInstalledAppAndPrivatePresentationMode() throws {
     #expect(source.contains("--interaction-acceptance"))
     #expect(source.contains("--open-settings"))
     #expect(source.contains("--settings-pane"))
+    #expect(source.contains("context|terminology|paste"))
     #expect(source.contains("--open-onboarding"))
     #expect(source.contains("--onboarding-step"))
     #expect(source.contains("--open-history"))

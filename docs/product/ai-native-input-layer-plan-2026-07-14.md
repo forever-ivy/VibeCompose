@@ -1,14 +1,16 @@
 # OpenWhisper AI-native 输入层完整方案
 
 > 日期：2026-07-14
-> 状态：产品与技术方案 v1；Phase 1–3 已落地
+> 状态：产品与技术方案 v2；Phase 1–5 已落地，Phase 6 安全研究边界已完成
 > 当前基线：`0.1.0 Alpha`
 > 范围：macOS 原生客户端、Skills、上下文、个性化、视觉反馈与可自定义全局热键
-> 与现有计划的关系：本方案是当前 V1 听写闭环之上的下一阶段产品方向，不替代签名、公证、更新、权限和安全粘贴等发布门禁。
+> 与现有计划的关系：本方案是当前 V1 听写闭环之上的 AI-native 实施主线，不替代签名、公证、更新、权限和安全粘贴等发布门禁。
 
 ## 实施进度更新
 
-截至 2026-07-14，本方案已完成 Phase 0 决策确认、Phase 1 交互基础、Phase 2 Skill Runtime 内核和 Phase 3 选区上下文与 Preview：
+截至 2026-07-14，本方案已完成 Phase 0–5 的 macOS 本地产品能力，并完成 Phase 6 的 Registry、Connector 与 Action 安全研究边界。Phase 6 当前是“设计与门禁完成”，不是“已经开放远程 Registry 或外部动作”。
+
+Phase 1–3 已完成：
 
 - `HotkeyBinding`、旧配置迁移、快捷键录制控件、组合校验；
 - 候选快捷键预注册、配置持久化、失败回滚、启动时 F5 回退；
@@ -22,7 +24,7 @@
 - Hidden 下的菜单 Retry 与 Esc 取消；
 - Reduce Motion、Increase Contrast 和 VoiceOver 状态语义；
 - 安装版三模式自动验收脚本。
-- 六个稳定、版本化的内置 Skill ID；
+- 八个稳定、版本化的内置 Skill ID；
 - Voice Mode 配置无损迁移到 `skills`，新配置不再写回旧键；
 - 手动、本应用规则、全局默认和 Direct 回退的固定解析优先级；
 - 录音开始时冻结 Skill ID、版本和解析来源；
@@ -43,15 +45,51 @@
 - 脱敏诊断只记录上下文能力枚举和字符数；
 - 安装版视觉验收增加 Diff Preview 截图。
 
+Phase 4 已完成：
+
+- Work Formal、Team Chat、Technical Writing、English Business、Personal Casual 五个内置 Style Capsules；
+- Capsule 本地创建、样本文本本机分析、摘要编辑、按 Skill 分配、删除和导出；
+- 样本文本只在创建界面内存中参与分析，生成摘要后清空，默认不持久化；
+- Capsule 只对声明了 `styleCapsule` 能力且被用户分配的 Skill 生效；
+- Backend Engineering、Medical Terminology、Kubernetes 三个内置 Domain Packs；
+- 用户纠正、Skill 私有词条、用户普通术语、Domain Pack 和 ASR hints 的固定优先级；
+- Pack 与用户词条的冲突显示；
+- Medical 高风险 Pack 强制进入 Preview；
+- 录音开始时冻结 Style Capsule、术语 Pack、合并词条和最高风险；
+- 支持诊断只记录数量与风险，不记录 Capsule、Prompt、样本或术语正文。
+
+Phase 5 已完成：
+
+- `.openwhisperskill` 本地目录包导入；
+- 受限 `skill.yaml`、`prompt.md`、`terminology.csv`、`validators.json`、本地化、示例和 Golden cases；
+- 文件数、单文件、Prompt 和整包硬限制；
+- 路径穿越、软链接、可执行位、shebang、Mach-O、脚本、动态库和未知文件拒绝；
+- Community Skill v1 只允许 `voice`、可选 `selection` 和可选 `styleCapsule`；
+- `externalAction`、`actionPreview`、自定义网络、进程、Keychain 和任意文件访问继续拒绝；
+- 安装前权限、文件、输出策略和内容 SHA-256 审查；
+- 多版本安装、活动版本选择、回滚、禁用和卸载；
+- Skill Inspector 与本地 Golden contract runner；
+- 配置保留未知或已卸载 Skill ID，运行时无法加载时安全回退 Direct；
+- 示例模板与 SDK 文档进入仓库回归测试。
+
+Phase 6 研究边界已完成：
+
+- Registry 索引签名、包哈希、内容寻址缓存、密钥轮换、隔离和下架模型；
+- Connector Broker、凭据隔离、固定端点、类型化操作和 Action Preview 约束；
+- 明确 Registry 来源不能绕过本地包检查；
+- 明确当前版本不开放远程 Registry、任意 Action、Shell、文件系统、自定义网络或通用 MCP。
+
 对应实现与验收说明见：
 
 - `docs/engineering/hotkey-and-feedback.md`
 - `docs/engineering/skill-runtime.md`
 - `docs/engineering/context-and-preview.md`
+- `docs/engineering/community-skill-sdk.md`
+- `docs/engineering/registry-and-actions-boundary.md`
 - `scripts/feedback_mode_acceptance.sh`
 - `scripts/visual_acceptance.sh`
 
-Phase 4–6 仍按本文顺序执行。当前实现没有声称已经开放 Style Capsule、Terminology Packs、社区 Registry 或 Action Skills。
+当前实现已经开放本地 Style Capsules、内置 Terminology Packs 和本地声明式 Community Skill 导入；仍未开放远程社区 Registry、认证发布者或 Action Skills。
 
 ## 0. 执行结论
 
@@ -65,7 +103,7 @@ OpenWhisper 不应继续只被定义为“语音转文字工具”，而应升�
 
 1. 保留现有“一个快捷键开始、同一个快捷键停止”的单触发工作流。
 2. 默认快捷键仍为 `F5`，但用户可以在 Settings 中录制并保存自己的全局快捷键。
-3. 现有固定 Voice Modes 逐步迁移为声明式 Skills；迁移期间保持配置向后兼容。
+3. 现有固定 Voice Modes 已迁移为声明式 Skills，并保持配置向后兼容。
 4. 社区 Skill v1 只允许声明式配置、提示词、术语、示例和校验规则，不允许执行任意 Swift、JavaScript、Python、Shell 或任意网络代码。
 5. 上下文必须按能力显式授权；首个版本只优先支持“用户选中文本”，不默认读取整个窗口、屏幕或文档。
 6. 输出继续服从现有安全回填边界；Skill 无权绕过粘贴验证、敏感应用限制或 copy-only 策略。
@@ -80,13 +118,16 @@ OpenWhisper 不应继续只被定义为“语音转文字工具”，而应升�
 
 ### 1.1 已有可复用能力
 
-OpenWhisper 已经具备 Skills Runtime 所需的大部分底座：
+OpenWhisper 当前已具备 AI-native 输入层的本地运行底座：
 
 - 原生 AppKit + SwiftUI 菜单栏应用；
-- 全局 `F5` 开始、再次 `F5` 停止；
+- 可自定义全局快捷键，默认 `F5` 开始、同键停止；
 - 麦克风录音、转写、术语对齐和可选 AI Polish；
-- Direct、Reply、Email、Agent Plan、Code Prompt、Translate；
-- 按精确 Bundle Identifier 选择 Voice Mode；
+- Direct、Reply、Email、Backend Prompt、Code Prompt、Translate、Context Rewrite、Context Reply；
+- 按精确 Bundle Identifier 选择 Skill；
+- 用户授权选区、Diff Preview 和安全选区替换；
+- Style Capsules、分层术语和三个内置 Domain Packs；
+- 本地声明式 Community Skill 导入与版本管理；
 - 保守自动粘贴、确认插入、仅发送粘贴和剪贴板兜底；
 - Retry、History、Recovery、诊断和隐私留存策略；
 - 敏感应用排除；
@@ -96,16 +137,17 @@ OpenWhisper 已经具备 Skills Runtime 所需的大部分底座：
 
 ### 1.2 当前实现与目标差距
 
-| 能力 | 当前实现 | 目标 |
+| 能力 | 2026-07-14 已实现 | 下一边界 |
 | --- | --- | --- |
-| 触发热键 | 配置保存 `hotkeyKeyCode`，默认键码 `96`；UI 写死显示 `F5`；主热键未保存修饰键 | 可视化录制、自定义键码和修饰键、冲突检测、原子切换、失败回滚 |
-| Voice Mode | 固定 Swift 枚举 | 可版本化、可安装、可测试的声明式 Skill |
-| 应用规则 | 精确 Bundle Identifier | Bundle ID 继续作为稳定基础，未来再增加网站或工作区适配 |
-| 上下文 | 不读取窗口或文档内容 | 用户显式授权的选区、局部文本、有限会话窗口和 Style Capsule |
-| 术语 | 单一用户术语库 | 用户术语 + 可安装领域术语包 + Skill 私有术语 |
-| AI Polish | 固定 Prompt Builder | 系统安全外壳 + Skill Prompt Compiler + 输出校验 |
-| HUD | 固定 graphite 胶囊与九段波形 | Refined HUD、Blue Signal Frame、Hidden 三模式 |
-| 社区扩展 | 无 | 可审计的 `.openwhisperskill` 声明式包 |
+| 触发热键 | `HotkeyBinding` 保存键码和修饰键；录制、冲突检测、原子切换、失败回滚和 F5 启动回退已完成 | 保持单快捷键开始/停止；未来单独研究多动作快捷键 |
+| Voice Mode / Skill | 八个内置声明式 Skills；稳定 ID、版本、迁移、Resolver、Prompt Compiler 和 Validator 已完成 | 扩充官方 Skills，但不增加任意代码能力 |
+| 应用规则 | 精确 Bundle Identifier，录音开始时冻结 | Bundle ID 继续作为稳定基础；网站或工作区适配必须另行授权 |
+| 上下文 | 只读取用户授权的选区；支持 Style Capsule；不读取完整窗口、屏幕或文档 | `focusedParagraph` 和有限会话窗口仍未开放 |
+| 术语 | 用户词典 + Skill 私有术语 + Backend/Medical/Kubernetes Domain Packs | 后续可增加经过审查的 Pack，但优先级和高风险 Preview 不变 |
+| AI Polish | 固定安全外壳 + Skill Prompt Compiler + 本地 Validator + ASR 回退 | 提升质量评估，不放宽本地安全顺序 |
+| HUD | Refined HUD、Blue Signal Frame、Hidden 三模式 | 继续优化安装版多显示器和无障碍证据 |
+| 社区扩展 | 本地 `.openwhisperskill` 声明式包、Inspector、多版本和 Golden tests | 远程 Registry 与认证发布者仍未开放 |
+| 外部动作 | 未开放，导入时拒绝 `externalAction` 和 `actionPreview` | 仅在独立 Connector、Action Preview 和发布门禁完成后研究有限集成 |
 
 ## 2. 产品定位
 
@@ -272,11 +314,11 @@ BackendPrompt.openwhisperskill/
 
 ```yaml
 schemaVersion: 1
-id: app.openwhisper.skill.backend-prompt
+id: com.example.openwhisper.backend-prompt
 version: 1.0.0
 name: Backend Prompt Composer
-author: OpenWhisper
-minimumAppVersion: 0.2.0
+author: Example Publisher
+minimumAppVersion: 0.1.0
 
 triggers:
   manual: true
@@ -308,6 +350,12 @@ validators:
 ```
 
 Manifest 只能声明能力。它不能提升权限、指定任意文件路径、读取 Keychain、修改网络端点或关闭安全回填。
+
+当前 Community Skill v1 保留 `app.openwhisper.skill.*` 给内置 Skills；
+第三方包必须使用自己的反向域名 ID。`triggers` 和 `context` 字段当前只
+作为前向兼容声明，不会自动创建 App Rules，也不会覆盖 App 自己的选区
+字符预算。完整可执行规范见
+`docs/engineering/community-skill-sdk.md`。
 
 ### 5.4 运行流水线
 
@@ -649,7 +697,7 @@ Validator 失败时不直接投递，可：
 
 ### 10.1 分阶段模型
 
-#### Phase A：官方 Skills
+#### Phase A：官方 Skills（已完成基础集）
 
 - 随 App 发布；
 - 完整测试；
@@ -657,7 +705,7 @@ Validator 失败时不直接投递，可：
 - 明确权限和风险；
 - 与 App 版本一起回归。
 
-#### Phase B：本地导入
+#### Phase B：本地导入（已完成）
 
 - 用户导入 `.openwhisperskill`；
 - 安装前查看作者、版本、权限、文件清单和示例；
@@ -665,7 +713,7 @@ Validator 失败时不直接投递，可：
 - 拒绝软链接、路径穿越、超大文件和未知可执行内容；
 - 支持禁用、卸载和版本回滚。
 
-#### Phase C：社区 Registry
+#### Phase C：社区 Registry（研究边界完成，运行时未开放）
 
 - GitHub 仓库式分发；
 - 版本锁定；
@@ -675,7 +723,7 @@ Validator 失败时不直接投递，可：
 - 可复现测试集；
 - 安全报告和下架机制。
 
-#### Phase D：认证发布者
+#### Phase D：认证发布者（研究边界完成，运行时未开放）
 
 - 开源项目、公司、医院或专业组织维护；
 - 认证只证明发布者和包完整性，不承诺模型输出永远正确；
@@ -698,6 +746,9 @@ Validator 失败时不直接投递，可：
 
 社区内容被视为不可信数据。即使 `prompt.md` 要求“忽略 OpenWhisper 规则”，运行时也只能在系统固定安全外壳内生效。
 
+本地包规范、硬限制、Manifest、Golden case 和模板见
+`docs/engineering/community-skill-sdk.md`。
+
 ### 10.3 未来 Action Skills
 
 连接 GitHub、Linear、Notion、Jira、Slack 或 MCP 属于后续阶段，必须：
@@ -709,6 +760,10 @@ Validator 失败时不直接投递，可：
 - 显示将写入的账号、空间、对象和字段；
 - 支持撤销时优先提供撤销；
 - 不允许 Skill 直接得到通用 Shell 或文件系统权限。
+
+签名 Registry、撤销、Connector Broker 和 Action Preview 的研究结论见
+`docs/engineering/registry-and-actions-boundary.md`。当前导入器继续拒绝
+`externalAction` 与 `actionPreview`。
 
 ## 11. Blue Signal 视觉反馈系统
 
@@ -1026,7 +1081,7 @@ Press ⌃⌥D again to transcribe.
 
 ## 13. Settings 信息架构
 
-建议目标结构：
+macOS Alpha 已落地九个 Settings 页面：
 
 1. **Account & Permissions**
    - ChatGPT；
@@ -1039,25 +1094,26 @@ Press ⌃⌥D again to transcribe.
    - 语言；
    - 标点；
    - 录音上限。
-3. **Skills**
+3. **Appearance & Feedback**
+   - Refined HUD / Blue Signal Frame / Hidden；
+   - 强度、目标、文字、声音、通知和无障碍。
+4. **AI Polish & Skills**
+   - AI Polish 策略；
    - 默认 Skill；
-   - 已安装 Skills；
+   - 内置和已安装 Skills；
    - App Rules；
    - Skill Inspector；
-   - 导入 Skill。
-4. **Context**
+   - 本地 `.openwhisperskill` 导入、版本和卸载。
+5. **Context**
    - 各 Skill 权限；
    - 敏感 App；
-   - 选区和局部上下文；
+   - 当前只开放选区；
    - Style Capsules。
-5. **Terminology**
+6. **Terminology**
    - Personal Dictionary；
    - Domain Packs；
    - 冲突处理。
-6. **Appearance & Feedback**
-   - Refined HUD / Blue Signal Frame / Hidden；
-   - 强度、位置、文字、声音和无障碍。
-7. **Output**
+7. **Paste**
    - 自动回填；
    - Preview；
    - 剪贴板策略；
@@ -1075,11 +1131,14 @@ Press ⌃⌥D again to transcribe.
    - Updates；
    - Licenses。
 
-为避免 Settings 过度膨胀：
+为避免 Settings 过度膨胀，当前采用：
 
-- History、Terminology 和 Skill Inspector 可继续使用独立窗口；
+- History、完整 Personal Dictionary 和 Quick Add 继续使用独立窗口；
+- Domain Packs 与冲突概览保留在 Settings → Terminology；
+- Style Capsules 保留在 Settings → Context；
+- Community Skill 管理保留在 Settings → AI Polish；
 - 侧边栏只显示高频配置；
-- 社区 Registry 不进入初版 Settings；
+- 远程社区 Registry 不进入当前 Settings；
 - 高级恢复路线继续保持 Advanced，不成为默认故事。
 
 ## 14. 目标技术架构
@@ -1092,7 +1151,7 @@ HotkeyRecorderView
 HotkeyRegistrationService
 
 SkillRegistry
-SkillPackageLoader
+SkillPackageStore
 SkillResolver
 SkillPromptCompiler
 SkillValidatorEngine
@@ -1101,6 +1160,9 @@ SkillPermissionStore
 ContextBroker
 SelectionContextProvider
 StyleCapsuleStore
+StyleCapsuleResolver
+TerminologyPackRegistry
+TerminologyPackResolver
 
 PreviewController
 OutputRouter
@@ -1131,6 +1193,15 @@ HiddenFeedbackController
 - 不执行包内代码；
 - 将社区文件视为不可信输入。
 
+#### `SkillPackageStore`
+
+- 只加载 `.openwhisperskill` 声明式目录包；
+- 拒绝未知文件、软链接、路径穿越、可执行内容和超限资源；
+- 安装到 owner-only 私有目录；
+- 复制后重新解析并校验内容 SHA-256；
+- 支持多版本、活动版本、回滚和卸载；
+- 运行 Golden contract tests，不执行包内代码。
+
 #### `SkillResolver`
 
 - 根据手动选择、Bundle ID 规则和默认 Skill 解析；
@@ -1145,6 +1216,21 @@ HiddenFeedbackController
 - 应用敏感 App 策略；
 - 记录类别和长度，不记录正文；
 - 会话结束释放快照。
+
+#### `StyleCapsuleStore` / `StyleCapsuleResolver`
+
+- 管理内置与用户 Capsule；
+- 用户样本文本默认只在创建流程内存中分析；
+- 本地文件使用 `0600`，目录使用 `0700`；
+- 只为声明了能力并被用户分配的 Skill 注入；
+- 录音开始时冻结摘要，不在诊断中记录正文。
+
+#### `TerminologyPackRegistry` / `TerminologyPackResolver`
+
+- 提供经过 App 审查的内置 Domain Packs；
+- 显示与用户词典的冲突；
+- 固定用户纠正、Skill 词条、用户术语和 Pack 的优先级；
+- 将最高风险冻结到会话并在高风险时强制 Preview。
 
 #### `SkillPromptCompiler`
 
@@ -1210,24 +1296,25 @@ struct VisualFeedbackConfig: Codable {
 
 ### 14.4 本地存储
 
-建议目录：
+当前已落地目录：
 
 ```text
 ~/Library/Application Support/OpenWhisper/
   Skills/
     Installed/
-    Cache/
-    Registry/
   StyleCapsules/
-  TerminologyPacks/
   config.json
 ```
+
+内置 Terminology Packs 随签名 App 发布，启用状态保存在 `config.json`；
+当前没有远程 `Cache/`、`Registry/` 或可执行插件目录。未来 Registry
+若实施，必须使用内容寻址缓存并继续通过相同本地包检查。
 
 规则：
 
 - 目录 `0700`；
 - 文件 `0600`；
-- 安装包解压拒绝路径穿越和软链接；
+- 安装包目录复制拒绝路径穿越和软链接；
 - 包大小、文件数量和单文件大小有硬限制；
 - 不从 Skill 目录加载动态库或可执行文件；
 - Delete All Data 同时删除 Skills、Capsules、Packs 和权限授权；
@@ -1256,7 +1343,7 @@ struct VisualFeedbackConfig: Codable {
 
 ## 15. 分阶段实施路线
 
-### Phase 0 — 决策与视觉原型
+### Phase 0 — 决策与视觉原型（已完成）
 
 交付：
 
@@ -1273,7 +1360,7 @@ struct VisualFeedbackConfig: Codable {
 - 确认声明式 Skill 边界；
 - 确认首批内置 Skills。
 
-### Phase 1 — 交互基础：自定义热键与新 HUD
+### Phase 1 — 交互基础：自定义热键与新 HUD（已完成）
 
 交付：
 
@@ -1331,15 +1418,18 @@ struct VisualFeedbackConfig: Codable {
 - 无 Accessibility 时稳定 copy-only；
 - TextEdit、Notes、浏览器编辑器和 Codex 的安装版矩阵有明确结果。
 
-### Phase 4 — Style Capsule 与 Terminology Packs
+### Phase 4 — Style Capsule 与 Terminology Packs（已完成）
 
 交付：
 
 - Capsule 创建、编辑、选择、删除和导出；
 - 用户样本默认不保留；
-- Domain Pack；
+- 五个内置 Capsule；
+- Backend Engineering、Medical Terminology、Kubernetes Domain Packs；
 - 冲突处理；
-- Backend、Medical、Kubernetes 等示例包。
+- 按 Skill 分配、会话冻结和 Prompt 注入；
+- 高风险 Pack 强制 Preview；
+- 脱敏诊断与 Snapshot Privacy 隔离。
 
 退出条件：
 
@@ -1348,7 +1438,7 @@ struct VisualFeedbackConfig: Codable {
 - 术语优先级确定；
 - 专业 Skill 默认 Preview。
 
-### Phase 5 — 本地社区 Skill
+### Phase 5 — 本地社区 Skill（已完成）
 
 交付：
 
@@ -1359,6 +1449,14 @@ struct VisualFeedbackConfig: Codable {
 - Skill Inspector；
 - SDK 文档和模板仓库。
 
+实现证据：
+
+- `Sources/OpenWhisper/CommunitySkillRuntime.swift`
+- `Sources/OpenWhisper/AINativeSettingsViews.swift`
+- `docs/engineering/community-skill-sdk.md`
+- `examples/skills/IssueDraft.openwhisperskill`
+- `Tests/OpenWhisperTests/CommunitySkillRuntimeTests.swift`
+
 退出条件：
 
 - 任意代码无法执行；
@@ -1366,30 +1464,44 @@ struct VisualFeedbackConfig: Codable {
 - 权限和版本不兼容清晰可见；
 - 恶意 Prompt 不能改变系统边界。
 
-### Phase 6 — Registry 与 Action 研究
+### Phase 6 — Registry 与 Action 研究（安全研究边界已完成；功能未开放）
 
-在核心体验和安全模型稳定后再进入：
+已完成设计与门禁：
 
-- 社区 Registry；
-- 发布者签名；
-- 认证发布者；
-- Connector 和 Action Preview；
-- GitHub、Linear、Notion 等有限集成。
+- Registry 签名记录、包哈希、内容寻址缓存和重复本地检查；
+- 发布者身份、密钥轮换、隔离、撤销、下架与申诉状态；
+- app-owned Connector Broker；
+- 凭据按 Connector 隔离到 Keychain；
+- 固定端点、类型化操作、幂等和不确定结果处理；
+- 强制 Action Preview 与逐次确认；
+- GitHub、Linear、Notion 的 create-only 研究优先级。
 
-## 16. 建议 MVP
+当前退出结论：
 
-首个 AI-native 可用版本只包含：
+- 研究文档已经形成可执行的后续门禁；
+- 当前 App 不发起 Registry 下载；
+- 当前导入器继续拒绝 `externalAction` 与 `actionPreview`；
+- 当前 App 不提供任意 Shell、文件系统、自定义网络、通用 MCP 或自动外部写入。
+
+研究文档：`docs/engineering/registry-and-actions-boundary.md`。
+
+## 16. 当前 AI-native Alpha 范围
+
+当前 AI-native macOS Alpha 范围包含：
 
 - 可自定义主听写快捷键，默认 F5；
 - Refined HUD、Blue Signal Frame、Hidden；
 - Direct、Reply、Email、Backend Prompt、Code Prompt、Translate；
+- Context Rewrite、Context Reply；
 - App → Skill 规则；
 - Personal Dictionary；
 - 只支持用户选区的上下文权限；
 - Diff Preview；
-- Style Capsule 先作为实验功能；
+- Style Capsule 本地实验功能；
+- Backend、Medical、Kubernetes 内置 Terminology Packs；
+- 本地声明式 `.openwhisperskill` 导入、Inspector、Golden tests 和版本回滚；
 - 高风险 Skill 默认 Preview 或 copy-only；
-- 不开放社区导入；
+- 不开放远程社区 Registry；
 - 不开放 Action。
 
 这已经足以证明：
@@ -1460,6 +1572,31 @@ struct VisualFeedbackConfig: Codable {
 - 选区替换验证同一 AX target、范围和文本；
 - Clipboard 恢复继续服从现有 ownership 验证。
 
+### 17.6 Style Capsule 与 Terminology Packs
+
+- Capsule 可创建、编辑、按 Skill 分配、删除和导出；
+- 创建样本文本默认不写入 Capsule 文件；
+- 删除自定义 Capsule 后本地文件不存在；
+- 未声明 `styleCapsule` 的 Skill 不获得 Capsule；
+- 录音中切换 Capsule 不改变本次会话；
+- 用户纠正优先于 Skill、用户术语和 Domain Pack；
+- 冲突在 Settings 中可见；
+- Medical Pack 强制 Preview；
+- 支持诊断不包含 Capsule、样本、Prompt 或术语正文。
+
+### 17.7 本地 Community Skills
+
+- `.openwhisperskill` 目录可审查后安装；
+- 多版本可切换和回滚；
+- Skill 可禁用和按版本卸载；
+- 软链接、路径穿越、可执行位、shebang、Mach-O、脚本、未知文件和超限包被拒绝；
+- `externalAction`、`actionPreview`、自定义网络和非声明式能力被拒绝；
+- 安装副本与源包定义和 SHA-256 一致；
+- 恶意 Prompt 始终位于固定系统安全外壳之后；
+- Golden runner 不调用 Provider，只验证 Prompt 顺序和输出契约；
+- 损坏、未知或已卸载的 Skill 在运行时回退 Direct；
+- Snapshot Privacy 不读取真实本地 Skills。
+
 ## 18. 测试与验收矩阵
 
 ### 18.1 自动化
@@ -1473,6 +1610,12 @@ struct VisualFeedbackConfig: Codable {
 - Skill Resolver 优先级；
 - Context 权限；
 - 敏感 App；
+- Style Capsule 存储、分配、样本清除和会话冻结；
+- Terminology Pack 冲突、优先级和最高风险；
+- Community Skill 受限 YAML、允许文件、大小、路径、软链接和可执行内容；
+- Community Skill 安装、SHA-256、多版本、回滚、禁用和卸载；
+- Community Prompt 安全外壳顺序；
+- 仓库示例 `.openwhisperskill` 与 Golden cases；
 - Prompt 编译顺序；
 - Validator；
 - VisualFeedbackConfig；
@@ -1498,6 +1641,9 @@ struct VisualFeedbackConfig: Codable {
 - Codex/浏览器编辑器的已发送粘贴或确认插入；
 - 选区未变化替换；
 - 选区变化 copy-only；
+- Context 页面 Capsule 创建、编辑、分配、删除和导出；
+- Terminology 页面 Pack 启用、冲突和 Medical 高风险提示；
+- AI Polish 页面 Community Skill 导入审查、Inspector、Golden tests、版本回滚、禁用和卸载；
 - 多显示器；
 - Reduce Motion；
 - Increase Contrast；
@@ -1567,9 +1713,9 @@ struct VisualFeedbackConfig: Codable {
 | Prompt 注入改变系统行为 | 上下文标记为数据，系统安全外壳固定且优先级最高 |
 | 产品范围失控 | 按 Phase 交付，Action 和 Registry 最后做 |
 
-## 21. 需要产品负责人确认的决策
+## 21. 已确认的产品决策
 
-建议默认采用以下答案：
+当前实现采用以下答案：
 
 1. **默认视觉模式**
    - 建议：`Refined HUD`；
@@ -1585,11 +1731,15 @@ struct VisualFeedbackConfig: Codable {
 5. **医疗能力**
    - 建议：先做术语包和结构化草稿，不做诊断型 Skill。
 6. **社区生态**
-   - 建议：先完成官方 Skill 和包规范，再开放本地导入，最后做 Registry。
+   - 已完成官方 Skill、包规范和本地导入；
+   - 远程 Registry 继续受签名、撤销和运营门禁约束。
 7. **Style Capsule**
-   - 建议：实验功能；原始样本默认生成后删除。
+   - 本地实验功能；
+   - 原始样本默认只在创建界面内存中分析，生成摘要后清空。
 8. **Action Skills**
-   - 建议：不进入 AI-native MVP。
+   - 不进入当前 AI-native Alpha；
+   - 当前导入器必须继续拒绝 Action；
+   - 未来只研究 app-owned Connector 和强制 Action Preview。
 
 ## 22. 最终产品表达
 
@@ -1607,9 +1757,25 @@ struct VisualFeedbackConfig: Codable {
 
 ## 23. 推荐下一步
 
-Phase 1–3 已完成。后续仍按依赖和风险执行：
+Phase 1–5 已完成，Phase 6 已完成研究边界。下一阶段不是继续扩张权限，而是把当前 macOS Alpha 做成可发布、可验证、可运营的产品：
 
-1. 在已完成的选区安全边界上实现 Style Capsule 和 Terminology Packs；
-2. 最后实现 `.openwhisperskill` 本地导入、包安全校验和社区分发研究。
+1. 对 Context、Terminology、AI Polish / Community Skills 三个 Settings 页面执行安装版键盘、焦点、VoiceOver、导入、回滚和删除验收；
+2. 用真实可编辑目标完成 F5 开始/停止、Esc、inline close、Retry、选区未变化替换和选区变化 copy-only 的完整安装版证明；
+3. 增加 Community Skill 真实安装包的中文错误文案、损坏包恢复和版本迁移回归；
+4. 对 Style Capsule 创建流程做隐私文案和“样本已清空”可见反馈验收；
+5. 继续收紧性能、崩溃恢复、权限状态和 Provider 故障体验；
+6. 完成 Developer ID、Hardened Runtime、公证、生产 Sparkle、签名 Provider Policy、签名 License 和商业运营信息门禁；
+7. 在真实用户质量数据证明 Skills、Preview 和术语层有价值之前，不启用远程 Registry；
+8. 在 Connector 权限、Action Preview、幂等、不确定结果和 installed-app 矩阵全部完成之前，不启用任何外部 Action。
 
-已落地的 Phase 1–3 已解决**触发方式不够自由**、**录音反馈不够高级**、**固定 Voice Mode 无法形成可验证运行时契约**和**选区改写缺少安全替换证明**。下一阶段必须让个人风格和领域术语继续服从已建立的权限、Prompt、Validator、Preview 和安全投递边界。
+当前落地已经解决：
+
+- **触发方式不够自由**；
+- **录音反馈不够高级**；
+- **固定 Voice Mode 无法形成可验证运行时契约**；
+- **选区改写缺少安全替换证明**；
+- **个人风格需要重复描述**；
+- **专业术语缺少分层优先级和风险策略**；
+- **社区扩展缺少可审计、不可执行的本地包边界**。
+
+因此，产品化重点现在从“继续增加能力”转为“完成安装版交互证据、发行基础设施、商业门禁和受控用户验证”。远程生态和外部动作必须继续晚于稳定性、隐私和安全证明。

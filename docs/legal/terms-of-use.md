@@ -2,7 +2,7 @@
 
 > Effective for the private alpha: July 13, 2026
 >
-> Last updated: July 13, 2026
+> Last updated: July 14, 2026
 
 ## 1. Alpha Software
 
@@ -25,6 +25,13 @@ You must not use OpenWhisper to:
 - distribute credentials, malicious payloads, or deceptive builds under the OpenWhisper name.
 
 You are responsible for reviewing dictated text before sending or publishing it.
+
+Locally imported Community Skills are user-selected declarative content.
+OpenWhisper's package checks limit executable behavior but do not verify that a
+third-party prompt, terminology list, example, license, or generated result is
+accurate, suitable, or non-infringing. You are responsible for having the
+right to install and use that content and for reviewing its declared
+permissions and output.
 
 ## 4. Accounts and Credentials
 

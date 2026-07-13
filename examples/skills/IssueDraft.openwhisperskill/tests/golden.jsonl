@@ -1,0 +1,2 @@
+{"name":"preserves-api-path-and-version","transcript":"Create a GitHub issue for /api/users returning HTTP 500 in v1.4.0.","expectedOutput":"# Goal\nFix the HTTP 500 response from /api/users in v1.4.0.\n\n# Context\nA GitHub issue is needed for the reported API failure.\n\n# Acceptance Criteria\n- The reported endpoint no longer returns HTTP 500."}
+{"name":"supports-bilingual-section-alternatives","transcript":"整理一个导入失败问题，37 条记录失败。","expectedOutput":"# 目标\n修复导入失败问题。\n\n# 背景\n当前有 37 条记录导入失败。\n\n# 验收标准\n- 已说明的导入失败场景可以被复现并验证修复。"}

@@ -174,6 +174,7 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
         "settings-appearance",
         "settings-ai-polish",
         "settings-context",
+        "settings-terminology",
         "settings-paste",
         "settings-privacy",
         "settings-advanced",

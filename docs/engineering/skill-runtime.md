@@ -1,6 +1,7 @@
 # OpenWhisper Skill Runtime
 
-> Status: implemented for built-in Skills in the macOS alpha
+> Status: implemented for built-in and locally imported declarative Skills in
+> the macOS alpha
 > Scope: declaration, resolution, prompt compilation, local validation,
 > configuration migration, and bounded diagnostics
 
@@ -21,10 +22,18 @@ The built-in registry currently exposes stable IDs and semantic versions for:
 | Backend Prompt | `app.openwhisper.skill.agent-plan` |
 | Code Prompt | `app.openwhisper.skill.code-prompt` |
 | Translate | `app.openwhisper.skill.translate` |
+| Context Rewrite | `app.openwhisper.skill.context-rewrite` |
+| Context Reply | `app.openwhisper.skill.context-reply` |
 
 The legacy `agentPlan` storage value remains mapped to the Backend Prompt
 Skill so existing user configuration and historical records continue to
 decode.
+
+Community Skill v1 can merge one active installed semantic version per
+third-party Skill ID into this Registry. Package loading remains declarative
+and reuses the same resolver, Prompt Compiler, Validator, Context Broker,
+Preview, and output routing. See
+[`community-skill-sdk.md`](community-skill-sdk.md).
 
 ## Resolution and session freezing
 
@@ -97,11 +106,12 @@ continues through the existing conservative paste/clipboard path.
 
 ## Data minimization
 
-History may store the built-in Skill ID and semantic version alongside the
-final result. Redacted support diagnostics allow only known built-in IDs,
-valid semantic versions, and a fixed validation-issue enum. They do not add
-Skill prompts, application rule tables, transcript text, terminology,
-clipboard content, or future context bodies.
+History may store the resolved Skill ID and semantic version alongside the
+final result. Redacted support diagnostics allow only bounded
+built-in/community ID categories, valid semantic versions, counts/risk, and a
+fixed validation-issue enum. They do not add Skill prompts or files, package
+names, application rule tables, transcript text, terminology, Style Capsule
+content, clipboard content, or context bodies.
 
 ## Verification
 
@@ -114,14 +124,22 @@ The primary automated contract is
 - malformed configuration fallback;
 - prompt section ordering and untrusted-data boundaries;
 - format, structure, literal, and marker validation;
-- pipeline fallback before delivery.
+- pipeline fallback before delivery;
+- local package install, hash, version rollback, malicious-file rejection, and
+  repository-template validation in
+  `Tests/OpenWhisperTests/CommunitySkillRuntimeTests.swift`.
 
 Run:
 
 ```bash
 swift test --filter SkillRuntimeTests
+swift test --filter CommunitySkillRuntimeTests
 ./scripts/check.sh
 ```
 
 Installed-app verification continues to use `/Applications/OpenWhisper.app`;
 `dist/OpenWhisper.app` is packaging output only.
+
+Remote Registry and Action execution are intentionally absent. Their research
+gates are documented in
+[`registry-and-actions-boundary.md`](registry-and-actions-boundary.md).

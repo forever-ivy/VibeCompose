@@ -104,6 +104,15 @@ private struct SupportDiagnosticsSummary: Codable, Sendable, Equatable {
         let punctuationPreference: String
         let terminologyEnabled: Bool
         let enabledTerminologyEntryCount: Int
+        let enabledTerminologyPackCount:
+            Int
+        let highRiskTerminologyPackEnabled:
+            Bool
+        let styleCapsulesEnabled: Bool
+        let styleCapsuleAssignmentCount:
+            Int
+        let configuredCommunitySkillCount:
+            Int
         let textPolishMode: String
         let textPolishEnabled: Bool
         let preserveClipboard: Bool
@@ -543,6 +552,38 @@ struct SupportDiagnosticsExporter {
                 terminologyEnabled: config.transcription.terminology.enabled,
                 enabledTerminologyEntryCount: config.transcription
                     .activeDictionaryEntries.count,
+                enabledTerminologyPackCount:
+                    config.terminologyPacks
+                        .enabledPackIDs
+                        .count,
+                highRiskTerminologyPackEnabled:
+                    config.terminologyPacks
+                        .enabledPackIDs
+                        .contains {
+                            TerminologyPackRegistry
+                                .definition(
+                                    id: $0
+                                )?.risk
+                                == .high
+                        },
+                styleCapsulesEnabled:
+                    config.styleCapsules
+                        .enabled,
+                styleCapsuleAssignmentCount:
+                    config.styleCapsules
+                        .skillAssignments
+                        .count,
+                configuredCommunitySkillCount:
+                    config.transcription
+                        .skills
+                        .enabledSkillIDs
+                        .filter {
+                            !SkillRegistry
+                                .builtIn
+                                .contains(
+                                    id: $0
+                                )
+                        }.count,
                 textPolishMode: config.transcription.textPolish.mode.rawValue,
                 textPolishEnabled: config.transcription.textPolish
                     .chatGPTAuthEnabled,
@@ -963,6 +1004,8 @@ struct SupportDiagnosticsExporter {
     - audio and failed recordings
     - transcript and clipboard text
     - terminology entries and imported source paths
+    - Style Capsule summaries, examples, and source samples
+    - community Skill prompts, terminology, localizations, and package file names
     - account email, access tokens, refresh tokens, API keys, cookies, and authorization headers
     - custom endpoint URLs and environment-variable values
     - raw crash-report bodies, history, Recovery metadata, and config.json

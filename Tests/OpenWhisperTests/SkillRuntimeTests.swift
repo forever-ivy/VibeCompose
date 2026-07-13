@@ -230,14 +230,19 @@ func damagedOrUnknownSkillConfigurationFallsBackToDirect()
 
     #expect(
         config.defaultSkillID
-            == SkillRegistry.directSkillID
+            == "app.example.unknown"
     )
     #expect(
         config.enabledSkillIDs == [
             SkillRegistry.directSkillID,
+            "app.example.unknown",
         ]
     )
-    #expect(config.applicationRules.isEmpty)
+    #expect(
+        config.applicationRules
+            .first?.skillID
+            == "app.example.unknown"
+    )
     #expect(
         SkillResolver()
             .resolve(

@@ -18,6 +18,7 @@ private struct ExactRule {
 private struct FuzzyRule {
     let canonical: String
     let referenceSkeletons: [String]
+    let priority: Int
     let preserveMixedCaseFromLowercaseCanonical: Bool
 }
 
@@ -25,6 +26,7 @@ private struct FuzzyCandidate {
     let canonical: String
     let distance: Int
     let similarity: Double
+    let priority: Int
     let preserveMixedCaseFromLowercaseCanonical: Bool
 }
 
@@ -326,6 +328,7 @@ struct TerminologyNormalizer: TranscriptNormalizing {
                     canonical: rule.canonical,
                     distance: distance,
                     similarity: similarity,
+                    priority: rule.priority,
                     preserveMixedCaseFromLowercaseCanonical: rule.preserveMixedCaseFromLowercaseCanonical
                 )
 
@@ -381,6 +384,9 @@ struct TerminologyNormalizer: TranscriptNormalizing {
     }
 
     private func isBetter(_ lhs: FuzzyCandidate, than rhs: FuzzyCandidate) -> Bool {
+        if lhs.priority != rhs.priority {
+            return lhs.priority > rhs.priority
+        }
         if lhs.similarity != rhs.similarity {
             return lhs.similarity > rhs.similarity
         }
@@ -394,6 +400,9 @@ struct TerminologyNormalizer: TranscriptNormalizing {
         _ first: FuzzyCandidate,
         over second: FuzzyCandidate
     ) -> Bool {
+        if first.priority != second.priority {
+            return first.priority > second.priority
+        }
         if first.distance + 1 < second.distance {
             return true
         }
@@ -408,7 +417,16 @@ struct TerminologyNormalizer: TranscriptNormalizing {
         var rules: [ExactRule] = []
 
         for entry in importedEntries where entry.isEnabled && entry.type == .term {
-            rules.append(contentsOf: exactRules(for: entry, priority: 100))
+            rules.append(
+                contentsOf:
+                    exactRules(
+                        for: entry,
+                        priority:
+                            terminologyPriority(
+                                for: entry
+                            )
+                    )
+            )
         }
 
         for term in normalizedTerms(from: hintTerms) {
@@ -448,7 +466,10 @@ struct TerminologyNormalizer: TranscriptNormalizing {
                         canonical: replacement,
                         regex: regex,
                         sortKey: collapsedLatinSkeleton(for: term).count,
-                        priority: 1_000,
+                        priority:
+                            correctionPriority(
+                                for: entry
+                            ),
                         preserveMixedCaseFromLowercaseCanonical: false
                     )
                 }
@@ -507,9 +528,41 @@ struct TerminologyNormalizer: TranscriptNormalizing {
             return FuzzyRule(
                 canonical: entry.canonical,
                 referenceSkeletons: Array(Set(references)).sorted(),
+                priority:
+                    terminologyPriority(
+                        for: entry
+                    ),
                 preserveMixedCaseFromLowercaseCanonical: true
             )
         }
+    }
+
+    private func terminologyPriority(
+        for entry: TerminologyEntry
+    ) -> Int {
+        if entry.source.hasPrefix("skill:") {
+            return 300
+        }
+        if entry.source.hasPrefix(
+            "domain-pack:"
+        ) {
+            return 100
+        }
+        return 200
+    }
+
+    private func correctionPriority(
+        for entry: TerminologyEntry
+    ) -> Int {
+        if entry.source.hasPrefix("skill:") {
+            return 3_000
+        }
+        if entry.source.hasPrefix(
+            "domain-pack:"
+        ) {
+            return 1_000
+        }
+        return 4_000
     }
 
     private func protectedCorrectionReplacementKeys(from entries: [TerminologyEntry]) -> Set<String> {

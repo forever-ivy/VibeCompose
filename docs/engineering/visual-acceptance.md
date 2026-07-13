@@ -59,8 +59,8 @@ Run the installed-app SwiftUI accessibility audit with:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-It covers Account, Dictation, Appearance & Feedback, AI Polish, Paste, Privacy,
-Advanced, all four
+It covers Account, Dictation, Appearance & Feedback, AI Polish, Context,
+Terminology, Paste, Privacy, Advanced, all four
 Onboarding steps, History, Terminology, and Quick Add. Each transient process
 uses default configuration and empty in-memory user data, enables AppKit's
 enhanced accessibility tree, and fails if the surface has no actionable
@@ -93,6 +93,7 @@ opens Settings → Account in privacy-isolated snapshot mode, and uses Vision OC
 to require both the Microphone and Accessibility cards to render as
 `Granted`/`已授权`. The process reads live TCC state but does not load the user's
 account credentials, configuration, History, Recovery, or terminology data.
+It also does not read local Style Capsules or installed Community Skills.
 Evidence is written under `dist/permission-surface-acceptance/<run-id>/`, and
 the normal installed menu bar app is relaunched and left running.
 

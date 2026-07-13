@@ -90,6 +90,7 @@ capture_audit "settings-dictation" "--open-settings" "dictation"
 capture_audit "settings-appearance" "--open-settings" "appearance"
 capture_audit "settings-ai-polish" "--open-settings" "ai-polish"
 capture_audit "settings-context" "--open-settings" "context"
+capture_audit "settings-terminology" "--open-settings" "terminology"
 capture_audit "settings-paste" "--open-settings" "paste"
 capture_audit "settings-privacy" "--open-settings" "privacy"
 capture_audit "settings-advanced" "--open-settings" "advanced"
@@ -113,6 +114,7 @@ expected = {
     "settings-appearance",
     "settings-ai-polish",
     "settings-context",
+    "settings-terminology",
     "settings-paste",
     "settings-privacy",
     "settings-advanced",
@@ -173,7 +175,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_DIR\`
-- Surfaces: six Settings panes, four Onboarding steps, History, Terminology, Quick Add
+- Surfaces: nine Settings panes, four Onboarding steps, History, Terminology, Quick Add
 - Validation: SwiftUI enhanced accessibility tree, actionable names, non-empty control surface
 - Privacy: capture mode uses default configuration and empty in-memory user data
 - Final live state: normal installed OpenWhisper relaunched and left running as PID \`$RUNNING_PID\`

@@ -14,6 +14,14 @@ This policy describes the current OpenWhisper macOS application. OpenWhisper doe
 
 When you start dictation, OpenWhisper records a short audio clip on your Mac. On the default route, the clip and transcription instructions are sent to the ChatGPT service using the ChatGPT session you connected in OpenWhisper. If you select the advanced OpenAI-compatible recovery route, the clip is sent to the HTTPS endpoint you configured using your own credential.
 
+When AI Polish or a non-Direct Skill runs through the ChatGPT route, the
+request may also include the current transcript, the resolved declarative
+Skill prompt, resolved terminology, a Style Capsule summary you assigned to
+that Skill, and selected text only when you authorized that Skill to read the
+selection. OpenWhisper does not send the complete Skill Registry, full App
+Rules, unrelated installed package files, Style Capsule creation source
+samples, the whole screen, or an entire document through this path.
+
 The Advanced Settings connection test sends only a generated 0.1-second
 silent WAV, the configured model, and your Recovery credential. It does not
 read or send your recordings, transcripts, or terminology. Your configured
@@ -36,7 +44,9 @@ OpenWhisper may store the following data under `~/Library/Application Support/Op
 | Successful recordings | Deleted after processing |
 | Performance diagnostics | 14 days, at most 1,000 records |
 | Local product metrics | Off by default; if enabled, 30 days and at most 5,000 events |
-| Settings and terminology | Until changed or deleted |
+| Settings and personal terminology | Until changed or deleted |
+| Custom Style Capsules | Until deleted; creation source samples are cleared and not stored by default |
+| Installed declarative Community Skills | Until disabled/uninstalled or Delete All Data |
 | Signed Pro activation receipt and random License Device ID | Until removed, reset with Delete All Data, or replaced during activation |
 
 Known password managers, Keychain Access, and macOS Passwords are excluded from transcript history and failed-audio recovery by default. You can add more sensitive applications.
@@ -63,7 +73,11 @@ to contain an account email or payment details.
 
 ## 2. Diagnostics and Support Archives
 
-Performance diagnostics contain timing, byte counts, provider categories, result categories, and error categories. They do not intentionally contain audio, transcript text, clipboard contents, or credentials.
+Performance diagnostics contain timing, byte counts, provider categories,
+result categories, bounded Skill/terminology counts and risk indicators, and
+error categories. They do not intentionally contain audio, transcript text,
+clipboard contents, credentials, selected text, Style Capsule contents,
+terminology text, Community Skill prompts/files, or installed package names.
 
 Optional local product metrics are disabled by default. If enabled, they
 contain only product version/build, completed Onboarding step, provider
@@ -84,7 +98,11 @@ When you choose **Settings → Advanced → Export Diagnostics**, OpenWhisper cr
 - whitelisted metadata from up to five recent OpenWhisper crash reports;
 - checksums for the included files.
 
-The archive excludes audio, transcripts, clipboard text, account email, terminology, custom endpoint URLs, credentials, raw crash-report bodies, history, Recovery metadata, and `config.json`. It is not uploaded automatically.
+The archive excludes audio, transcripts, clipboard text, account email,
+selected text, terminology text, Style Capsule summaries/examples/source
+samples, Community Skill prompts/files/package names, custom endpoint URLs,
+credentials, raw crash-report bodies, history, Recovery metadata, and
+`config.json`. It is not uploaded automatically.
 
 ## 3. Clipboard and Accessibility
 
@@ -98,13 +116,17 @@ You can:
 - export aggregate local product metrics for your own review or voluntary sharing;
 - disable raw transcript storage;
 - add sensitive applications that must not create history or Recovery records;
+- revoke per-Skill selected-text access and change or remove Style Capsule
+  assignments;
+- disable Domain Packs and local Community Skills, roll back an installed
+  version, or uninstall it;
 - delete individual history or Recovery records;
 - sign out of ChatGPT;
 - remove the OpenAI-Compatible Recovery key without deleting other data;
-- use **Delete All Data** to remove local settings, terminology, history,
-  failed recordings, diagnostics, product metrics, Retry files, the saved
-  ChatGPT session, the Recovery API key, the signed Pro receipt, and the local
-  License Device ID.
+- use **Delete All Data** to remove local settings, terminology, custom Style
+  Capsules, installed Community Skills, history, failed recordings,
+  diagnostics, product metrics, Retry files, the saved ChatGPT session, the
+  Recovery API key, the signed Pro receipt, and the local License Device ID.
 
 Deleting local OpenWhisper data does not delete information already sent to or retained by a third-party service. Use that service's account and privacy controls for third-party data.
 

@@ -98,7 +98,8 @@ Latency diagnostics may store only:
 
 - approved capability enum values;
 - bounded selected-character count;
-- existing built-in Skill ID/version and validator issue codes.
+- bounded built-in/community Skill category, semantic version, and validator
+  issue codes.
 
 They do not store selected text, its digest, AX identifiers, app names, bundle
 identifiers, Prompt bodies, clipboard content, or Preview text.

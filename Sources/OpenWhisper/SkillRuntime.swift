@@ -121,6 +121,8 @@ struct SkillDefinition:
         [SkillCapability]
     let optionalCapabilities:
         [SkillCapability]
+    let terminologyEntries:
+        [TerminologyEntry]
     let promptInstruction: String
     let output: SkillOutputContract
     let validators: SkillValidatorPolicy
@@ -137,6 +139,8 @@ struct SkillDefinition:
             [SkillCapability] = [.voice],
         optionalCapabilities:
             [SkillCapability] = [],
+        terminologyEntries:
+            [TerminologyEntry] = [],
         promptInstruction: String,
         output: SkillOutputContract,
         validators: SkillValidatorPolicy =
@@ -161,6 +165,10 @@ struct SkillDefinition:
                         .contains($0)
                 }
             )
+        self.terminologyEntries =
+            Self.normalizedTerminologyEntries(
+                terminologyEntries
+            )
         self.promptInstruction =
             promptInstruction
                 .trimmingCharacters(
@@ -169,6 +177,83 @@ struct SkillDefinition:
         self.output = output
         self.validators = validators
         self.legacyMode = legacyMode
+    }
+
+    init(from decoder: any Decoder)
+        throws
+    {
+        let container =
+            try decoder.container(
+                keyedBy: CodingKeys.self
+            )
+        self.init(
+            schemaVersion:
+                try container.decodeIfPresent(
+                    Int.self,
+                    forKey: .schemaVersion
+                ) ?? 1,
+            id: try container.decode(
+                String.self,
+                forKey: .id
+            ),
+            version: try container.decode(
+                String.self,
+                forKey: .version
+            ),
+            name: try container.decode(
+                String.self,
+                forKey: .name
+            ),
+            author:
+                try container.decodeIfPresent(
+                    String.self,
+                    forKey: .author
+                ) ?? "OpenWhisper",
+            minimumAppVersion:
+                try container.decodeIfPresent(
+                    String.self,
+                    forKey:
+                        .minimumAppVersion
+                ) ?? "0.1.0",
+            requiredCapabilities:
+                try container.decodeIfPresent(
+                    [SkillCapability].self,
+                    forKey:
+                        .requiredCapabilities
+                ) ?? [.voice],
+            optionalCapabilities:
+                try container.decodeIfPresent(
+                    [SkillCapability].self,
+                    forKey:
+                        .optionalCapabilities
+                ) ?? [],
+            terminologyEntries:
+                try container.decodeIfPresent(
+                    [TerminologyEntry].self,
+                    forKey:
+                        .terminologyEntries
+                ) ?? [],
+            promptInstruction:
+                try container.decode(
+                    String.self,
+                    forKey:
+                        .promptInstruction
+                ),
+            output: try container.decode(
+                SkillOutputContract.self,
+                forKey: .output
+            ),
+            validators:
+                try container.decodeIfPresent(
+                    SkillValidatorPolicy.self,
+                    forKey: .validators
+                ) ?? .init(),
+            legacyMode:
+                try container.decodeIfPresent(
+                    DictationMode.self,
+                    forKey: .legacyMode
+                )
+        )
     }
 
     var localizedName: String {
@@ -185,6 +270,12 @@ struct SkillDefinition:
     static func isValidIdentifier(
         _ value: String
     ) -> Bool {
+        guard
+            !value.isEmpty,
+            value.utf8.count <= 160
+        else {
+            return false
+        }
         let pattern =
             #"^[a-z0-9]+(?:[.-][a-z0-9-]+)*$"#
         return value.range(
@@ -196,12 +287,38 @@ struct SkillDefinition:
     static func isValidVersion(
         _ value: String
     ) -> Bool {
+        guard
+            !value.isEmpty,
+            value.utf8.count <= 64
+        else {
+            return false
+        }
         let pattern =
             #"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"#
-        return value.range(
-            of: pattern,
-            options: .regularExpression
-        ) != nil
+        guard
+            value.range(
+                of: pattern,
+                options: .regularExpression
+            ) != nil
+        else {
+            return false
+        }
+        let core = value.split(
+            separator: "-",
+            maxSplits: 1,
+            omittingEmptySubsequences:
+                false
+        )[0]
+        let components = core.split(
+            separator: ".",
+            omittingEmptySubsequences:
+                false
+        )
+        return components.count == 3
+            && components.allSatisfy {
+                $0.count <= 20
+                    && UInt64($0) != nil
+            }
     }
 
     private static func normalizedCapabilities(
@@ -211,6 +328,65 @@ struct SkillDefinition:
         return capabilities.filter {
             seen.insert($0).inserted
         }
+    }
+
+    private static func normalizedTerminologyEntries(
+        _ entries: [TerminologyEntry]
+    ) -> [TerminologyEntry] {
+        var seen = Set<String>()
+        return entries.compactMap { entry in
+            let original =
+                entry.original
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+            let replacement =
+                entry.replacement?
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+            guard
+                !original.isEmpty,
+                original.count <= 240,
+                entry.type != .correction
+                    || replacement?.isEmpty
+                        == false
+            else {
+                return nil
+            }
+            var normalized = entry
+            normalized.original = original
+            normalized.replacement =
+                entry.type == .correction
+                ? replacement
+                : nil
+            normalized.aliases =
+                entry.aliases
+                    .map {
+                        $0.trimmingCharacters(
+                            in:
+                                .whitespacesAndNewlines
+                        )
+                    }
+                    .filter {
+                        !$0.isEmpty
+                            && $0.count <= 240
+                    }
+                    .prefix(40)
+                    .map { $0 }
+            let key =
+                TerminologyLibrary
+                    .identityKey(
+                        for: normalized
+                    )
+            guard seen.insert(key).inserted
+            else {
+                return nil
+            }
+            return normalized
+        }
+        .prefix(1_000)
+        .map { $0 }
     }
 }
 
@@ -256,6 +432,9 @@ struct SkillRegistry:
                 id: replySkillID,
                 version: "1.0.0",
                 name: "Reply",
+                optionalCapabilities: [
+                    .styleCapsule,
+                ],
                 promptInstruction:
                     DictationMode.reply
                         .promptInstruction,
@@ -271,6 +450,9 @@ struct SkillRegistry:
                 id: emailSkillID,
                 version: "1.0.0",
                 name: "Email",
+                optionalCapabilities: [
+                    .styleCapsule,
+                ],
                 promptInstruction:
                     DictationMode.email
                         .promptInstruction,
@@ -285,6 +467,25 @@ struct SkillRegistry:
                 id: agentPlanSkillID,
                 version: "1.0.0",
                 name: "Backend Prompt",
+                optionalCapabilities: [
+                    .styleCapsule,
+                ],
+                terminologyEntries: [
+                    TerminologyEntry(
+                        canonical: "Acceptance Criteria",
+                        aliases: [
+                            "acceptance criteria",
+                        ],
+                        source:
+                            "skill:\(agentPlanSkillID)"
+                    ),
+                    TerminologyEntry(
+                        canonical: "OpenAPI",
+                        aliases: ["open api"],
+                        source:
+                            "skill:\(agentPlanSkillID)"
+                    ),
+                ],
                 promptInstruction:
                     DictationMode.agentPlan
                         .promptInstruction,
@@ -319,6 +520,17 @@ struct SkillRegistry:
                 id: codePromptSkillID,
                 version: "1.0.0",
                 name: "Code Prompt",
+                optionalCapabilities: [
+                    .styleCapsule,
+                ],
+                terminologyEntries: [
+                    TerminologyEntry(
+                        canonical: "stack trace",
+                        aliases: ["stacktrace"],
+                        source:
+                            "skill:\(codePromptSkillID)"
+                    ),
+                ],
                 promptInstruction:
                     DictationMode.codePrompt
                         .promptInstruction,
@@ -338,6 +550,9 @@ struct SkillRegistry:
                 id: translateSkillID,
                 version: "1.0.0",
                 name: "Translate",
+                optionalCapabilities: [
+                    .styleCapsule,
+                ],
                 promptInstruction:
                     DictationMode.translate
                         .promptInstruction,
@@ -354,6 +569,7 @@ struct SkillRegistry:
                 name: "Context Rewrite",
                 optionalCapabilities: [
                     .selection,
+                    .styleCapsule,
                 ],
                 promptInstruction:
                     "Rewrite the selected text according to the speaker's instruction. Preserve every date, number, path, command, identifier, proper noun, and factual claim unless the speaker explicitly asks to change it. If no selection was authorized, transform only the spoken text and do not claim that source text was available.",
@@ -371,6 +587,7 @@ struct SkillRegistry:
                 name: "Context Reply",
                 optionalCapabilities: [
                     .selection,
+                    .styleCapsule,
                 ],
                 promptInstruction:
                     "Draft a concise reply to the selected text using only the speaker's stated intent and facts present in the authorized selection. Do not invent commitments, dates, attachments, actions already completed, greetings, or sign-offs that were not requested. If no selection was authorized, produce a reply from the spoken intent only.",
@@ -432,6 +649,18 @@ struct SkillRegistry:
 
     var skillIDs: [String] {
         orderedDefinitions.map(\.id)
+    }
+
+    func merging(
+        _ definitions: [SkillDefinition]
+    ) -> SkillRegistry {
+        SkillRegistry(
+            definitions:
+                orderedDefinitions
+                + definitions.filter {
+                    !contains(id: $0.id)
+                }
+        )
     }
 }
 
@@ -735,14 +964,13 @@ struct SkillsConfig:
             try decoder.container(
                 keyedBy: CodingKeys.self
             )
-        let registry = SkillRegistry.builtIn
         enabledSkillIDs =
             Self.normalizedEnabledSkillIDs(
                 try container.decodeIfPresent(
                     [String].self,
                     forKey: .enabledSkillIDs
-                ) ?? registry.skillIDs,
-                registry: registry
+                ) ?? SkillRegistry
+                    .builtIn.skillIDs
             )
         defaultSkillID =
             Self.normalizedDefaultSkillID(
@@ -752,8 +980,7 @@ struct SkillsConfig:
                 ) ?? SkillRegistry
                     .directSkillID,
                 enabledSkillIDs:
-                    enabledSkillIDs,
-                registry: registry
+                    enabledSkillIDs
             )
         applicationRules =
             Self.normalizedRules(
@@ -762,8 +989,7 @@ struct SkillsConfig:
                     forKey: .applicationRules
                 ) ?? [],
                 enabledSkillIDs:
-                    enabledSkillIDs,
-                registry: registry
+                    enabledSkillIDs
             )
     }
 
@@ -782,6 +1008,44 @@ struct SkillsConfig:
         _ skillID: String
     ) -> Bool {
         enabledSkillIDs.contains(skillID)
+    }
+
+    mutating func setEnabled(
+        _ isEnabled: Bool,
+        skillID: String
+    ) {
+        guard
+            SkillDefinition
+                .isValidIdentifier(
+                    skillID
+                )
+        else {
+            return
+        }
+        enabledSkillIDs.removeAll {
+            $0 == skillID
+        }
+        if
+            isEnabled
+                || skillID
+                    == SkillRegistry
+                        .directSkillID
+        {
+            enabledSkillIDs.append(skillID)
+        }
+        enabledSkillIDs =
+            Self.normalizedEnabledSkillIDs(
+                enabledSkillIDs
+            )
+        if
+            !enabledSkillIDs.contains(
+                defaultSkillID
+            )
+        {
+            defaultSkillID =
+                SkillRegistry
+                    .directSkillID
+        }
     }
 
     mutating func upsert(
@@ -895,11 +1159,17 @@ struct SkillsConfig:
 
     private static func normalizedEnabledSkillIDs(
         _ values: [String],
-        registry: SkillRegistry
+        registry: SkillRegistry? = nil
     ) -> [String] {
         var seen = Set<String>()
         var normalized = values.filter {
-            registry.contains(id: $0)
+            SkillDefinition
+                .isValidIdentifier($0)
+                && (
+                    registry?
+                        .contains(id: $0)
+                        ?? true
+                )
                 && seen.insert($0).inserted
         }
         if !normalized.contains(
@@ -916,10 +1186,13 @@ struct SkillsConfig:
     private static func normalizedDefaultSkillID(
         _ value: String,
         enabledSkillIDs: [String],
-        registry: SkillRegistry
+        registry: SkillRegistry? = nil
     ) -> String {
         guard
-            registry.contains(id: value),
+            SkillDefinition
+                .isValidIdentifier(value),
+            registry?.contains(id: value)
+                ?? true,
             enabledSkillIDs.contains(value)
         else {
             return SkillRegistry.directSkillID
@@ -930,7 +1203,7 @@ struct SkillsConfig:
     private static func normalizedRules(
         _ rules: [AppSkillRule],
         enabledSkillIDs: [String],
-        registry: SkillRegistry
+        registry: SkillRegistry? = nil
     ) -> [AppSkillRule] {
         var seenIDs = Set<UUID>()
         var seenBundleIdentifiers =
@@ -946,9 +1219,13 @@ struct SkillsConfig:
                     .isValidBundleIdentifier(
                         bundleIdentifier
                     ),
-                registry.contains(
+                SkillDefinition
+                    .isValidIdentifier(
+                        rule.skillID
+                    ),
+                registry?.contains(
                     id: rule.skillID
-                ),
+                ) ?? true,
                 enabledSkillIDs.contains(
                     rule.skillID
                 ),

@@ -7,6 +7,9 @@ struct AppConfig: Codable, Sendable, Equatable {
     var privacy: PrivacyConfig = .init()
     var visualFeedback: VisualFeedbackConfig = .init()
     var context: ContextConfig = .init()
+    var styleCapsules: StyleCapsuleConfig = .init()
+    var terminologyPacks: TerminologyPackConfig = .init()
+    var communitySkills: CommunitySkillConfig = .init()
 
     init() {}
 
@@ -24,6 +27,21 @@ struct AppConfig: Codable, Sendable, Equatable {
             ContextConfig.self,
             forKey: .context
         ) ?? .init()
+        styleCapsules =
+            try container.decodeIfPresent(
+                StyleCapsuleConfig.self,
+                forKey: .styleCapsules
+            ) ?? .init()
+        terminologyPacks =
+            try container.decodeIfPresent(
+                TerminologyPackConfig.self,
+                forKey: .terminologyPacks
+            ) ?? .init()
+        communitySkills =
+            try container.decodeIfPresent(
+                CommunitySkillConfig.self,
+                forKey: .communitySkills
+            ) ?? .init()
     }
 }
 
@@ -316,6 +334,14 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         ResolvedSkillExecutionPlan?
     var skillPromptContext =
         SkillPromptContext()
+    var resolvedTerminologyEntries:
+        [TerminologyEntry]?
+    var resolvedTerminologyPackIDs:
+        [String] = []
+    var resolvedTerminologyRisk:
+        SkillRiskLevel = .low
+    var resolvedStyleCapsuleID:
+        String?
 
     init() {}
 
@@ -384,6 +410,10 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         resolvedSkillPlan = nil
         skillPromptContext =
             SkillPromptContext()
+        resolvedTerminologyEntries = nil
+        resolvedTerminologyPackIDs = []
+        resolvedTerminologyRisk = .low
+        resolvedStyleCapsuleID = nil
     }
 
     var voiceModes: VoiceModeConfig {
@@ -509,6 +539,10 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     }
 
     var activeDictionaryEntries: [TerminologyEntry] {
+        if let resolvedTerminologyEntries {
+            return resolvedTerminologyEntries
+                .filter(\.isEnabled)
+        }
         guard terminology.enabled else {
             return []
         }

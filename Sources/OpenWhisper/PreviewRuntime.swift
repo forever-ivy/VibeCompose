@@ -18,12 +18,18 @@ struct OutputRouter:
         plan:
             ResolvedSkillExecutionPlan,
         automaticPasteAllowed: Bool,
-        hasSelectionContext: Bool
+        hasSelectionContext: Bool,
+        additionalRisk:
+            SkillRiskLevel = .low
     ) -> OutputRoute {
         guard automaticPasteAllowed else {
             return .copyOnly
         }
-        if plan.skill.output.risk == .high {
+        if
+            plan.skill.output.risk
+                == .high
+                || additionalRisk == .high
+        {
             return .preview
         }
         switch plan.skill.output.delivery {

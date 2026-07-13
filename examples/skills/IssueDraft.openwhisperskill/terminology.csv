@@ -1,0 +1,4 @@
+type,original,replacement,enabled,aliases
+term,GitHub,,true,git hub
+term,OpenAPI,,true,open api
+term,Acceptance Criteria,,true,acceptance criteria

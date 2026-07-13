@@ -19,7 +19,7 @@ The current product line is macOS-only. The installed application at `/Applicati
 
 ## 2. Trust-Boundary Rules
 
-The implementation follows five fail-safe rules:
+The implementation follows six fail-safe rules:
 
 1. A previously active application can be reactivated, but old launch context is never proof that the current focused control is editable.
 2. A managed ChatGPT token can only be attached to the built-in approved HTTPS origins and paths.
@@ -28,6 +28,9 @@ The implementation follows five fail-safe rules:
 5. Selected text is read only after per-Skill authorization, and replacement
    is allowed only while the original AX target, selection range, and text
    digest remain unchanged.
+6. Community Skill files remain untrusted declarative data; they cannot
+   execute code, add providers or network origins, request external actions,
+   or move ahead of the fixed Prompt and delivery boundaries.
 
 When OpenWhisper cannot prove a safe insertion target, the transcript remains in the clipboard. HUD Retry and saved Recovery Retry are copy-only by default.
 
@@ -124,7 +127,7 @@ The long-term target remains a dedicated `DictationSession` model rather than co
     `run_self_correction`, or `run_long_dictation` without retaining text.
 - `SkillRegistry`, `SkillsConfig`, and `AppSkillRule`
   - provide stable, versioned declarations for Direct, Reply, Email, Backend
-    Prompt, Code Prompt, and Translate;
+    Prompt, Code Prompt, Translate, Context Rewrite, and Context Reply;
   - migrate legacy `VoiceModeConfig` and `AppModeRule` values without writing
     the old `voiceModes` key back to new configuration files;
   - normalize, bound, and de-duplicate decoded rules so malformed local
@@ -155,6 +158,18 @@ The long-term target remains a dedicated `DictationSession` model rather than co
     when model output fails the local contract;
   - records only bounded Skill IDs, semantic versions, and validation issue
     codes in History and redacted diagnostics.
+- `SkillPackageStore`
+  - imports only local `.openwhisperskill` directory packages containing the
+    constrained v1 file set;
+  - rejects unknown paths, traversal, symlinks, executable bits, shebangs,
+    Mach-O content, scripts, unsupported capabilities, external actions, and
+    bounded-size violations;
+  - installs owner-only copies under `Skills/Installed/<id>/<version>`,
+    re-inspects after copy, and verifies a deterministic content SHA-256;
+  - supports active-version selection, rollback, disable, per-version
+    uninstall, a package Inspector, and deterministic Golden contract tests;
+  - merges only active valid declarations into the built-in Registry, so
+    missing or damaged configured IDs resolve safely to Direct.
 - `ContextBroker` and `SelectionContextProvider`
   - support only explicit selected-text context in the current phase;
   - evaluate per-Skill Ask/Always/Never grants before reading text;
@@ -163,6 +178,20 @@ The long-term target remains a dedicated `DictationSession` model rather than co
     UTF-16 range, selected text, and SHA-256 digest for the session;
   - clear selected text from retained retry configuration and never add it to
     History, Recovery, product metrics, or support diagnostics.
+- `StyleCapsuleStore` and `StyleCapsuleResolver`
+  - expose five built-in Capsules and owner-only local custom Capsule files;
+  - analyze creation samples locally, clear the source-sample field after
+    summary generation, and do not persist source samples by default;
+  - inject only a user-assigned Capsule into a Skill that declares the
+    `styleCapsule` capability;
+  - freeze the resolved Capsule summary at recording start.
+- `TerminologyPackRegistry` and `TerminologyPackResolver`
+  - provide built-in Backend Engineering, Medical, and Kubernetes packs;
+  - merge user corrections, Skill-local terminology, user terms, and Domain
+    Pack entries in a fixed priority order;
+  - report user/pack conflicts and freeze enabled pack IDs, merged entries,
+    and maximum risk for the session;
+  - force Preview when a high-risk pack such as Medical is active.
 - `OutputRouter` and `PreviewWindowController`
   - preserve Direct automatic delivery while routing structured,
     selection-backed, and high-risk output through local Preview;
@@ -280,6 +309,8 @@ Current defaults:
 | Store | Contents | Default retention |
 | --- | --- | --- |
 | `config.json` | user configuration and privacy preferences | until reset/delete |
+| `StyleCapsules/*.json` | user-approved Capsule summary and optional retained examples; creation source samples are not stored by default | until delete/reset |
+| `Skills/Installed/<id>/<version>/` | reviewed declarative Community Skill files | until version uninstall/reset |
 | `transcription-history.jsonl` | final text, target metadata, outcome; raw ASR only when enabled | 30 days, 500 records |
 | `Recovery/recovery-history.jsonl` | failed-dictation metadata | 24 hours, 10 records |
 | `Recovery/Audio/*.wav` | failed recordings only | same as Recovery metadata |
@@ -292,7 +323,9 @@ Privacy behavior:
 - raw ASR history is disabled by default;
 - known password managers, Keychain, and Passwords are excluded from transcript/recovery persistence;
 - users can add extra sensitive bundle identifiers in configuration;
-- diagnostics do not include audio, transcript text, clipboard content, tokens, or complete provider response bodies;
+- diagnostics do not include audio, transcript text, clipboard content,
+  tokens, complete provider response bodies, Style Capsule content, Community
+  Skill prompts/files, or terminology text;
 - storage directories use `0700` and data files use `0600` where supported;
 - bounded JSONL tail reads avoid synchronously loading an unlimited history file;
 - startup pruning enforces time and count limits.
@@ -305,7 +338,8 @@ items, then
 `StorageCleanupService.deleteAllData()` validates the
 application-support boundary, refuses symbolic-link deletion, removes the
 complete local data root, recreates a secure empty directory, and saves a
-fresh default configuration.
+fresh default configuration. Removing the complete root also removes custom
+Style Capsules and installed Community Skills.
 
 ## 7. Recovery Containment
 
@@ -337,6 +371,12 @@ The current Settings window exposes:
   connected;
 - selected-text context enablement, character budget, per-Skill
   Ask/Always/Never grants, sensitive-app explanation, and permission reset;
+- built-in and custom Style Capsule creation, editing, per-Skill assignment,
+  deletion, and export;
+- personal terminology, Domain Pack enablement, conflict review, and
+  high-risk professional-review messaging;
+- local Community Skill import review, active-version selection, disable,
+  uninstall, Inspector, reviewed file list, SHA-256, and Golden tests;
 - history/recovery entry points;
 - terminology entry points;
 - paste behavior;
@@ -351,7 +391,7 @@ ChatGPT session.
 
 History and Terminology now use separate native management windows. History supports filtering, details, copy/retry, audio actions, deletion, and automatic refresh. Terminology uses stable entry identifiers and supports search, sorting, editing, enable/disable, deletion, CSV import/export, import conflict preview, and a global Quick Add panel.
 
-Settings uses a native resizable `NavigationSplitView` with eight panes and immediately
+Settings uses a native resizable `NavigationSplitView` with nine panes and immediately
 persists configuration changes. Remaining productization work is full
 keyboard/VoiceOver/high-contrast acceptance across Settings and the
 management windows.
@@ -378,7 +418,11 @@ management windows.
 - Benchmark output includes cold/warm `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 summaries.
 - Product diagnostics and optional product metrics are local-only in the current alpha; no product analytics upload is enabled.
 - `SupportDiagnosticsExporter` creates an owner-only local ZIP containing a non-secret runtime/configuration summary, redacted latency rows, enum/bucket-only product metrics, whitelisted metadata from up to five crash reports, and per-file SHA-256 values.
-- Support exports exclude audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoint values, raw crash bodies, history, Recovery metadata, and `config.json`; they are never uploaded automatically.
+- Support exports exclude audio, transcripts, clipboard text, account email,
+  credentials, terminology, Style Capsule summaries/examples/source samples,
+  Community Skill prompts/files/package names, custom endpoint values, raw
+  crash bodies, history, Recovery metadata, and `config.json`; they are never
+  uploaded automatically.
 
 ## 10. Packaging and Verification
 
@@ -419,7 +463,8 @@ Settings, Onboarding, History, Terminology, and Quick Add self-capture launches
 enable `SnapshotPrivacyMode` before loading runtime state. The capture process
 uses `AppConfig()` defaults, an empty in-memory ChatGPT session store, an empty
 in-memory OpenAI-Compatible credential store, and empty history/recovery/
-terminology collections. It also disables persistence, permission requests,
+terminology/Style Capsule/Community Skill collections. It also disables
+persistence, permission requests,
 support export, update mutations, and normal hotkey/runtime startup so
 acceptance artifacts cannot contain the user's account email, custom endpoint,
 transcripts, recovery metadata, or terminology.
@@ -428,7 +473,7 @@ The same privacy boundary applies to
 `--accessibility-audit-output`. `AccessibilityAudit` enables AppKit's enhanced
 accessibility interface for the transient process, walks the SwiftUI virtual
 accessibility tree, and records only roles, control names, identifiers, action
-names, and standard subroles. The installed-app harness covers all eight Settings
+names, and standard subroles. The installed-app harness covers all nine Settings
 panes, all four Onboarding steps, History, Terminology, and Quick Add and fails
 when an actionable control has neither an explicit/associated name nor a
 standard AppKit subrole description. Values and user content are not exported.

@@ -14,6 +14,8 @@
 
 开始听写后，OpenWhisper 会在 Mac 上录制一段短音频。默认路径会使用你在 OpenWhisper 中连接的 ChatGPT 会话，把音频和转写指令发送到 ChatGPT 服务。如果选择高级 OpenAI-Compatible 恢复路径，音频会通过 HTTPS 发送到你配置的端点，并使用你自己的凭据。
 
+当 AI Polish 或非 Direct Skill 通过 ChatGPT 路径运行时，请求还可能包含当前转写、已解析的声明式 Skill Prompt、已解析术语、你为该 Skill 分配的 Style Capsule 摘要，以及仅在你授权该 Skill 读取选区后才包含的选中文本。该路径不会发送完整 Skill Registry、完整 App Rules、无关安装包文件、Style Capsule 创建源样本、整个屏幕或完整文档。
+
 高级设置中的连接测试只发送自动生成的 0.1 秒静音 WAV、所配置的模型和 Recovery 凭据，不会读取或发送你的录音、转写文本或术语。所配置的服务商仍可能对此请求计费。
 
 OpenWhisper 是独立项目，与 OpenAI 不存在隶属、赞助或官方背书关系。第三方处理受你所选服务的条款和隐私政策约束：
@@ -33,7 +35,9 @@ OpenWhisper 可能在 `~/Library/Application Support/OpenWhisper/` 保存：
 | 成功录音 | 处理完成后删除 |
 | 性能诊断 | 14 天，最多 1,000 条 |
 | 本地产品指标 | 默认关闭；开启后 30 天，最多 5,000 条 |
-| 设置和术语 | 直到修改或删除 |
+| 设置和个人术语 | 直到修改或删除 |
+| 自定义 Style Capsule | 直到删除；创建源样本默认会被清空且不保存 |
+| 已安装的声明式 Community Skills | 直到禁用/卸载或执行“删除全部数据” |
 | 签名 Pro 激活收据和随机许可证设备 ID | 直到移除、通过“删除全部数据”重置，或在重新激活时替换 |
 
 已知密码管理器、钥匙串访问和 macOS“密码”默认不写入转写历史或失败音频 Recovery。你也可以添加其他敏感应用。
@@ -46,7 +50,7 @@ OpenWhisper 连接的 ChatGPT 会话保存在 macOS Keychain 服务 `app.openwhi
 
 ## 2. 诊断与支持归档
 
-性能诊断只包含耗时、字节数、服务类别、结果类别和错误类别，不应包含音频、转写正文、剪贴板内容或凭据。
+性能诊断只包含耗时、字节数、服务类别、结果类别、有限 Skill/术语数量与风险指标和错误类别，不应包含音频、转写正文、剪贴板内容、凭据、选中文本、Style Capsule 内容、术语正文、Community Skill Prompt/文件或安装包名称。
 
 可选的本地产品指标默认关闭。开启后只包含产品版本/构建、已完成的 Onboarding 步骤、服务类别、音频时长区间、处理延迟区间、交付类别和失败类别；不包含音频、转写或剪贴板正文、应用名称、Bundle Identifier、文件路径、账户信息或持久用户/安装标识，也不会由 OpenWhisper 自动上传。
 开启后，你可以使用 **设置 → 隐私 → 导出产品指标** 创建汇总 JSON，自行检查或自愿分享。报告只包含各维度计数，不包含单条事件时间戳。
@@ -60,7 +64,7 @@ OpenWhisper 连接的 ChatGPT 会话保存在 macOS Keychain 服务 `app.openwhi
 - 最多五份近期 OpenWhisper 崩溃报告的白名单元数据；
 - 文件校验和。
 
-归档不包含音频、转写正文、剪贴板文本、账户邮箱、术语、自定义端点 URL、凭据、原始崩溃报告正文、历史、Recovery 元数据或 `config.json`，也不会自动上传。
+归档不包含音频、转写正文、剪贴板文本、账户邮箱、选中文本、术语正文、Style Capsule 摘要/示例/源样本、Community Skill Prompt/文件/包名称、自定义端点 URL、凭据、原始崩溃报告正文、历史、Recovery 元数据或 `config.json`，也不会自动上传。
 
 ## 3. 剪贴板与辅助功能
 
@@ -74,10 +78,12 @@ OpenWhisper 会先把完成的转写写入 macOS 剪贴板。只有在辅助功�
 - 导出汇总后的本地产品指标，供自己检查或自愿分享；
 - 关闭原始转写保存；
 - 添加禁止生成历史或 Recovery 的敏感应用；
+- 撤销按 Skill 的选中文本权限，修改或移除 Style Capsule 分配；
+- 禁用 Domain Packs 和本地 Community Skills，回滚已安装版本或将其卸载；
 - 删除单条历史或 Recovery；
 - 退出 ChatGPT；
 - 单独移除 OpenAI-Compatible Recovery 密钥；
-- 使用“删除全部数据”删除本地设置、术语、历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话、Recovery API 密钥、签名 Pro 收据和本地许可证设备 ID。
+- 使用“删除全部数据”删除本地设置、术语、自定义 Style Capsule、已安装 Community Skills、历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话、Recovery API 密钥、签名 Pro 收据和本地许可证设备 ID。
 
 删除 OpenWhisper 本地数据不会删除已经发送到第三方服务或由第三方保留的数据。第三方数据需要通过对应服务的账户和隐私控制处理。
 

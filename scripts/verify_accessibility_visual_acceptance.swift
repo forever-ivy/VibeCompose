@@ -74,6 +74,7 @@ let expectedSurfaces = [
     "settings-appearance",
     "settings-ai-polish",
     "settings-context",
+    "settings-terminology",
     "settings-paste",
     "settings-privacy",
     "settings-advanced",

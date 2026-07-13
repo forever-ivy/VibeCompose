@@ -64,6 +64,12 @@ final class AppCoordinator {
     let pipelineFactory: PipelineFactory
     let launchAppContextProvider: LaunchAppContextProvider
     let contextBroker: ContextBroker
+    let styleCapsuleStore:
+        StyleCapsuleStore
+    let terminologyPackResolver:
+        TerminologyPackResolver
+    let skillPackageStore:
+        SkillPackageStore
     let contextPermissionPrompter:
         any ContextPermissionPrompting
     let previewPresenter:
@@ -118,6 +124,12 @@ final class AppCoordinator {
     private struct ActiveProcessingAudio {
         let fileURL: URL
         let deleteWhenFinished: Bool
+    }
+
+    private struct PersonalizationResolution {
+        let capsule: StyleCapsule?
+        let terminology:
+            ResolvedTerminologyAssets
     }
 
     init(
@@ -226,6 +238,12 @@ final class AppCoordinator {
         },
         launchAppContextProvider: @escaping LaunchAppContextProvider = { LaunchAppContext.current() },
         contextBroker: ContextBroker = .init(),
+        styleCapsuleStore:
+            StyleCapsuleStore = .init(),
+        terminologyPackResolver:
+            TerminologyPackResolver = .init(),
+        skillPackageStore:
+            SkillPackageStore = .init(),
         contextPermissionPrompter:
             (any ContextPermissionPrompting)? = nil,
         previewPresenter:
@@ -261,6 +279,12 @@ final class AppCoordinator {
         self.pipelineFactory = pipelineFactory
         self.launchAppContextProvider = launchAppContextProvider
         self.contextBroker = contextBroker
+        self.styleCapsuleStore =
+            styleCapsuleStore
+        self.terminologyPackResolver =
+            terminologyPackResolver
+        self.skillPackageStore =
+            skillPackageStore
         self.contextPermissionPrompter =
             contextPermissionPrompter
             ?? ContextPermissionPromptController()
@@ -491,6 +515,61 @@ final class AppCoordinator {
     private var activeDictationHotkey: HotkeyBinding {
         hotkeyRegistrationService.activeBinding
             ?? config.transcription.dictationHotkey
+    }
+
+    private func resolvePersonalization(
+        plan:
+            ResolvedSkillExecutionPlan
+    ) -> PersonalizationResolution {
+        let capsules: [StyleCapsule]
+        do {
+            capsules =
+                try styleCapsuleStore
+                    .loadAll()
+        } catch {
+            capsules =
+                StyleCapsuleRegistry
+                    .builtIn
+            logger.error(
+                "Loading Style Capsules failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+        let capsule =
+            StyleCapsuleResolver()
+                .resolve(
+                    config:
+                        config.styleCapsules,
+                    available: capsules,
+                    skill: plan.skill
+                )
+        let personalEntries =
+            config.transcription
+                .terminology.enabled
+            ? config.transcription
+                .terminology.entries
+                .filter(\.isEnabled)
+            : []
+        let terminology =
+            terminologyPackResolver.resolve(
+                personalEntries:
+                    personalEntries,
+                config:
+                    config.terminologyPacks,
+                skill: plan.skill
+            )
+        return PersonalizationResolution(
+            capsule: capsule,
+            terminology: terminology
+        )
+    }
+
+    private func currentSkillRegistry()
+        -> SkillRegistry
+    {
+        skillPackageStore.registry(
+            config:
+                config.communitySkills
+        )
     }
 
     private func applyVisualFeedbackLaunchOverride() {
@@ -799,7 +878,9 @@ final class AppCoordinator {
                 for: launchAppContext,
                 voiceModesAllowed: licenseManager
                     .snapshot()
-                    .allows(.voiceModes)
+                    .allows(.voiceModes),
+                registry:
+                    currentSkillRegistry()
             )
         state = .processing
         statusMenu?.update(state: .processing, detail: L10n.text("Requesting microphone"))
@@ -866,7 +947,7 @@ final class AppCoordinator {
                         "Checking selected text access"
                     )
                 )
-                let preparedContext =
+                var preparedContext =
                     await self.contextBroker.prepare(
                         plan: resolvedPlan,
                         launchAppContext:
@@ -908,12 +989,57 @@ final class AppCoordinator {
                             .save(self.config)
                     }
                 }
-                self.recordingPreparedContext =
-                    preparedContext
                 if
                     var frozenConfig =
                         self.recordingTranscriptionConfig
                 {
+                    let personalization =
+                        self.resolvePersonalization(
+                            plan:
+                                resolvedPlan
+                        )
+                    if
+                        let capsule =
+                            personalization
+                                .capsule
+                    {
+                        preparedContext
+                            .promptContext
+                            .styleCapsule =
+                            capsule
+                                .promptText
+                        if
+                            !preparedContext
+                                .grantedCapabilities
+                                .contains(
+                                    .styleCapsule
+                                )
+                        {
+                            preparedContext
+                                .grantedCapabilities
+                                .append(
+                                    .styleCapsule
+                                )
+                        }
+                        frozenConfig
+                            .resolvedStyleCapsuleID =
+                            capsule.id
+                    }
+                    frozenConfig
+                        .resolvedTerminologyEntries =
+                        personalization
+                            .terminology
+                            .entries
+                    frozenConfig
+                        .resolvedTerminologyPackIDs =
+                        personalization
+                            .terminology
+                            .enabledPackIDs
+                    frozenConfig
+                        .resolvedTerminologyRisk =
+                        personalization
+                            .terminology
+                            .maximumRisk
                     frozenConfig
                         .skillPromptContext =
                         preparedContext
@@ -921,6 +1047,8 @@ final class AppCoordinator {
                     self.recordingTranscriptionConfig =
                         frozenConfig
                 }
+                self.recordingPreparedContext =
+                    preparedContext
 
                 logger.info("Runtime preflight passed; starting recording session")
                 if let audioRecorder = recorder as? AudioRecorder {
@@ -1016,7 +1144,9 @@ final class AppCoordinator {
                     for: launchAppContext,
                     voiceModesAllowed: licenseManager
                         .snapshot()
-                        .allows(.voiceModes)
+                        .allows(.voiceModes),
+                    registry:
+                        currentSkillRegistry()
                 )
             recordingTranscriptionConfig = nil
             let preparedContext =
@@ -1174,7 +1304,10 @@ final class AppCoordinator {
                             hasSelectionContext:
                                 preparedSkillContext
                                     .selectionSnapshot
-                                    != nil
+                                    != nil,
+                            additionalRisk:
+                                transcriptionConfig
+                                    .resolvedTerminologyRisk
                         )
                     }
                 var deliveryAllowsAutomaticPaste =
@@ -1797,6 +1930,13 @@ final class AppCoordinator {
                         config: visualConfig
                     )
                 },
+                skillPackageStore:
+                    skillPackageStore,
+                styleCapsuleStore:
+                    styleCapsuleStore,
+                localAssetAccessEnabled:
+                    !snapshotPrivacyMode
+                        .isEnabled,
                 focusPane: focusPane
             )
         }
@@ -2263,7 +2403,9 @@ final class AppCoordinator {
                 for: launchAppContext,
                 voiceModesAllowed: licenseManager
                     .snapshot()
-                    .allows(.voiceModes)
+                    .allows(.voiceModes),
+                registry:
+                    currentSkillRegistry()
             ),
             injectionConfig: config.injection,
             launchAppContext: launchAppContext,

@@ -27,6 +27,16 @@ The current implementation already includes:
 - opt-in selected-text context for Context Rewrite and Context Reply, with
   per-Skill Ask/Always/Never permissions, sensitive-app blocking, a local Diff
   Preview, and exact target/range/text verification before replacement
+- five built-in Style Capsules plus local custom Capsule creation, editing,
+  per-Skill assignment, deletion, and export; source samples are analyzed in
+  memory and cleared instead of being stored by default
+- layered terminology with personal corrections, Skill-local terms, and
+  Backend Engineering, Medical, and Kubernetes Domain Packs; conflicts are
+  visible and the high-risk Medical pack forces Preview
+- local declarative `.openwhisperskill` import with package review, hard file
+  limits, path/symlink/executable rejection, content SHA-256, multiple
+  versions, rollback, disable/uninstall, Skill Inspector, and Golden contract
+  tests; arbitrary code, custom network, and external actions remain blocked
 - conservative paste behavior with clipboard fallback
 - retry results that are copied for manual paste instead of being injected automatically
 - microphone and Accessibility permission diagnostics
@@ -96,7 +106,7 @@ Installed accessibility structure precheck:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-This checks all seven Settings panes, every one of the four Onboarding steps,
+This checks all nine Settings panes, every one of the four Onboarding steps,
 History, Terminology, and Quick Add for a non-empty SwiftUI accessibility tree
 and named actionable controls. It complements—but does not replace—keyboard
 and VoiceOver interaction acceptance.
@@ -151,6 +161,11 @@ manually.
 
 **Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, optional product-metric, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
 
+The export also excludes Style Capsule summaries/examples/source samples,
+Community Skill prompts/files, and installed package names. It may contain
+only bounded counts, risk indicators, semantic versions, and validator issue
+codes for these features.
+
 The ChatGPT session is stored in Keychain under
 `app.openwhisper.mac.ChatGPTSession`. The optional OpenAI-Compatible Recovery
 API key is stored separately under
@@ -160,10 +175,11 @@ the endpoint, model, Keychain credential, real connection test, paid-route
 confirmation, and switch back to the ChatGPT account route. Recovery changes
 dictation ASR only; AI Polish remains ChatGPT-authenticated.
 
-**Settings → Privacy → Delete All Data** removes settings, terminology,
-transcript history, failed recordings, diagnostics, product metrics, retry
-files, the saved ChatGPT session, and the Recovery API key, then returns
-OpenWhisper to its signed-out defaults.
+**Settings → Privacy → Delete All Data** removes settings, terminology, custom
+Style Capsules, installed Community Skills, transcript history, failed
+recordings, diagnostics, product metrics, retry files, the saved ChatGPT
+session, and the Recovery API key, then returns OpenWhisper to its signed-out
+defaults.
 
 ## Repository Layout
 
@@ -171,6 +187,7 @@ OpenWhisper to its signed-out defaults.
 Sources/OpenWhisper/          macOS application source
 Tests/OpenWhisperTests/       unit and integration tests
 scripts/                      build, package, install, benchmark, and acceptance tools
+examples/skills/              reviewed declarative Community Skill template
 packaging/homebrew/           Homebrew Cask metadata
 docs/product/                 PRD, commercialization, brand, and productization plans
 docs/audits/                  security and logic audits
@@ -190,6 +207,8 @@ docs/design/                  visual specifications
 - [Architecture](docs/engineering/architecture.md)
 - [Skill Runtime](docs/engineering/skill-runtime.md)
 - [Context and Preview](docs/engineering/context-and-preview.md)
+- [Community Skill SDK](docs/engineering/community-skill-sdk.md)
+- [Registry and Actions boundary](docs/engineering/registry-and-actions-boundary.md)
 - [Release process](docs/engineering/release.md)
 - [Updater decision](docs/engineering/updater.md)
 - [Privacy Policy](docs/legal/privacy-policy.md)

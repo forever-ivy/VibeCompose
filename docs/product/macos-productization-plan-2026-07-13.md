@@ -541,11 +541,11 @@ Application Support/OpenWhisper
 - Quick Add 独立面板与 `Control–Option–Space` 全局快捷键；
 - 导入文件执行 metadata-first 检查，限制 2 MB、10,000 条并拒绝符号链接；
 - `scripts/product_surface_acceptance.sh --install` 已覆盖 History、Terminology 和 Quick Add 的安装版渲染证据。
-- Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
+- Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据、用户术语、Style Capsules 或已安装 Community Skills，并禁止截图进程写回真实数据。
 - HUD、产品表面、无障碍、权限和粘贴验收模式现在会在账户管理器创建前统一进入隐私隔离，不再触发真实 Keychain 的 `SecItemCopyMatching`；Overlay demo 同样使用默认 `AppConfig`，避免验收进程在启动阶段阻塞。
 - 产品表面截图会拒绝技术上有效但视觉上全黑或近似纯色的 CoreGraphics 帧，并回退到确定性的 content-view 渲染；回退结果仍必须通过非纯色门禁，避免把黑屏证据误判为成功。
-- `scripts/accessibility_acceptance.sh --install` 已覆盖七个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
-- `scripts/accessibility_visual_acceptance.sh` 已覆盖相同 13 个产品表面的 baseline / Increase Contrast 成对截图；截图固定为 2x，分析统一下采样到逻辑像素，要求几何一致、像素差异明确且局部边缘对比度不下降。`20260713T084453Z` 安装版证据中所有表面通过，Privacy pane 也被确认不再误捕获 Account pane。
+- `scripts/accessibility_acceptance.sh --install` 已覆盖九个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
+- `scripts/accessibility_visual_acceptance.sh` 当前覆盖相同 16 个产品表面的 baseline / Increase Contrast 成对截图；截图固定为 2x，分析统一下采样到逻辑像素，要求几何一致、像素差异明确且局部边缘对比度不下降。此前 `20260713T084453Z` 安装版证据覆盖当时表面；新增 Context 与 Settings Terminology 页面需要通过本轮最新构建重新生成证据。
 - `scripts/interaction_acceptance.sh` 可用同一隐私边界启动长时间保持的安装版界面，供官方 Computer Use 验证键盘、焦点和控件激活；验收进程不读取或持久化真实配置、凭据、History、Recovery、术语或 Onboarding 完成状态，并可显式恢复正常菜单栏运行。
 - `scripts/permission_surface_acceptance.sh` 从 `/Applications/OpenWhisper.app` 生成 Account 权限表面，并用 Vision OCR 要求麦克风和辅助功能两张卡片都显示 `Granted`/`已授权`；该路径读取真实 TCC 状态，但仍使用隐私隔离配置和空用户内容。
 - `OverlayController` 的辅助显示选项已改为可注入 provider；正常运行仍实时读取 macOS Reduce Motion / Increase Contrast，视觉验收则显式固定基线并生成 Reduce Motion 双时点与 Increase Contrast 快照。门禁要求 Reduce Motion 波形跨时点零/近零像素漂移、增强对比度产生明确像素变化且两者都不改变对应 HUD 几何。

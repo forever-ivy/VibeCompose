@@ -1,0 +1,35 @@
+schemaVersion: 1
+id: dev.openwhisper.example.issue-draft
+version: 1.0.0
+name: Issue Draft
+author: OpenWhisper Example
+minimumAppVersion: 0.1.0
+
+triggers:
+  manual: true
+
+permissions:
+  required:
+    - voice
+  optional:
+    - selection
+    - styleCapsule
+
+context:
+  maximumCharacters: 6000
+  includeSelectionOnly: true
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 12000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: true
+  requiredSections:
+    - Goal
+    - Context
+    - Acceptance Criteria

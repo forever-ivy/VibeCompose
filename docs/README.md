@@ -25,6 +25,9 @@
 - [Hotkey and feedback architecture](engineering/hotkey-and-feedback.md)
 - [Skill Runtime](engineering/skill-runtime.md)
 - [Context and Preview](engineering/context-and-preview.md)
+- [Community Skill SDK](engineering/community-skill-sdk.md) — local package
+  manifest, security limits, validators, Golden cases, and maintained template
+- [Registry, Connectors, and Actions boundary](engineering/registry-and-actions-boundary.md) — Phase 6 signing, revocation, Connector, and Action Preview research gates
 - [HUD visual specification](design/hud-visual-spec.md)
 
 ## Legal, Privacy, and Support

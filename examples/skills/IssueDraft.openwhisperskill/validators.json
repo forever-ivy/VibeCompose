@@ -1,0 +1,16 @@
+{
+  "requireNonEmpty": true,
+  "maximumCharacters": 12000,
+  "preserveTechnicalLiterals": true,
+  "requireClosedMarkdownFences": true,
+  "requiredSectionAlternatives": [
+    ["Goal", "目标"],
+    ["Context", "背景"],
+    ["Acceptance Criteria", "验收标准"]
+  ],
+  "forbiddenPhrases": [
+    "I accessed your files",
+    "I ran the command",
+    "tests are passing"
+  ]
+}
