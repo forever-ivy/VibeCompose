@@ -81,6 +81,7 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("OWCapabilityPublicEDKey"))
     #expect(packageScript.contains("sign_sparkle_components"))
     #expect(packageScript.contains("enable_adhoc_library_validation_exception"))
+    #expect(packageScript.contains("plutil -lint \"$ENTITLEMENTS_FILE\""))
     #expect(
         packageScript.contains(
             "com.apple.security.cs.disable-library-validation"

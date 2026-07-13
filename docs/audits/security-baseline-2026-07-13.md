@@ -34,6 +34,10 @@
 - 粘贴目标等待改为可取消异步时钟，不再用同步 sleep 阻塞 MainActor；
 - 录音、处理中音频和 multipart 在初始化失败、启动失败、上传失败、取消、退出和下次启动时均有归属明确的清理路径。
 
+发布门禁自身也补齐了临时文件生命周期：转写测试创建的 10–25 MB
+音频 fixture 现在全部通过 `defer` 删除，完整 `scripts/check.sh` 前后不会新增
+大体积临时 WAV；打包脚本在签名前使用 `plutil -lint` 校验 entitlement plist。
+
 **仍不能公开声明为可商业发布。** 真实 Developer ID/公证证据、完整原生首次体验、生产 Updater 与 Capability Policy 托管/密钥及更新回滚/事故演练实证、永久商业运营/联系方式以及若干残余可靠性问题尚未关闭。
 
 ## 2. 基线状态
@@ -46,7 +50,7 @@
 
 | 审计 ID | 状态 | 当前证据 | 残余工作 |
 | --- | --- | --- | --- |
-| OW-AUD-001 错误目标自动粘贴 | 部分关闭 | `TextInjector.injectionPlan` 不再把旧启动上下文视为可编辑证明；Retry/Recovery Retry 强制复制；发送前重新检查当前可编辑焦点与同一 AX target；发送后用 AX value/range 前后快照区分 `inserted_verified`、`paste_dispatched` 和 `clipboard`，无法确认时保留转写剪贴板 | 需完成真实 Notes/TextEdit/Terminal 及第三方编辑器矩阵；不支持可靠 AX 文本快照的目标应稳定落入 `paste_dispatched`，不能误报已确认插入 |
+| OW-AUD-001 错误目标自动粘贴 | 部分关闭 | `TextInjector.injectionPlan` 不再把旧启动上下文视为可编辑证明；Retry/Recovery Retry 强制复制；发送前重新检查当前可编辑焦点与同一 AX target；发送后用 AX value/range 前后快照区分 `inserted_verified`、`paste_dispatched` 和 `clipboard`，无法确认时保留转写剪贴板；安装版 TextEdit 自动验收已观察到 `inserted_verified` 并恢复原剪贴板 | 需完成真实 Notes/Terminal 及第三方编辑器矩阵；不支持可靠 AX 文本快照的目标应稳定落入 `paste_dispatched`，不能误报已确认插入 |
 | OW-AUD-002 Managed Token 任意 endpoint | 关闭 | `ManagedEndpointPolicy` 固定 `https://chatgpt.com` 两个 path；拒绝 query、fragment、userinfo、非 443 端口；`SecureHTTPClient` 拒绝重定向；自定义 endpoint 只使用独立 Keychain API Key；`OPENAI_API_KEY` 单独存在不能启用或授权 Recovery | 继续保留 managed/user-owned credential 隔离和重定向回归测试 |
 | OW-AUD-003 Recovery 路径逃逸 | 关闭 | 记录只持久化 UUID；文件名由 UUID 派生；Recovery 根目录、JSONL index、Audio 目录与音频文件均检查 symlink；同时检查普通文件、包含关系、25 MB 与 RIFF/WAVE 头；启动时把遗留音频权限收紧为 `0600` | 增加更大规模损坏 JSONL/path fuzz 作为持续门禁 |
 | OW-AUD-004 refresh 竞态/注销复活 | 关闭 | `RefreshFlight` 合并并发 refresh；generation 与原 refresh token 双重提交校验；Sign out 取消 flight 并递增 generation | 可进一步迁移到 actor，减少锁式状态管理复杂度 |
@@ -127,6 +131,8 @@ excludeSensitiveApps = true
 | 技术字面量、简繁与标点 round-trip | `TechnicalLiteralTokenizerTests.swift`, `DictationPipelineTests.swift`, `TextPolishTests.swift` |
 | 可取消粘贴等待、session 取消与 HUD generation | `TextInjectorTests.swift`, `AppCoordinatorCancellationTests.swift`, `OverlayControllerTests.swift` |
 | 启动/退出孤儿文件与 Recorder partial 清理 | `StoragePrivacyTests.swift`, `AudioRecorderTests.swift`, `AppCoordinatorCancellationTests.swift` |
+| 测试音频 fixture 与 entitlement 语法门禁 | `ChatGPTTranscriberTests.swift`, `ReleaseIntegrityScriptTests.swift` |
+| 产品表面固定 2x 截图、可见屏幕定位与局部边缘对比度门禁 | `ProductSurfaceSnapshotTests.swift`, `VisualAcceptanceScriptTests.swift`, `scripts/verify_accessibility_visual_acceptance.swift` |
 | 脱敏支持诊断 ZIP、崩溃白名单摘要和校验和 | `SupportDiagnosticsTests.swift`, `SettingsProductizationTests.swift` |
 | 双语隐私/条款/退款/支持文档契约 | `PolicyDocumentationTests.swift` |
 | Release manifest、Cask fail-closed 与 updater gate | `ReleaseIntegrityScriptTests.swift` |
@@ -140,9 +146,22 @@ excludeSensitiveApps = true
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ```
 
-2026-07-13 本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
+2026-07-13 本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过；当前临时目录中大于 5 MB 的 WAV 在完整检查前后均为 `44` 个、`780686764` 字节，没有新增测试大文件。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
 
 同日对 `/Applications/OpenWhisper.app` 的启动清理进行实机检查：原有 Recovery WAV 从 `0644` 被统一收紧为 `0600`，应用以 Settings 模式保持运行。
+
+同日最新安装版自动验收证据：
+
+- `dist/accessibility-visual-acceptance/20260713T045237Z`：六个 Settings pane、四步 Onboarding、History、Terminology 和 Quick Add 均输出稳定 2x 成对截图；统一逻辑分辨率上的局部边缘对比度全部提升；
+- `dist/accessibility-acceptance/20260713T045557Z`：13 个产品表面的可操作控件均无缺失名称；
+- `dist/product-surface-acceptance/20260713T045625Z`：History、Terminology 和 Quick Add 渲染与几何门禁通过；
+- `dist/visual-acceptance/20260713T045753Z`：HUD 全状态、Reduce Motion 静态性和 Increase Contrast 差异门禁通过；
+- `dist/paste-acceptance/20260713T045828Z`：隔离 TextEdit 进程观察到 `inserted_verified`，目标 marker 存在且原剪贴板已恢复。
+
+本机两个 Apple Development identity 仍被 Gatekeeper 判定为
+`CSSMERR_TP_CERT_REVOKED`。上述证据使用稳定 designated requirement 的
+ad-hoc 本地构建，不构成 Developer ID、notarization/staple 或 clean TCC
+首次授权证明。
 
 ## 6. 安装版验收要求
 
@@ -181,7 +200,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ## 8. 下一安全工作序列
 
 1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID、生产 Sparkle 与 Capability Policy 独立密钥/托管地址，完成真实签名、公证、签名 appcast、首份能力策略、更新回滚与事故演练；
-2. 完成安全粘贴真实 Notes/TextEdit/Terminal 等矩阵，验证 `inserted_verified`、`paste_dispatched`、`clipboard` 与剪贴板恢复行为均符合实现；
+2. 在已通过 TextEdit 自动预检的基础上，完成安全粘贴真实 Notes/Terminal/第三方编辑器矩阵，验证 `inserted_verified`、`paste_dispatched`、`clipboard` 与剪贴板恢复行为均符合实现；
 3. 完成 clean TCC Onboarding、键盘和 VoiceOver 安装版验收；
 4. 把私有 Alpha 双语政策定稿为带永久运营主体、联系方式和结账条款的公开版本；
 5. 对磁盘满、SIGKILL 后重启、慢网络和大文件取消做持续压力测试。

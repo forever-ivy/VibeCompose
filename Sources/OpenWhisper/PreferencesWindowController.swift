@@ -114,43 +114,7 @@ final class PreferencesWindowController: NSWindowController {
     func writeSnapshot(to url: URL) throws {
         window?.contentView?.layoutSubtreeIfNeeded()
         window?.displayIfNeeded()
-
-        if
-            let window,
-            window.windowNumber > 0,
-            let windowImage = CGWindowListCreateImage(
-                .null,
-                .optionIncludingWindow,
-                CGWindowID(window.windowNumber),
-                [.boundsIgnoreFraming, .bestResolution]
-            ),
-            let png = NSBitmapImageRep(cgImage: windowImage)
-                .representation(using: .png, properties: [:])
-        {
-            try png.write(to: url, options: [.atomic])
-            return
-        }
-
-        guard let contentView = window?.contentView else {
-            throw PreferencesSnapshotError.missingContentView
-        }
-
-        contentView.layoutSubtreeIfNeeded()
-        contentView.displayIfNeeded()
-        let bounds = contentView.bounds
-        guard
-            bounds.width > 0,
-            bounds.height > 0,
-            let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds)
-        else {
-            throw PreferencesSnapshotError.bitmapUnavailable
-        }
-
-        contentView.cacheDisplay(in: bounds, to: bitmap)
-        guard let png = bitmap.representation(using: .png, properties: [:]) else {
-            throw PreferencesSnapshotError.pngEncodingFailed
-        }
-        try png.write(to: url, options: [.atomic])
+        try ProductSurfaceSnapshot.write(window: window, to: url)
     }
 
     func resizeForSnapshot(_ size: SettingsSnapshotSize) {

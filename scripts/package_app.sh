@@ -222,6 +222,7 @@ fi
   printf '%s\n' '</dict>'
   printf '%s\n' '</plist>'
 } >"$ENTITLEMENTS_FILE"
+/usr/bin/plutil -lint "$ENTITLEMENTS_FILE" >/dev/null
 
 SIGNING_IDENTITY="$(resolve_signing_identity)"
 CODESIGN_ARGS=(--force)

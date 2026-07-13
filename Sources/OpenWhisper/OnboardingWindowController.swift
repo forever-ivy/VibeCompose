@@ -108,23 +108,7 @@ final class OnboardingWindowController: NSWindowController {
     func writeSnapshot(to url: URL) throws {
         window?.contentView?.layoutSubtreeIfNeeded()
         window?.displayIfNeeded()
-
-        guard
-            let window,
-            window.windowNumber > 0,
-            let windowImage = CGWindowListCreateImage(
-                .null,
-                .optionIncludingWindow,
-                CGWindowID(window.windowNumber),
-                [.boundsIgnoreFraming, .bestResolution]
-            ),
-            let png = NSBitmapImageRep(cgImage: windowImage)
-                .representation(using: .png, properties: [:])
-        else {
-            throw PreferencesSnapshotError.bitmapUnavailable
-        }
-
-        try png.write(to: url, options: [.atomic])
+        try ProductSurfaceSnapshot.write(window: window, to: url)
     }
 }
 

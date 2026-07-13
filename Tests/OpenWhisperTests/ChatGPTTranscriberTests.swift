@@ -162,6 +162,7 @@ func managedAuthSendsAudioAboveLegacyTenMegabyteLimit() async throws {
 
     let byteCount = 10 * 1024 * 1024 + 1
     let audio = try makeAudioFixture(byteCount: byteCount)
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     let result = try await transcriber.transcribe(audio)
 
     #expect(result.text == "large audio transcript")
@@ -185,6 +186,7 @@ func rejectsAudioAboveOfficialTwentyFiveMegabyteLimit() async throws {
     )
 
     let audio = try makeSparseAudioFixture(byteCount: 25_000_001)
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     var caughtError: Error?
     do {
         _ = try await transcriber.transcribe(audio)
@@ -221,7 +223,9 @@ func transcriptionStreamsPrivateMultipartFileAndRemovesItAfterUpload() async thr
         }
     )
 
-    let result = try await transcriber.transcribe(makeAudioFixture())
+    let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
+    let result = try await transcriber.transcribe(audio)
     let snapshot = observation.snapshot()
 
     #expect(result.text == "streamed")
@@ -308,6 +312,7 @@ func rejectsSymlinkedAudioBeforeBuildingMultipartUpload() async throws {
     config.provider = .chatGPTManagedAuth
 
     let target = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: target.fileURL) }
     let symlinkURL = FileManager.default.temporaryDirectory
         .appendingPathComponent("\(UUID().uuidString).wav")
     try FileManager.default.createSymbolicLink(
@@ -372,6 +377,7 @@ func openAICompatibleRouteIncludesPromptField() async throws {
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     let result = try await transcriber.transcribe(audio)
 
     #expect(result.metrics.promptIncluded == true)
@@ -411,6 +417,7 @@ func openAICompatibleRouteRejectsEnvironmentOnlyCredential() async throws {
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     var caughtError: Error?
     do {
         _ = try await transcriber.transcribe(audio)
@@ -456,6 +463,7 @@ func openAICompatibleRouteRedactsKeyFromProviderError() async throws {
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     var caughtError: Error?
     do {
         _ = try await transcriber.transcribe(audio)
@@ -507,6 +515,7 @@ func managedAuthFallsBackWhenPromptFieldIsRejected() async throws {
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     let result = try await transcriber.transcribe(audio)
 
     #expect(result.text == "OpenWhisper done")
@@ -560,6 +569,7 @@ func managedAuthRefreshesAccessTokenAfterForbidden() async throws {
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     let result = try await transcriber.transcribe(audio)
 
     #expect(result.text == "refreshed transcript")
@@ -599,6 +609,7 @@ func managedAuthReportsRetryableErrorAfterThreeCloudflareChallenges() async thro
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     var caughtError: Error?
     do {
         _ = try await transcriber.transcribe(audio)
@@ -644,6 +655,7 @@ func managedAuthManualRetryPolicyAttemptsCloudflareChallengeOnlyOnce() async thr
     )
 
     let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     var caughtError: Error?
     do {
         _ = try await transcriber.transcribe(audio)

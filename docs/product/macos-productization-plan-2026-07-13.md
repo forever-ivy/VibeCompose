@@ -69,7 +69,7 @@ macOS 首发策略：
 当前仍阻断商业发布的事项：
 
 - Developer ID、固定 Team ID、notarization/staple、生产 updater 托管/密钥、真实签名 appcast 和 rollback 实证未完成；
-- 已将“确认插入”“仅发送粘贴并保留剪贴板”“纯剪贴板兜底”拆为三种结果，并用同一 AX target 的前后 value/range 变化验证插入；真实 Notes/TextEdit/Terminal 多应用焦点矩阵仍未完成；
+- 已将“确认插入”“仅发送粘贴并保留剪贴板”“纯剪贴板兜底”拆为三种结果，并用同一 AX target 的前后 value/range 变化验证插入；TextEdit 自动预检已通过，真实 Notes/Terminal/第三方编辑器多应用焦点矩阵仍未完成；
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
 - HUD 的 Reduce Motion / Increase Contrast 已加入安装版确定性像素门禁；Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与交互式高对比度验收仍未完成；
 - 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
@@ -88,6 +88,8 @@ macOS 首发策略：
 - Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
 - Provider Capability Policy 使用独立 Ed25519 公钥、HTTPS 固定地址、31 天硬到期、build 范围和单调 revision；在读取音频/Token/文本前阻断受影响能力；
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
+- 打包前会校验 Hardened Runtime entitlement plist 语法；转写测试中的全部临时音频 fixture 已改为确定性清理，重复执行完整检查不再累积 10–25 MB WAV 并挤满系统临时目录。
+- Settings、Onboarding、History、Terminology 和 Quick Add 的安装版截图统一归一为 2x backing scale，并在固定可见屏幕区域内居中；Increase Contrast 门禁在统一逻辑分辨率上比较局部边缘对比度，整体 luminance spread 只保留为诊断，避免把 macOS 减少透明度/颜色层次误判为对比度退化。
 - 安全粘贴新增同一 AX target 的前后文本快照验证；只有精确观察到预期 UTF-16 替换才记为 `inserted_verified`，无法观察或结果不确定时记为 `paste_dispatched` 并保留转写剪贴板，未发送事件仍记为 `clipboard`；
 - HUD、History 筛选与标签、延迟诊断和双语文案已区分“已确认插入 / 已发送粘贴 / 已复制”，旧版 `pasted` 历史按“仅发送粘贴（旧记录）”解释，不追溯性宣称已验证。
 - Auto Polish 决策引擎已接入真实流水线：短且低复杂度的 Direct 听写跳过二次重写；改口、结构化、邮件、翻译、长输入和未来显式 Voice Mode 才执行，并只把有限枚举决策原因写入脱敏诊断。
@@ -525,15 +527,26 @@ Application Support/OpenWhisper
 - `scripts/product_surface_acceptance.sh --install` 已覆盖 History、Terminology 和 Quick Add 的安装版渲染证据。
 - Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
 - `scripts/accessibility_acceptance.sh --install` 已覆盖六个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
+- `scripts/accessibility_visual_acceptance.sh` 已覆盖相同 13 个产品表面的 baseline / Increase Contrast 成对截图；截图固定为 2x，分析统一下采样到逻辑像素，要求几何一致、像素差异明确且局部边缘对比度不下降。`20260713T045237Z` 安装版证据中所有表面通过，Privacy pane 也被确认不再误捕获 Account pane。
 - `scripts/interaction_acceptance.sh` 可用同一隐私边界启动长时间保持的安装版界面，供官方 Computer Use 验证键盘、焦点和控件激活；验收进程不读取或持久化真实配置、凭据、History、Recovery、术语或 Onboarding 完成状态，并可显式恢复正常菜单栏运行。
 - `OverlayController` 的辅助显示选项已改为可注入 provider；正常运行仍实时读取 macOS Reduce Motion / Increase Contrast，视觉验收则显式固定基线并生成 Reduce Motion 双时点与 Increase Contrast 快照。门禁要求 Reduce Motion 波形跨时点零/近零像素漂移、增强对比度产生明确像素变化且两者都不改变对应 HUD 几何。
-- 2026-07-13 本机安装版 TextEdit 粘贴验收再次证明签名/TCC 阻断：可用 Keychain 中的 Apple Development 身份被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，打包只能回退 ad-hoc；此时 `AXIsProcessTrusted()` 为 false，不能把“权限列表已打开”当作已授权。需要更新有效开发/Developer ID 证书后重新安装、重新授权并重跑真实矩阵。
+- 本机可用 Keychain 中的 Apple Development 身份仍被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，因此当前构建只能在显式本地调试开关下回退为稳定 designated requirement 的 ad-hoc 签名；这仍然阻断 Developer ID 商业发布。
+- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T045828Z` 安装版证据已在隔离 TextEdit 进程中观察到 marker，结果为 `inserted_verified`，并在验证后恢复原剪贴板。该结果只关闭当前 TextEdit 自动预检，不替代 Notes/Terminal/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
+
+本轮最新安装版证据：
+
+- 完整检查：`OPENWHISPER_ALLOW_ADHOC_SIGNING=1 scripts/check.sh` 退出码 `0`；当前临时目录中大于 5 MB 的 WAV 在执行前后均为 `44` 个、`780686764` 字节，没有新增测试大文件；
+- 产品表面高对比度：`dist/accessibility-visual-acceptance/20260713T045237Z`；
+- 无障碍结构：`dist/accessibility-acceptance/20260713T045557Z`；
+- History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T045625Z`；
+- HUD 状态、Reduce Motion 与 Increase Contrast：`dist/visual-acceptance/20260713T045753Z`；
+- TextEdit 安全粘贴：`dist/paste-acceptance/20260713T045828Z`。
 
 仍未完成的 Phase 3 出口项：
 
 - clean TCC 首次成功听写；
 - HUD 已完成 Reduce Motion / Increase Contrast 安装版确定性视觉门禁；Settings、Onboarding、History、Terminology 和 Quick Add 已完成安装版无障碍结构预检，但完整键盘/VoiceOver/高对比度交互验收仍未完成；
-- 真实安装版 F5、ESC、inline close、Retry 与 paste/clipboard 矩阵。
+- TextEdit 自动安全粘贴预检已通过；真实安装版 F5、ESC、inline close、Retry，以及 Notes/Terminal/第三方编辑器的 paste/clipboard 矩阵仍未完成。
 
 ## 8. 性能与可靠性
 
@@ -865,6 +878,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-024 | P1 | 临时文件故障清理（已实现） | Audio/Upload lifecycle | partial、失败上传、退出和启动 orphan 均可验证清理 |
 | OW-MAC-025 | P1 | 签名 Provider Capability Kill Switch（客户端与工具已实现，待生产运营） | Provider boundary/Release | 音频、Token、文本发送前阻断；无效/旧策略不能清除停用 |
 | OW-MAC-026 | P1 | 第三方依赖许可证门禁（已实现） | Package.resolved/Release | 每个 pin 均有精确 notices 与 SHA-256，App 资源和 release gate 一致 |
+| OW-MAC-027 | P1 | 测试临时音频生命周期（已实现） | CI/Storage | 完整检查前后不新增大体积临时 WAV；失败测试不长期占用系统盘 |
 
 ## 14. 第一执行 Sprint（10 个工作日）
 

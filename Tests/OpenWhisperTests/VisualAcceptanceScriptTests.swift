@@ -119,6 +119,8 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
     #expect(script.contains("/Applications/$APP_NAME.app"))
     #expect(script.contains("--visual-acceptance-increase-contrast"))
     #expect(script.contains("--visual-acceptance-reduce-motion=off"))
+    #expect(script.contains(#""--settings-pane=$detail_value""#))
+    #expect(script.contains(#""--onboarding-step=$detail_value""#))
     #expect(script.contains("verify_accessibility_visual_acceptance.swift"))
     #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
     for surface in [
@@ -140,9 +142,12 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
         #expect(verifier.contains(surface))
     }
     #expect(verifier.contains("changed pixels"))
-    #expect(verifier.contains("luminance spread"))
+    #expect(verifier.contains("local edge contrast"))
+    #expect(verifier.contains("luminance spread diagnostic"))
+    #expect(verifier.contains("normalizedBackingScale"))
     #expect(verifier.contains("geometryMismatch"))
-    #expect(verifier.contains("weakerContrast"))
+    #expect(verifier.contains("weakerEdgeContrast"))
+    #expect(!verifier.contains("non-decreasing luminance spread"))
 }
 
 @Test

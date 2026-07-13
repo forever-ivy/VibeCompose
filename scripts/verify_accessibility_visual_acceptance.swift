@@ -16,10 +16,11 @@ enum AccessibilityVisualVerificationError:
     case usage
     case unreadable(String)
     case tooSmall(String, Int, Int)
+    case unexpectedBackingScale(String, Int, Int, Int)
     case tooUniform(String, Int)
     case geometryMismatch(String, Int, Int, Int, Int)
     case insufficientDifference(String, Int)
-    case weakerContrast(String, Double, Double)
+    case weakerEdgeContrast(String, Double, Double, Double)
 
     var description: String {
         switch self {
@@ -29,6 +30,13 @@ enum AccessibilityVisualVerificationError:
             return "Could not read accessibility visual snapshot: \(path)"
         case .tooSmall(let name, let width, let height):
             return "\(name) is unexpectedly small: \(width)x\(height)"
+        case .unexpectedBackingScale(
+            let name,
+            let width,
+            let height,
+            let scale
+        ):
+            return "\(name) is not normalized to a \(scale)x backing scale: \(width)x\(height)"
         case .tooUniform(let name, let buckets):
             return "\(name) is too visually uniform: \(buckets) sampled color buckets"
         case .geometryMismatch(
@@ -41,12 +49,21 @@ enum AccessibilityVisualVerificationError:
             return "\(name) changed geometry from \(baselineWidth)x\(baselineHeight) to \(contrastWidth)x\(contrastHeight)"
         case .insufficientDifference(let name, let changedPixels):
             return "\(name) Increase Contrast changed only \(changedPixels) pixels"
-        case .weakerContrast(
+        case .weakerEdgeContrast(
             let name,
-            let baselineSpread,
-            let contrastSpread
+            let baselineContrast,
+            let contrastContrast,
+            let tolerance
         ):
-            return "\(name) luminance spread decreased from \(baselineSpread) to \(contrastSpread)"
+            return String(
+                format:
+                    "%@ local edge contrast decreased from %.5f to %.5f "
+                    + "(tolerance %.5f)",
+                name,
+                baselineContrast,
+                contrastContrast,
+                tolerance
+            )
         }
     }
 }
@@ -75,6 +92,68 @@ func load(path: String, name: String) throws -> AccessibilitySurfaceImage {
         throw AccessibilityVisualVerificationError.unreadable(path)
     }
     return AccessibilitySurfaceImage(name: name, rep: rep)
+}
+
+func normalizedLogicalImage(
+    _ image: AccessibilitySurfaceImage,
+    backingScale: Int
+) throws -> AccessibilitySurfaceImage {
+    guard
+        backingScale > 0,
+        image.width.isMultiple(of: backingScale),
+        image.height.isMultiple(of: backingScale)
+    else {
+        throw AccessibilityVisualVerificationError.unexpectedBackingScale(
+            image.name,
+            image.width,
+            image.height,
+            backingScale
+        )
+    }
+
+    let targetWidth = image.width / backingScale
+    let targetHeight = image.height / backingScale
+    guard
+        let sourceImage = image.rep.cgImage,
+        let context = CGContext(
+            data: nil,
+            width: targetWidth,
+            height: targetHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space:
+                CGColorSpace(name: CGColorSpace.sRGB)
+                ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+    else {
+        throw AccessibilityVisualVerificationError.unreadable(image.name)
+    }
+
+    context.interpolationQuality = .high
+    context.draw(
+        sourceImage,
+        in: CGRect(
+            x: 0,
+            y: 0,
+            width: targetWidth,
+            height: targetHeight
+        )
+    )
+    guard let normalizedImage = context.makeImage() else {
+        throw AccessibilityVisualVerificationError.unreadable(image.name)
+    }
+
+    return AccessibilitySurfaceImage(
+        name: image.name,
+        rep: NSBitmapImageRep(cgImage: normalizedImage)
+    )
+}
+
+func luminance(_ color: NSColor) -> Double {
+    (0.2126 * Double(color.redComponent))
+        + (0.7152 * Double(color.greenComponent))
+        + (0.0722 * Double(color.blueComponent))
 }
 
 func sampledColors(
@@ -116,16 +195,51 @@ func luminanceSpread(_ colors: [NSColor]) -> Double {
     guard !colors.isEmpty else {
         return 0
     }
-    let luminances = colors.map {
-        (0.2126 * Double($0.redComponent))
-            + (0.7152 * Double($0.greenComponent))
-            + (0.0722 * Double($0.blueComponent))
-    }
+    let luminances = colors.map(luminance)
     let mean = luminances.reduce(0, +) / Double(luminances.count)
     let variance = luminances.reduce(0) {
         $0 + (($1 - mean) * ($1 - mean))
     } / Double(luminances.count)
     return sqrt(variance)
+}
+
+func localEdgeContrast(
+    in image: AccessibilitySurfaceImage
+) -> Double {
+    guard image.width > 1, image.height > 1 else {
+        return 0
+    }
+
+    let step = max(1, min(image.width, image.height) / 500)
+    var total = 0.0
+    var edgeCount = 0
+
+    for y in stride(from: 0, to: image.height - step, by: step) {
+        for x in stride(from: 0, to: image.width - step, by: step) {
+            guard
+                let center = image.rep.colorAt(x: x, y: y)?
+                    .usingColorSpace(.deviceRGB),
+                let right = image.rep.colorAt(x: x + step, y: y)?
+                    .usingColorSpace(.deviceRGB),
+                let down = image.rep.colorAt(x: x, y: y + step)?
+                    .usingColorSpace(.deviceRGB),
+                center.alphaComponent > 0.05,
+                right.alphaComponent > 0.05,
+                down.alphaComponent > 0.05
+            else {
+                continue
+            }
+
+            total += abs(luminance(center) - luminance(right))
+            total += abs(luminance(center) - luminance(down))
+            edgeCount += 2
+        }
+    }
+
+    guard edgeCount > 0 else {
+        return 0
+    }
+    return total / Double(edgeCount)
 }
 
 func changedPixelCount(
@@ -166,18 +280,20 @@ do {
     }
 
     let root = URL(fileURLWithPath: args[0], isDirectory: true)
+    let normalizedBackingScale = 2
     let minimumChangedPixels = 400
     let minimumColorBuckets = 12
-    let luminanceTolerance = 0.0005
+    let absoluteEdgeTolerance = 0.0001
+    let relativeEdgeTolerance = 0.01
 
     for surface in expectedSurfaces {
-        let baseline = try load(
+        let baselineSource = try load(
             path: root
                 .appendingPathComponent("\(surface)-baseline.png")
                 .path,
             name: "\(surface)-baseline"
         )
-        let contrast = try load(
+        let contrastSource = try load(
             path: root
                 .appendingPathComponent(
                     "\(surface)-increase-contrast.png"
@@ -186,7 +302,7 @@ do {
             name: "\(surface)-increase-contrast"
         )
 
-        for image in [baseline, contrast] {
+        for image in [baselineSource, contrastSource] {
             guard image.width >= 900, image.height >= 650 else {
                 throw AccessibilityVisualVerificationError.tooSmall(
                     image.name,
@@ -196,17 +312,26 @@ do {
             }
         }
         guard
-            baseline.width == contrast.width,
-            baseline.height == contrast.height
+            baselineSource.width == contrastSource.width,
+            baselineSource.height == contrastSource.height
         else {
             throw AccessibilityVisualVerificationError.geometryMismatch(
                 surface,
-                baseline.width,
-                baseline.height,
-                contrast.width,
-                contrast.height
+                baselineSource.width,
+                baselineSource.height,
+                contrastSource.width,
+                contrastSource.height
             )
         }
+
+        let baseline = try normalizedLogicalImage(
+            baselineSource,
+            backingScale: normalizedBackingScale
+        )
+        let contrast = try normalizedLogicalImage(
+            contrastSource,
+            backingScale: normalizedBackingScale
+        )
 
         let baselineColors = sampledColors(in: baseline)
         let contrastColors = sampledColors(in: contrast)
@@ -234,20 +359,38 @@ do {
 
         let baselineSpread = luminanceSpread(baselineColors)
         let contrastSpread = luminanceSpread(contrastColors)
-        guard contrastSpread + luminanceTolerance >= baselineSpread else {
-            throw AccessibilityVisualVerificationError.weakerContrast(
+        let baselineEdgeContrast = localEdgeContrast(in: baseline)
+        let contrastEdgeContrast = localEdgeContrast(in: contrast)
+        let edgeTolerance = max(
+            absoluteEdgeTolerance,
+            baselineEdgeContrast * relativeEdgeTolerance
+        )
+        guard
+            contrastEdgeContrast + edgeTolerance
+                >= baselineEdgeContrast
+        else {
+            throw AccessibilityVisualVerificationError.weakerEdgeContrast(
                 surface,
-                baselineSpread,
-                contrastSpread
+                baselineEdgeContrast,
+                contrastEdgeContrast,
+                edgeTolerance
             )
         }
 
         print(
-            "\(surface): \(baseline.width)x\(baseline.height), "
+            "\(surface): source "
+                + "\(baselineSource.width)x\(baselineSource.height), "
+                + "logical \(baseline.width)x\(baseline.height), "
                 + "\(changedPixels) changed pixels, "
                 + String(
                     format:
-                        "luminance spread %.5f -> %.5f",
+                        "local edge contrast %.5f -> %.5f, ",
+                    baselineEdgeContrast,
+                    contrastEdgeContrast
+                )
+                + String(
+                    format:
+                        "luminance spread diagnostic %.5f -> %.5f",
                     baselineSpread,
                     contrastSpread
                 )

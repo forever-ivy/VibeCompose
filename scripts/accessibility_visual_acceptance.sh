@@ -103,13 +103,12 @@ capture_profile() {
   case "$detail_kind" in
     settings)
       args+=(
-        "--settings-pane"
-        "$detail_value"
+        "--settings-pane=$detail_value"
         "--settings-snapshot-size=900x625"
       )
       ;;
     onboarding)
-      args+=("--onboarding-step" "$detail_value")
+      args+=("--onboarding-step=$detail_value")
       ;;
     "")
       ;;
@@ -270,7 +269,8 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 - Installed app: \`$APP_BINARY\`
 - Surfaces: six Settings panes, four Onboarding steps, History, Terminology, Quick Add
 - Profiles: baseline and forced app-specific Increase Contrast
-- Validation: exact pair geometry, visible pixel difference, non-decreasing luminance spread
+- Validation: normalized 2x capture geometry, visible logical-pixel difference, non-decreasing local edge contrast
+- Diagnostics: whole-image luminance spread is recorded but is not used as the contrast gate
 - Privacy: snapshot mode uses default configuration and empty in-memory user data
 - Final live state: normal installed app relaunched and left running as PID \`$RUNNING_PID\`
 
