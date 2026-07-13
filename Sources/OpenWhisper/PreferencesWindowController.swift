@@ -49,6 +49,13 @@ final class PreferencesWindowController: NSWindowController {
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
+        onHotkeyCaptureChanged:
+            @escaping (Bool) -> Void = { _ in },
+        onPreviewVisualFeedback:
+            @escaping (
+                VisualFeedbackPreview,
+                VisualFeedbackConfig
+            ) -> Void = { _, _ in },
         focusPane: SettingsPane? = nil
     ) {
         let view = PreferencesView(
@@ -73,6 +80,10 @@ final class PreferencesWindowController: NSWindowController {
             onSetAutomaticallyChecksForUpdates: onSetAutomaticallyChecksForUpdates,
             onDeleteAllData: onDeleteAllData,
             onOpenOnboarding: onOpenOnboarding,
+            onHotkeyCaptureChanged:
+                onHotkeyCaptureChanged,
+            onPreviewVisualFeedback:
+                onPreviewVisualFeedback,
             focusPane: focusPane
         )
         .applyingAccessibilityDisplayOptionsOverride(
@@ -155,6 +166,8 @@ private extension SettingsPane {
             return "person.crop.circle"
         case .dictation:
             return "mic"
+        case .appearance:
+            return "sparkles"
         case .polish:
             return "wand.and.stars"
         case .paste:
@@ -298,6 +311,7 @@ private struct PreferencesView: View {
     }
 
     @State private var config: AppConfig
+    @State private var persistedConfig: AppConfig
     @State private var showsAdvancedRecovery: Bool
     @StateObject private var permissionStatusMonitor: PermissionStatusMonitor
     @State private var terminologyImportMessage: String?
@@ -347,6 +361,10 @@ private struct PreferencesView: View {
     @State private var licenseMessage: String?
     @State private var licenseMessageIsError = false
     @State private var showsRemoveLicenseConfirmation = false
+    @State private var hotkeyMessage: String?
+    @State private var hotkeyMessageIsError = false
+    @State private var isCapturingHotkey = false
+    @State private var suppressNextPersist = false
     @State private var softwareUpdateSnapshot: SoftwareUpdateSnapshot
     @State private var softwareUpdateMessage: String?
     @State private var softwareUpdateMessageIsError = false
@@ -376,6 +394,12 @@ private struct PreferencesView: View {
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
     let onOpenOnboarding: () -> Void
+    let onHotkeyCaptureChanged: (Bool) -> Void
+    let onPreviewVisualFeedback:
+        (
+            VisualFeedbackPreview,
+            VisualFeedbackConfig
+        ) -> Void
     let windowStateStore: SettingsWindowStateStore
 
     init(
@@ -400,6 +424,13 @@ private struct PreferencesView: View {
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
+        onHotkeyCaptureChanged:
+            @escaping (Bool) -> Void,
+        onPreviewVisualFeedback:
+            @escaping (
+                VisualFeedbackPreview,
+                VisualFeedbackConfig
+            ) -> Void,
         focusPane: SettingsPane? = nil
     ) {
         let windowStateStore = SettingsWindowStateStore()
@@ -407,6 +438,9 @@ private struct PreferencesView: View {
             try recoveryCredentialStore.hasAPIKey()
         }
         _config = State(initialValue: initialConfig)
+        _persistedConfig = State(
+            initialValue: initialConfig
+        )
         _showsAdvancedRecovery = State(initialValue: false)
         _permissionStatusMonitor = StateObject(wrappedValue: PermissionStatusMonitor())
         _terminologyImportMessage = State(initialValue: Self.terminologyStatusMessage(for: initialConfig))
@@ -460,6 +494,10 @@ private struct PreferencesView: View {
         self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
         self.onDeleteAllData = onDeleteAllData
         self.onOpenOnboarding = onOpenOnboarding
+        self.onHotkeyCaptureChanged =
+            onHotkeyCaptureChanged
+        self.onPreviewVisualFeedback =
+            onPreviewVisualFeedback
         self.windowStateStore = windowStateStore
     }
 
@@ -510,7 +548,11 @@ private struct PreferencesView: View {
         case .undetermined:
             return SetupStatus(
                 title: L10n.text("Not requested yet"),
-                subtitle: L10n.text("Press F5 once and macOS will ask for microphone access."),
+                subtitle: L10n.format(
+                    "Press %@ once and macOS will ask for microphone access.",
+                    config.transcription.dictationHotkey
+                        .displayName
+                ),
                 isReady: false
             )
         case .denied:
@@ -580,7 +622,14 @@ private struct PreferencesView: View {
                         Text("OpenWhisper")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
-                        Text(L10n.text("F5 dictation workflow"))
+                        Text(
+                            L10n.format(
+                                "%@ dictation workflow",
+                                config.transcription
+                                    .dictationHotkey
+                                    .displayName
+                            )
+                        )
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -622,6 +671,10 @@ private struct PreferencesView: View {
             windowStateStore.saveSelectedPane(pane)
         }
         .onChange(of: config) { _ in
+            if suppressNextPersist {
+                suppressNextPersist = false
+                return
+            }
             persistSettings()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -749,7 +802,15 @@ private struct PreferencesView: View {
         case .account:
             return L10n.text("Connect ChatGPT, verify permissions, and keep the first-run flow healthy.")
         case .dictation:
-            return L10n.text("Configure the F5 recording route and ASR behavior.")
+            return L10n.format(
+                "Configure the %@ recording route and ASR behavior.",
+                config.transcription.dictationHotkey
+                    .displayName
+            )
+        case .appearance:
+            return L10n.text(
+                "Choose how OpenWhisper signals recording, processing, delivery, and recovery without taking focus."
+            )
         case .polish:
             return L10n.text(
                 "Choose the writing shape for each app and control when AI Polish rewrites a transcript."
@@ -770,6 +831,8 @@ private struct PreferencesView: View {
             accountOverviewCard
         case .dictation:
             dictationCard
+        case .appearance:
+            appearanceAndFeedbackCard
         case .polish:
             aiPolishCard
         case .paste:
@@ -794,11 +857,59 @@ private struct PreferencesView: View {
     }
 
     private func persistSettings() {
+        let previousHotkey =
+            persistedConfig.transcription.dictationHotkey
+        let requestedHotkey =
+            config.transcription.dictationHotkey
         switch onSave(config) {
         case .success:
+            persistedConfig = config
             saveStatus = .saved
+            if previousHotkey != requestedHotkey {
+                hotkeyMessage = L10n.format(
+                    "Dictation shortcut changed to %@.",
+                    requestedHotkey.displayName
+                )
+                hotkeyMessageIsError = false
+            }
         case .failure(let error):
             saveStatus = .failed(error.localizedDescription)
+            if previousHotkey != requestedHotkey {
+                hotkeyMessage = error.localizedDescription
+                hotkeyMessageIsError = true
+                suppressNextPersist = true
+                config.transcription.dictationHotkey =
+                    previousHotkey
+            }
+        }
+    }
+
+    private func applyHotkeyCandidate(
+        _ candidate: HotkeyBinding
+    ) {
+        do {
+            let validated = try candidate.validated()
+            if validated
+                == config.transcription
+                    .dictationHotkey
+            {
+                hotkeyMessage = L10n.format(
+                    "%@ is already the dictation shortcut.",
+                    validated.displayName
+                )
+                hotkeyMessageIsError = false
+                return
+            }
+            hotkeyMessage = L10n.format(
+                "Testing %@…",
+                validated.displayName
+            )
+            hotkeyMessageIsError = false
+            config.transcription.dictationHotkey =
+                validated
+        } catch {
+            hotkeyMessage = error.localizedDescription
+            hotkeyMessageIsError = true
         }
     }
 
@@ -940,7 +1051,14 @@ private struct PreferencesView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(authSnapshot.userEmail ?? L10n.text("Connect ChatGPT to start dictation."))
                             .font(.system(size: 12, weight: .medium))
-                        Text(L10n.text("F5 starts and stops recording. Output pastes when an editable target is focused; otherwise it stays in the clipboard."))
+                        Text(
+                            L10n.format(
+                                "%@ starts and stops recording. Output pastes when an editable target is focused; otherwise it stays in the clipboard.",
+                                config.transcription
+                                    .dictationHotkey
+                                    .displayName
+                            )
+                        )
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -952,8 +1070,11 @@ private struct PreferencesView: View {
 
                 HStack {
                     Text(
-                        L10n.text(
-                            "Need to revisit the first-run flow or practice F5 again?"
+                        L10n.format(
+                            "Need to revisit the first-run flow or practice %@ again?",
+                            config.transcription
+                                .dictationHotkey
+                                .displayName
                         )
                     )
                     .font(.system(size: 11))
@@ -1260,12 +1381,82 @@ private struct PreferencesView: View {
     private var dictationCard: some View {
         settingsCard(title: "Dictation / ASR") {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(L10n.text("Hotkey"))
-                    Spacer()
-                    Text("F5")
-                        .monospaced()
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 7) {
+                    LabeledContent(
+                        L10n.text("Dictation shortcut")
+                    ) {
+                        HStack(spacing: 8) {
+                            HotkeyRecorderView(
+                                binding:
+                                    config.transcription
+                                        .dictationHotkey,
+                                onCandidate: {
+                                    candidate in
+                                    applyHotkeyCandidate(
+                                        candidate
+                                    )
+                                },
+                                onCaptureChanged: {
+                                    capturing in
+                                    isCapturingHotkey =
+                                        capturing
+                                    onHotkeyCaptureChanged(
+                                        capturing
+                                    )
+                                    if capturing {
+                                        hotkeyMessage =
+                                            L10n.text(
+                                                "Press the shortcut you want to use. Esc cancels without changing the current shortcut."
+                                            )
+                                        hotkeyMessageIsError =
+                                            false
+                                    }
+                                }
+                            )
+                            .frame(width: 176, height: 30)
+
+                            Button(
+                                L10n.text("Restore F5")
+                            ) {
+                                applyHotkeyCandidate(.f5)
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(
+                                config.transcription
+                                    .dictationHotkey == .f5
+                                    || isCapturingHotkey
+                            )
+                        }
+                    }
+
+                    Text(
+                        L10n.format(
+                            "%@ starts recording, and the same shortcut stops and submits the dictation. Esc and the inline close control still cancel.",
+                            config.transcription
+                                .dictationHotkey
+                                .displayName
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true
+                    )
+
+                    if let hotkeyMessage {
+                        Text(hotkeyMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(
+                                hotkeyMessageIsError
+                                    ? .red
+                                    : .secondary
+                            )
+                            .fixedSize(
+                                horizontal: false,
+                                vertical: true
+                            )
+                    }
                 }
 
                 Toggle(L10n.text("Feedback sounds"), isOn: $config.transcription.feedbackSoundsEnabled)
@@ -1323,6 +1514,213 @@ private struct PreferencesView: View {
                     title: "Recent Dictation History",
                     textSource: .dictation
                 )
+            }
+        }
+    }
+
+    private var appearanceAndFeedbackCard:
+        some View
+    {
+        settingsCard(
+            title: "Appearance & Feedback"
+        ) {
+            VStack(
+                alignment: .leading,
+                spacing: 14
+            ) {
+                VStack(
+                    alignment: .leading,
+                    spacing: 7
+                ) {
+                    Text(
+                        L10n.text(
+                            "Visual feedback"
+                        )
+                    )
+                    .font(
+                        .system(
+                            size: 12,
+                            weight: .medium
+                        )
+                    )
+
+                    Picker(
+                        L10n.text(
+                            "Visual feedback"
+                        ),
+                        selection:
+                            $config.visualFeedback
+                                .mode
+                    ) {
+                        ForEach(
+                            VisualFeedbackMode
+                                .allCases
+                        ) { mode in
+                            Text(mode.title)
+                                .tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+
+                    Text(
+                        config.visualFeedback
+                            .mode.detail
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(
+                        horizontal: false,
+                        vertical: true
+                    )
+                }
+
+                Divider()
+
+                LabeledContent(
+                    L10n.text("Intensity")
+                ) {
+                    Picker(
+                        L10n.text("Intensity"),
+                        selection:
+                            $config.visualFeedback
+                                .intensity
+                    ) {
+                        ForEach(
+                            VisualFeedbackIntensity
+                                .allCases
+                        ) { intensity in
+                            Text(intensity.title)
+                                .tag(intensity)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 180)
+                }
+
+                if config.visualFeedback.mode
+                    == .blueSignalFrame
+                {
+                    LabeledContent(
+                        L10n.text("Frame target")
+                    ) {
+                        Picker(
+                            L10n.text(
+                                "Frame target"
+                            ),
+                            selection:
+                                $config
+                                    .visualFeedback
+                                    .frameTarget
+                        ) {
+                            ForEach(
+                                BlueSignalFrameTarget
+                                    .allCases
+                            ) { target in
+                                Text(target.title)
+                                    .tag(target)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 230)
+                    }
+                }
+
+                Toggle(
+                    L10n.text(
+                        "Show status text when an action needs explanation"
+                    ),
+                    isOn:
+                        $config.visualFeedback
+                            .showStatusText
+                )
+                .disabled(
+                    config.visualFeedback.mode
+                        == .hidden
+                )
+
+                Toggle(
+                    L10n.text("Feedback sounds"),
+                    isOn:
+                        $config.transcription
+                            .feedbackSoundsEnabled
+                )
+
+                Toggle(
+                    L10n.text(
+                        "Completion notification"
+                    ),
+                    isOn:
+                        $config.visualFeedback
+                            .completionNotificationEnabled
+                )
+
+                Toggle(
+                    L10n.text(
+                        "Always reduce motion"
+                    ),
+                    isOn:
+                        $config.visualFeedback
+                            .alwaysReduceMotion
+                )
+
+                Text(
+                    L10n.text(
+                        "OpenWhisper always follows macOS Increase Contrast and Reduce Motion. Always reduce motion keeps every OpenWhisper feedback surface static even when the system setting is off."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
+                )
+
+                Divider()
+
+                VStack(
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    Text(
+                        L10n.text(
+                            "Preview feedback"
+                        )
+                    )
+                    .font(
+                        .system(
+                            size: 12,
+                            weight: .medium
+                        )
+                    )
+
+                    HStack(spacing: 8) {
+                        ForEach(
+                            VisualFeedbackPreview
+                                .allCases
+                        ) { preview in
+                            Button(preview.title) {
+                                onPreviewVisualFeedback(
+                                    preview,
+                                    config.visualFeedback
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
+                    if config.visualFeedback.mode
+                        == .hidden
+                    {
+                        Text(
+                            L10n.text(
+                                "Hidden intentionally produces no visible preview; menu status, sounds, notifications, and accessibility announcements remain available."
+                            )
+                        )
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }

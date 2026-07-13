@@ -3,7 +3,7 @@ import Testing
 
 @Test
 func statusMenuVisualStatesExposeStableLabels() {
-    #expect(StatusMenuVisualState.ready.menuLabel == "CT")
+    #expect(StatusMenuVisualState.ready.menuLabel == "OW")
     #expect(StatusMenuVisualState.setupRequired.menuLabel == "SET")
     #expect(StatusMenuVisualState.recording.menuLabel == "REC")
     #expect(StatusMenuVisualState.processing.menuLabel == "Working")

@@ -3,6 +3,7 @@ import Foundation
 enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     case account = "Account"
     case dictation = "Dictation"
+    case appearance = "Appearance & Feedback"
     case polish = "AI Polish"
     case paste = "Paste"
     case privacy = "Privacy"
@@ -16,6 +17,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return "account"
         case .dictation:
             return "dictation"
+        case .appearance:
+            return "appearance"
         case .polish:
             return "ai-polish"
         case .paste:
@@ -37,6 +40,10 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return .account
         case "dictation":
             return .dictation
+        case "appearance",
+             "appearance-feedback",
+             "feedback":
+            return .appearance
         case "polish", "ai-polish", "aipolish":
             return .polish
         case "paste":

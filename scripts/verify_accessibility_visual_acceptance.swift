@@ -71,6 +71,7 @@ enum AccessibilityVisualVerificationError:
 let expectedSurfaces = [
     "settings-account",
     "settings-dictation",
+    "settings-appearance",
     "settings-ai-polish",
     "settings-paste",
     "settings-privacy",

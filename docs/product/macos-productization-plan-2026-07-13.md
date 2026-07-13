@@ -100,6 +100,15 @@ macOS 首发策略：
 - `OpenWhisperLicensing` 已作为独立 Swift target 落地：支持 Ed25519 签名收据、随机应用级 Device ID、Keychain 收据/设备存储、最多 90 天离线宽限、最大可用 build、功能枚举、导入/移除与 Delete All Data；Voice Modes 和 Quick Add 在运行时重新检查权益，修改本地配置不能绕过 Direct 回退。
 - 私有 Alpha 会在 Info.plist 显式写入 `OWProPreviewEnabled=true`；商业 release gate 要求关闭 Preview 并配置独立的 `OWLicensePublicEDKey`。许可证私钥、支付密钥和客户邮箱不进入仓库或 App。
 
+2026-07-14 AI-native Phase 1 进展：
+
+- 默认 F5 已升级为可录制、可持久化的自定义全局听写快捷键；候选组合先注册再保存，失败时旧快捷键继续有效，损坏或启动冲突时安全回退 F5；
+- Onboarding、Settings、History、菜单栏、Ready/Recording 状态与 VoiceOver 已统一显示当前快捷键；
+- 视觉反馈统一由 `FeedbackSurfaceController` 路由，提供顶部 Refined HUD、Blue Signal Frame 和 Hidden 三种模式；
+- Appearance & Feedback 已支持强度、边框目标、状态文字、声音、完成通知和 Always Reduce Motion；
+- Hidden 仍保留 Esc 取消、菜单 Retry、通知和辅助功能播报；
+- `scripts/visual_acceptance.sh --install` 已串联三模式安装版证据，覆盖 Reduce Motion 与可见窗口状态。
+
 2026-07-13 Advanced Recovery 进展：
 
 - OpenAI-Compatible API Key 已迁入独立 macOS Keychain 服务，不再读取 `OPENAI_API_KEY`，也不会进入 `config.json`、诊断或日志；
@@ -535,7 +544,7 @@ Application Support/OpenWhisper
 - Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
 - HUD、产品表面、无障碍、权限和粘贴验收模式现在会在账户管理器创建前统一进入隐私隔离，不再触发真实 Keychain 的 `SecItemCopyMatching`；Overlay demo 同样使用默认 `AppConfig`，避免验收进程在启动阶段阻塞。
 - 产品表面截图会拒绝技术上有效但视觉上全黑或近似纯色的 CoreGraphics 帧，并回退到确定性的 content-view 渲染；回退结果仍必须通过非纯色门禁，避免把黑屏证据误判为成功。
-- `scripts/accessibility_acceptance.sh --install` 已覆盖六个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
+- `scripts/accessibility_acceptance.sh --install` 已覆盖七个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
 - `scripts/accessibility_visual_acceptance.sh` 已覆盖相同 13 个产品表面的 baseline / Increase Contrast 成对截图；截图固定为 2x，分析统一下采样到逻辑像素，要求几何一致、像素差异明确且局部边缘对比度不下降。`20260713T084453Z` 安装版证据中所有表面通过，Privacy pane 也被确认不再误捕获 Account pane。
 - `scripts/interaction_acceptance.sh` 可用同一隐私边界启动长时间保持的安装版界面，供官方 Computer Use 验证键盘、焦点和控件激活；验收进程不读取或持久化真实配置、凭据、History、Recovery、术语或 Onboarding 完成状态，并可显式恢复正常菜单栏运行。
 - `scripts/permission_surface_acceptance.sh` 从 `/Applications/OpenWhisper.app` 生成 Account 权限表面，并用 Vision OCR 要求麦克风和辅助功能两张卡片都显示 `Granted`/`已授权`；该路径读取真实 TCC 状态，但仍使用隐私隔离配置和空用户内容。

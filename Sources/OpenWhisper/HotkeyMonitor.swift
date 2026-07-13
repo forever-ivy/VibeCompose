@@ -18,6 +18,11 @@ enum HotKeyError: LocalizedError {
                 status
             )
         case .register(let status):
+            if status == eventHotKeyExistsErr {
+                return L10n.text(
+                    "This shortcut is already used by macOS or another application."
+                )
+            }
             return L10n.format(
                 "Could not register the global hotkey. Status code: %d.",
                 status
@@ -27,7 +32,7 @@ enum HotKeyError: LocalizedError {
 }
 
 final class HotkeyMonitor {
-    private static let signature = OSType(0x4354484B) // CTHK
+    private static let signature = OSType(0x4F57484B) // OWHK
     private static let callbackRegistry = HotkeyCallbackRegistry()
 
     private let id: UInt32

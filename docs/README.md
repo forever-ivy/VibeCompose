@@ -3,6 +3,7 @@
 ## Product
 
 - [macOS productization plan](product/macos-productization-plan-2026-07-13.md) — canonical implementation and launch plan
+- [AI-native input layer plan](product/ai-native-input-layer-plan-2026-07-14.md) — Skills, context permissions, personal style, Blue Signal feedback, and customizable global hotkeys
 - [Product and commercialization analysis](product/product-and-commercialization-plan-2026-07-13.md) — positioning, packaging, pricing, and growth inputs
 - [V1 PRD](product/v1-prd.md) — current product scope
 - [Brand identity](product/brand-identity.md) — canonical product names and identifiers
@@ -21,6 +22,7 @@
 - [Updater decision](engineering/updater.md)
 - [License operations](engineering/licensing.md)
 - [Visual acceptance](engineering/visual-acceptance.md)
+- [Hotkey and feedback architecture](engineering/hotkey-and-feedback.md)
 - [HUD visual specification](design/hud-visual-spec.md)
 
 ## Legal, Privacy, and Support

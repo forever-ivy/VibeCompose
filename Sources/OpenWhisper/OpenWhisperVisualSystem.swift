@@ -12,7 +12,7 @@ enum StatusMenuVisualState: Sendable, Equatable {
     var menuLabel: String {
         switch self {
         case .ready:
-            return "CT"
+            return "OW"
         case .setupRequired:
             return "SET"
         case .recording:
@@ -74,6 +74,7 @@ enum OpenWhisperPalette {
     static let graphite = NSColor(srgbRed: 0.09, green: 0.11, blue: 0.15, alpha: 0.96)
     static let mist = NSColor(srgbRed: 0.94, green: 0.96, blue: 0.985, alpha: 1)
     static let mistMuted = NSColor(srgbRed: 0.78, green: 0.82, blue: 0.88, alpha: 1)
+    static let signalBlue = NSColor(srgbRed: 0.18, green: 0.52, blue: 1, alpha: 1)
     static let iceBlue = NSColor(srgbRed: 0.48, green: 0.78, blue: 1, alpha: 1)
     static let success = NSColor(srgbRed: 0.35, green: 0.84, blue: 0.62, alpha: 1)
     static let amber = NSColor(srgbRed: 1, green: 0.75, blue: 0.32, alpha: 1)

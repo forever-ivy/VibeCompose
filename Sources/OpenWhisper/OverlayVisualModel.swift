@@ -6,7 +6,7 @@ struct OverlayStylePreset: Sendable, Equatable {
     let primaryPillHeight: CGFloat
     let errorPillWidth: CGFloat
     let errorPillHeight: CGFloat
-    let bottomInset: CGFloat
+    let topInset: CGFloat
     let cornerRadius: CGFloat
     let contentPaddingH: CGFloat
     let contentPaddingV: CGFloat
@@ -33,7 +33,7 @@ struct OverlayStylePreset: Sendable, Equatable {
         primaryPillHeight: 44,
         errorPillWidth: 320,
         errorPillHeight: 56,
-        bottomInset: 16,
+        topInset: 16,
         cornerRadius: 16,
         contentPaddingH: 10,
         contentPaddingV: 8,
@@ -96,9 +96,20 @@ enum OverlayVisualState: Sendable, Equatable {
     case retryableError(String)
 
     var label: String {
+        label(
+            hotkeyDisplayName: HotkeyBinding.f5.displayName
+        )
+    }
+
+    func label(
+        hotkeyDisplayName: String
+    ) -> String {
         switch self {
         case .recording:
-            return L10n.text("F5 again to transcribe")
+            return L10n.format(
+                "%@ again to transcribe",
+                hotkeyDisplayName
+            )
         case .processing:
             return L10n.text("Processing")
         case .success(let kind):

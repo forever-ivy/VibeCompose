@@ -153,6 +153,62 @@ enum AppLaunchMode: Equatable {
         )
     }
 
+    static func feedbackSurfaceDebugOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey:
+                "OPENWHISPER_FEEDBACK_SURFACE_DEBUG_OUTPUT",
+            argumentName:
+                "--feedback-surface-debug-output"
+        )
+    }
+
+    static func visualFeedbackModeOverride(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> VisualFeedbackMode? {
+        for (index, argument) in arguments
+            .enumerated()
+        {
+            if argument
+                == "--visual-feedback-mode",
+               index + 1 < arguments.count
+            {
+                return VisualFeedbackMode
+                    .fromLaunchValue(
+                        arguments[index + 1]
+                    )
+            }
+
+            let prefix =
+                "--visual-feedback-mode="
+            if argument.hasPrefix(prefix) {
+                return VisualFeedbackMode
+                    .fromLaunchValue(
+                        String(
+                            argument.dropFirst(
+                                prefix.count
+                            )
+                        )
+                    )
+            }
+        }
+
+        guard
+            let rawValue = environment[
+                "OPENWHISPER_VISUAL_FEEDBACK_MODE"
+            ]
+        else {
+            return nil
+        }
+        return VisualFeedbackMode
+            .fromLaunchValue(rawValue)
+    }
+
     static func visualAcceptanceDisplayOptionsOverride(
         environment: [String: String],
         arguments: [String] = []

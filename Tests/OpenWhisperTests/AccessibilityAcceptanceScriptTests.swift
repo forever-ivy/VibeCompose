@@ -13,6 +13,7 @@ func accessibilityAcceptanceCoversEveryPrimaryProductSurface() throws {
     #expect(source.contains("--accessibility-audit-output"))
     #expect(source.contains("settings-account"))
     #expect(source.contains("settings-dictation"))
+    #expect(source.contains("settings-appearance"))
     #expect(source.contains("settings-ai-polish"))
     #expect(source.contains("settings-paste"))
     #expect(source.contains("settings-privacy"))

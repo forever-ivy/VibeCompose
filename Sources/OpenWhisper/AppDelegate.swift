@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 environment: environment,
                 arguments: arguments
             )
-        let overlay = OverlayController(
+        let overlay = FeedbackSurfaceController(
             accessibilityDisplayOptionsProvider: {
                 accessibilityDisplayOptionsOverride.applying(to: .system)
             }

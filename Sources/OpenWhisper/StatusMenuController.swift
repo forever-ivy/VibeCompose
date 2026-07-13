@@ -3,6 +3,45 @@ import AppKit
 @MainActor
 protocol StatusMenuUpdating: AnyObject {
     func update(state: StatusMenuVisualState, detail: String)
+    func updateDictationHotkey(_ binding: HotkeyBinding)
+    func setManualDictationAvailable(_ available: Bool)
+    func setToggleDictationHandler(
+        _ handler: @escaping () -> Void
+    )
+    func setRetryDictationAvailable(
+        _ available: Bool
+    )
+    func setRetryDictationHandler(
+        _ handler: @escaping () -> Void
+    )
+}
+
+extension StatusMenuUpdating {
+    func updateDictationHotkey(_ binding: HotkeyBinding) {
+        _ = binding
+    }
+
+    func setManualDictationAvailable(_ available: Bool) {
+        _ = available
+    }
+
+    func setToggleDictationHandler(
+        _ handler: @escaping () -> Void
+    ) {
+        _ = handler
+    }
+
+    func setRetryDictationAvailable(
+        _ available: Bool
+    ) {
+        _ = available
+    }
+
+    func setRetryDictationHandler(
+        _ handler: @escaping () -> Void
+    ) {
+        _ = handler
+    }
 }
 
 @MainActor
@@ -10,6 +49,22 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let stateItem = NSMenuItem(title: L10n.text("State: idle"), action: nil, keyEquivalent: "")
     private let detailItem = NSMenuItem(title: L10n.text("Ready"), action: nil, keyEquivalent: "")
+    private let dictationItem = NSMenuItem(
+        title: "",
+        action: #selector(toggleDictation),
+        keyEquivalent: ""
+    )
+    private let retryDictationItem = NSMenuItem(
+        title: L10n.text("Retry last dictation"),
+        action: #selector(retryDictation),
+        keyEquivalent: ""
+    )
+    private var toggleDictationHandler: () -> Void
+    private var retryDictationHandler: () -> Void
+    private var dictationHotkey = HotkeyBinding.f5
+    private var currentState:
+        StatusMenuVisualState = .ready
+    private var manualDictationAvailable = false
     private let openHistoryHandler: () -> Void
     private let openQuickAddHandler: () -> Void
     private let openTerminologyHandler: () -> Void
@@ -18,6 +73,8 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
     private let quitHandler: () -> Void
 
     init(
+        toggleDictationHandler: @escaping () -> Void = {},
+        retryDictationHandler: @escaping () -> Void = {},
         openHistoryHandler: @escaping () -> Void,
         openQuickAddHandler: @escaping () -> Void,
         openTerminologyHandler: @escaping () -> Void,
@@ -25,6 +82,9 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         checkForUpdatesHandler: @escaping () -> Void,
         quitHandler: @escaping () -> Void
     ) {
+        self.toggleDictationHandler = toggleDictationHandler
+        self.retryDictationHandler =
+            retryDictationHandler
         self.openHistoryHandler = openHistoryHandler
         self.openQuickAddHandler = openQuickAddHandler
         self.openTerminologyHandler = openTerminologyHandler
@@ -33,10 +93,18 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         self.quitHandler = quitHandler
         super.init()
         configureMenu()
-        update(state: .ready, detail: L10n.text("Ready. Press F5 to dictate"))
+        updateDictationHotkey(.f5)
+        update(
+            state: .ready,
+            detail: L10n.format(
+                "Ready. Press %@ to dictate",
+                HotkeyBinding.f5.displayName
+            )
+        )
     }
 
     func update(state: StatusMenuVisualState, detail: String) {
+        currentState = state
         if let button = statusItem.button {
             button.title = ""
             button.image = OpenWhisperStatusIconRenderer.image(for: state)
@@ -47,6 +115,41 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
 
         stateItem.title = L10n.format("State: %@", state.stateDescription)
         detailItem.title = L10n.text(detail)
+        refreshDictationItem()
+    }
+
+    func updateDictationHotkey(_ binding: HotkeyBinding) {
+        dictationHotkey = binding
+        refreshDictationItem()
+        dictationItem.setAccessibilityLabel(
+            L10n.format(
+                "Start or stop dictation with %@",
+                binding.displayName
+            )
+        )
+    }
+
+    func setManualDictationAvailable(_ available: Bool) {
+        manualDictationAvailable = available
+        refreshDictationItem()
+    }
+
+    func setToggleDictationHandler(
+        _ handler: @escaping () -> Void
+    ) {
+        toggleDictationHandler = handler
+    }
+
+    func setRetryDictationAvailable(
+        _ available: Bool
+    ) {
+        retryDictationItem.isEnabled = available
+    }
+
+    func setRetryDictationHandler(
+        _ handler: @escaping () -> Void
+    ) {
+        retryDictationHandler = handler
     }
 
     private func configureMenu() {
@@ -59,6 +162,14 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         let menu = NSMenu()
         menu.addItem(stateItem)
         menu.addItem(detailItem)
+        dictationItem.target = self
+        menu.addItem(dictationItem)
+        retryDictationItem.target = self
+        retryDictationItem.isEnabled = false
+        retryDictationItem.setAccessibilityLabel(
+            L10n.text("Retry last dictation")
+        )
+        menu.addItem(retryDictationItem)
         menu.addItem(.separator())
 
         let historyItem = NSMenuItem(
@@ -115,6 +226,43 @@ final class StatusMenuController: NSObject, StatusMenuUpdating {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    @objc
+    private func toggleDictation() {
+        toggleDictationHandler()
+    }
+
+    @objc
+    private func retryDictation() {
+        retryDictationHandler()
+    }
+
+    private func refreshDictationItem() {
+        switch currentState {
+        case .recording:
+            dictationItem.title = L10n.format(
+                "Stop dictation — %@",
+                dictationHotkey.displayName
+            )
+            dictationItem.isEnabled =
+                manualDictationAvailable
+        case .processing:
+            dictationItem.title = L10n.text(
+                "Dictation is processing"
+            )
+            dictationItem.isEnabled = false
+        case .ready,
+             .setupRequired,
+             .error,
+             .demo:
+            dictationItem.title = L10n.format(
+                "Start dictation — %@",
+                dictationHotkey.displayName
+            )
+            dictationItem.isEnabled =
+                manualDictationAvailable
+        }
     }
 
     @objc

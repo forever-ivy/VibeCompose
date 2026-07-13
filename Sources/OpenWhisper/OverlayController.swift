@@ -12,6 +12,10 @@ protocol OverlayControlling: AnyObject {
     var onCancel: (@MainActor (OverlayCancelSource) -> Void)? { get set }
     var onRetry: (@MainActor () -> Void)? { get set }
 
+    func updateHotkeyBinding(_ binding: HotkeyBinding)
+    func updateVisualFeedbackConfiguration(
+        _ config: VisualFeedbackConfig
+    )
     func showRecording(elapsedText: String)
     func updateRecording(level: CGFloat, elapsedText: String)
     func showProcessing()
@@ -19,6 +23,18 @@ protocol OverlayControlling: AnyObject {
     func showError(_ message: String)
     func showRetryableError(_ message: String)
     func hide()
+}
+
+extension OverlayControlling {
+    func updateHotkeyBinding(_ binding: HotkeyBinding) {
+        _ = binding
+    }
+
+    func updateVisualFeedbackConfiguration(
+        _ config: VisualFeedbackConfig
+    ) {
+        _ = config
+    }
 }
 
 enum OverlaySnapshotError: LocalizedError {
@@ -117,6 +133,8 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private var processingFrameIndex = 0
     private var displayedLevels: [CGFloat]
     private var currentState: OverlayVisualState
+    private var hotkeyDisplayName = HotkeyBinding.f5.displayName
+    private var alwaysReduceMotion = false
     private var accessibilityAppearance: OverlayAccessibilityAppearance
     private var presentationGeneration = OverlayPresentationGeneration()
     private var escapeHotkeyMonitor: HotkeyMonitor?
@@ -127,7 +145,8 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         onCancel: (@MainActor (OverlayCancelSource) -> Void)? = nil,
         onRetry: (@MainActor () -> Void)? = nil,
         accessibilityDisplayOptionsProvider: @escaping @MainActor () -> AccessibilityDisplayOptions = {
-            .system
+            AccessibilityDisplayOptionsOverride
+                .current
         }
     ) {
         self.accessibilityDisplayOptionsProvider = accessibilityDisplayOptionsProvider
@@ -137,7 +156,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         )
         currentState = .processing
         accessibilityAppearance = OverlayAccessibilityAppearance.resolve(
-            options: accessibilityDisplayOptionsProvider(),
+            options: Self.resolvedAccessibilityDisplayOptions(
+                provider: accessibilityDisplayOptionsProvider,
+                alwaysReduceMotion: false
+            ),
             style: style
         )
         waveformView = OverlayWaveformView(
@@ -167,6 +189,30 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
         configureViews()
         observeAccessibilityDisplayOptions()
+    }
+
+    func updateHotkeyBinding(_ binding: HotkeyBinding) {
+        hotkeyDisplayName = binding.displayName
+        if case .recording = currentState, panel.isVisible {
+            titleLabel.stringValue = currentState.label(
+                hotkeyDisplayName: hotkeyDisplayName
+            )
+        }
+    }
+
+    func updateVisualFeedbackConfiguration(
+        _ config: VisualFeedbackConfig
+    ) {
+        let reduceMotionChanged =
+            alwaysReduceMotion != config.alwaysReduceMotion
+        alwaysReduceMotion = config.alwaysReduceMotion
+        updateAccessibilityAppearance()
+        if reduceMotionChanged,
+           case .processing = currentState,
+           panel.isVisible
+        {
+            startProcessingAnimation()
+        }
     }
 
     func showRecording(elapsedText: String) {
@@ -217,7 +263,17 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
         apply(state: .success(successKind))
         present()
-        scheduleHide(afterSeconds: style.successAutoHideDelay ?? 1.2)
+        let displayDuration: Double = switch successKind {
+        case .inserted:
+            0.9
+        case .pasteSent:
+            1.5
+        case .copied:
+            2
+        }
+        scheduleHide(
+            afterSeconds: displayDuration
+        )
     }
 
     func showError(_ message: String) {
@@ -272,7 +328,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         positionPanel(size: panelSize(for: state))
         updateAccessibilityAppearance()
 
-        titleLabel.stringValue = state.label
+        titleLabel.stringValue = state.label(
+            hotkeyDisplayName: hotkeyDisplayName
+        )
         detailLabel.stringValue = state.supplementaryText ?? ""
         detailLabel.isHidden = !state.allowsSupplementaryText
         trailingTimerLabel.stringValue = state.trailingText ?? ""
@@ -353,7 +411,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private func startProcessingAnimation() {
         stopProcessingAnimation()
 
-        if accessibilityDisplayOptionsProvider().reduceMotion {
+        if resolvedAccessibilityDisplayOptions()
+            .reduceMotion
+        {
             displayedLevels = WaveformNormalizer.reducedMotionProcessingLevels(
                 barCount: style.waveformBarCount
             )
@@ -385,7 +445,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         if panel.alphaValue == 0 || !panel.isVisible {
             panel.alphaValue = 0
             panel.orderFrontRegardless()
-            if accessibilityDisplayOptionsProvider().reduceMotion {
+            if resolvedAccessibilityDisplayOptions()
+                .reduceMotion
+            {
                 panel.alphaValue = 1
                 return
             }
@@ -410,7 +472,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             else {
                 return
             }
-            if self.accessibilityDisplayOptionsProvider().reduceMotion {
+            if self.resolvedAccessibilityDisplayOptions()
+                .reduceMotion
+            {
                 self.hide()
                 return
             }
@@ -607,7 +671,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     private func updateAccessibilityAppearance() {
-        let options = accessibilityDisplayOptionsProvider()
+        let options = resolvedAccessibilityDisplayOptions()
         accessibilityAppearance = OverlayAccessibilityAppearance.resolve(
             options: options,
             style: style
@@ -635,9 +699,13 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private func announce(_ state: OverlayVisualState) {
         let announcement: String
         if let supplementaryText = state.supplementaryText, !supplementaryText.isEmpty {
-            announcement = "\(state.label). \(supplementaryText)"
+            announcement =
+                "\(state.label(hotkeyDisplayName: hotkeyDisplayName)). "
+                + supplementaryText
         } else {
-            announcement = state.label
+            announcement = state.label(
+                hotkeyDisplayName: hotkeyDisplayName
+            )
         }
 
         panelRootView.setAccessibilityElement(true)
@@ -660,7 +728,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             Self.panelFrame(
                 for: size,
                 in: visibleFrame,
-                bottomInset: style.bottomInset
+                topInset: style.topInset
             ),
             display: false
         )
@@ -669,7 +737,7 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     static func panelFrame(
         for size: NSSize,
         in visibleFrame: NSRect,
-        bottomInset: CGFloat
+        topInset: CGFloat
     ) -> NSRect {
         let fittedSize = NSSize(
             width: min(size.width, visibleFrame.width),
@@ -677,9 +745,38 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         )
         let origin = NSPoint(
             x: visibleFrame.midX - (fittedSize.width / 2),
-            y: min(visibleFrame.maxY - fittedSize.height, visibleFrame.minY + bottomInset)
+            y: max(
+                visibleFrame.minY,
+                visibleFrame.maxY
+                    - topInset
+                    - fittedSize.height
+            )
         )
         return NSRect(origin: origin, size: fittedSize)
+    }
+
+    private func resolvedAccessibilityDisplayOptions()
+        -> AccessibilityDisplayOptions
+    {
+        Self.resolvedAccessibilityDisplayOptions(
+            provider: accessibilityDisplayOptionsProvider,
+            alwaysReduceMotion: alwaysReduceMotion
+        )
+    }
+
+    private static func resolvedAccessibilityDisplayOptions(
+        provider:
+            @MainActor () -> AccessibilityDisplayOptions,
+        alwaysReduceMotion: Bool
+    ) -> AccessibilityDisplayOptions {
+        let options = provider()
+        return AccessibilityDisplayOptions(
+            reduceMotion:
+                options.reduceMotion
+                    || alwaysReduceMotion,
+            increaseContrast:
+                options.increaseContrast
+        )
     }
 
     private func activeScreen() -> NSScreen? {

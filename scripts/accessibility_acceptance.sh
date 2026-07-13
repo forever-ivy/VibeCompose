@@ -87,6 +87,7 @@ capture_audit() {
 
 capture_audit "settings-account" "--open-settings" "account"
 capture_audit "settings-dictation" "--open-settings" "dictation"
+capture_audit "settings-appearance" "--open-settings" "appearance"
 capture_audit "settings-ai-polish" "--open-settings" "ai-polish"
 capture_audit "settings-paste" "--open-settings" "paste"
 capture_audit "settings-privacy" "--open-settings" "privacy"
@@ -108,6 +109,7 @@ root = pathlib.Path(sys.argv[1])
 expected = {
     "settings-account",
     "settings-dictation",
+    "settings-appearance",
     "settings-ai-polish",
     "settings-paste",
     "settings-privacy",

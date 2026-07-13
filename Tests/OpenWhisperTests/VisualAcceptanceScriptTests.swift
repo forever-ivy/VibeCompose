@@ -2,6 +2,43 @@ import Foundation
 import Testing
 
 @Test
+func feedbackModeAcceptanceCoversAllThreeInstalledSurfaces()
+    throws
+{
+    let root = URL(
+        fileURLWithPath:
+            FileManager.default
+                .currentDirectoryPath
+    )
+    let source = try String(
+        contentsOf:
+            root.appendingPathComponent(
+                "scripts/feedback_mode_acceptance.sh"
+            ),
+        encoding: .utf8
+    )
+
+    #expect(
+        source.contains(
+            "/Applications/$APP_NAME.app"
+        )
+    )
+    #expect(
+        source.contains(
+            "--feedback-surface-debug-output"
+        )
+    )
+    #expect(source.contains("refined-hud"))
+    #expect(source.contains("blue-signal-frame"))
+    #expect(source.contains("\"hidden\""))
+    #expect(
+        source.contains(
+            "blueSignalAnimationIsActive"
+        )
+    )
+}
+
+@Test
 func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
@@ -25,6 +62,11 @@ func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
     #expect(script.contains("find_visual_acceptance_window.swift"))
     #expect(script.contains("screencapture -x -l"))
     #expect(script.contains("verify_visual_acceptance.swift"))
+    #expect(
+        script.contains(
+            "feedback_mode_acceptance.sh"
+        )
+    )
     #expect(!script.contains("sleep 0.8"))
     #expect(!script.contains("00-before.png"))
     #expect(!script.contains("dist/OpenWhisper.app/Contents/MacOS/OpenWhisper"))
@@ -126,6 +168,7 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
     for surface in [
         "settings-account",
         "settings-dictation",
+        "settings-appearance",
         "settings-ai-polish",
         "settings-paste",
         "settings-privacy",

@@ -10,6 +10,13 @@ Use this chain for OpenWhisper HUD or interaction-facing visual work after unit/
 
 The command packages the current build, installs it to `/Applications/OpenWhisper.app`, and launches one installed-app demo process per HUD state through LaunchServices with `--overlay-demo-state`.
 
+After the Refined HUD image matrix passes, the same command runs
+`scripts/feedback_mode_acceptance.sh`. That installed-app harness verifies
+Refined HUD, Blue Signal Frame, and Hidden through explicit
+`--visual-feedback-mode` launches, records machine-readable visibility and
+Escape-cancellation state, captures Blue Signal evidence, and proves that
+Reduce Motion disables the continuous Blue Signal scan.
+
 Each demo process renders its own HUD content to a local temporary PNG path supplied through `--visual-acceptance-output`; the script then copies that artifact into the repository evidence directory. Using a local temporary path avoids removable-volume privacy prompts when the repository is under `/Volumes`. This primary path does not require Screen Recording permission and works in clean CI or Codex environments. If self-rendering does not produce a file, the script falls back to CoreGraphics window discovery plus `screencapture -l`, then runs the screenshot verifier.
 
 The harness explicitly forces Reduce Motion and Increase Contrast off for the
@@ -52,7 +59,8 @@ Run the installed-app SwiftUI accessibility audit with:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-It covers Account, Dictation, AI Polish, Paste, Privacy, Advanced, all four
+It covers Account, Dictation, Appearance & Feedback, AI Polish, Paste, Privacy,
+Advanced, all four
 Onboarding steps, History, Terminology, and Quick Add. Each transient process
 uses default configuration and empty in-memory user data, enables AppKit's
 enhanced accessibility tree, and fails if the surface has no actionable

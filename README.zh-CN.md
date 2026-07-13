@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-OpenWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工具。按 `F5` 开始录音，再按一次 `F5` 停止；OpenWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
+OpenWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工具。按下已配置的全局快捷键（默认 `F5`）开始录音，再按同一个快捷键停止；OpenWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
 
 ## 当前状态
 
@@ -11,7 +11,8 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 当前代码已经具备：
 
 - 原生 AppKit + SwiftUI 菜单栏应用
-- 全局 `F5` 开始/停止工作流
+- 可自定义的全局开始/停止快捷键，默认 `F5`，支持冲突检测、原子切换和失败回滚
+- Refined HUD、Blue Signal Frame 和 Hidden 三种视觉反馈模式，支持减少动态效果、提高对比度、VoiceOver 播报、菜单重试和可选完成通知
 - 简体中文和英文界面
 - 浏览器连接 ChatGPT，Keychain 保存本机会话
 - 语音转写、术语对齐和可选 AI 润色；自动模式会跳过短且低复杂度的听写，避免不必要的等待
@@ -70,7 +71,7 @@ Ad-hoc 签名只适合本地验证，可能导致 macOS 辅助功能设置中无
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-该命令覆盖六个设置页面、Onboarding 的全部四个步骤、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
+该命令覆盖七个设置页面、Onboarding 的全部四个步骤、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
 
 使用官方 Computer Use 做安装版交互验收时，可以启用不读取真实配置、凭据、History、Recovery 或术语的隔离模式：
 

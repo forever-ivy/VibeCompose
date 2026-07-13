@@ -31,14 +31,14 @@
 | Trigger | Command | Expected Result | Failure Recovery |
 | --- | --- | --- | --- |
 | Output pastes into the wrong place | Inspect focused editable target and run the installed app path | Text sends paste only to the same focused editable target; verified insertion, unverified paste dispatch, and clipboard-only fallback remain distinct | Keep paste behavior conservative and debug AX target/value/range verification before changing STT cleanup |
-| HUD or hotkey interaction changed | Use official Computer Use on the installed app | `F5` starts/stops, `ESC` cancels, inline close cancels, retry/re-entry works | Fix source, rebuild, reinstall, and rerun the full interaction branch |
+| HUD or hotkey interaction changed | Use official Computer Use on the installed app | The configured shortcut (default `F5`) starts/stops, `ESC` cancels, inline close cancels, retry/re-entry works, and all three feedback modes preserve the same state semantics | Fix source, rebuild, reinstall, and rerun the full interaction branch |
 | Permission flow regresses | Clean TCC state and installed app launch | Accessibility/Microphone prompts appear in the expected order | Add or update automated ordering tests, then repeat installed-app proof |
 
 ## Verification
 
 - Verification ladder: unit tests, integration tests, then real installed-app user-flow testing. The first two are prechecks only.
 - For native GUI work, use official Computer Use whenever clicks, hotkeys, focus, timing, modal state, permissions, or multi-step interaction are touched.
-- OpenWhisper Computer Use acceptance should cover: focus a real editable target, start with `F5`, stop with `F5`, cancel with `ESC`, cancel with inline close, retry after cancel/error, and observe paste-versus-clipboard result.
+- OpenWhisper Computer Use acceptance should cover: focus a real editable target, start and stop with the configured shortcut (including default `F5` and one custom binding), cancel with `ESC`, cancel with inline close in Refined HUD, retry after cancel/error, switch Refined HUD / Blue Signal Frame / Hidden, and observe paste-versus-clipboard result.
 - For closeouts, report the installed-app user flow exercised, the live verification path, the exact outcome observed, and the live OpenWhisper state left for review.
 - After build, install, scripted visual acceptance, or interaction acceptance, relaunch `/Applications/OpenWhisper.app` as the normal installed app and leave it running. General ship closeouts should leave the menu bar app running; Settings or Terminologies work should leave that window visible when practical.
 
@@ -50,7 +50,7 @@
 
 ## Guardrails
 
-- Preserve the single-trigger workflow: `F5` starts recording and `F5` stops recording.
+- Preserve the single-trigger workflow: the configured shortcut starts recording and the same shortcut stops recording; new and reset configurations default to `F5`.
 - Do not run `OpenWhisper.app` directly from `dist`.
 - Do not end an OpenWhisper closeout with `pkill -x OpenWhisper`, quit, or close. `scripts/install_app.sh` may stop the old app before replacing `/Applications/OpenWhisper.app`, and visual demo scripts may stop transient overlay-demo processes, but final closeout must restore the normal installed runtime.
 - Keep `.notDetermined` permission paths as their own regression surface.

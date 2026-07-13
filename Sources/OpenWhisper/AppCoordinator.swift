@@ -58,6 +58,7 @@ final class AppCoordinator {
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
     let licenseManager: any CommercialLicenseManaging
+    let hotkeyRegistrationService: HotkeyRegistrationService
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -68,7 +69,6 @@ final class AppCoordinator {
     )
 
     var config: AppConfig
-    private var hotkeyMonitor: HotkeyMonitor?
     private var quickAddHotkeyMonitor: HotkeyMonitor?
     var recorder: (any RecordingControlling)?
     var statusMenu: (any StatusMenuUpdating)?
@@ -92,6 +92,9 @@ final class AppCoordinator {
     private var authStateObserver: NSObjectProtocol?
     private var activeProcessingAudio: ActiveProcessingAudio?
     private var snapshotPrivacyMode = SnapshotPrivacyMode.disabled
+    private var hotkeyRegistrationIssue: String?
+    private var visualFeedbackPreviewTask:
+        Task<Void, Never>?
 
     private struct PendingRetry {
         let id: UUID
@@ -121,6 +124,8 @@ final class AppCoordinator {
         soundFeedback: any SoundFeedbackPlaying = SoundFeedbackService(),
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting =
             KeychainOpenAICompatibleCredentialStore(),
+        hotkeyRegistrationService: HotkeyRegistrationService =
+            HotkeyRegistrationService(),
         recorderFactory: @escaping RecorderFactory = { AudioRecorder(sampleRateHz: $0) },
         statusMenuFactory: @escaping StatusMenuFactory = {
             openHistory,
@@ -198,7 +203,8 @@ final class AppCoordinator {
         self.config = config
         self.notifier = notifier
         self.injector = injector
-        let resolvedOverlay = overlay ?? OverlayController()
+        let resolvedOverlay =
+            overlay ?? FeedbackSurfaceController()
         self.overlay = resolvedOverlay
         self.authManager = authManager
         self.latencyRecorder = latencyRecorder ?? LatencyRecorder(directoryURL: configStore.directoryURL)
@@ -215,6 +221,8 @@ final class AppCoordinator {
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
         self.licenseManager = licenseManager
+        self.hotkeyRegistrationService =
+            hotkeyRegistrationService
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -260,6 +268,15 @@ final class AppCoordinator {
                 { [weak self] in self?.checkForUpdates() },
                 { NSApplication.shared.terminate(nil) }
             )
+            statusMenu?.setToggleDictationHandler { [weak self] in
+                self?.handleHotkeyPress()
+            }
+            statusMenu?.setRetryDictationHandler {
+                [weak self] in
+                self?.retryPendingTranscription()
+            }
+            statusMenu?.setManualDictationAvailable(false)
+            statusMenu?.setRetryDictationAvailable(false)
 
             switch launchMode {
             case .normal,
@@ -284,15 +301,14 @@ final class AppCoordinator {
                     }
                     recorder = recorderFactory(config.transcription.sampleRateHz)
                     recorder?.configure(maxDurationSeconds: config.transcription.maxDurationSeconds)
+                    overlay.updateVisualFeedbackConfiguration(
+                        config.visualFeedback
+                    )
+                    configureDictationHotkeyAtStartup()
                     refreshReadyState()
                     checkLaunchLoginState()
                     prewarmAuthIfNeeded()
 
-                    hotkeyMonitor = try HotkeyMonitor(keyCode: config.transcription.hotkeyKeyCode) { [weak self] in
-                        Task { @MainActor in
-                            self?.handleHotkeyPress()
-                        }
-                    }
                     do {
                         quickAddHotkeyMonitor = try HotkeyMonitor(
                             keyCode: OpenWhisperHotkeys.quickAddKeyCode,
@@ -380,12 +396,26 @@ final class AppCoordinator {
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
                     : ((try? configStore.load()) ?? config)
+                applyVisualFeedbackLaunchOverride()
+                applyActiveDictationHotkey(
+                    config.transcription.dictationHotkey
+                )
+                overlay.updateVisualFeedbackConfiguration(
+                    config.visualFeedback
+                )
                 runOverlayDemo()
                 return
             case .overlayDemoState(let demoState):
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
                     : ((try? configStore.load()) ?? config)
+                applyVisualFeedbackLaunchOverride()
+                applyActiveDictationHotkey(
+                    config.transcription.dictationHotkey
+                )
+                overlay.updateVisualFeedbackConfiguration(
+                    config.visualFeedback
+                )
                 runOverlayDemoState(demoState)
                 return
             case .pasteAcceptance:
@@ -414,16 +444,222 @@ final class AppCoordinator {
         }
     }
 
+    private var activeDictationHotkey: HotkeyBinding {
+        hotkeyRegistrationService.activeBinding
+            ?? config.transcription.dictationHotkey
+    }
+
+    private func applyVisualFeedbackLaunchOverride() {
+        guard
+            let mode = AppLaunchMode
+                .visualFeedbackModeOverride(
+                    environment:
+                        ProcessInfo.processInfo
+                            .environment,
+                    arguments:
+                        ProcessInfo.processInfo
+                            .arguments
+                )
+        else {
+            return
+        }
+        config.visualFeedback.mode = mode
+    }
+
+    private func dictationHotkeyPressHandler()
+        -> @Sendable () -> Void
+    {
+        { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.handleHotkeyPress()
+            }
+        }
+    }
+
+    private func configureDictationHotkeyAtStartup() {
+        let requested = config.transcription.dictationHotkey
+        let outcome = hotkeyRegistrationService.start(
+            preferred: requested,
+            onPress: dictationHotkeyPressHandler()
+        )
+
+        switch outcome {
+        case .registered(let binding):
+            hotkeyRegistrationIssue = nil
+            applyActiveDictationHotkey(binding)
+        case .fellBack(
+            let requested,
+            let active,
+            let reason
+        ):
+            hotkeyRegistrationIssue = nil
+            config.transcription.dictationHotkey = active
+            try? configStore.save(config)
+            applyActiveDictationHotkey(active)
+            let detail = L10n.format(
+                "%@ could not be registered. OpenWhisper restored %@. Choose another shortcut in Settings. %@",
+                requested.displayName,
+                active.displayName,
+                reason
+            )
+            logger.error(
+                "Dictation shortcut fallback requested=\(requested.displayName, privacy: .public) active=\(active.displayName, privacy: .public) reason=\(reason, privacy: .public)"
+            )
+            notifier.notify(
+                title: L10n.text(
+                    "OpenWhisper shortcut restored"
+                ),
+                body: detail
+            )
+        case .unavailable(_, let reason):
+            hotkeyRegistrationIssue = L10n.format(
+                "The global dictation shortcut is unavailable. Use Start or Stop Dictation from the menu and choose another shortcut in Settings. %@",
+                reason
+            )
+            applyActiveDictationHotkey(requested)
+            logger.error(
+                "Dictation shortcut registration unavailable: \(reason, privacy: .public)"
+            )
+            notifier.notify(
+                title: L10n.text(
+                    "OpenWhisper shortcut unavailable"
+                ),
+                body: hotkeyRegistrationIssue
+                    ?? reason
+            )
+        }
+
+        statusMenu?.setManualDictationAvailable(
+            recorder != nil
+        )
+    }
+
+    private func applyActiveDictationHotkey(
+        _ binding: HotkeyBinding
+    ) {
+        overlay.updateHotkeyBinding(binding)
+        statusMenu?.updateDictationHotkey(binding)
+    }
+
+    private func setHotkeyCaptureActive(
+        _ isCapturing: Bool
+    ) {
+        if isCapturing {
+            if state != .idle {
+                cancelCurrentSession()
+            }
+            hotkeyRegistrationService.suspend()
+            return
+        }
+
+        do {
+            try hotkeyRegistrationService.resume()
+            if let activeBinding =
+                hotkeyRegistrationService
+                    .activeBinding
+            {
+                applyActiveDictationHotkey(
+                    activeBinding
+                )
+            }
+        } catch {
+            logger.error(
+                "Restoring the dictation shortcut after recorder capture failed: \(error.localizedDescription, privacy: .public)"
+            )
+            configureDictationHotkeyAtStartup()
+            refreshReadyState()
+        }
+    }
+
     func handleHotkeyPress() {
-        logger.info("F5 received while state=\(String(describing: self.state), privacy: .public)")
+        logger.info(
+            "Dictation trigger received shortcut=\(self.activeDictationHotkey.displayName, privacy: .public) state=\(String(describing: self.state), privacy: .public)"
+        )
         switch state {
         case .idle:
+            cancelVisualFeedbackPreview()
             startRecording()
         case .recording:
             stopRecording()
         case .processing:
             NSSound.beep()
         }
+    }
+
+    private func cancelVisualFeedbackPreview() {
+        guard visualFeedbackPreviewTask != nil else {
+            return
+        }
+        visualFeedbackPreviewTask?.cancel()
+        visualFeedbackPreviewTask = nil
+        overlay.hide()
+        overlay.updateVisualFeedbackConfiguration(
+            config.visualFeedback
+        )
+    }
+
+    private func previewVisualFeedback(
+        _ preview: VisualFeedbackPreview,
+        config: VisualFeedbackConfig
+    ) {
+        guard state == .idle else {
+            NSSound.beep()
+            return
+        }
+
+        cancelVisualFeedbackPreview()
+        overlay.updateVisualFeedbackConfiguration(
+            config
+        )
+        switch preview {
+        case .recording:
+            overlay.showRecording(
+                elapsedText: "00:07"
+            )
+            overlay.updateRecording(
+                level: 0.72,
+                elapsedText: "00:07"
+            )
+        case .processing:
+            overlay.showProcessing()
+        case .copied:
+            overlay.showResult(
+                text: L10n.text("Preview"),
+                outcome: .copiedToClipboard(
+                    reason: .noEditableTarget
+                )
+            )
+        case .error:
+            overlay.showError(
+                L10n.text(
+                    "Preview error — no user data was used."
+                )
+            )
+        }
+
+        visualFeedbackPreviewTask =
+            Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(
+                        for: .seconds(2.4)
+                    )
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else {
+                    return
+                }
+                self?.overlay.hide()
+                if let self {
+                    self.overlay
+                        .updateVisualFeedbackConfiguration(
+                            self.config
+                                .visualFeedback
+                        )
+                }
+                self?.visualFeedbackPreviewTask =
+                    nil
+            }
     }
 
     func cancelCurrentSession(source: OverlayCancelSource? = nil) {
@@ -467,6 +703,9 @@ final class AppCoordinator {
     }
 
     func shutdown() {
+        hotkeyRegistrationService.stop()
+        visualFeedbackPreviewTask?.cancel()
+        visualFeedbackPreviewTask = nil
         startRecordingTask?.cancel()
         startRecordingTask = nil
         processingTask?.cancel()
@@ -580,7 +819,14 @@ final class AppCoordinator {
                 logger.info("Recording session \(sessionID.uuidString, privacy: .public) started successfully")
                 self.recordingStartedAt = .now()
                 self.state = .recording
-                self.statusMenu?.update(state: .recording, detail: L10n.text("Recording on F5"))
+                self.statusMenu?.update(
+                    state: .recording,
+                    detail: L10n.format(
+                        "Recording — press %@ to transcribe",
+                        self.activeDictationHotkey
+                            .displayName
+                    )
+                )
                 self.overlay.showRecording(elapsedText: "00:00")
                 self.recordProductMetric(
                     event: .dictationStarted,
@@ -617,12 +863,16 @@ final class AppCoordinator {
 
     private func stopRecording() {
         guard let recorder, let sessionID = activeSessionID else {
-            logger.error("F5 stop request ignored because no active recorder/session was available")
+            logger.error(
+                "Dictation stop request ignored because no active recorder/session was available"
+            )
             return
         }
 
         do {
-            logger.info("Stopping recording session \(sessionID.uuidString, privacy: .public) from F5")
+            logger.info(
+                "Stopping recording session \(sessionID.uuidString, privacy: .public) from dictation shortcut"
+            )
             stopRecordingLevelUpdates()
             let audio = try recorder.stopRecording()
             let audioBytes = Self.audioFileSize(at: audio.fileURL)
@@ -688,6 +938,7 @@ final class AppCoordinator {
         let sessionID = UUID()
         activeSessionID = sessionID
         state = .processing
+        statusMenu?.setRetryDictationAvailable(false)
         statusMenu?.update(state: .processing, detail: L10n.text("Retrying"))
         overlay.showProcessing()
         recordProductMetric(
@@ -852,6 +1103,18 @@ final class AppCoordinator {
                         detail: self.statusDetail(for: outcome)
                     )
                     self.overlay.showResult(text: prepared.finalText, outcome: outcome)
+                    if self.config.visualFeedback
+                        .completionNotificationEnabled
+                    {
+                        self.notifier.notify(
+                            title: L10n.text(
+                                "OpenWhisper dictation complete"
+                            ),
+                            body: self.statusDetail(
+                                for: outcome
+                            )
+                        )
+                    }
                     self.launchAppContext = nil
                     self.logger.info(
                         "Dictation session \(sessionID.uuidString, privacy: .public) completed outcome=\(self.latencyResultStatus(for: outcome), privacy: .public)"
@@ -1224,6 +1487,20 @@ final class AppCoordinator {
                 onOpenOnboarding: { [weak self] in
                     self?.openOnboarding()
                 },
+                onHotkeyCaptureChanged: {
+                    [weak self] isCapturing in
+                    self?.setHotkeyCaptureActive(
+                        isCapturing
+                    )
+                },
+                onPreviewVisualFeedback: {
+                    [weak self] preview,
+                    visualConfig in
+                    self?.previewVisualFeedback(
+                        preview,
+                        config: visualConfig
+                    )
+                },
                 focusPane: focusPane
             )
         }
@@ -1234,6 +1511,7 @@ final class AppCoordinator {
     private func openHistory() {
         if historyWindowController == nil {
             historyWindowController = HistoryWindowController(
+                hotkeyBinding: activeDictationHotkey,
                 onLoadTranscriptionHistory: { [weak self] in
                     guard let self else {
                         return []
@@ -1415,8 +1693,34 @@ final class AppCoordinator {
     ) -> Result<Void, any Error> {
         do {
             let previousConfig = config
-            try configStore.save(newConfig)
+            if previousConfig.transcription.dictationHotkey
+                != newConfig.transcription.dictationHotkey
+            {
+                try hotkeyRegistrationService.replace(
+                    with:
+                        newConfig.transcription
+                            .dictationHotkey,
+                    onPress: dictationHotkeyPressHandler()
+                ) {
+                    try configStore.save(newConfig)
+                }
+                hotkeyRegistrationIssue = nil
+            } else {
+                try configStore.save(newConfig)
+            }
             config = newConfig
+            overlay.updateVisualFeedbackConfiguration(
+                newConfig.visualFeedback
+            )
+            applyActiveDictationHotkey(
+                activeDictationHotkey
+            )
+            if previousConfig.transcription.dictationHotkey
+                != newConfig.transcription.dictationHotkey
+            {
+                onboardingWindowController = nil
+                historyWindowController = nil
+            }
             refreshReadyState(detailOverride: successMessage, state: .ready)
             if previousConfig.privacy != newConfig.privacy {
                 enforceStoragePolicies()
@@ -1442,6 +1746,7 @@ final class AppCoordinator {
             )
             onboardingWindowController = OnboardingWindowController(
                 authManager: authManager,
+                hotkeyBinding: activeDictationHotkey,
                 initialStep: initialStep,
                 persistCompletion: !snapshotPrivacyMode.isEnabled,
                 onRequestMicrophoneAccess: { [weak self] in
@@ -1855,6 +2160,47 @@ final class AppCoordinator {
         let snapshotOutputURL = Self.visualAcceptanceSnapshotOutputURL()
         let followupSnapshotOutputURL =
             Self.visualAcceptanceFollowupSnapshotOutputURL()
+        let feedbackDebugOutputURL =
+            Self.feedbackSurfaceDebugOutputURL()
+        if let feedbackDebugOutputURL {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + 0.25
+            ) { [overlay] in
+                do {
+                    guard
+                        let feedback =
+                            overlay
+                                as? FeedbackSurfaceController
+                    else {
+                        throw OverlaySnapshotError
+                            .bitmapUnavailable
+                    }
+                    let encoder = JSONEncoder()
+                    encoder.outputFormatting = [
+                        .prettyPrinted,
+                        .sortedKeys,
+                    ]
+                    try encoder.encode(
+                        feedback.debugSnapshot
+                    ).write(
+                        to: feedbackDebugOutputURL,
+                        options: [.atomic]
+                    )
+                    if snapshotOutputURL == nil
+                        && followupSnapshotOutputURL
+                            == nil
+                    {
+                        NSApplication.shared
+                            .terminate(nil)
+                    }
+                } catch {
+                    print(
+                        "OpenWhisper feedback debug capture failed: "
+                            + error.localizedDescription
+                    )
+                }
+            }
+        }
         if let snapshotOutputURL {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [overlay] in
                 do {
@@ -1937,6 +2283,20 @@ final class AppCoordinator {
         )
     }
 
+    private static func feedbackSurfaceDebugOutputURL()
+        -> URL?
+    {
+        AppLaunchMode
+            .feedbackSurfaceDebugOutputURL(
+                environment:
+                    ProcessInfo.processInfo
+                        .environment,
+                arguments:
+                    ProcessInfo.processInfo
+                        .arguments
+            )
+    }
+
     private func startRecordingLevelUpdates() {
         stopRecordingLevelUpdates()
         overlay.showRecording(elapsedText: elapsedRecordingText())
@@ -2014,6 +2374,9 @@ final class AppCoordinator {
                 expiresAt: expiration
             )
             pendingRetry = retry
+            statusMenu?.setRetryDictationAvailable(
+                true
+            )
             schedulePendingRetryExpiry(for: retry)
             return
         }
@@ -2032,6 +2395,7 @@ final class AppCoordinator {
             expiresAt: expiration
         )
         pendingRetry = retry
+        statusMenu?.setRetryDictationAvailable(true)
         schedulePendingRetryExpiry(for: retry)
     }
 
@@ -2042,6 +2406,7 @@ final class AppCoordinator {
             try? FileManager.default.removeItem(at: pendingRetry.audio.fileURL)
         }
         pendingRetry = nil
+        statusMenu?.setRetryDictationAvailable(false)
     }
 
     private func schedulePendingRetryExpiry(for retry: PendingRetry) {
@@ -2329,8 +2694,23 @@ final class AppCoordinator {
 
         let freshConfig = AppConfig()
         do {
-            try configStore.save(freshConfig)
+            try hotkeyRegistrationService.replace(
+                with:
+                    freshConfig.transcription
+                        .dictationHotkey,
+                onPress: dictationHotkeyPressHandler()
+            ) {
+                try configStore.save(freshConfig)
+            }
             config = freshConfig
+            hotkeyRegistrationIssue = nil
+            overlay.updateVisualFeedbackConfiguration(
+                freshConfig.visualFeedback
+            )
+            applyActiveDictationHotkey(
+                freshConfig.transcription
+                    .dictationHotkey
+            )
             recorder?.configure(maxDurationSeconds: freshConfig.transcription.maxDurationSeconds)
             refreshReadyState(
                 detailOverride: L10n.text("All OpenWhisper data was deleted. Connect ChatGPT again to continue."),
@@ -2378,10 +2758,21 @@ final class AppCoordinator {
         )
         if let detailOverride {
             statusMenu?.update(state: state, detail: detailOverride)
+        } else if let hotkeyRegistrationIssue {
+            statusMenu?.update(
+                state: .setupRequired,
+                detail: hotkeyRegistrationIssue
+            )
         } else if let summary = RuntimePreflight.summary(for: issues) {
             statusMenu?.update(state: .setupRequired, detail: summary)
         } else {
-            statusMenu?.update(state: state, detail: L10n.text("Ready. Press F5 to dictate"))
+            statusMenu?.update(
+                state: state,
+                detail: L10n.format(
+                    "Ready. Press %@ to dictate",
+                    activeDictationHotkey.displayName
+                )
+            )
         }
     }
 }

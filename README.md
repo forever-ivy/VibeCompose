@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-OpenWhisper is an MIT-licensed, native macOS push-to-talk voice input app. Press `F5` to start recording, press `F5` again to stop, and OpenWhisper returns the transcript to the current editable field or leaves it in the clipboard when automatic insertion is not safe.
+OpenWhisper is an MIT-licensed, native macOS push-to-talk voice input app. Press the configured global shortcut (default `F5`) to start recording, press the same shortcut again to stop, and OpenWhisper returns the transcript to the current editable field or leaves it in the clipboard when automatic insertion is not safe.
 
 ## Status
 
@@ -11,7 +11,11 @@ OpenWhisper is currently a **macOS alpha** under productization. The working ver
 The current implementation already includes:
 
 - native AppKit + SwiftUI menu bar app
-- global `F5` start/stop workflow
+- one configurable global start/stop shortcut, defaulting to `F5`, with
+  conflict-safe registration and rollback
+- Refined HUD, Blue Signal Frame, and Hidden visual-feedback modes with
+  Reduce Motion, Increase Contrast, VoiceOver announcements, menu Retry, and
+  optional completion notifications
 - English and Simplified Chinese UI
 - browser-based ChatGPT connection with Keychain-backed local session storage
 - transcription, terminology alignment, and optional AI polish with an Auto
@@ -88,7 +92,7 @@ Installed accessibility structure precheck:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-This checks all six Settings panes, every one of the four Onboarding steps,
+This checks all seven Settings panes, every one of the four Onboarding steps,
 History, Terminology, and Quick Add for a non-empty SwiftUI accessibility tree
 and named actionable controls. It complements—but does not replace—keyboard
 and VoiceOver interaction acceptance.

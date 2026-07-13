@@ -200,6 +200,10 @@ swift "$ROOT/scripts/verify_visual_acceptance.swift" \
   "$OUT_DIR/10-retryable-error-increase-contrast.png" \
   | tee "$OUT_DIR/verification.txt"
 
+"$ROOT/scripts/feedback_mode_acceptance.sh" \
+  --no-final-launch \
+  | tee "$OUT_DIR/feedback-mode-acceptance.txt"
+
 /usr/bin/open "$APP_DIR"
 if ! wait_for_installed_app; then
   echo "Installed app did not remain running after launch: $APP_DIR" >&2
@@ -229,6 +233,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
   - \`09-processing-reduced-motion-followup.png\`
   - \`10-retryable-error-increase-contrast.png\`
   - \`verification.txt\`
+  - \`feedback-mode-acceptance.txt\`
   - \`openwhisper-overlay-demo-*.log\`
 
 SUMMARY

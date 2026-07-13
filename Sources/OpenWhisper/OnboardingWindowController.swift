@@ -33,6 +33,7 @@ final class OnboardingWindowController: NSWindowController {
 
     init(
         authManager: ChatGPTAuthManager,
+        hotkeyBinding: HotkeyBinding = .f5,
         initialStep: OnboardingStep = .welcome,
         persistCompletion: Bool = true,
         stateStore: OnboardingStateStore = OnboardingStateStore(),
@@ -46,6 +47,7 @@ final class OnboardingWindowController: NSWindowController {
 
         let placeholder = OnboardingView(
             authManager: authManager,
+            hotkeyBinding: hotkeyBinding,
             initialStep: initialStep,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onStepCompleted: onStepCompleted,
@@ -77,6 +79,7 @@ final class OnboardingWindowController: NSWindowController {
         hostingController.rootView =
             OnboardingView(
                 authManager: authManager,
+                hotkeyBinding: hotkeyBinding,
                 initialStep: initialStep,
                 onRequestMicrophoneAccess: onRequestMicrophoneAccess,
                 onStepCompleted: onStepCompleted,
@@ -204,6 +207,7 @@ private struct OnboardingView: View {
     @State private var practiceText = ""
 
     let authManager: ChatGPTAuthManager
+    let hotkeyBinding: HotkeyBinding
     let onRequestMicrophoneAccess:
         @MainActor @Sendable () async -> Result<Void, any Error>
     let onStepCompleted: (OnboardingStep) -> Void
@@ -211,12 +215,14 @@ private struct OnboardingView: View {
 
     init(
         authManager: ChatGPTAuthManager,
+        hotkeyBinding: HotkeyBinding = .f5,
         initialStep: OnboardingStep = .welcome,
         onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
         onStepCompleted: @escaping (OnboardingStep) -> Void = { _ in },
         onComplete: @escaping () -> Void
     ) {
         self.authManager = authManager
+        self.hotkeyBinding = hotkeyBinding
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onStepCompleted = onStepCompleted
         self.onComplete = onComplete
@@ -261,7 +267,12 @@ private struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text("Set Up OpenWhisper"))
                     .font(.system(size: 19, weight: .semibold))
-                Text(L10n.text("Four short steps to your first F5 dictation."))
+                Text(
+                    L10n.format(
+                        "Four short steps to your first %@ dictation.",
+                        hotkeyBinding.displayName
+                    )
+                )
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -326,13 +337,20 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 20) {
             stepTitle(
                 title: "Speak anywhere on your Mac",
-                subtitle: "Focus a text field, press F5 to start, press F5 again to transcribe."
+                subtitle: L10n.format(
+                    "Focus a text field, press %@ to start, then press %@ again to transcribe.",
+                    hotkeyBinding.displayName,
+                    hotkeyBinding.displayName
+                )
             )
 
             onboardingFeature(
                 symbol: "keyboard",
                 title: "One global shortcut",
-                detail: "F5 starts and stops every dictation—no mode switch or floating editor."
+                detail: L10n.format(
+                    "%@ starts and stops every dictation—no mode switch or floating editor.",
+                    hotkeyBinding.displayName
+                )
             )
             onboardingFeature(
                 symbol: "text.badge.checkmark",
@@ -438,7 +456,11 @@ private struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             stepTitle(
                 title: "Try your first dictation",
-                subtitle: "Click the practice field, press F5, speak, then press F5 again."
+                subtitle: L10n.format(
+                    "Click the practice field, press %@, speak, then press %@ again.",
+                    hotkeyBinding.displayName,
+                    hotkeyBinding.displayName
+                )
             )
 
             statusPanel(
@@ -543,7 +565,10 @@ private struct OnboardingView: View {
     private var microphoneStatusDetail: String {
         switch permissionMonitor.snapshot.microphone {
         case .granted:
-            return L10n.text("You can record with F5.")
+            return L10n.format(
+                "You can record with %@.",
+                hotkeyBinding.displayName
+            )
         case .undetermined:
             return L10n.text("Click Enable Microphone to show the macOS permission prompt.")
         case .denied:

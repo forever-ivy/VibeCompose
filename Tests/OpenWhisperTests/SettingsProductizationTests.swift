@@ -78,6 +78,10 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(!source.contains("edit config.json for bulk changes"))
     #expect(source.contains("$config.transcription.languagePreference"))
     #expect(source.contains("$config.transcription.punctuationPreference"))
+    #expect(source.contains("$config.visualFeedback"))
+    #expect(source.contains("Appearance & Feedback"))
+    #expect(source.contains("VisualFeedbackMode"))
+    #expect(source.contains("VisualFeedbackPreview"))
     #expect(source.contains("$config.transcription.voiceModes.defaultMode"))
     #expect(source.contains("Application Rules"))
     #expect(source.contains("Button(L10n.text(\"Choose App…\")"))
@@ -151,4 +155,6 @@ func statusMenuExposesSoftwareUpdateEntry() throws {
     #expect(source.contains("title: L10n.text(\"Check for Updates…\")"))
     #expect(source.contains("action: #selector(checkForUpdates)"))
     #expect(source.contains("checkForUpdatesHandler()"))
+    #expect(source.contains("Retry last dictation"))
+    #expect(source.contains("setRetryDictationAvailable"))
 }

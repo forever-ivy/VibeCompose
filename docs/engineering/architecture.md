@@ -6,8 +6,8 @@ OpenWhisper is a native AppKit + SwiftUI menu bar application for one global dic
 
 ```text
 focus an editable target
-→ F5 starts recording
-→ F5 stops recording
+→ configured shortcut starts recording (default F5)
+→ the same shortcut stops recording
 → transcribe
 → normalize terminology
 → optionally polish
@@ -66,14 +66,36 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `AppCoordinator`
   - orchestrates recording, transcription, retry, insertion, storage, and setup state.
 - `StatusMenuController`
-  - exposes status, Settings, History/Recovery entry points, and Quit.
+  - exposes status, manual start/stop, pending Retry, Settings,
+    History/Recovery entry points, and Quit.
+- `HotkeyBinding`
+  - stores the Carbon key code and normalized Command/Shift/Option/Control
+    modifier mask;
+  - keeps F5 as the decode and reset fallback.
+- `HotkeyRegistrationService`
+  - registers a candidate before releasing the previous shortcut;
+  - rolls back cleanly when persistence or registration fails;
+  - temporarily suspends the active binding while Settings records a new
+    shortcut.
 - `HotkeyMonitor`
-  - registers the global `F5` shortcut.
+  - registers the configured global shortcut and the fixed internal Quick Add
+    and Escape controls.
+- `FeedbackSurfaceController`
+  - owns one shared feedback state and routes it to Refined HUD, Blue Signal
+    Frame, or Hidden presentation;
+  - keeps Escape cancellation and accessibility announcements active even when
+    no HUD is visible.
 - `OverlayController`
-  - renders recording, processing, verified-insert, paste-sent, copied, error, and retryable-error HUD states;
+  - renders the top-center Refined HUD for recording, processing,
+    verified-insert, paste-sent, copied, error, and retryable-error states;
   - uses a presentation generation so stale auto-hide tasks and animation completions cannot hide a newer state.
+- `BlueSignalFrameController`
+  - renders a nonactivating, mouse-transparent, frozen-target cold-blue frame
+    around the active display or focused window;
+  - stops continuous animation under system or app-level Reduce Motion.
 - `PreferencesWindowController`
-  - hosts the current workflow-sidebar Settings surface, including Privacy & Data.
+  - hosts the workflow-sidebar Settings surface, including shortcut recording,
+    Appearance & Feedback, and Privacy & Data.
 
 ### Audio and transcription
 
@@ -360,7 +382,7 @@ The same privacy boundary applies to
 `--accessibility-audit-output`. `AccessibilityAudit` enables AppKit's enhanced
 accessibility interface for the transient process, walks the SwiftUI virtual
 accessibility tree, and records only roles, control names, identifiers, action
-names, and standard subroles. The installed-app harness covers all six Settings
+names, and standard subroles. The installed-app harness covers all seven Settings
 panes, all four Onboarding steps, History, Terminology, and Quick Add and fails
 when an actionable control has neither an explicit/associated name nor a
 standard AppKit subrole description. Values and user content are not exported.

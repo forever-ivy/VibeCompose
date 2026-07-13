@@ -4,6 +4,40 @@ import Testing
 
 struct AppLaunchModeTests {
     @Test
+    func visualFeedbackAcceptanceOverridesParseWithoutChangingLaunchMode() {
+        #expect(
+            AppLaunchMode.visualFeedbackModeOverride(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--visual-feedback-mode",
+                    "blue-signal-frame",
+                ]
+            ) == .blueSignalFrame
+        )
+        #expect(
+            AppLaunchMode.visualFeedbackModeOverride(
+                environment: [
+                    "OPENWHISPER_VISUAL_FEEDBACK_MODE":
+                        "hidden",
+                ],
+                arguments: ["OpenWhisper"]
+            ) == .hidden
+        )
+        #expect(
+            AppLaunchMode
+                .feedbackSurfaceDebugOutputURL(
+                    environment: [:],
+                    arguments: [
+                        "OpenWhisper",
+                        "--feedback-surface-debug-output",
+                        "/tmp/feedback.json",
+                    ]
+                )?.path == "/tmp/feedback.json"
+        )
+    }
+
+    @Test
     func overlayDemoModeRequiresExplicitFlag() {
         #expect(AppLaunchMode.resolve(environment: [:]) == .normal)
         #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "0"]) == .normal)

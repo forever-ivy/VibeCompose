@@ -5,6 +5,7 @@ This spec mirrors the HUD implementation currently shipped in `dist/OpenWhisper.
 ## Core Shell
 
 - Container: one integrated graphite dictation indicator
+- Position: top center of the active display, `16pt` below its visible top edge
 - Recording / processing / success size: `284 x 44`
 - Error / retryable error size: `320 x 56`
 - Corner radius: `16`
@@ -48,7 +49,7 @@ This spec mirrors the HUD implementation currently shipped in `dist/OpenWhisper.
 
 ## Recording
 
-- Title: `Listening`
+- Title: `<current shortcut> again to transcribe`
 - Cancel affordances:
   - `ESC` cancels the current session
   - an inline `xmark.circle.fill` cancel control sits inside the right-side accessory row

@@ -5,6 +5,7 @@ struct AppConfig: Codable, Sendable, Equatable {
     var injection: InjectionConfig = .init()
     var auth: AuthConfig = .init()
     var privacy: PrivacyConfig = .init()
+    var visualFeedback: VisualFeedbackConfig = .init()
 
     init() {}
 
@@ -14,6 +15,10 @@ struct AppConfig: Codable, Sendable, Equatable {
         injection = try container.decodeIfPresent(InjectionConfig.self, forKey: .injection) ?? .init()
         auth = try container.decodeIfPresent(AuthConfig.self, forKey: .auth) ?? .init()
         privacy = try container.decodeIfPresent(PrivacyConfig.self, forKey: .privacy) ?? .init()
+        visualFeedback = try container.decodeIfPresent(
+            VisualFeedbackConfig.self,
+            forKey: .visualFeedback
+        ) ?? .init()
     }
 }
 
@@ -289,7 +294,7 @@ struct TextPolishConfig: Codable, Sendable, Equatable {
 
 struct TranscriptionConfig: Codable, Sendable, Equatable {
     var provider: TranscriptionProvider = .chatGPTManagedAuth
-    var hotkeyKeyCode: UInt32 = 96
+    var dictationHotkey: HotkeyBinding = .f5
     var openAITranscriptionURL: String = "https://api.openai.com/v1/audio/transcriptions"
     var openAIModel: String = "gpt-4o-mini-transcribe"
     var sampleRateHz: Int = 24_000
@@ -312,7 +317,27 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         } else {
             provider = .chatGPTManagedAuth
         }
-        hotkeyKeyCode = try container.decodeIfPresent(UInt32.self, forKey: .hotkeyKeyCode) ?? 96
+        if let decodedBinding = try container.decodeIfPresent(
+            HotkeyBinding.self,
+            forKey: .dictationHotkey
+        ) {
+            dictationHotkey =
+                (try? decodedBinding.validated()) ?? .f5
+        } else {
+            let legacyContainer = try decoder.container(
+                keyedBy: LegacyCodingKeys.self
+            )
+            let legacyKeyCode = try legacyContainer.decodeIfPresent(
+                UInt32.self,
+                forKey: .hotkeyKeyCode
+            )
+            let migrated = HotkeyBinding(
+                keyCode: legacyKeyCode
+                    ?? HotkeyBinding.f5.keyCode
+            )
+            dictationHotkey =
+                (try? migrated.validated()) ?? .f5
+        }
         openAITranscriptionURL = try container.decodeIfPresent(String.self, forKey: .openAITranscriptionURL) ?? "https://api.openai.com/v1/audio/transcriptions"
         openAIModel = try container.decodeIfPresent(String.self, forKey: .openAIModel) ?? "gpt-4o-mini-transcribe"
         sampleRateHz = try container.decodeIfPresent(Int.self, forKey: .sampleRateHz) ?? 24_000
@@ -334,6 +359,25 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         ) ?? .init()
         terminology = try container.decodeIfPresent(TerminologyConfig.self, forKey: .terminology) ?? .init()
         textPolish = try container.decodeIfPresent(TextPolishConfig.self, forKey: .textPolish) ?? .init()
+    }
+
+    var hotkeyKeyCode: UInt32 {
+        get {
+            dictationHotkey.keyCode
+        }
+        set {
+            dictationHotkey = HotkeyBinding(
+                keyCode: newValue,
+                modifiers: dictationHotkey.modifiers
+            )
+        }
+    }
+
+    private enum LegacyCodingKeys:
+        String,
+        CodingKey
+    {
+        case hotkeyKeyCode
     }
 
     var activeDictionaryEntries: [TerminologyEntry] {

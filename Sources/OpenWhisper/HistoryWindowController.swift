@@ -27,6 +27,7 @@ private final class HistoryAudioPlayer: ObservableObject {
 @MainActor
 final class HistoryWindowController: NSWindowController {
     init(
+        hotkeyBinding: HotkeyBinding = .f5,
         onLoadTranscriptionHistory: @escaping () -> [TranscriptionHistoryRecord],
         onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
         onResolveRecoveryAudioURL: @escaping (RecoveryRecord) -> Result<URL, any Error>,
@@ -35,6 +36,7 @@ final class HistoryWindowController: NSWindowController {
         onDeleteRecoveryRecord: @escaping (UUID) -> Result<Void, any Error>
     ) {
         let view = HistoryWindowView(
+            hotkeyBinding: hotkeyBinding,
             onLoadTranscriptionHistory: onLoadTranscriptionHistory,
             onLoadRecoveryHistory: onLoadRecoveryHistory,
             onResolveRecoveryAudioURL: onResolveRecoveryAudioURL,
@@ -112,6 +114,7 @@ private struct HistoryWindowView: View {
     @State private var messageIsError = false
     @StateObject private var audioPlayer = HistoryAudioPlayer()
 
+    let hotkeyBinding: HotkeyBinding
     let onLoadTranscriptionHistory: () -> [TranscriptionHistoryRecord]
     let onLoadRecoveryHistory: () -> [RecoveryRecord]
     let onResolveRecoveryAudioURL: (RecoveryRecord) -> Result<URL, any Error>
@@ -408,7 +411,12 @@ private struct HistoryWindowView: View {
                 .foregroundStyle(.secondary)
             Text(L10n.text("No matching history"))
                 .font(.system(size: 15, weight: .semibold))
-            Text(L10n.text("Press F5 to create your first dictation, or change the search and filters."))
+            Text(
+                L10n.format(
+                    "Press %@ to create your first dictation, or change the search and filters.",
+                    hotkeyBinding.displayName
+                )
+            )
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

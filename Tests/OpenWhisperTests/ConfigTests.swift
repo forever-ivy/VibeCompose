@@ -1,3 +1,4 @@
+import Carbon
 import Foundation
 import Testing
 @testable import OpenWhisper
@@ -5,7 +6,10 @@ import Testing
 @Test
 func defaultConfigUsesChatGPTAccountDefaults() throws {
     let config = AppConfig()
-    #expect(config.transcription.hotkeyKeyCode == 96)
+    #expect(
+        config.transcription.dictationHotkey
+            == .f5
+    )
     #expect(config.transcription.provider == .chatGPTManagedAuth)
     #expect(config.transcription.openAITranscriptionURL == "https://api.openai.com/v1/audio/transcriptions")
     #expect(config.transcription.openAIModel == "gpt-4o-mini-transcribe")
@@ -18,6 +22,59 @@ func defaultConfigUsesChatGPTAccountDefaults() throws {
     #expect(config.auth.preferredLoginSurface == .defaultBrowser)
     #expect(config.auth.allowEmbeddedFallback == false)
     #expect(config.auth.persistCapturedSession == true)
+    #expect(
+        config.visualFeedback.mode
+            == .refinedHUD
+    )
+}
+
+@Test
+func configMigratesLegacyHotkeyAndWritesOnlyTheNewBinding() throws {
+    let json = """
+    {
+      "transcription": {
+        "hotkeyKeyCode": 96
+      }
+    }
+    """.data(using: .utf8)!
+
+    let decoded = try JSONDecoder().decode(
+        AppConfig.self,
+        from: json
+    )
+    let encoded = try JSONEncoder().encode(decoded)
+    let encodedJSON =
+        String(data: encoded, encoding: .utf8) ?? ""
+
+    #expect(
+        decoded.transcription.dictationHotkey
+            == .f5
+    )
+    #expect(encodedJSON.contains("dictationHotkey"))
+    #expect(!encodedJSON.contains("hotkeyKeyCode"))
+}
+
+@Test
+func configRoundTripPreservesModifiedDictationHotkey() throws {
+    var config = AppConfig()
+    config.transcription.dictationHotkey =
+        HotkeyBinding(
+            keyCode: UInt32(kVK_ANSI_D),
+            modifiers: UInt32(
+                controlKey | optionKey
+            )
+        )
+
+    let data = try JSONEncoder().encode(config)
+    let decoded = try JSONDecoder().decode(
+        AppConfig.self,
+        from: data
+    )
+
+    #expect(
+        decoded.transcription.dictationHotkey
+            == config.transcription.dictationHotkey
+    )
 }
 
 @Test

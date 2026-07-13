@@ -187,6 +187,12 @@ capture_surface \
   "settings" \
   "dictation"
 capture_surface \
+  "settings-appearance" \
+  "--open-settings" \
+  "settings-snapshot-output" \
+  "settings" \
+  "appearance"
+capture_surface \
   "settings-ai-polish" \
   "--open-settings" \
   "settings-snapshot-output" \

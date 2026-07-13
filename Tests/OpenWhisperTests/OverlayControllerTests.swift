@@ -12,7 +12,7 @@ func minimalOverlayPresetUsesNineBarVoiceGlyph() {
     #expect(preset.errorPillWidth == 320)
     #expect(preset.errorPillHeight == 56)
     #expect(preset.cornerRadius == 16)
-    #expect(preset.bottomInset == 16)
+    #expect(preset.topInset == 16)
     #expect(preset.waveformBarCount == 9)
     #expect(preset.showsTranscriptPreview == false)
     #expect(preset.inlineCancelControlSize == 14)
@@ -245,16 +245,20 @@ func overlayPresentationGenerationRejectsStaleCompletions() {
 
 @MainActor
 @Test
-func overlayPanelPlacementStaysNearBottomEdge() {
+func overlayPanelPlacementStaysNearTopEdge() {
     let preset = OverlayStylePreset.dictationHUD
     let visibleFrame = CGRect(x: 40, y: 30, width: 1440, height: 860)
     let frame = OverlayController.panelFrame(
         for: preset.size(for: .processing),
         in: visibleFrame,
-        bottomInset: preset.bottomInset
+        topInset: preset.topInset
     )
 
-    #expect(frame.minY == visibleFrame.minY + preset.bottomInset)
+    #expect(
+        frame.maxY
+            == visibleFrame.maxY
+                - preset.topInset
+    )
     #expect(abs(frame.midX - visibleFrame.midX) < 0.0001)
 }
 
