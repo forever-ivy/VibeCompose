@@ -237,6 +237,7 @@
 "Microphone access is ready." = "麦克风权限已就绪。";
 "Press F5 once and macOS will ask for microphone access." = "按一次 F5，macOS 将请求麦克风权限。";
 "Microphone access was previously denied. Open Privacy & Security > Microphone to re-enable it." = "麦克风权限此前被拒绝。请打开“隐私与安全性 > 麦克风”重新启用。";
+"OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app." = "OpenWhisper 仍无法确认麦克风权限。请点击“刷新权限状态”或重新打开应用。";
 "Auto-paste is ready." = "自动粘贴已就绪。";
 "Allow Microphone Access" = "允许使用麦克风";
 "Open Microphone Settings" = "打开麦克风设置";

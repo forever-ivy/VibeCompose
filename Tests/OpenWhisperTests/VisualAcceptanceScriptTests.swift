@@ -151,6 +151,37 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
 }
 
 @Test
+func permissionSurfaceAcceptanceChecksInstalledLivePermissionCards() throws {
+    let root = repositoryRoot()
+    let script = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/permission_surface_acceptance.sh"
+        ),
+        encoding: .utf8
+    )
+    let verifier = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_permission_surface.swift"
+        ),
+        encoding: .utf8
+    )
+
+    #expect(script.contains("/Applications/$APP_NAME.app"))
+    #expect(script.contains("--settings-pane=account"))
+    #expect(script.contains("--settings-snapshot-output"))
+    #expect(script.contains("verify_permission_surface.swift"))
+    #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
+    #expect(!script.contains("dist/OpenWhisper.app/Contents/MacOS/OpenWhisper"))
+
+    #expect(verifier.contains("VNRecognizeTextRequest"))
+    #expect(verifier.contains("\"Microphone\", \"麦克风\""))
+    #expect(verifier.contains("\"Accessibility\", \"辅助功能\""))
+    #expect(verifier.contains("\"Granted\", \"已授权\""))
+    #expect(verifier.contains("containsCJKSequence"))
+    #expect(verifier.contains("grantedStatusCount >= 2"))
+}
+
+@Test
 func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
     let root = repositoryRoot()
     for source in [

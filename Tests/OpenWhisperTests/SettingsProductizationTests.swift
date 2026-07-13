@@ -96,6 +96,13 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(source.contains("Provider Safety"))
     #expect(source.contains("Refresh Safety Policy"))
     #expect(source.contains("providerCapabilityPolicy.refresh"))
+    #expect(source.contains("permissionStatusMonitor.requestMicrophoneAccess"))
+    #expect(source.contains("isRequestingMicrophoneAccess"))
+    #expect(
+        source.contains(
+            "OpenWhisper still cannot confirm microphone access."
+        )
+    )
     #expect(source.contains("SecureField("))
     #expect(source.contains("Save API Key"))
     #expect(source.contains("Remove API Key"))

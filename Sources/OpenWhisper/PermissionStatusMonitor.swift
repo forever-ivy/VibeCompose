@@ -16,6 +16,8 @@ struct PermissionStatusSnapshot: Equatable, Sendable {
 
 @MainActor
 final class PermissionStatusMonitor: ObservableObject {
+    typealias RefreshPause = @MainActor (Duration) async -> Void
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? ProductIdentity.defaultBundleIdentifier,
         category: "PermissionStatus"
@@ -43,5 +45,34 @@ final class PermissionStatusMonitor: ObservableObject {
             "Permission status changed: microphone=\(String(describing: nextSnapshot.microphone), privacy: .public), accessibilityTrusted=\(nextSnapshot.accessibilityTrusted, privacy: .public)"
         )
         snapshot = nextSnapshot
+    }
+
+    func requestMicrophoneAccess(
+        using request: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
+        maximumRefreshAttempts: Int = 10,
+        refreshDelay: Duration = .milliseconds(100),
+        pause: @escaping RefreshPause = { delay in
+            try? await Task.sleep(for: delay)
+        }
+    ) async -> Result<Void, any Error> {
+        let result = await request()
+        refresh()
+
+        guard
+            case .success = result,
+            snapshot.microphone == .undetermined,
+            maximumRefreshAttempts > 1
+        else {
+            return result
+        }
+
+        for _ in 1..<maximumRefreshAttempts {
+            await pause(refreshDelay)
+            refresh()
+            if snapshot.microphone != .undetermined {
+                break
+            }
+        }
+        return result
     }
 }

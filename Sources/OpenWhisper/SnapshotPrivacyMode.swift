@@ -9,6 +9,18 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
         environment: [String: String],
         arguments: [String]
     ) -> SnapshotPrivacyMode {
+        let launchMode = AppLaunchMode.resolve(
+            environment: environment,
+            arguments: arguments
+        )
+        let hasPrivateAcceptanceLaunchMode: Bool
+        switch launchMode {
+        case .overlayDemo, .overlayDemoState, .pasteAcceptance:
+            hasPrivateAcceptanceLaunchMode = true
+        default:
+            hasPrivateAcceptanceLaunchMode = false
+        }
+
         let hasPrivateAcceptanceSurface =
             AppLaunchMode.settingsSnapshotOutputURL(
                 environment: environment,
@@ -38,9 +50,23 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
                 environment: environment,
                 arguments: arguments
             )
+            || AppLaunchMode.visualAcceptanceOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
+            || AppLaunchMode.visualAcceptanceFollowupOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
+            || AppLaunchMode.pasteAcceptanceOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
 
         return SnapshotPrivacyMode(
-            isEnabled: hasPrivateAcceptanceSurface
+            isEnabled:
+                hasPrivateAcceptanceSurface
+                || hasPrivateAcceptanceLaunchMode
         )
     }
 

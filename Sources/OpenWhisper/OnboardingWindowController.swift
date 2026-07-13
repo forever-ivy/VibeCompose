@@ -36,7 +36,7 @@ final class OnboardingWindowController: NSWindowController {
         initialStep: OnboardingStep = .welcome,
         persistCompletion: Bool = true,
         stateStore: OnboardingStateStore = OnboardingStateStore(),
-        onRequestMicrophoneAccess: @escaping () async -> Result<Void, any Error>,
+        onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
         onStepCompleted: @escaping (OnboardingStep) -> Void = { _ in },
         onCompleted: @escaping () -> Void
     ) {
@@ -204,14 +204,15 @@ private struct OnboardingView: View {
     @State private var practiceText = ""
 
     let authManager: ChatGPTAuthManager
-    let onRequestMicrophoneAccess: () async -> Result<Void, any Error>
+    let onRequestMicrophoneAccess:
+        @MainActor @Sendable () async -> Result<Void, any Error>
     let onStepCompleted: (OnboardingStep) -> Void
     let onComplete: () -> Void
 
     init(
         authManager: ChatGPTAuthManager,
         initialStep: OnboardingStep = .welcome,
-        onRequestMicrophoneAccess: @escaping () async -> Result<Void, any Error>,
+        onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
         onStepCompleted: @escaping (OnboardingStep) -> Void = { _ in },
         onComplete: @escaping () -> Void
     ) {
@@ -644,19 +645,29 @@ private struct OnboardingView: View {
     private func requestMicrophone() {
         isRequestingMicrophone = true
         message = nil
-        Task {
-            let result = await onRequestMicrophoneAccess()
-            await MainActor.run {
-                permissionMonitor.refresh()
-                isRequestingMicrophone = false
-                switch result {
-                case .success:
+        Task { @MainActor in
+            let result = await permissionMonitor.requestMicrophoneAccess(
+                using: onRequestMicrophoneAccess
+            )
+            isRequestingMicrophone = false
+            switch result {
+            case .success:
+                switch permissionMonitor.snapshot.microphone {
+                case .granted:
                     message = L10n.text("Microphone access is ready.")
                     messageIsError = false
-                case .failure(let error):
-                    message = error.localizedDescription
+                case .undetermined:
+                    message = L10n.text(
+                        "OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
+                    )
+                    messageIsError = true
+                case .denied:
+                    message = microphoneStatusDetail
                     messageIsError = true
                 }
+            case .failure(let error):
+                message = error.localizedDescription
+                messageIsError = true
             }
         }
     }

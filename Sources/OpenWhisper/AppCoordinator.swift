@@ -355,11 +355,15 @@ final class AppCoordinator {
                     }
                 }
             case .overlayDemo:
-                config = (try? configStore.load()) ?? config
+                config = snapshotPrivacyMode.isEnabled
+                    ? AppConfig()
+                    : ((try? configStore.load()) ?? config)
                 runOverlayDemo()
                 return
             case .overlayDemoState(let demoState):
-                config = (try? configStore.load()) ?? config
+                config = snapshotPrivacyMode.isEnabled
+                    ? AppConfig()
+                    : ((try? configStore.load()) ?? config)
                 runOverlayDemoState(demoState)
                 return
             case .pasteAcceptance:
@@ -998,10 +1002,36 @@ final class AppCoordinator {
                     self?.retryRecoveryRecord(record)
                 },
                 onRequestMicrophoneAccess: { [weak self] in
-                    guard self?.snapshotPrivacyMode.isEnabled == false else {
-                        return
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.Preferences",
+                                code: 3,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper settings are no longer available."
+                                    ),
+                                ]
+                            )
+                        )
                     }
-                    self?.requestMicrophoneAccessFromSettings()
+                    guard self.snapshotPrivacyMode.isEnabled == false else {
+                        return .success(())
+                    }
+
+                    do {
+                        try await self.requestMicrophoneAccess(
+                            showExplanation: false
+                        )
+                        self.refreshReadyState()
+                        return .success(())
+                    } catch {
+                        self.statusMenu?.update(
+                            state: .setupRequired,
+                            detail: error.localizedDescription
+                        )
+                        return .failure(error)
+                    }
                 },
                 onOpenConfigFolder: { [weak self] in
                     guard self?.snapshotPrivacyMode.isEnabled == false else {
@@ -1673,21 +1703,6 @@ final class AppCoordinator {
 
         logger.info("Calling microphone access request helper")
         try await recorder.ensureRecordingPermission()
-    }
-
-    private func requestMicrophoneAccessFromSettings() {
-        Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-
-            do {
-                try await self.requestMicrophoneAccess(showExplanation: false)
-                self.refreshReadyState()
-            } catch {
-                self.statusMenu?.update(state: .setupRequired, detail: error.localizedDescription)
-            }
-        }
     }
 
     private func runOverlayDemo() {

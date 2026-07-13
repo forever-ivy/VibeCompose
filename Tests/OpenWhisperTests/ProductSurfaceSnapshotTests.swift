@@ -62,6 +62,44 @@ func productSurfaceSnapshotRejectsInvalidLogicalGeometry() throws {
 
 @MainActor
 @Test
+func productSurfaceSnapshotRejectsUniformWindowImages() throws {
+    let uniformContext = try #require(
+        CGContext(
+            data: nil,
+            width: 40,
+            height: 30,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+    )
+    uniformContext.setFillColor(NSColor.black.cgColor)
+    uniformContext.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+    let uniformImage = try #require(uniformContext.makeImage())
+    #expect(ProductSurfaceSnapshot.isVisuallyPopulated(uniformImage) == false)
+
+    let populatedContext = try #require(
+        CGContext(
+            data: nil,
+            width: 40,
+            height: 30,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+    )
+    populatedContext.setFillColor(NSColor.black.cgColor)
+    populatedContext.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+    populatedContext.setFillColor(NSColor.white.cgColor)
+    populatedContext.fill(CGRect(x: 20, y: 0, width: 20, height: 30))
+    let populatedImage = try #require(populatedContext.makeImage())
+    #expect(ProductSurfaceSnapshot.isVisuallyPopulated(populatedImage))
+}
+
+@MainActor
+@Test
 func productSurfaceSnapshotCentersCaptureInsideVisibleScreen() {
     let frame = ProductSurfaceSnapshot.centeredCaptureFrame(
         windowFrame: NSRect(x: -500, y: 1_200, width: 900, height: 709),

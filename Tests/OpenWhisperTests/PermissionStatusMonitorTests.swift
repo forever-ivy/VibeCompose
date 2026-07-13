@@ -22,3 +22,101 @@ func permissionStatusMonitorRefreshesAfterSystemSettingsChanges() {
 
     #expect(monitor.snapshot == current)
 }
+
+@MainActor
+@Test
+func permissionStatusMonitorPollsUntilMicrophoneRequestSettles() async {
+    var current = PermissionStatusSnapshot(
+        microphone: .undetermined,
+        accessibilityTrusted: true
+    )
+    var pauseCount = 0
+    let monitor = PermissionStatusMonitor {
+        current
+    }
+
+    let result = await monitor.requestMicrophoneAccess(
+        using: {
+            .success(())
+        },
+        maximumRefreshAttempts: 4,
+        pause: { _ in
+            pauseCount += 1
+            current = PermissionStatusSnapshot(
+                microphone: .granted,
+                accessibilityTrusted: true
+            )
+        }
+    )
+
+    if case .failure(let error) = result {
+        Issue.record("Unexpected microphone request failure: \(error)")
+    }
+    #expect(pauseCount == 1)
+    #expect(monitor.snapshot.microphone == .granted)
+}
+
+@MainActor
+@Test
+func permissionStatusMonitorRefreshesDeniedStateWithoutPolling() async {
+    enum TestError: Error {
+        case denied
+    }
+
+    var current = PermissionStatusSnapshot(
+        microphone: .undetermined,
+        accessibilityTrusted: true
+    )
+    var pauseCount = 0
+    let monitor = PermissionStatusMonitor {
+        current
+    }
+
+    let result = await monitor.requestMicrophoneAccess(
+        using: {
+            current = PermissionStatusSnapshot(
+                microphone: .denied,
+                accessibilityTrusted: true
+            )
+            return .failure(TestError.denied)
+        },
+        pause: { _ in
+            pauseCount += 1
+        }
+    )
+
+    if case .success = result {
+        Issue.record("Expected the microphone request to fail.")
+    }
+    #expect(pauseCount == 0)
+    #expect(monitor.snapshot.microphone == .denied)
+}
+
+@MainActor
+@Test
+func permissionStatusMonitorBoundsPollingWhenSystemStateStaysUndetermined() async {
+    let current = PermissionStatusSnapshot(
+        microphone: .undetermined,
+        accessibilityTrusted: true
+    )
+    var pauseCount = 0
+    let monitor = PermissionStatusMonitor {
+        current
+    }
+
+    let result = await monitor.requestMicrophoneAccess(
+        using: {
+            .success(())
+        },
+        maximumRefreshAttempts: 3,
+        pause: { _ in
+            pauseCount += 1
+        }
+    )
+
+    if case .failure(let error) = result {
+        Issue.record("Unexpected microphone request failure: \(error)")
+    }
+    #expect(pauseCount == 2)
+    #expect(monitor.snapshot.microphone == .undetermined)
+}

@@ -159,6 +159,11 @@ final class AudioRecorder: RecordingControlling {
                     kind: .requestMicrophoneAccess,
                     prominence: .primary
                 ),
+                PermissionRepairAction(
+                    title: L10n.text("Refresh Status"),
+                    kind: .refreshStatus,
+                    prominence: .utility
+                ),
             ]
         case .denied:
             return [
@@ -166,6 +171,11 @@ final class AudioRecorder: RecordingControlling {
                     title: L10n.text("Open Microphone Settings"),
                     kind: .openSettings(.microphone),
                     prominence: .secondary
+                ),
+                PermissionRepairAction(
+                    title: L10n.text("Refresh Status"),
+                    kind: .refreshStatus,
+                    prominence: .utility
                 ),
             ]
         }

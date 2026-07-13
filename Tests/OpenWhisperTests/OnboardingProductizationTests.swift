@@ -57,6 +57,12 @@ func onboardingSourceKeepsPermissionsRequiredAndOptional() throws {
     #expect(source.contains("Accessibility is optional"))
     #expect(source.contains("TextEditor(text: $practiceText)"))
     #expect(source.contains("onRequestMicrophoneAccess"))
+    #expect(source.contains("permissionMonitor.requestMicrophoneAccess"))
+    #expect(
+        source.contains(
+            "OpenWhisper still cannot confirm microphone access."
+        )
+    )
     #expect(source.contains("AccessibilityPermission.guideAccess()"))
 }
 

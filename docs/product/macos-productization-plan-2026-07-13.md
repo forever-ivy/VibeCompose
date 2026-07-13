@@ -90,6 +90,7 @@ macOS 首发策略：
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
 - 打包前会校验 Hardened Runtime entitlement plist 语法；转写测试中的全部临时音频 fixture 已改为确定性清理，重复执行完整检查不再累积 10–25 MB WAV 并挤满系统临时目录。
 - Settings、Onboarding、History、Terminology 和 Quick Add 的安装版截图统一归一为 2x backing scale，并在固定可见屏幕区域内居中；Increase Contrast 门禁在统一逻辑分辨率上比较局部边缘对比度，整体 luminance spread 只保留为诊断，避免把 macOS 减少透明度/颜色层次误判为对比度退化。
+- Settings 与 Onboarding 的麦克风授权动作现在等待同一异步请求结果，并在系统回调成功后进行有上限的状态轮询；授权未及时收敛时不会误报成功，而是提供“刷新权限状态”和明确恢复文案。安装版权限表面新增 Vision OCR 黑盒门禁，直接验证 Settings → Account 中麦克风与辅助功能均显示“已授权”。
 - 安全粘贴新增同一 AX target 的前后文本快照验证；只有精确观察到预期 UTF-16 替换才记为 `inserted_verified`，无法观察或结果不确定时记为 `paste_dispatched` 并保留转写剪贴板，未发送事件仍记为 `clipboard`；
 - HUD、History 筛选与标签、延迟诊断和双语文案已区分“已确认插入 / 已发送粘贴 / 已复制”，旧版 `pasted` 历史按“仅发送粘贴（旧记录）”解释，不追溯性宣称已验证。
 - Auto Polish 决策引擎已接入真实流水线：短且低复杂度的 Direct 听写跳过二次重写；改口、结构化、邮件、翻译、长输入和未来显式 Voice Mode 才执行，并只把有限枚举决策原因写入脱敏诊断。
@@ -526,21 +527,25 @@ Application Support/OpenWhisper
 - 导入文件执行 metadata-first 检查，限制 2 MB、10,000 条并拒绝符号链接；
 - `scripts/product_surface_acceptance.sh --install` 已覆盖 History、Terminology 和 Quick Add 的安装版渲染证据。
 - Settings、Onboarding、History、Terminology 和 Quick Add 的自动截图已启用隐私隔离：不加载真实配置、账户邮箱、Keychain 凭据、历史正文、Recovery 元数据或用户术语，并禁止截图进程写回真实数据。
+- HUD、产品表面、无障碍、权限和粘贴验收模式现在会在账户管理器创建前统一进入隐私隔离，不再触发真实 Keychain 的 `SecItemCopyMatching`；Overlay demo 同样使用默认 `AppConfig`，避免验收进程在启动阶段阻塞。
+- 产品表面截图会拒绝技术上有效但视觉上全黑或近似纯色的 CoreGraphics 帧，并回退到确定性的 content-view 渲染；回退结果仍必须通过非纯色门禁，避免把黑屏证据误判为成功。
 - `scripts/accessibility_acceptance.sh --install` 已覆盖六个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add 的安装版 SwiftUI 无障碍树；验收要求界面存在可操作控件，且控件必须具备显式/关联名称或标准 AppKit subrole 描述。验收只导出结构元数据，不导出控件值或用户内容。
-- `scripts/accessibility_visual_acceptance.sh` 已覆盖相同 13 个产品表面的 baseline / Increase Contrast 成对截图；截图固定为 2x，分析统一下采样到逻辑像素，要求几何一致、像素差异明确且局部边缘对比度不下降。`20260713T045237Z` 安装版证据中所有表面通过，Privacy pane 也被确认不再误捕获 Account pane。
+- `scripts/accessibility_visual_acceptance.sh` 已覆盖相同 13 个产品表面的 baseline / Increase Contrast 成对截图；截图固定为 2x，分析统一下采样到逻辑像素，要求几何一致、像素差异明确且局部边缘对比度不下降。`20260713T084453Z` 安装版证据中所有表面通过，Privacy pane 也被确认不再误捕获 Account pane。
 - `scripts/interaction_acceptance.sh` 可用同一隐私边界启动长时间保持的安装版界面，供官方 Computer Use 验证键盘、焦点和控件激活；验收进程不读取或持久化真实配置、凭据、History、Recovery、术语或 Onboarding 完成状态，并可显式恢复正常菜单栏运行。
+- `scripts/permission_surface_acceptance.sh` 从 `/Applications/OpenWhisper.app` 生成 Account 权限表面，并用 Vision OCR 要求麦克风和辅助功能两张卡片都显示 `Granted`/`已授权`；该路径读取真实 TCC 状态，但仍使用隐私隔离配置和空用户内容。
 - `OverlayController` 的辅助显示选项已改为可注入 provider；正常运行仍实时读取 macOS Reduce Motion / Increase Contrast，视觉验收则显式固定基线并生成 Reduce Motion 双时点与 Increase Contrast 快照。门禁要求 Reduce Motion 波形跨时点零/近零像素漂移、增强对比度产生明确像素变化且两者都不改变对应 HUD 几何。
 - 本机可用 Keychain 中的 Apple Development 身份仍被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，因此当前构建只能在显式本地调试开关下回退为稳定 designated requirement 的 ad-hoc 签名；这仍然阻断 Developer ID 商业发布。
-- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T045828Z` 安装版证据已在隔离 TextEdit 进程中观察到 marker，结果为 `inserted_verified`，并在验证后恢复原剪贴板。该结果只关闭当前 TextEdit 自动预检，不替代 Notes/Terminal/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
+- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T084429Z` 安装版证据已在隔离 TextEdit 进程中观察到 marker，结果为 `inserted_verified`，并在验证后恢复原剪贴板。该结果只关闭当前 TextEdit 自动预检，不替代 Notes/Terminal/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
 
 本轮最新安装版证据：
 
-- 完整检查：`OPENWHISPER_ALLOW_ADHOC_SIGNING=1 scripts/check.sh` 退出码 `0`；当前临时目录中大于 5 MB 的 WAV 在执行前后均为 `44` 个、`780686764` 字节，没有新增测试大文件；
-- 产品表面高对比度：`dist/accessibility-visual-acceptance/20260713T045237Z`；
-- 无障碍结构：`dist/accessibility-acceptance/20260713T045557Z`；
-- History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T045625Z`；
-- HUD 状态、Reduce Motion 与 Increase Contrast：`dist/visual-acceptance/20260713T045753Z`；
-- TextEdit 安全粘贴：`dist/paste-acceptance/20260713T045828Z`。
+- 完整检查：2026-07-13 16:39（UTC+8）执行 `OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh`，退出码 `0`；
+- 已授权权限表面：`dist/permission-surface-acceptance/20260713T084418Z`，麦克风与辅助功能标签均被识别，`已授权` 状态识别数为 `2`；
+- TextEdit 安全粘贴：`dist/paste-acceptance/20260713T084429Z`，结果为 `inserted_verified` 且原剪贴板已恢复；
+- 无障碍结构：`dist/accessibility-acceptance/20260713T084431Z`，13 个产品表面均无可操作控件名称缺失；
+- 产品表面高对比度：`dist/accessibility-visual-acceptance/20260713T084453Z`；
+- History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T084724Z`；
+- HUD 状态、Reduce Motion 与 Increase Contrast：`dist/visual-acceptance/20260713T084731Z`。
 
 仍未完成的 Phase 3 出口项：
 

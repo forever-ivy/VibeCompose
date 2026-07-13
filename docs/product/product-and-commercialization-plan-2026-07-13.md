@@ -554,9 +554,11 @@ StorageCleanupService
 - 用户可以删除 Recovery Key、切回 ChatGPT 账户路径，Delete All Data 也会删除该 Key；
 - Recovery 只切换 Dictation ASR，AI Polish 继续依赖 ChatGPT Auth；
 - 从默认 ChatGPT 路径切换到可能计费的 API 前会显示费用与数据流向确认。
-- 产品界面自动截图使用独立隐私模式，默认配置、空内存认证和空用户内容，避免发布素材意外包含真实邮箱、端点、历史、Recovery 或术语。
+- 产品界面自动截图使用独立隐私模式，默认配置、空内存认证和空用户内容，避免发布素材意外包含真实邮箱、端点、历史、Recovery 或术语；HUD、产品表面、无障碍、权限和粘贴验收都会在账户管理器创建前进入该模式，不读取真实 Keychain。
+- 产品表面截图会拒绝全黑或近似纯色的 CoreGraphics 帧，并回退到确定性 content-view 渲染；回退结果仍需通过非纯色门禁，防止空白截图被作为发布证据。
 - 安装版无障碍结构门禁覆盖六个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add；它验证可操作控件名称并保持用户数据隔离，但不替代真实键盘、VoiceOver、高对比度和权限交互。
 - 长时间安装版交互验收可通过显式私有模式启动，使用默认展示数据、不写回真实配置或 Onboarding 状态，并在官方 Computer Use 验收后恢复正常菜单栏进程。
+- 麦克风请求已统一为可等待结果的 Settings/Onboarding 流程，成功回调后会有上限地刷新状态；安装版权限表面门禁读取真实 TCC 状态，并通过 Vision OCR 确认麦克风和辅助功能卡片均显示 `Granted`/`已授权`，避免“系统已开启但 App 仍显示未开启”的静态假象。
 - 隐私友好的产品指标 Alpha 基础已完成：默认关闭、只在本机保存，不生成用户/安装标识；只记录启动、Onboarding 步骤和听写/Retry 的枚举结果、用户主动丢弃及音频时长/处理延迟区间，并可由用户随 Delete All Data 删除、主动纳入脱敏诊断，或导出不含单条时间戳的汇总 JSON 自愿分享。
 
 持续验收：

@@ -17,6 +17,12 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["OpenWhisper Settings"] == "OpenWhisper 设置")
     #expect(strings["Microphone"] == "麦克风")
     #expect(strings["Accessibility"] == "辅助功能")
+    #expect(strings["Refresh Status"] == "刷新权限状态")
+    #expect(
+        strings[
+            "OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
+        ] == "OpenWhisper 仍无法确认麦克风权限。请点击“刷新权限状态”或重新打开应用。"
+    )
     #expect(strings["Ready. Press F5 to dictate"] == "已就绪。按 F5 开始听写")
     #expect(strings["F5 again to transcribe"] == "再次按 F5 开始转写")
     #expect(strings["Inserted"] == "已确认插入")

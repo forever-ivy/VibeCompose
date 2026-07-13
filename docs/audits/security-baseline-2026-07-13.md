@@ -61,7 +61,7 @@
 | OW-AUD-009 技术字面量归一化 | 关闭 | `TechnicalLiteralTokenizer` 保护 URL、邮箱、POSIX/Windows 路径、文件名、版本、IP、UUID、hash、CLI flag、环境变量、inline/fenced code 和代码符号；本地处理使用 private-use token，AI Polish 使用显式 model-safe token；token 缺失或重复即回退；Settings 支持简体、繁体、原样及自动/全角/半角/原样标点 | 扩充真实混输语料和边缘文件名 corpus，保持 round-trip 门禁 |
 | OW-AUD-010 MainActor/旧回调污染 | 关闭 | 协调器使用 `activeSessionID`，取消后迟到 pipeline 或注入结果不能写入新状态；`AsyncPasteTargetWaiter` 与 `AsyncPasteVerificationWaiter` 使用 `ContinuousClock` 和可取消 `Task.sleep`，只在短检查/激活/AX 采样阶段回到 MainActor；HUD apply/hide 使用 presentation generation 拒绝 stale auto-hide 与动画 completion | 多应用真实验证矩阵继续归入 OW-AUD-001，不再用单一 `.pasted` 状态掩盖验证边界 |
 | OW-AUD-011 剪贴板恢复竞态 | 关闭 | 恢复前校验 pasteboard change count 与 OpenWhisper 所有权 | 真实跨应用复制/Universal Clipboard 场景继续验收 |
-| OW-AUD-012 首次麦克风顺序 | 部分关闭 | `.notDetermined` 有独立请求动作；录音层正确等待授权结果；四步 Onboarding 产品表面已实现 | clean TCC 下的完整首次成功听写仍缺可信安装版原生 GUI 证据 |
+| OW-AUD-012 首次麦克风顺序 | 部分关闭 | `.notDetermined` 有独立请求动作；Settings/Onboarding 共用异步请求结果，并在成功回调后有上限地轮询真实权限状态；未收敛时显示明确恢复文案和“刷新权限状态”；四步 Onboarding 已实现；`permission_surface_acceptance.sh` 已在当前授权 TCC 状态下黑盒确认安装版两张权限卡均显示“已授权” | clean TCC 下的系统提示顺序、拒绝后修复及完整首次成功听写仍缺可信安装版原生 GUI 证据 |
 | OW-AUD-013 配置 URL 崩溃 | 关闭 | 可配置 endpoint 经 `validatedUserOwnedURL` 返回可理解错误；Managed URL 为编译时常量 | 对全部高风险文本字段统一失焦/提交校验 |
 | OW-AUD-014 Settings stale index | 关闭 | Terminology 条目持久化稳定 UUID；独立 Manager 的选择、编辑、启停和删除均按 ID 定位；旧配置迁移补齐稳定 ID；导入和 Quick Add 在写入前执行重复与语义冲突检测 | 继续保留 ID 迁移、删除后编辑和冲突分类回归测试 |
 | OW-AUD-015 失败清理不完整 | 关闭 | Recorder 初始化写入失败和启动失败会删除 partial WAV；上传成功、失败或取消均删除 multipart；`shutdown()` 同步删除处理中自有音频；下次启动只清理严格 UUID 命名的 `openwhisper-*.wav` 与 `openwhisper-upload-*.multipart`，跳过目录和 lookalike，删除 symlink 本身而不触碰目标 | 继续做真实磁盘满、SIGKILL 后重启和长时间压力测试 |
@@ -133,6 +133,7 @@ excludeSensitiveApps = true
 | 启动/退出孤儿文件与 Recorder partial 清理 | `StoragePrivacyTests.swift`, `AudioRecorderTests.swift`, `AppCoordinatorCancellationTests.swift` |
 | 测试音频 fixture 与 entitlement 语法门禁 | `ChatGPTTranscriberTests.swift`, `ReleaseIntegrityScriptTests.swift` |
 | 产品表面固定 2x 截图、可见屏幕定位与局部边缘对比度门禁 | `ProductSurfaceSnapshotTests.swift`, `VisualAcceptanceScriptTests.swift`, `scripts/verify_accessibility_visual_acceptance.swift` |
+| 麦克风请求后状态收敛、刷新修复与安装版权限表面 | `PermissionStatusMonitorTests.swift`, `AudioRecorderTests.swift`, `LocalizationTests.swift`, `VisualAcceptanceScriptTests.swift`, `scripts/verify_permission_surface.swift` |
 | 脱敏支持诊断 ZIP、崩溃白名单摘要和校验和 | `SupportDiagnosticsTests.swift`, `SettingsProductizationTests.swift` |
 | 双语隐私/条款/退款/支持文档契约 | `PolicyDocumentationTests.swift` |
 | Release manifest、Cask fail-closed 与 updater gate | `ReleaseIntegrityScriptTests.swift` |
@@ -146,17 +147,20 @@ excludeSensitiveApps = true
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ```
 
-2026-07-13 本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过；当前临时目录中大于 5 MB 的 WAV 在完整检查前后均为 `44` 个、`780686764` 字节，没有新增测试大文件。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
+2026-07-13 16:39（UTC+8）本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
 
 同日对 `/Applications/OpenWhisper.app` 的启动清理进行实机检查：原有 Recovery WAV 从 `0644` 被统一收紧为 `0600`，应用以 Settings 模式保持运行。
 
+自动验收模式会在账户管理器创建前统一进入隐私隔离，使用默认配置和内存凭据，不读取真实 Keychain，避免 `SecItemCopyMatching` 阻塞或用户状态泄漏。产品表面截图还会拒绝全黑/近似纯色的 CoreGraphics 帧，回退到确定性 content-view 渲染，并再次执行非纯色门禁。
+
 同日最新安装版自动验收证据：
 
-- `dist/accessibility-visual-acceptance/20260713T045237Z`：六个 Settings pane、四步 Onboarding、History、Terminology 和 Quick Add 均输出稳定 2x 成对截图；统一逻辑分辨率上的局部边缘对比度全部提升；
-- `dist/accessibility-acceptance/20260713T045557Z`：13 个产品表面的可操作控件均无缺失名称；
-- `dist/product-surface-acceptance/20260713T045625Z`：History、Terminology 和 Quick Add 渲染与几何门禁通过；
-- `dist/visual-acceptance/20260713T045753Z`：HUD 全状态、Reduce Motion 静态性和 Increase Contrast 差异门禁通过；
-- `dist/paste-acceptance/20260713T045828Z`：隔离 TextEdit 进程观察到 `inserted_verified`，目标 marker 存在且原剪贴板已恢复。
+- `dist/permission-surface-acceptance/20260713T084418Z`：安装版 Settings → Account 黑盒截图中麦克风与辅助功能标签均被 Vision 识别，`已授权` 状态识别数为 `2`；
+- `dist/paste-acceptance/20260713T084429Z`：隔离 TextEdit 进程观察到 `inserted_verified`，目标 marker 存在且原剪贴板已恢复；
+- `dist/accessibility-acceptance/20260713T084431Z`：13 个产品表面的可操作控件均无缺失名称；
+- `dist/accessibility-visual-acceptance/20260713T084453Z`：六个 Settings pane、四步 Onboarding、History、Terminology 和 Quick Add 均输出稳定 2x 成对截图；统一逻辑分辨率上的局部边缘对比度全部提升；
+- `dist/product-surface-acceptance/20260713T084724Z`：History、Terminology 和 Quick Add 渲染、几何及非纯色门禁通过；
+- `dist/visual-acceptance/20260713T084731Z`：HUD 全状态、Reduce Motion 静态性和 Increase Contrast 差异门禁通过。
 
 本机两个 Apple Development identity 仍被 Gatekeeper 判定为
 `CSSMERR_TP_CERT_REVOKED`。上述证据使用稳定 designated requirement 的

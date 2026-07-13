@@ -46,10 +46,12 @@ struct AudioRecorderTests {
     func microphoneRepairActionsOfferFirstRunPermissionRequest() {
         let actions = AudioRecorder.repairActions(for: .undetermined)
 
-        #expect(actions.count == 1)
+        #expect(actions.count == 2)
         #expect(actions[0].title == "Allow Microphone Access")
         #expect(actions[0].kind == .requestMicrophoneAccess)
         #expect(actions[0].prominence == .primary)
+        #expect(actions[1].kind == .refreshStatus)
+        #expect(actions[1].prominence == .utility)
     }
 
     @Test
@@ -57,7 +59,7 @@ struct AudioRecorderTests {
         #expect(AudioRecorder.repairActions(for: .granted).isEmpty)
 
         let actions = AudioRecorder.repairActions(for: .denied)
-        #expect(actions.count == 1)
+        #expect(actions.count == 2)
         #expect(actions[0].title == "Open Microphone Settings")
         #expect(
             actions[0].kind == .openSettings(
@@ -68,6 +70,8 @@ struct AudioRecorderTests {
                 )
             )
         )
+        #expect(actions[1].kind == .refreshStatus)
+        #expect(actions[1].prominence == .utility)
     }
 
     @Test

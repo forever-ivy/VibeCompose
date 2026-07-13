@@ -35,7 +35,14 @@ History, Terminology, and Quick Add use a separate installed-app acceptance harn
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --install
 ```
 
-The harness opens each surface through LaunchServices, writes its snapshot to a local temporary path from inside the installed app, verifies image geometry and visual variation, copies the evidence under `dist/product-surface-acceptance/`, and finally relaunches the normal menu bar app.
+The harness opens each surface through LaunchServices, writes its snapshot to a
+local temporary path from inside the installed app, verifies image geometry and
+visual variation, copies the evidence under
+`dist/product-surface-acceptance/`, and finally relaunches the normal menu bar
+app. CoreGraphics captures that are technically valid but visually uniform
+(including intermittent all-black frames) are rejected. The app then falls
+back to deterministic content-view rendering, which must also pass the
+non-uniform-image guard before evidence is accepted.
 
 ## Accessibility structure precheck
 
@@ -55,6 +62,35 @@ The generated JSON is structural evidence only. It does not prove Tab order,
 keyboard activation, VoiceOver speech output, focus timing, system permission
 dialogs, or high-contrast appearance; those remain official Computer Use
 interaction requirements.
+
+All automated HUD, product-surface, accessibility, permission, and paste
+acceptance launch modes are classified as privacy-isolated before account
+managers are created. They therefore use default configuration and in-memory
+credentials instead of reading the user's Keychain. This both protects user
+state and prevents acceptance startup from blocking in
+`SecItemCopyMatching`.
+
+## Installed permission surface precheck
+
+When macOS shows Microphone and Accessibility as enabled but OpenWhisper appears
+stale, run:
+
+```bash
+OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
+  ./scripts/permission_surface_acceptance.sh --install
+```
+
+The harness launches `/Applications/OpenWhisper.app` through LaunchServices,
+opens Settings → Account in privacy-isolated snapshot mode, and uses Vision OCR
+to require both the Microphone and Accessibility cards to render as
+`Granted`/`已授权`. The process reads live TCC state but does not load the user's
+account credentials, configuration, History, Recovery, or terminology data.
+Evidence is written under `dist/permission-surface-acceptance/<run-id>/`, and
+the normal installed menu bar app is relaunched and left running.
+
+This closes the deterministic installed-surface check only. It does not replace
+clean-TCC prompt ordering, changing permissions in System Settings, or
+VoiceOver/keyboard interaction acceptance.
 
 Launch a privacy-isolated installed surface for those interaction checks with:
 

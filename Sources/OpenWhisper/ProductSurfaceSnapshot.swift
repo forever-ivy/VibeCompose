@@ -5,6 +5,7 @@ import Foundation
 enum ProductSurfaceSnapshotError: LocalizedError {
     case missingContentView
     case bitmapUnavailable
+    case visuallyEmptyWindowCapture
     case pngEncodingFailed
 
     var errorDescription: String? {
@@ -13,6 +14,8 @@ enum ProductSurfaceSnapshotError: LocalizedError {
             return "The OpenWhisper product window has no content view to capture."
         case .bitmapUnavailable:
             return "The OpenWhisper product window could not create a bitmap snapshot."
+        case .visuallyEmptyWindowCapture:
+            return "The OpenWhisper window capture was visually empty."
         case .pngEncodingFailed:
             return "The OpenWhisper product window could not encode its snapshot as PNG."
         }
@@ -46,6 +49,7 @@ enum ProductSurfaceSnapshot {
                 windowImage,
                 pointSize: window.frame.size
             ),
+            isVisuallyPopulated(normalizedImage),
             let png = NSBitmapImageRep(cgImage: normalizedImage)
                 .representation(using: .png, properties: [:])
         {
@@ -74,13 +78,79 @@ enum ProductSurfaceSnapshot {
             let normalizedImage = normalizedWindowImage(
                 sourceImage,
                 pointSize: bounds.size
-            ),
+            )
+        else {
+            throw ProductSurfaceSnapshotError.pngEncodingFailed
+        }
+        guard isVisuallyPopulated(normalizedImage) else {
+            throw ProductSurfaceSnapshotError.visuallyEmptyWindowCapture
+        }
+        guard
             let png = NSBitmapImageRep(cgImage: normalizedImage)
                 .representation(using: .png, properties: [:])
         else {
             throw ProductSurfaceSnapshotError.pngEncodingFailed
         }
         try png.write(to: url, options: [.atomic])
+    }
+
+    static func isVisuallyPopulated(
+        _ image: CGImage,
+        minimumDistinctBuckets: Int = 2
+    ) -> Bool {
+        guard minimumDistinctBuckets > 0 else {
+            return true
+        }
+        guard
+            let dataProvider = image.dataProvider,
+            let data = dataProvider.data,
+            let bytes = CFDataGetBytePtr(data)
+        else {
+            return false
+        }
+
+        let width = image.width
+        let height = image.height
+        let bytesPerRow = image.bytesPerRow
+        let bitsPerPixel = image.bitsPerPixel
+        let bytesPerPixel = bitsPerPixel / 8
+        guard
+            width > 0,
+            height > 0,
+            bytesPerPixel >= 3,
+            bytesPerRow >= width * bytesPerPixel
+        else {
+            return false
+        }
+
+        let sampleColumns = min(24, width)
+        let sampleRows = min(18, height)
+        var buckets = Set<Int>()
+        for row in 0..<sampleRows {
+            let y = min(
+                height - 1,
+                ((row * 2 + 1) * height) / (sampleRows * 2)
+            )
+            for column in 0..<sampleColumns {
+                let x = min(
+                    width - 1,
+                    ((column * 2 + 1) * width) / (sampleColumns * 2)
+                )
+                let offset = y * bytesPerRow + x * bytesPerPixel
+                let red = Int(bytes[offset])
+                let green = Int(bytes[offset + 1])
+                let blue = Int(bytes[offset + 2])
+                let bucket =
+                    ((red >> 5) << 6)
+                    | ((green >> 5) << 3)
+                    | (blue >> 5)
+                buckets.insert(bucket)
+                if buckets.count >= minimumDistinctBuckets {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     static func centeredCaptureFrame(

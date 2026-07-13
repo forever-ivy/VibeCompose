@@ -32,7 +32,7 @@ final class PreferencesWindowController: NSWindowController {
         onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
         onResolveRecoveryAudioURL: @escaping (RecoveryRecord) -> Result<URL, any Error>,
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
-        onRequestMicrophoneAccess: @escaping () -> Void,
+        onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
@@ -308,6 +308,9 @@ private struct PreferencesView: View {
     @State private var authSnapshot: ChatGPTAuthSnapshot
     @State private var browserBridgeSnapshot: BrowserBridgeSnapshot
     @State private var isConnectingBrowserLogin = false
+    @State private var isRequestingMicrophoneAccess = false
+    @State private var permissionMessage: String?
+    @State private var permissionMessageIsError = false
     @State private var selectedSection: SettingsPane?
     @State private var saveStatus: SettingsSaveStatus = .saved
     @State private var textPolishUsage: [TextPolishProviderID: TextPolishUsage] = [:]
@@ -346,7 +349,8 @@ private struct PreferencesView: View {
     let onLoadRecoveryHistory: () -> [RecoveryRecord]
     let onResolveRecoveryAudioURL: (RecoveryRecord) -> Result<URL, any Error>
     let onRetryRecoveryRecord: (RecoveryRecord) -> Void
-    let onRequestMicrophoneAccess: () -> Void
+    let onRequestMicrophoneAccess:
+        @MainActor @Sendable () async -> Result<Void, any Error>
     let onOpenConfigFolder: () -> Void
     let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
     let onExportProductMetrics: (URL) -> Result<URL, any Error>
@@ -368,7 +372,7 @@ private struct PreferencesView: View {
         onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
         onResolveRecoveryAudioURL: @escaping (RecoveryRecord) -> Result<URL, any Error>,
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
-        onRequestMicrophoneAccess: @escaping () -> Void,
+        onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
         onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
@@ -529,6 +533,13 @@ private struct PreferencesView: View {
 
     private var microphoneRepairActions: [PermissionRepairAction] {
         AudioRecorder.repairActions(for: permissionStatusMonitor.snapshot.microphone)
+    }
+
+    private var permissionRepairActions: [PermissionRepairAction] {
+        var identifiers = Set<String>()
+        return (microphoneRepairActions + accessibilityRepairActions).filter {
+            identifiers.insert($0.id).inserted
+        }
     }
 
     var body: some View {
@@ -913,9 +924,18 @@ private struct PreferencesView: View {
                     || !permissionStatusMonitor.snapshot.accessibilityTrusted {
                     Divider()
                     HStack(spacing: 10) {
-                        ForEach(microphoneRepairActions + accessibilityRepairActions) { action in
+                        ForEach(permissionRepairActions) { action in
                             repairActionButton(action)
                         }
+                    }
+
+                    if isRequestingMicrophoneAccess {
+                        Label(
+                            L10n.text("Requesting microphone"),
+                            systemImage: "mic.badge.plus"
+                        )
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
                     }
 
                     if !permissionStatusMonitor.snapshot.accessibilityTrusted,
@@ -925,6 +945,15 @@ private struct PreferencesView: View {
                             .foregroundStyle(.orange)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                }
+
+                if let permissionMessage {
+                    Text(permissionMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            permissionMessageIsError ? .red : .secondary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -2792,14 +2821,63 @@ private struct PreferencesView: View {
     private func performRepairAction(_ action: PermissionRepairAction) {
         switch action.kind {
         case .requestMicrophoneAccess:
-            onRequestMicrophoneAccess()
+            requestMicrophoneAccess()
         case .guidedAccessibilityAccess:
             AccessibilityPermission.guideAccess()
         case .openSettings(let destination):
             _ = destination.open()
         case .refreshStatus:
+            permissionMessage = nil
             permissionStatusMonitor.refresh()
         }
+    }
+
+    @MainActor
+    private func requestMicrophoneAccess() {
+        guard !isRequestingMicrophoneAccess else {
+            return
+        }
+
+        isRequestingMicrophoneAccess = true
+        permissionMessage = nil
+
+        Task { @MainActor in
+            let result = await permissionStatusMonitor.requestMicrophoneAccess(
+                using: onRequestMicrophoneAccess
+            )
+            isRequestingMicrophoneAccess = false
+
+            switch result {
+            case .success:
+                switch permissionStatusMonitor.snapshot.microphone {
+                case .granted:
+                    permissionMessage = L10n.text(
+                        "Microphone access is ready."
+                    )
+                    permissionMessageIsError = false
+                case .undetermined:
+                    permissionMessage = L10n.text(
+                        "OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
+                    )
+                    permissionMessageIsError = true
+                case .denied:
+                    permissionMessage = L10n.text(
+                        "Microphone access was previously denied. Open Privacy & Security > Microphone to re-enable it."
+                    )
+                    permissionMessageIsError = true
+                }
+            case .failure(let error):
+                permissionMessage = error.localizedDescription
+                permissionMessageIsError = true
+            }
+        }
+    }
+
+    private func repairActionIsDisabled(
+        _ action: PermissionRepairAction
+    ) -> Bool {
+        action.kind == .requestMicrophoneAccess
+            && isRequestingMicrophoneAccess
     }
 
     @ViewBuilder
@@ -2810,16 +2888,19 @@ private struct PreferencesView: View {
                 performRepairAction(action)
             }
             .buttonStyle(.borderedProminent)
+            .disabled(repairActionIsDisabled(action))
         case .secondary:
             Button(L10n.text(action.title)) {
                 performRepairAction(action)
             }
             .buttonStyle(.bordered)
+            .disabled(repairActionIsDisabled(action))
         case .utility:
             Button(L10n.text(action.title)) {
                 performRepairAction(action)
             }
             .buttonStyle(.borderless)
+            .disabled(repairActionIsDisabled(action))
         }
     }
 }
