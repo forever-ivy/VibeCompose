@@ -82,6 +82,14 @@ func settingsSourceKeepsTheNativeAutosavingContract() throws {
     #expect(source.contains("Button(L10n.text(\"Export Diagnostics…\")"))
     #expect(source.contains("onExportSupportDiagnostics"))
     #expect(source.contains("account email, tokens, API keys"))
+    #expect(source.contains("Export Product Metrics…"))
+    #expect(source.contains("onExportProductMetrics"))
+    #expect(
+        source.contains(
+            ".disabled(!config.privacy.productMetricsEnabled)"
+        )
+    )
+    #expect(source.contains("no event timestamps"))
     #expect(source.contains("Button(L10n.text(\"Check for Updates…\")"))
     #expect(source.contains("Automatically check for updates"))
     #expect(source.contains("onSetAutomaticallyChecksForUpdates"))

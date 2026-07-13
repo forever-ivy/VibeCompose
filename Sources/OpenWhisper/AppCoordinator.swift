@@ -1050,6 +1050,41 @@ final class AppCoordinator {
                         )
                     }
                 },
+                onExportProductMetrics: { [weak self] destinationURL in
+                    guard let self else {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.ProductMetrics",
+                                code: 1,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper settings are no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+                    if self.snapshotPrivacyMode.isEnabled {
+                        return .failure(
+                            NSError(
+                                domain: "OpenWhisper.ProductMetrics",
+                                code: 2,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: L10n.text(
+                                        "OpenWhisper settings are no longer available."
+                                    ),
+                                ]
+                            )
+                        )
+                    }
+
+                    return Result {
+                        try ProductMetricsExporter(
+                            applicationSupportURL:
+                                self.configStore.directoryURL
+                        ).export(to: destinationURL)
+                    }
+                },
                 providerCapabilityPolicy: providerCapabilityPolicy,
                 recoveryCredentialStore: credentialStore,
                 textPolishUsageDirectoryURL:

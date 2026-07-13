@@ -282,6 +282,10 @@ management windows.
 - Product metrics default off, use owner-only permissions and bounded
   retention, reject symbolic-link storage, and are never uploaded
   automatically.
+- `ProductMetricsExporter` reduces local rows to version/build, event,
+  Onboarding, provider, duration/latency, delivery, and failure count maps. The
+  owner-only JSON report contains no individual event timestamps and is
+  created only after the user chooses an export destination.
 - `scripts/benchmark_stt.sh` runs explicit audio inputs through packaged-app benchmark mode.
 - Benchmark output includes cold/warm `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 summaries.
 - Product diagnostics and optional product metrics are local-only in the current alpha; no product analytics upload is enabled.

@@ -154,8 +154,12 @@ private struct SupportProductMetricSample:
     init(_ sample: ProductMetricSample) {
         schemaVersion = ProductMetricSample.currentSchemaVersion
         timestamp = sample.timestamp
-        productVersion = Self.safeVersion(sample.productVersion)
-        productBuild = Self.safeVersion(sample.productBuild)
+        productVersion = ProductMetricsPrivacy.safeVersion(
+            sample.productVersion
+        )
+        productBuild = ProductMetricsPrivacy.safeVersion(
+            sample.productBuild
+        )
         event = sample.event
         onboardingStep = sample.onboardingStep
         provider = sample.provider
@@ -163,20 +167,6 @@ private struct SupportProductMetricSample:
         latencyBucket = sample.latencyBucket
         deliveryStatus = sample.deliveryStatus
         failureCategory = sample.failureCategory
-    }
-
-    private static func safeVersion(_ value: String) -> String {
-        let allowed = CharacterSet(
-            charactersIn: "0123456789.-+"
-        )
-        let bounded = String(value.prefix(32))
-        guard
-            !bounded.isEmpty,
-            bounded.unicodeScalars.allSatisfy(allowed.contains)
-        else {
-            return "other"
-        }
-        return bounded
     }
 }
 

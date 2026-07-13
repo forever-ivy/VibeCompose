@@ -27,6 +27,7 @@
   completion, dictation, discard, and Retry outcomes. Metrics use only
   version/build, enums, and duration/latency buckets, have bounded owner-only
   retention, are never uploaded automatically, and can be reviewed in support
-  diagnostics.
+  diagnostics or exported as an aggregate, timestamp-free JSON report for
+  voluntary sharing.
 
 OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.

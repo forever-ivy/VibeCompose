@@ -119,6 +119,22 @@ struct ProductMetricsEnvironment: Sendable, Equatable {
     }
 }
 
+enum ProductMetricsPrivacy {
+    static func safeVersion(_ value: String) -> String {
+        let allowed = CharacterSet(
+            charactersIn: "0123456789.-+"
+        )
+        let bounded = String(value.prefix(32))
+        guard
+            !bounded.isEmpty,
+            bounded.unicodeScalars.allSatisfy(allowed.contains)
+        else {
+            return "other"
+        }
+        return bounded
+    }
+}
+
 struct ProductMetricSample: Codable, Sendable, Equatable {
     static let currentSchemaVersion = 1
 
@@ -328,5 +344,210 @@ final class ProductMetricsRecorder: ProductMetricsRecording, @unchecked Sendable
 
     private var dataURL: URL {
         directoryURL.appendingPathComponent("product-metrics.jsonl")
+    }
+}
+
+struct ProductMetricsReport: Codable, Sendable, Equatable {
+    static let currentSchemaVersion = 1
+
+    let schemaVersion: Int
+    let generatedAt: Date
+    let sampleCount: Int
+    let eventCounts: [String: Int]
+    let onboardingStepCounts: [String: Int]
+    let providerCounts: [String: Int]
+    let audioDurationBucketCounts: [String: Int]
+    let latencyBucketCounts: [String: Int]
+    let deliveryStatusCounts: [String: Int]
+    let failureCategoryCounts: [String: Int]
+    let productVersionCounts: [String: Int]
+    let productBuildCounts: [String: Int]
+
+    init(
+        samples: [ProductMetricSample],
+        generatedAt: Date = Date()
+    ) {
+        schemaVersion = Self.currentSchemaVersion
+        self.generatedAt = generatedAt
+        sampleCount = samples.count
+
+        var eventCounts: [String: Int] = [:]
+        var onboardingStepCounts: [String: Int] = [:]
+        var providerCounts: [String: Int] = [:]
+        var audioDurationBucketCounts: [String: Int] = [:]
+        var latencyBucketCounts: [String: Int] = [:]
+        var deliveryStatusCounts: [String: Int] = [:]
+        var failureCategoryCounts: [String: Int] = [:]
+        var productVersionCounts: [String: Int] = [:]
+        var productBuildCounts: [String: Int] = [:]
+
+        for sample in samples {
+            Self.increment(sample.event.rawValue, in: &eventCounts)
+            Self.increment(
+                sample.onboardingStep?.rawValue,
+                in: &onboardingStepCounts
+            )
+            Self.increment(
+                sample.provider?.rawValue,
+                in: &providerCounts
+            )
+            Self.increment(
+                sample.audioDurationBucket?.rawValue,
+                in: &audioDurationBucketCounts
+            )
+            Self.increment(
+                sample.latencyBucket?.rawValue,
+                in: &latencyBucketCounts
+            )
+            Self.increment(
+                sample.deliveryStatus?.rawValue,
+                in: &deliveryStatusCounts
+            )
+            Self.increment(
+                sample.failureCategory?.rawValue,
+                in: &failureCategoryCounts
+            )
+            Self.increment(
+                ProductMetricsPrivacy.safeVersion(
+                    sample.productVersion
+                ),
+                in: &productVersionCounts
+            )
+            Self.increment(
+                ProductMetricsPrivacy.safeVersion(
+                    sample.productBuild
+                ),
+                in: &productBuildCounts
+            )
+        }
+
+        self.eventCounts = eventCounts
+        self.onboardingStepCounts = onboardingStepCounts
+        self.providerCounts = providerCounts
+        self.audioDurationBucketCounts = audioDurationBucketCounts
+        self.latencyBucketCounts = latencyBucketCounts
+        self.deliveryStatusCounts = deliveryStatusCounts
+        self.failureCategoryCounts = failureCategoryCounts
+        self.productVersionCounts = productVersionCounts
+        self.productBuildCounts = productBuildCounts
+    }
+
+    private static func increment(
+        _ value: String?,
+        in counts: inout [String: Int]
+    ) {
+        guard let value else {
+            return
+        }
+        counts[value, default: 0] += 1
+    }
+}
+
+enum ProductMetricsExportError: LocalizedError, Equatable {
+    case destinationIsDirectory(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .destinationIsDirectory(let name):
+            return L10n.format(
+                "OpenWhisper cannot replace the folder named %@ with a product metrics report.",
+                name
+            )
+        }
+    }
+}
+
+struct ProductMetricsExporter {
+    let fileManager: FileManager
+    let applicationSupportURL: URL
+
+    init(
+        fileManager: FileManager = .default,
+        applicationSupportURL: URL? = nil
+    ) {
+        self.fileManager = fileManager
+        self.applicationSupportURL = applicationSupportURL
+            ?? ProductIdentity.applicationSupportURL(
+                homeDirectoryURL:
+                    fileManager.homeDirectoryForCurrentUser
+            )
+    }
+
+    static func suggestedFileName(now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return "OpenWhisper-Product-Metrics-\(formatter.string(from: now)).json"
+    }
+
+    func export(
+        to requestedDestinationURL: URL,
+        generatedAt: Date = Date()
+    ) throws -> URL {
+        let destinationURL = normalizedDestinationURL(
+            requestedDestinationURL
+        )
+        try validateDestination(destinationURL)
+
+        let samples = try ProductMetricsRecorder(
+            fileManager: fileManager,
+            directoryURL: applicationSupportURL
+        ).loadRecent(limit: 50_000)
+        let report = ProductMetricsReport(
+            samples: samples,
+            generatedAt: generatedAt
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [
+            .prettyPrinted,
+            .sortedKeys,
+            .withoutEscapingSlashes,
+        ]
+        let reportData = try encoder.encode(report)
+        let stagedURL = destinationURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(
+                ".openwhisper-product-metrics-\(UUID().uuidString).json"
+            )
+        defer {
+            try? fileManager.removeItem(at: stagedURL)
+        }
+
+        try reportData.write(to: stagedURL, options: [.atomic])
+        try fileManager.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o600))],
+            ofItemAtPath: stagedURL.path
+        )
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            try fileManager.removeItem(at: destinationURL)
+        }
+        try fileManager.moveItem(
+            at: stagedURL,
+            to: destinationURL
+        )
+        return destinationURL
+    }
+
+    private func normalizedDestinationURL(_ requestedURL: URL) -> URL {
+        guard requestedURL.pathExtension.lowercased() != "json" else {
+            return requestedURL
+        }
+        return requestedURL.appendingPathExtension("json")
+    }
+
+    private func validateDestination(_ destinationURL: URL) throws {
+        guard fileManager.fileExists(atPath: destinationURL.path) else {
+            return
+        }
+        let values = try destinationURL.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+        )
+        if values.isDirectory == true, values.isSymbolicLink != true {
+            throw ProductMetricsExportError.destinationIsDirectory(
+                destinationURL.lastPathComponent
+            )
+        }
     }
 }

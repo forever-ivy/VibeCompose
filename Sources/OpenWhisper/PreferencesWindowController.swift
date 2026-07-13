@@ -35,6 +35,7 @@ final class PreferencesWindowController: NSWindowController {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
+        onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
         textPolishUsageDirectoryURL: URL? = ProductIdentity
@@ -60,6 +61,7 @@ final class PreferencesWindowController: NSWindowController {
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onOpenConfigFolder: onOpenConfigFolder,
             onExportSupportDiagnostics: onExportSupportDiagnostics,
+            onExportProductMetrics: onExportProductMetrics,
             providerCapabilityPolicy: providerCapabilityPolicy,
             recoveryCredentialStore: recoveryCredentialStore,
             textPolishUsageDirectoryURL: textPolishUsageDirectoryURL,
@@ -349,6 +351,8 @@ private struct PreferencesView: View {
     @State private var showsDeleteAllDataConfirmation = false
     @State private var privacyMessage: String?
     @State private var privacyMessageIsError = false
+    @State private var productMetricsExportMessage: String?
+    @State private var productMetricsExportMessageIsError = false
     @State private var diagnosticsExportMessage: String?
     @State private var diagnosticsExportMessageIsError = false
     @State private var recoveryAPIKeyInput = ""
@@ -376,6 +380,7 @@ private struct PreferencesView: View {
     let onRequestMicrophoneAccess: () -> Void
     let onOpenConfigFolder: () -> Void
     let onExportSupportDiagnostics: (URL) -> Result<URL, any Error>
+    let onExportProductMetrics: (URL) -> Result<URL, any Error>
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
     let textPolishUsageDirectoryURL: URL?
@@ -397,6 +402,7 @@ private struct PreferencesView: View {
         onRequestMicrophoneAccess: @escaping () -> Void,
         onOpenConfigFolder: @escaping () -> Void,
         onExportSupportDiagnostics: @escaping (URL) -> Result<URL, any Error>,
+        onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
         textPolishUsageDirectoryURL: URL?,
@@ -449,6 +455,7 @@ private struct PreferencesView: View {
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
         self.onOpenConfigFolder = onOpenConfigFolder
         self.onExportSupportDiagnostics = onExportSupportDiagnostics
+        self.onExportProductMetrics = onExportProductMetrics
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
         self.textPolishUsageDirectoryURL = textPolishUsageDirectoryURL
@@ -1166,6 +1173,36 @@ private struct PreferencesView: View {
                             step: 100
                         )
                     }
+
+                    HStack(spacing: 10) {
+                        Button(
+                            L10n.text(
+                                "Export Product Metrics…"
+                            )
+                        ) {
+                            exportProductMetrics()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!config.privacy.productMetricsEnabled)
+
+                        Text(
+                            L10n.text(
+                                "Exports an aggregate JSON report with enum and bucket counts only. It contains no event timestamps, content, app names, paths, account details, or persistent identifiers; you decide whether to share it."
+                            )
+                        )
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    }
+
+                    if let productMetricsExportMessage {
+                        Text(productMetricsExportMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(
+                                productMetricsExportMessageIsError
+                                    ? .red
+                                    : .secondary
+                            )
+                    }
                 }
 
                 Divider()
@@ -1734,6 +1771,34 @@ private struct PreferencesView: View {
         case .failure(let error):
             softwareUpdateMessage = error.localizedDescription
             softwareUpdateMessageIsError = true
+        }
+    }
+
+    private func exportProductMetrics() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = ProductMetricsExporter
+            .suggestedFileName()
+        panel.title = L10n.text("Export Product Metrics")
+        panel.prompt = L10n.text("Export")
+
+        guard panel.runModal() == .OK, let destinationURL = panel.url else {
+            return
+        }
+
+        switch onExportProductMetrics(destinationURL) {
+        case .success(let reportURL):
+            productMetricsExportMessage = L10n.format(
+                "Saved product metrics report as %@.",
+                reportURL.lastPathComponent
+            )
+            productMetricsExportMessageIsError = false
+            NSWorkspace.shared.activateFileViewerSelecting([reportURL])
+        case .failure(let error):
+            productMetricsExportMessage = error.localizedDescription
+            productMetricsExportMessageIsError = true
         }
     }
 

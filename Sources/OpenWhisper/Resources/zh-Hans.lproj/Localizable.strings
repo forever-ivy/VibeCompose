@@ -208,6 +208,11 @@
 "Product metrics contain only version, onboarding step, provider category, duration and latency buckets, result category, and failure category. They never include audio, transcript text, app names, paths, account details, or persistent identifiers, and are never uploaded automatically." = "产品指标只包含版本、引导步骤、服务类别、时长与延迟区间、结果类别和失败类别；绝不包含音频、转写正文、应用名称、路径、账户信息或持久标识，也不会自动上传。";
 "Keep product metrics for %ld days" = "产品指标保留 %ld 天";
 "Keep at most %ld product metric events" = "最多保留 %ld 条产品指标事件";
+"Export Product Metrics…" = "导出产品指标…";
+"Exports an aggregate JSON report with enum and bucket counts only. It contains no event timestamps, content, app names, paths, account details, or persistent identifiers; you decide whether to share it." = "导出仅包含枚举和区间计数的汇总 JSON 报告；不包含事件时间戳、正文、应用名称、路径、账户信息或持久标识，是否分享完全由你决定。";
+"Export Product Metrics" = "导出产品指标";
+"Saved product metrics report as %@." = "已将产品指标报告保存为 %@。";
+"OpenWhisper cannot replace the folder named %@ with a product metrics report." = "OpenWhisper 无法用产品指标报告替换名为 %@ 的文件夹。";
 "Do not save history or recovery audio for sensitive apps" = "敏感应用不保存历史或恢复音频";
 "OpenWhisper excludes known password managers and Keychain/Passwords apps by default." = "OpenWhisper 默认排除已知密码管理器以及“钥匙串访问/密码”应用。";
 "Delete all local data" = "删除全部本地数据";

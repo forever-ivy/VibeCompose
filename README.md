@@ -133,7 +133,10 @@ Optional product metrics are disabled by default and remain on this Mac. They
 contain only product version/build, completed Onboarding step, provider
 category, duration and latency buckets, result category, and failure category.
 They do not contain app names, paths, account details, content, or persistent
-identifiers and are never uploaded automatically.
+identifiers and are never uploaded automatically. When metrics are enabled,
+**Settings → Privacy → Export Product Metrics** creates an aggregate JSON
+report without individual event timestamps for you to review or share
+manually.
 
 **Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, optional product-metric, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
 

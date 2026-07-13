@@ -60,6 +60,9 @@ category, audio-duration bucket, processing-latency bucket, delivery category,
 and failure category. They do not contain audio, transcript or clipboard text,
 app names, bundle identifiers, file paths, account details, or a persistent
 user/install identifier. OpenWhisper does not upload them automatically.
+When metrics are enabled, you may use **Settings → Privacy → Export Product
+Metrics** to create an aggregate JSON report for manual review or sharing. The
+report contains count maps only and omits individual event timestamps.
 
 When you choose **Settings → Advanced → Export Diagnostics**, OpenWhisper creates a local ZIP for you to review and share manually. The archive contains:
 
@@ -81,6 +84,7 @@ OpenWhisper writes the completed transcript to the macOS pasteboard. If Accessib
 You can:
 
 - disable or limit transcript history, failed-audio recovery, diagnostics, and local product metrics;
+- export aggregate local product metrics for your own review or voluntary sharing;
 - disable raw transcript storage;
 - add sensitive applications that must not create history or Recovery records;
 - delete individual history or Recovery records;
