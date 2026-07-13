@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "dependencies": [
+    {
+      "identity": "permissionflow",
+      "name": "PermissionFlow",
+      "sourceURL": "https://github.com/jaywcjlove/PermissionFlow.git",
+      "revision": "3c5ae16337d3448e8561e00352a01b68f92fe974",
+      "licenseName": "MIT License",
+      "licenseFile": "Legal/ThirdPartyLicenses/PermissionFlow-LICENSE.txt",
+      "licenseSHA256": "d65f906c8116c14921f841867969d6dc3f9dd7b99fca34071671ff5896a3fa94"
+    },
+    {
+      "identity": "sparkle",
+      "name": "Sparkle",
+      "sourceURL": "https://github.com/sparkle-project/Sparkle.git",
+      "revision": "b6496a74a087257ef5e6da1c5b29a447a60f5bd7",
+      "version": "2.9.4",
+      "licenseName": "MIT License with bundled third-party notices",
+      "licenseFile": "Legal/ThirdPartyLicenses/Sparkle-LICENSE.txt",
+      "licenseSHA256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"
+    }
+  ]
+}

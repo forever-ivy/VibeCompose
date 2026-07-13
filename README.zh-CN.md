@@ -23,6 +23,7 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 脱敏支持诊断 ZIP 导出
 - 面向托管转写和 AI 润色事故的签名服务安全策略
 - 作为高级恢复路径的 OpenAI-Compatible 转写，包括原生端点/模型配置、Keychain API 密钥、付费 API 显式确认和合成静音连接测试
+- 锁定的第三方依赖许可证清单、许可证 SHA-256 校验和 App 内许可证查看
 
 ## 产品边界
 
@@ -121,3 +122,8 @@ docs/design/                  视觉规范
 ## 许可证
 
 MIT，详见 [LICENSE](LICENSE)。分发软件副本或其重要部分时，必须保留现有版权声明和许可声明。
+
+PermissionFlow、Sparkle 及 Sparkle 内置第三方组件继续适用各自许可证。精确锁定的依赖元数据和许可证全文位于
+[`Sources/OpenWhisper/Resources/Legal`](Sources/OpenWhisper/Resources/Legal)，
+也可通过 **设置 → 高级 → 查看第三方许可证** 阅读。构建、打包、安装包检查和商业发布门禁会在
+`Package.resolved`、许可证哈希、notices 或 App 内资源不一致时直接失败。

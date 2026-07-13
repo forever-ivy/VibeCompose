@@ -70,6 +70,7 @@ func commercialPolicySetIsBilingualAndKeepsPreReleaseGatesExplicit() throws {
 
     let terms = try policyText(root, "docs/legal/terms-of-use.md")
     #expect(terms.contains("MIT License"))
+    #expect(terms.contains("View Third-Party Licenses"))
     #expect(terms.contains("not affiliated with, sponsored by, or endorsed by OpenAI"))
     #expect(terms.contains("public paid release must identify the commercial operator"))
 

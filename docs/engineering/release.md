@@ -9,6 +9,8 @@ OpenWhisper `0.1.0` is an alpha baseline. Do not publish it as production-ready 
 - Product identity: `product.env`
 - Runtime identity: `Sources/OpenWhisper/ProductIdentity.swift`
 - Version/build: `version.env`
+- Dependency license manifest:
+  `Sources/OpenWhisper/Resources/Legal/third-party-licenses.json`
 - Installed app: `/Applications/OpenWhisper.app`
 - Packaged output: `dist/OpenWhisper.app`
 
@@ -67,12 +69,17 @@ dist/OpenWhisper-0.1.0-macos-arm64.dmg
 - Release ZIP/DMG hashes are generated and published.
 - Homebrew Cask uses an exact SHA-256.
 - Update manifest is signed and rollback-safe.
+- Every resolved dependency has a pinned, integrity-checked license notice in
+  the repository and packaged App.
 
 Current fail-closed foundations:
 
 - `scripts/generate_release_metadata.sh` records exact ZIP/DMG SHA-256 values, byte counts, HTTPS URLs, version, build, architecture, bundle ID, and minimum macOS.
 - `scripts/update_homebrew_cask.sh` writes the exact ZIP hash into the Cask; the tracked unreleased Cask uses an impossible all-zero checksum rather than `:no_check`.
 - `scripts/install_app.sh` stages and validates a candidate, checks bundle ID/version/build/architecture/signature, and restores the previous app after a failed replacement.
+- `scripts/verify_dependency_licenses.swift` requires exact coverage of every
+  `Package.resolved` pin, matching source URL/revision/version, SHA-256-verified
+  license text, notices coverage, and byte-identical packaged App resources.
 - Sparkle 2.9.4 is pinned, embedded, linked through the app Frameworks rpath, and exposed through the menu and Advanced Settings.
 - Ad-hoc local builds use a library-validation exception so the no-Team-ID app can load the no-Team-ID framework; Developer ID releases must retain library validation and the release gate rejects this entitlement.
 - `scripts/generate_sparkle_appcast.sh` creates channel-specific signed appcasts without storing a private signing key in the repository.
@@ -129,4 +136,6 @@ OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/path/openwhisper-capability-ed25
 OPENWHISPER_TEAM_ID=YOUR_TEAM_ID ./scripts/verify_release_gate.sh
 ```
 
-The final command must fail unless the packaged app, signed appcast, release manifest, Cask checksum, Developer ID identity, notarization, stapling, and Gatekeeper assessment all agree.
+The final command must fail unless dependency licenses, the packaged app,
+signed appcast, release manifest, Cask checksum, Developer ID identity,
+notarization, stapling, and Gatekeeper assessment all agree.

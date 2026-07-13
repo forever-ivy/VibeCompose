@@ -13,6 +13,9 @@ EXECUTABLE="$APP/Contents/MacOS/$OPENWHISPER_APP_NAME"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 
 "$ROOT/scripts/package_app.sh" >/dev/null
+swift "$ROOT/scripts/verify_dependency_licenses.swift" \
+  --root "$ROOT" \
+  --app-resources "$APP/Contents/Resources"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 
 if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then

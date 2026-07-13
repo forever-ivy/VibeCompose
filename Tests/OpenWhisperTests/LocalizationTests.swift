@@ -44,6 +44,12 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
         strings["API key stored in Keychain"]
             == "API 密钥已存入钥匙串"
     )
+    #expect(strings["Open Source Licenses"] == "开源许可证")
+    #expect(
+        strings["View Third-Party Licenses…"]
+            == "查看第三方许可证…"
+    )
+    #expect(strings["Third-Party Licenses"] == "第三方许可证")
 }
 
 @Test

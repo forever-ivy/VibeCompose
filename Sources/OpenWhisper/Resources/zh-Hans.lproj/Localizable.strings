@@ -477,6 +477,25 @@
 "OpenWhisper must be installed to /Applications/OpenWhisper.app before it runs. This copy is at %@. Rebuild, install the packaged app to /Applications, then launch that installed copy." = "OpenWhisper 必须安装到 /Applications/OpenWhisper.app 后才能运行。当前副本位于 %@。请重新构建，将打包后的应用安装到 /Applications，然后启动已安装的副本。";
 "OpenWhisper settings are no longer available." = "OpenWhisper 设置窗口已不可用。";
 
+/* Third-party licenses */
+"Open Source Licenses" = "开源许可证";
+"View Third-Party Licenses…" = "查看第三方许可证…";
+"Third-Party Licenses" = "第三方许可证";
+"No license selected" = "尚未选择许可证";
+"Close" = "关闭";
+"Version %@ · revision %@" = "版本 %@ · 修订 %@";
+"Revision %@" = "修订 %@";
+"Review the exact pinned dependency versions and license texts bundled with this copy of OpenWhisper." = "查看此 OpenWhisper 副本内置依赖的精确锁定版本和许可证全文。";
+"OpenWhisper could not find its bundled third-party license resources." = "OpenWhisper 找不到内置的第三方许可证资源。";
+"OpenWhisper could not read its third-party license manifest." = "OpenWhisper 无法读取第三方许可证清单。";
+"OpenWhisper cannot read third-party license manifest schema %ld." = "OpenWhisper 无法读取版本为 %ld 的第三方许可证清单格式。";
+"The third-party license manifest contains duplicate dependency %@." = "第三方许可证清单包含重复依赖 %@。";
+"The third-party license entry for %@ is incomplete." = "依赖 %@ 的第三方许可证条目不完整。";
+"The third-party license path for %@ is unsafe." = "依赖 %@ 的第三方许可证路径不安全。";
+"The bundled license for %@ is missing." = "缺少依赖 %@ 的内置许可证。";
+"The bundled license for %@ could not be read." = "无法读取依赖 %@ 的内置许可证。";
+"The bundled license for %@ failed its integrity check." = "依赖 %@ 的内置许可证未通过完整性校验。";
+
 /* Errors */
 "Microphone access is required to start recording." = "没有麦克风权限，无法开始录音。";
 "Could not initialize the audio recorder." = "无法初始化录音器。";

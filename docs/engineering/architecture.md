@@ -287,6 +287,10 @@ Release metadata and distribution guards currently include:
 - exact ZIP/DMG byte counts, HTTPS download URLs, and SHA-256 values in `dist/release-manifest.json`;
 - a Homebrew Cask that uses an impossible all-zero checksum until the release preparation script records the exact notarized ZIP hash;
 - installer validation of bundle ID, version, build, architecture, signature, and—when release enforcement is enabled—the expected Developer ID Team ID;
+- a dependency-license manifest that exactly covers `Package.resolved`,
+  verifies source URL/revision/version and vendored license SHA-256, ships
+  notices inside the App, and is rechecked by package and commercial release
+  gates;
 - a commercial release gate that requires Developer ID, stapling, Gatekeeper success, manifest/Cask consistency, and signed-updater `SUFeedURL`/`SUPublicEDKey` configuration.
 - a separate signed provider capability policy gate requiring
   `OWCapabilityPolicyURL`, `OWCapabilityPublicEDKey`, and a verified,
@@ -299,8 +303,11 @@ Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the 
 The current alpha must not be described as commercially release-ready while these remain:
 
 - paste success is event-dispatch success, not destination insertion confirmation;
-- Settings and Onboarding are not yet at the target native product architecture; History, Terminology, and Quick Add still require full keyboard/VoiceOver interaction acceptance;
-- HUD Reduce Motion, Increase Contrast, and VoiceOver state announcements are incomplete;
+- Settings now uses `NavigationSplitView` with immediate persistence, and the
+  HUD implementation respects Reduce Motion, strengthens Increase Contrast,
+  and posts state announcements; trusted installed-app keyboard/VoiceOver and
+  high-contrast interaction evidence is still incomplete across Settings,
+  Onboarding, History, Terminology, Quick Add, and HUD;
 - a real Developer ID/notarized artifact and installed Sparkle update/rollback proof are not complete;
 - permanent capability-policy hosting, a separate production Ed25519 key, and
   an installed incident disable/restore drill are not complete;

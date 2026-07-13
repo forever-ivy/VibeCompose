@@ -11,6 +11,9 @@ source "$ENV_LOADER"
 load_product_env "$PRODUCT_ENV"
 load_version_env "$VERSION_ENV"
 
+swift "$ROOT/scripts/verify_dependency_licenses.swift" \
+  --root "$ROOT"
+
 : "${OPENWHISPER_APP_NAME:?OPENWHISPER_APP_NAME is required}"
 : "${OPENWHISPER_BUNDLE_ID:?OPENWHISPER_BUNDLE_ID is required}"
 : "${OPENWHISPER_MIN_MACOS:?OPENWHISPER_MIN_MACOS is required}"
@@ -104,6 +107,9 @@ fi
 if [[ -d "$ROOT/Sources/OpenWhisper/Resources" ]]; then
   cp -R "$ROOT/Sources/OpenWhisper/Resources/." "$RESOURCES_DIR/"
 fi
+swift "$ROOT/scripts/verify_dependency_licenses.swift" \
+  --root "$ROOT" \
+  --app-resources "$RESOURCES_DIR"
 swift "$ROOT/scripts/render_app_icon.swift" "$ICONSET_DIR"
 /usr/bin/iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 

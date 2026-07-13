@@ -34,6 +34,10 @@ You are responsible for your Mac, ChatGPT account, API credentials, and connecte
 
 The source code identified by the repository's `LICENSE` file is available under the MIT License. These Terms do not remove the rights granted by that license.
 
+Bundled third-party components remain subject to their own licenses. Their
+exact pinned versions and full notices are available in **Settings → Advanced
+→ View Third-Party Licenses** and in the repository's bundled legal resources.
+
 The OpenWhisper name, logo, release signing identity, hosted services, paid modules, and commercial support are separate product assets and are not licensed merely because source code is MIT-licensed.
 
 ## 6. Privacy

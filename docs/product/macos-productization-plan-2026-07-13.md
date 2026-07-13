@@ -84,6 +84,7 @@ macOS 首发策略：
 - release manifest 记录 ZIP/DMG 精确哈希、字节数、版本、构建、架构和 HTTPS 下载 URL；
 - Homebrew Cask 从 `sha256 :no_check` 改为未发布时全零 fail-closed，并由发布脚本写入精确 ZIP 哈希；
 - 安装器新增 build 与 Developer ID Team ID 校验；
+- PermissionFlow 与 Sparkle 的精确 source/revision/version、许可证全文和 SHA-256 已进入机器可读清单；Build、Package、Packaged App 和商业 release gate 会校验 `Package.resolved` 全覆盖与 App 内资源一致性；
 - Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
 - Provider Capability Policy 使用独立 Ed25519 公钥、HTTPS 固定地址、31 天硬到期、build 范围和单调 revision；在读取音频/Token/文本前阻断受影响能力；
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
@@ -105,7 +106,7 @@ UI 调研确认的主要问题：
 - 首次使用和权限修复混入过多工程诊断信息。
 - History 和 Terminology 只是设置页中的有限预览。
 - HUD 不同状态宽度跳变，错误停留时间不足。
-- Reduce Motion、Increase Contrast、VoiceOver 覆盖不完整。
+- HUD 已实现 Reduce Motion、Increase Contrast 和状态 announcement；完整安装版键盘、VoiceOver 与高对比度交互证据仍不完整。
 - 代码、视觉规范、截图和视觉测试不是同一事实源。
 
 商业化分析确认的主要约束：
@@ -627,7 +628,7 @@ PR：
 - Swift build/test；
 - lint/format；
 - secret scan；
-- dependency license scan；
+- dependency license scan（已由 `verify_dependency_licenses.swift` 接入本地和发布检查）；
 - localization key consistency；
 - docs links；
 - landing content contract。
@@ -726,6 +727,7 @@ OpenWhisperLicensing   许可证与收据
 - Swift target、包、Bundle、路径、Keychain、脚本和文档统一；
 - 旧发布素材和过时截图移除；
 - MIT License 保留；
+- `Package.resolved` 中每个依赖都有锁定版本/修订、许可证全文、SHA-256 和 App 内可查看 notices；
 - `0.1.0` Alpha 基线可构建、安装和运行；
 - 三份输入报告纳入新的文档结构。
 
@@ -840,6 +842,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-023 | P1 | 异步粘贴等待与 HUD generation（已实现） | Session lifecycle | MainActor 可继续调度，取消后无迟到状态 |
 | OW-MAC-024 | P1 | 临时文件故障清理（已实现） | Audio/Upload lifecycle | partial、失败上传、退出和启动 orphan 均可验证清理 |
 | OW-MAC-025 | P1 | 签名 Provider Capability Kill Switch（客户端与工具已实现，待生产运营） | Provider boundary/Release | 音频、Token、文本发送前阻断；无效/旧策略不能清除停用 |
+| OW-MAC-026 | P1 | 第三方依赖许可证门禁（已实现） | Package.resolved/Release | 每个 pin 均有精确 notices 与 SHA-256，App 资源和 release gate 一致 |
 
 ## 14. 第一执行 Sprint（10 个工作日）
 

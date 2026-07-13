@@ -209,6 +209,104 @@ private struct TextPolishUsage: Equatable {
     }
 }
 
+private struct ThirdPartyLicensesView: View {
+    let documents: [ThirdPartyLicenseDocument]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedIdentity: String?
+
+    init(documents: [ThirdPartyLicenseDocument]) {
+        self.documents = documents
+        _selectedIdentity = State(
+            initialValue: documents.first?.entry.identity
+        )
+    }
+
+    var body: some View {
+        NavigationSplitView {
+            List(selection: $selectedIdentity) {
+                ForEach(documents) { document in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(document.entry.name)
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(document.entry.pinnedDescription)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+                    .tag(document.entry.identity)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(
+                min: 190,
+                ideal: 220,
+                max: 260
+            )
+        } detail: {
+            if let selectedDocument {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(selectedDocument.entry.name)
+                                .font(.system(size: 24, weight: .semibold))
+                            Text(selectedDocument.entry.pinnedDescription)
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            Text(selectedDocument.entry.licenseName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Divider()
+
+                        Text(selectedDocument.licenseText)
+                            .font(
+                                .system(
+                                    size: 11,
+                                    design: .monospaced
+                                )
+                            )
+                            .textSelection(.enabled)
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: .topLeading
+                            )
+                    }
+                    .padding(22)
+                }
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.secondary)
+                    Text(L10n.text("No license selected"))
+                        .font(.system(size: 15, weight: .semibold))
+                }
+            }
+        }
+        .frame(minWidth: 760, minHeight: 520)
+        .navigationTitle(L10n.text("Third-Party Licenses"))
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(L10n.text("Close")) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+        }
+    }
+
+    private var selectedDocument: ThirdPartyLicenseDocument? {
+        guard let selectedIdentity else {
+            return documents.first
+        }
+        return documents.first {
+            $0.entry.identity == selectedIdentity
+        }
+    }
+}
+
 private struct PreferencesView: View {
     private enum TerminologyFilter: String, CaseIterable, Identifiable {
         case all = "All"
@@ -255,6 +353,11 @@ private struct PreferencesView: View {
     @State private var softwareUpdateSnapshot: SoftwareUpdateSnapshot
     @State private var softwareUpdateMessage: String?
     @State private var softwareUpdateMessageIsError = false
+    @State private var thirdPartyLicenseDocuments:
+        [ThirdPartyLicenseDocument] = []
+    @State private var showsThirdPartyLicenses = false
+    @State private var thirdPartyLicenseMessage: String?
+    @State private var thirdPartyLicenseMessageIsError = false
 
     let authManager: ChatGPTAuthManager
     let onSave: (AppConfig) -> Result<Void, any Error>
@@ -557,6 +660,11 @@ private struct PreferencesView: View {
                 L10n.text(
                     "Future dictation audio will be sent to the configured endpoint with the API key stored in Keychain. Your API provider may charge for transcription. AI Polish will still use your ChatGPT account."
                 )
+            )
+        }
+        .sheet(isPresented: $showsThirdPartyLicenses) {
+            ThirdPartyLicensesView(
+                documents: thirdPartyLicenseDocuments
             )
         }
     }
@@ -1263,6 +1371,32 @@ private struct PreferencesView: View {
 
                 Divider()
 
+                LabeledContent(L10n.text("Open Source Licenses")) {
+                    Button(L10n.text("View Third-Party Licenses…")) {
+                        showThirdPartyLicenses()
+                    }
+                    .buttonStyle(.bordered)
+                }
+                Text(
+                    L10n.text(
+                        "Review the exact pinned dependency versions and license texts bundled with this copy of OpenWhisper."
+                    )
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+
+                if let thirdPartyLicenseMessage {
+                    Text(thirdPartyLicenseMessage)
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            thirdPartyLicenseMessageIsError
+                                ? .red
+                                : .secondary
+                        )
+                }
+
+                Divider()
+
                 LabeledContent(L10n.text("Provider Safety")) {
                     Button(L10n.text("Refresh Safety Policy")) {
                         Task {
@@ -1562,6 +1696,21 @@ private struct PreferencesView: View {
         case .failure(let error):
             diagnosticsExportMessage = error.localizedDescription
             diagnosticsExportMessageIsError = true
+        }
+    }
+
+    private func showThirdPartyLicenses() {
+        do {
+            thirdPartyLicenseDocuments =
+                try ThirdPartyLicenseCatalog.load()
+            thirdPartyLicenseMessage = nil
+            thirdPartyLicenseMessageIsError = false
+            showsThirdPartyLicenses = true
+        } catch {
+            thirdPartyLicenseDocuments = []
+            thirdPartyLicenseMessage = error.localizedDescription
+            thirdPartyLicenseMessageIsError = true
+            NSSound.beep()
         }
     }
 

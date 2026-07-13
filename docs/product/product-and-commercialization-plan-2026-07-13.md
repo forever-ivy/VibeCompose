@@ -623,6 +623,7 @@ StorageCleanupService
 - 登录、403、429 和上游变化工单；
 - macOS 兼容性；
 - Developer ID、签名、公证和更新；
+- 第三方依赖许可证维护与随包 notices；
 - 支付、税务、退款和换汇；
 - 用户教育和内容获客；
 - 上游故障导致的集中退款和声誉损失。
@@ -876,6 +877,7 @@ North Star：
 - Developer ID 签名；
 - Notarization 和 staple；
 - 自动更新；
+- `Package.resolved` 全覆盖的第三方许可证清单、App 内查看和发布门禁；
 - 隐私、条款、退款和非官方声明；
 - 匿名漏斗指标。
 

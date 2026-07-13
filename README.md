@@ -26,6 +26,8 @@ The current implementation already includes:
 - OpenAI-compatible transcription as an advanced recovery route, with native
   endpoint/model controls, a Keychain-backed API key, explicit paid-API
   confirmation, and a synthetic-silence connection test
+- pinned third-party dependency notices, SHA-256 license verification, and
+  packaged in-app license review
 
 ## Product Boundary
 
@@ -141,3 +143,11 @@ docs/design/                  visual specifications
 ## License
 
 MIT. See [LICENSE](LICENSE). The existing copyright and permission notice must remain in distributed copies or substantial portions of the software.
+
+PermissionFlow, Sparkle, and Sparkle's bundled third-party components retain
+their own licenses. The exact pinned dependency metadata and full notices are
+stored under
+[`Sources/OpenWhisper/Resources/Legal`](Sources/OpenWhisper/Resources/Legal)
+and are available in **Settings → Advanced → View Third-Party Licenses**.
+Build, package, packaged-app, and commercial-release checks fail if
+`Package.resolved`, license hashes, notices, or App resources diverge.

@@ -24,6 +24,10 @@ CAPABILITY_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-cap
   exit 1
 }
 
+swift "$ROOT/scripts/verify_dependency_licenses.swift" \
+  --root "$ROOT" \
+  --app-resources "$APP/Contents/Resources"
+
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
 SIGNATURE_DETAILS="$(/usr/bin/codesign -dvvv "$APP" 2>&1)"
 [[ "$SIGNATURE_DETAILS" == *"Authority=Developer ID Application:"* ]] || {
