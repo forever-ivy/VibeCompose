@@ -4,6 +4,8 @@ enum OverlayDemoState: String, Equatable, Sendable, CaseIterable {
     case recording
     case processing
     case result
+    case pasteSent = "paste-sent"
+    case copied
     case error
     case retryableError = "retryable-error"
 }
@@ -25,6 +27,7 @@ enum AppLaunchMode: Equatable {
     case quickAdd
     case overlayDemo
     case overlayDemoState(OverlayDemoState)
+    case pasteAcceptance
     case benchmark
 
     static func resolve(
@@ -80,6 +83,10 @@ enum AppLaunchMode: Equatable {
             return .overlayDemo
         }
 
+        if arguments.contains("--paste-acceptance") {
+            return .pasteAcceptance
+        }
+
         let rawValue = environment["OPENWHISPER_OVERLAY_DEMO"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
@@ -118,6 +125,34 @@ enum AppLaunchMode: Equatable {
             }
         }
 
+        return nil
+    }
+
+    static func pasteAcceptanceOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        if let value = environment["OPENWHISPER_PASTE_ACCEPTANCE_OUTPUT"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !value.isEmpty
+        {
+            return URL(fileURLWithPath: value)
+        }
+
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--paste-acceptance-output",
+               index + 1 < arguments.count {
+                let value = arguments[index + 1]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+            if argument.hasPrefix("--paste-acceptance-output=") {
+                let value = String(
+                    argument.dropFirst("--paste-acceptance-output=".count)
+                ).trimmingCharacters(in: .whitespacesAndNewlines)
+                return value.isEmpty ? nil : URL(fileURLWithPath: value)
+            }
+        }
         return nil
     }
 

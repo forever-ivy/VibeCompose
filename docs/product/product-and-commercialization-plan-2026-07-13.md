@@ -443,7 +443,7 @@ Sources/OpenWhisper/DictationContext.swift
 
 ### 6.2 安全粘贴
 
-当前 `launchAppContext` 在部分情况下可参与允许粘贴的判断，可能与“只有可编辑目标才粘贴”的公开承诺不一致。
+当前实现已不再把 `launchAppContext` 当作粘贴许可；它只用于恢复原应用。发送前会重新确认 PID、bundle、启动时间、窗口和同一 focused AX element，Retry 默认 copy-only。
 
 正确原则：
 
@@ -458,6 +458,17 @@ Sources/OpenWhisper/DictationContext.swift
 - 无法确认可写时只复制到剪贴板；
 - Retry 默认不向任意当前应用自动粘贴；
 - 区分“已发送粘贴命令”和“已确认插入成功”。
+
+2026-07-13 已实现：
+
+- 捕获同一 AX target 的 value 与 selected range 前快照；
+- 发送后短轮询同一 target，并按 UTF-16 选区替换计算精确期望值；
+- 只有观察到预期变化才记录 `inserted_verified`；
+- AX 快照不可用或结果不确定时记录 `paste_dispatched`，并保留转写剪贴板；
+- 未发送事件的回退记录为 `clipboard`；
+- 旧版 `pasted` 历史只按“已发送粘贴（旧记录）”展示，不追溯性声称已确认插入。
+
+剩余工作是安装版 Notes/TextEdit/Terminal 和第三方编辑器矩阵，不是继续用单一成功状态覆盖差异。
 
 涉及文件：
 

@@ -69,7 +69,7 @@ macOS 首发策略：
 当前仍阻断商业发布的事项：
 
 - Developer ID、固定 Team ID、notarization/staple、生产 updater 托管/密钥、真实签名 appcast 和 rollback 实证未完成；
-- `.pasted` 尚不能证明目标应用实际接收文本，真实多应用焦点矩阵未完成；
+- 已将“确认插入”“仅发送粘贴并保留剪贴板”“纯剪贴板兜底”拆为三种结果，并用同一 AX target 的前后 value/range 变化验证插入；真实 Notes/TextEdit/Terminal 多应用焦点矩阵仍未完成；
 - clean TCC 首次成功听写及完整 F5/ESC/inline close/Retry 验收尚缺可信原生 GUI 证据；
 - Settings/Onboarding/HUD/History/Terminology 的完整键盘、VoiceOver 与高对比度验收未完成；
 - 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
@@ -88,6 +88,8 @@ macOS 首发策略：
 - Sparkle 2.9.4 已固定、嵌入并接入状态栏菜单和高级设置；支持自动检查偏好、签名 appcast 生成和框架/rpath/release gate 校验；
 - Provider Capability Policy 使用独立 Ed25519 公钥、HTTPS 固定地址、31 天硬到期、build 范围和单调 revision；在读取音频/Token/文本前阻断受影响能力；
 - 私有 Alpha 默认不写入生产 `SUFeedURL`/`SUPublicEDKey`，Developer ID 打包和商业 release gate 会在缺少生产 feed、公钥或匹配签名 appcast 时阻断。
+- 安全粘贴新增同一 AX target 的前后文本快照验证；只有精确观察到预期 UTF-16 替换才记为 `inserted_verified`，无法观察或结果不确定时记为 `paste_dispatched` 并保留转写剪贴板，未发送事件仍记为 `clipboard`；
+- HUD、History 筛选与标签、延迟诊断和双语文案已区分“已确认插入 / 已发送粘贴 / 已复制”，旧版 `pasted` 历史按“仅发送粘贴（旧记录）”解释，不追溯性宣称已验证。
 
 2026-07-13 Advanced Recovery 进展：
 
@@ -912,8 +914,9 @@ Sprint 完成定义：
 
 不能只统计“接口返回成功”，还需要区分：
 
-- pasted；
-- copied；
+- inserted_verified；
+- paste_dispatched；
+- clipboard；
 - user retried；
 - discarded；
 - failure category。

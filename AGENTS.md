@@ -13,6 +13,7 @@
 - Package app: `scripts/package_app.sh`
 - Install packaged app: `scripts/install_app.sh`
 - Visual acceptance: `./scripts/visual_acceptance.sh --install`
+- Installed TextEdit paste precheck: `./scripts/paste_acceptance.sh --install`
 - Installed app smoke: `scripts/check_packaged_app.sh`
 
 ## Routine Operations
@@ -21,14 +22,15 @@
 | --- | --- | --- | --- |
 | Implement app behavior fix | `scripts/check.sh` | Unit/integration checks pass | Fix the first failing test; keep paste/permission regressions covered |
 | Ship usable local build | `scripts/package_app.sh` then `scripts/install_app.sh` | Fresh `dist/OpenWhisper.app` is installed to `/Applications/OpenWhisper.app` | Rebuild and reinstall; never launch directly from `dist` for live verification |
-| Run visual acceptance | `./scripts/visual_acceptance.sh --install` | Installed app launches through LaunchServices in overlay demo mode and captures recording/processing/result/error/retryable-error evidence | Inspect generated artifact directory, fix the HUD/state mismatch, and rerun |
+| Run visual acceptance | `./scripts/visual_acceptance.sh --install` | Installed app launches through LaunchServices in overlay demo mode and captures recording/processing/verified-insert/paste-sent/copied/error/retryable-error evidence | Inspect generated artifact directory, fix the HUD/state mismatch, and rerun |
+| Verify installed TextEdit insertion | `./scripts/paste_acceptance.sh --install` | Installed app launches an isolated TextEdit process, records `inserted_verified`, observes the marker, and restores the previous clipboard only after verification | If Accessibility is false, re-add the newly signed `/Applications/OpenWhisper.app`; do not treat an old signing identity's TCC row as proof |
 | Verify first-run permissions | Reset TCC for installed app path, then launch `/Applications/OpenWhisper.app` | System permission prompt fires from `not determined` state | Do not let setup preflights request permissions before the first-run path is observed |
 
 ## Troubleshooting
 
 | Trigger | Command | Expected Result | Failure Recovery |
 | --- | --- | --- | --- |
-| Output pastes into the wrong place | Inspect focused editable target and run the installed app path | Text pastes only when a focused editable target exists; otherwise it stays in clipboard | Keep paste behavior conservative and debug AX/direct insertion path before changing STT cleanup |
+| Output pastes into the wrong place | Inspect focused editable target and run the installed app path | Text sends paste only to the same focused editable target; verified insertion, unverified paste dispatch, and clipboard-only fallback remain distinct | Keep paste behavior conservative and debug AX target/value/range verification before changing STT cleanup |
 | HUD or hotkey interaction changed | Use official Computer Use on the installed app | `F5` starts/stops, `ESC` cancels, inline close cancels, retry/re-entry works | Fix source, rebuild, reinstall, and rerun the full interaction branch |
 | Permission flow regresses | Clean TCC state and installed app launch | Accessibility/Microphone prompts appear in the expected order | Add or update automated ordering tests, then repeat installed-app proof |
 

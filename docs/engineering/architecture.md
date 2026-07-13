@@ -48,7 +48,8 @@ idle
 → starting(sessionID)
 → recording(sessionID)
 → processing(sessionID)
-→ pasted | copied | retryableFailure | terminalFailure
+→ insertedAndVerified | pasteDispatchedClipboardRetained | copiedToClipboard
+  | retryableFailure | terminalFailure
 → idle
 ```
 
@@ -69,7 +70,7 @@ The long-term target remains a dedicated `DictationSession` model rather than co
 - `HotkeyMonitor`
   - registers the global `F5` shortcut.
 - `OverlayController`
-  - renders recording, processing, pasted, copied, error, and retryable-error HUD states;
+  - renders recording, processing, verified-insert, paste-sent, copied, error, and retryable-error HUD states;
   - uses a presentation generation so stale auto-hide tasks and animation completions cannot hide a newer state.
 - `PreferencesWindowController`
   - hosts the current workflow-sidebar Settings surface, including Privacy & Data.
@@ -166,11 +167,19 @@ matching locally verified signed policy before release.
 - `.clipboardFallback(.noEditableTarget)`;
 - `.clipboardFallback(.retryRequiresManualPaste)`.
 
-The original clipboard is restored only when the pasteboard change count still proves OpenWhisper owns the current contents. Retry output intentionally remains in the clipboard.
+Immediately before dispatch, OpenWhisper captures the same focused AX target and, when the destination exposes both `AXValue` and `AXSelectedTextRange`, a bounded before snapshot. After `Cmd+V`, it polls that same target for up to 500 ms and compares the observed value against the exact UTF-16 replacement implied by the original selection.
 
-Current limitation: `.pasted` means OpenWhisper sent the paste key event after its checks; it does not prove that the destination application accepted and inserted the text.
+Delivery outcomes are intentionally distinct:
+
+- `.insertedAndVerified`: the same AX target exposed the expected text transition;
+- `.pasteDispatchedClipboardRetained`: `Cmd+V` was sent, but AX verification was unavailable or inconclusive, so the transcript remains in the clipboard;
+- `.copiedToClipboard(...)`: no paste event was sent.
+
+The original clipboard is restored only after `.insertedAndVerified` and only when the pasteboard change count still proves OpenWhisper owns the current contents. Retry output and unverified paste output intentionally remain in the clipboard.
 
 Paste-target waiting is implemented by `AsyncPasteTargetWaiter` with `ContinuousClock` and cancellation-aware `Task.sleep`. Focus checks and application activation briefly execute on MainActor, while the wait itself no longer blocks it. Cancelling the active dictation session also cancels pending insertion and prevents a late outcome from updating HUD or history.
+
+The remaining acceptance boundary is application coverage: targets that expose a stable value/range transition can reach the verified state, while browser composers, Terminal-style controls, and some custom editors may legitimately remain in the “Paste sent” state. Installed-app Notes/TextEdit/Terminal and third-party editor matrices remain release evidence rather than assumptions.
 
 ## 6. Storage and Privacy
 

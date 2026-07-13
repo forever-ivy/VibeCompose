@@ -72,13 +72,16 @@ enum OverlayLeadingVisual: Sendable, Equatable {
 }
 
 enum OverlaySuccessKind: Sendable, Equatable {
-    case pasted
+    case inserted
+    case pasteSent
     case copied
 
     var label: String {
         switch self {
-        case .pasted:
-            return L10n.text("Pasted")
+        case .inserted:
+            return L10n.text("Inserted")
+        case .pasteSent:
+            return L10n.text("Paste sent")
         case .copied:
             return L10n.text("Copied")
         }
@@ -112,7 +115,14 @@ enum OverlayVisualState: Sendable, Equatable {
         case .processing:
             return .waveform
         case .success(let kind):
-            return .icon(symbolName: kind == .pasted ? "checkmark.circle.fill" : "doc.on.clipboard.fill")
+            switch kind {
+            case .inserted:
+                return .icon(symbolName: "checkmark.circle.fill")
+            case .pasteSent:
+                return .icon(symbolName: "arrow.right.circle.fill")
+            case .copied:
+                return .icon(symbolName: "doc.on.clipboard.fill")
+            }
         case .error, .retryableError:
             return .icon(symbolName: "exclamationmark.triangle.fill")
         }

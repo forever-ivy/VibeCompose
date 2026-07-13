@@ -125,8 +125,10 @@ capture_state() {
 capture_state "recording" "01-recording.png"
 capture_state "processing" "02-processing.png"
 capture_state "result" "03-result.png"
-capture_state "error" "04-error.png"
-capture_state "retryable-error" "05-retryable-error.png"
+capture_state "paste-sent" "04-paste-sent.png"
+capture_state "copied" "05-copied.png"
+capture_state "error" "06-error.png"
+capture_state "retryable-error" "07-retryable-error.png"
 
 trap - EXIT
 
@@ -134,8 +136,10 @@ swift "$ROOT/scripts/verify_visual_acceptance.swift" \
   "$OUT_DIR/01-recording.png" \
   "$OUT_DIR/02-processing.png" \
   "$OUT_DIR/03-result.png" \
-  "$OUT_DIR/04-error.png" \
-  "$OUT_DIR/05-retryable-error.png" | tee "$OUT_DIR/verification.txt"
+  "$OUT_DIR/04-paste-sent.png" \
+  "$OUT_DIR/05-copied.png" \
+  "$OUT_DIR/06-error.png" \
+  "$OUT_DIR/07-retryable-error.png" | tee "$OUT_DIR/verification.txt"
 
 /usr/bin/open "$APP_DIR"
 if ! wait_for_installed_app; then
@@ -157,8 +161,10 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
   - \`01-recording.png\`
   - \`02-processing.png\`
   - \`03-result.png\`
-  - \`04-error.png\`
-  - \`05-retryable-error.png\`
+  - \`04-paste-sent.png\`
+  - \`05-copied.png\`
+  - \`06-error.png\`
+  - \`07-retryable-error.png\`
   - \`verification.txt\`
   - \`openwhisper-overlay-demo-*.log\`
 

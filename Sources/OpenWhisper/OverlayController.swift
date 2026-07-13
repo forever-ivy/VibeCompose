@@ -159,8 +159,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
         let successKind: OverlaySuccessKind
         switch outcome {
-        case .pasted:
-            successKind = .pasted
+        case .insertedAndVerified:
+            successKind = .inserted
+        case .pasteDispatchedClipboardRetained:
+            successKind = .pasteSent
         case .copiedToClipboard:
             successKind = .copied
         }
@@ -244,12 +246,29 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             iconView.isHidden = true
         case .success(let kind):
             waveformView.isHidden = true
-            configureBadge(
-                symbolName: kind == .pasted ? "checkmark" : "doc.on.clipboard.fill",
-                tintColor: kind == .pasted ? OpenWhisperPalette.success : OpenWhisperPalette.amber,
-                fillColor: kind == .pasted ? OpenWhisperPalette.success.withAlphaComponent(0.14) : OpenWhisperPalette.amber.withAlphaComponent(0.16),
-                borderColor: kind == .pasted ? OpenWhisperPalette.success.withAlphaComponent(0.34) : OpenWhisperPalette.amber.withAlphaComponent(0.38)
-            )
+            switch kind {
+            case .inserted:
+                configureBadge(
+                    symbolName: "checkmark",
+                    tintColor: OpenWhisperPalette.success,
+                    fillColor: OpenWhisperPalette.success.withAlphaComponent(0.14),
+                    borderColor: OpenWhisperPalette.success.withAlphaComponent(0.34)
+                )
+            case .pasteSent:
+                configureBadge(
+                    symbolName: "arrow.right",
+                    tintColor: OpenWhisperPalette.iceBlue,
+                    fillColor: OpenWhisperPalette.iceBlue.withAlphaComponent(0.14),
+                    borderColor: OpenWhisperPalette.iceBlue.withAlphaComponent(0.34)
+                )
+            case .copied:
+                configureBadge(
+                    symbolName: "doc.on.clipboard.fill",
+                    tintColor: OpenWhisperPalette.amber,
+                    fillColor: OpenWhisperPalette.amber.withAlphaComponent(0.16),
+                    borderColor: OpenWhisperPalette.amber.withAlphaComponent(0.38)
+                )
+            }
         case .error, .retryableError:
             waveformView.isHidden = true
             configureBadge(

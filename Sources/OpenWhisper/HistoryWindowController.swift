@@ -233,7 +233,7 @@ private struct HistoryWindowView: View {
                 Text(
                     entry.kind == .recovery
                         ? L10n.text("Recovery")
-                        : L10n.text(entry.outcome)
+                        : TextDeliveryStatus.localizedLabel(for: entry.outcome)
                 )
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(entry.kind == .recovery ? .orange : outcomeColor(entry.outcome))
@@ -295,7 +295,7 @@ private struct HistoryWindowView: View {
             Text(entry.timestamp.formatted(date: .complete, time: .standard))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
-            Text(L10n.text(entry.outcome))
+            Text(TextDeliveryStatus.localizedLabel(for: entry.outcome))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(outcomeColor(entry.outcome))
         }
@@ -501,11 +501,33 @@ private struct HistoryWindowView: View {
     }
 
     private func outcomeSymbol(_ outcome: String) -> String {
-        outcome == "error" ? "exclamationmark.circle.fill" : "checkmark.circle.fill"
+        switch TextDeliveryStatus.kind(for: outcome) {
+        case .insertedAndVerified:
+            return "checkmark.circle.fill"
+        case .pasteDispatched:
+            return "arrow.right.circle.fill"
+        case .clipboard:
+            return "doc.on.clipboard.fill"
+        case .error:
+            return "exclamationmark.circle.fill"
+        case .unknown:
+            return "questionmark.circle"
+        }
     }
 
     private func outcomeColor(_ outcome: String) -> Color {
-        outcome == "error" ? .red : .secondary
+        switch TextDeliveryStatus.kind(for: outcome) {
+        case .insertedAndVerified:
+            return .green
+        case .pasteDispatched:
+            return .blue
+        case .clipboard:
+            return .orange
+        case .error:
+            return .red
+        case .unknown:
+            return .secondary
+        }
     }
 
     private static func formattedDuration(_ durationMs: Int) -> String {

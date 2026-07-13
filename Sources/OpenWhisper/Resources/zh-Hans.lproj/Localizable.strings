@@ -14,7 +14,7 @@
 "Technical language stays intact" = "保护技术表达";
 "Terminology and deterministic corrections protect product names, commands, and paths." = "术语与确定性修正规则可保护产品名、命令和路径。";
 "Safe paste or clipboard" = "安全粘贴或剪贴板兜底";
-"OpenWhisper pastes only when it can verify an editable target. Otherwise, your result stays in the clipboard." = "OpenWhisper 仅在确认目标可编辑时自动粘贴，否则结果会保留在剪贴板。";
+"OpenWhisper sends paste only to a verified editable target. If insertion cannot be confirmed, your result stays in the clipboard." = "OpenWhisper 仅向已确认可编辑的目标发送粘贴命令；如果无法确认文本已插入，结果会继续保留在剪贴板。";
 "The default route uses your ChatGPT account through a private, undocumented backend. OpenWhisper is independent from OpenAI, and upstream availability or limits may change." = "默认路径通过未公开、无正式文档的后端使用你的 ChatGPT 账户。OpenWhisper 是独立项目，上游可用性和限制可能变化。";
 "Connect your ChatGPT account" = "连接你的 ChatGPT 账户";
 "OpenWhisper stores its own session in Keychain on this Mac." = "OpenWhisper 会将自己的会话安全存储在这台 Mac 的钥匙串中。";
@@ -38,7 +38,7 @@
 "Click the practice field, press F5, speak, then press F5 again." = "点击练习输入框，按 F5 后说话，再按一次 F5。";
 "Automatic paste is ready" = "自动粘贴已就绪";
 "Clipboard Mode is ready" = "剪贴板模式已就绪";
-"OpenWhisper can paste into the focused editable field." = "OpenWhisper 可以粘贴到当前聚焦的可编辑输入框。";
+"OpenWhisper can send paste to the focused editable field and verify insertion when the app exposes text through Accessibility." = "OpenWhisper 可以向当前聚焦的可编辑输入框发送粘贴命令；当目标应用通过辅助功能暴露文本时，还会确认插入结果。";
 "Accessibility is optional. Without it, the transcript remains in your clipboard for Command-V." = "辅助功能是可选权限；未开启时，转写结果会保留在剪贴板，可按 Command-V 粘贴。";
 "Enable Automatic Paste" = "启用自动粘贴";
 "Dictation practice field" = "听写练习输入框";
@@ -60,6 +60,7 @@
 "Status" = "状态";
 "Date" = "日期";
 "All statuses" = "全部状态";
+"Verified insertions" = "已确认插入";
 "Errors" = "错误";
 "All time" = "全部时间";
 "Today" = "今天";
@@ -143,7 +144,9 @@
 "Not requested yet" = "尚未请求";
 "Re-add required" = "需要重新添加";
 "Optional but recommended" = "可选但建议开启";
-"Pasted" = "已粘贴";
+"Inserted" = "已确认插入";
+"Paste sent" = "已发送粘贴";
+"Paste sent (legacy)" = "已发送粘贴（旧记录）";
 "Copied" = "已复制";
 "Copy" = "复制";
 "Retry" = "重试";
@@ -253,7 +256,8 @@
 "Recording on F5" = "正在录音，按 F5 停止";
 "Retrying" = "正在重试";
 "Retrying saved audio" = "正在重试已保存的音频";
-"Pasted transcript" = "转写结果已粘贴";
+"Transcript insertion verified" = "已确认转写结果插入成功";
+"Paste sent. Transcript kept in clipboard." = "已发送粘贴命令，转写结果仍保留在剪贴板。";
 "Settings saved" = "设置已保存";
 "Saved automatically" = "已自动保存";
 "Settings saved automatically" = "设置已自动保存";
@@ -382,7 +386,9 @@
 "Final text" = "最终文本";
 "Direct ASR" = "直接转写";
 "Audio" = "音频";
-"pasted" = "已粘贴";
+"pasted" = "已发送粘贴（旧记录）";
+"inserted_verified" = "已确认插入";
+"paste_dispatched" = "已发送粘贴";
 "clipboard" = "剪贴板";
 "error" = "错误";
 
@@ -413,8 +419,8 @@
 
 /* Paste */
 "Paste & Clipboard" = "粘贴与剪贴板";
-"Restore clipboard after paste" = "粘贴后恢复原剪贴板";
-"When no editable focus is detected, OpenWhisper leaves the polished transcript in the clipboard for manual Cmd+V." = "未检测到可编辑光标时，OpenWhisper 会把最终文本留在剪贴板，供你手动按 Cmd+V 粘贴。";
+"Restore clipboard after verified insertion" = "确认插入后恢复原剪贴板";
+"OpenWhisper restores the previous clipboard only after Accessibility confirms the expected text change. If the target or insertion cannot be verified, the transcript stays in the clipboard for manual Cmd+V." = "只有当辅助功能确认目标文本发生了预期变化后，OpenWhisper 才会恢复原剪贴板。如果无法确认目标或插入结果，转写文本会保留在剪贴板，供你手动按 Cmd+V 粘贴。";
 "Copied to clipboard. Grant Accessibility access for auto-paste." = "已复制到剪贴板。开启辅助功能权限后可自动粘贴。";
 "Copied to clipboard" = "已复制到剪贴板";
 "Retry completed and was copied to the clipboard." = "重试已完成，结果已复制到剪贴板。";

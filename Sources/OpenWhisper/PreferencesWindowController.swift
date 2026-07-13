@@ -730,8 +730,15 @@ private struct PreferencesView: View {
             aiPolishCard
         case .paste:
             settingsCard(title: "Paste & Clipboard") {
-                Toggle(L10n.text("Restore clipboard after paste"), isOn: $config.injection.preserveClipboard)
-                Text(L10n.text("When no editable focus is detected, OpenWhisper leaves the polished transcript in the clipboard for manual Cmd+V."))
+                Toggle(
+                    L10n.text("Restore clipboard after verified insertion"),
+                    isOn: $config.injection.preserveClipboard
+                )
+                Text(
+                    L10n.text(
+                        "OpenWhisper restores the previous clipboard only after Accessibility confirms the expected text change. If the target or insertion cannot be verified, the transcript stays in the clipboard for manual Cmd+V."
+                    )
+                )
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -1813,7 +1820,7 @@ private struct PreferencesView: View {
                 HStack(spacing: 8) {
                     Text(item.target)
                         .font(.system(size: 11, weight: .medium))
-                    Text(L10n.text(item.outcome))
+                    Text(TextDeliveryStatus.localizedLabel(for: item.outcome))
                         .font(.system(size: 10))
                         .foregroundStyle(item.outcome == "error" ? .red : .secondary)
                     Text(item.timestamp.formatted(date: .numeric, time: .shortened))
@@ -1999,7 +2006,7 @@ private struct PreferencesView: View {
                     Text(item.sourceLabel)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(L10n.text(item.outcome))
+                    Text(TextDeliveryStatus.localizedLabel(for: item.outcome))
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                     Text(item.timestamp.formatted(date: .numeric, time: .shortened))

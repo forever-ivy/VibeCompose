@@ -10,22 +10,37 @@ struct FocusedTargetIdentity: Sendable, Equatable {
 }
 
 final class FocusedAXElementReference: @unchecked Sendable {
+    let processIdentifier: pid_t
     let element: AXUIElement
     let window: AXUIElement?
     let identity: FocusedTargetIdentity
 
     init(
+        processIdentifier: pid_t,
         element: AXUIElement,
         window: AXUIElement?,
         identity: FocusedTargetIdentity
     ) {
+        self.processIdentifier = processIdentifier
         self.element = element
         self.window = window
         self.identity = identity
     }
 }
 
+struct FocusedEditableTargetCapture: @unchecked Sendable {
+    let target: FocusedAXElementReference
+    let editableTextSnapshot: EditableTextSnapshot?
+}
+
+enum FocusedEditableSnapshotCapture: Sendable, Equatable {
+    case captured(EditableTextSnapshot)
+    case unavailable
+    case targetChanged
+}
+
 enum FocusedElementInspector {
+    private static let maximumVerificationTextLength = 1_000_000
     private static let textRoles: Set<String> = [
         kAXTextFieldRole as String,
         kAXTextAreaRole as String,
@@ -69,9 +84,98 @@ enum FocusedElementInspector {
 
         let window = axElementAttributeValue(kAXWindowAttribute, on: element)
         return FocusedAXElementReference(
+            processIdentifier: processIdentifier,
             element: element,
             window: window,
             identity: identity(for: element, window: window)
+        )
+    }
+
+    static func capturePasteTarget(
+        in launchAppContext: LaunchAppContext?
+    ) -> FocusedEditableTargetCapture? {
+        guard AXIsProcessTrusted() else {
+            return nil
+        }
+
+        let element: AXUIElement
+        let processIdentifier: pid_t
+        if let launchAppContext {
+            guard
+                launchAppContext.processIdentifier > 0,
+                let expectedTarget = launchAppContext.focusedTarget,
+                let currentElement = focusedElement(in: launchAppContext.processIdentifier),
+                matches(
+                    currentElement: currentElement,
+                    expectedTarget: expectedTarget,
+                    processIdentifier: launchAppContext.processIdentifier
+                )
+            else {
+                return nil
+            }
+            element = currentElement
+            processIdentifier = launchAppContext.processIdentifier
+        } else {
+            guard
+                let currentElement = focusedElement(),
+                let currentProcessIdentifier = self.processIdentifier(of: currentElement),
+                currentProcessIdentifier > 0,
+                isEditableTextFocus(currentElement)
+            else {
+                return nil
+            }
+            element = currentElement
+            processIdentifier = currentProcessIdentifier
+        }
+
+        let window = axElementAttributeValue(kAXWindowAttribute, on: element)
+        let target = FocusedAXElementReference(
+            processIdentifier: processIdentifier,
+            element: element,
+            window: window,
+            identity: identity(for: element, window: window)
+        )
+        return FocusedEditableTargetCapture(
+            target: target,
+            editableTextSnapshot: editableTextSnapshot(from: element)
+        )
+    }
+
+    static func captureEditableTextSnapshot(
+        matching expectedTarget: FocusedAXElementReference
+    ) -> FocusedEditableSnapshotCapture {
+        guard
+            AXIsProcessTrusted(),
+            expectedTarget.processIdentifier > 0,
+            let currentElement = focusedElement(),
+            matches(
+                currentElement: currentElement,
+                expectedTarget: expectedTarget,
+                processIdentifier: expectedTarget.processIdentifier
+            )
+        else {
+            return .targetChanged
+        }
+
+        guard let snapshot = editableTextSnapshot(from: currentElement) else {
+            return .unavailable
+        }
+        return .captured(snapshot)
+    }
+
+    static func isCurrentTarget(_ expectedTarget: FocusedAXElementReference) -> Bool {
+        guard
+            AXIsProcessTrusted(),
+            expectedTarget.processIdentifier > 0,
+            let currentElement = focusedElement()
+        else {
+            return false
+        }
+
+        return matches(
+            currentElement: currentElement,
+            expectedTarget: expectedTarget,
+            processIdentifier: expectedTarget.processIdentifier
         )
     }
 
@@ -168,6 +272,59 @@ enum FocusedElementInspector {
             identifier: attributeValue(kAXIdentifierAttribute, on: element) as? String,
             windowHash: window.map { UInt64(CFHash($0)) }
         )
+    }
+
+    private static func editableTextSnapshot(
+        from element: AXUIElement
+    ) -> EditableTextSnapshot? {
+        guard
+            let rawValue = attributeValue(kAXValueAttribute, on: element),
+            let value = textValue(from: rawValue),
+            let selectedRange = selectedTextRange(on: element)
+        else {
+            return nil
+        }
+
+        let utf16Length = (value as NSString).length
+        guard
+            utf16Length <= maximumVerificationTextLength,
+            selectedRange.location >= 0,
+            selectedRange.length >= 0,
+            selectedRange.location <= utf16Length,
+            selectedRange.length <= utf16Length - selectedRange.location
+        else {
+            return nil
+        }
+
+        return EditableTextSnapshot(
+            value: value,
+            selectedRange: selectedRange
+        )
+    }
+
+    private static func textValue(from rawValue: CFTypeRef) -> String? {
+        if let value = rawValue as? String {
+            return value
+        }
+        if let value = rawValue as? NSAttributedString {
+            return value.string
+        }
+        return nil
+    }
+
+    private static func selectedTextRange(on element: AXUIElement) -> CFRange? {
+        guard
+            let rawRange = attributeValue(kAXSelectedTextRangeAttribute, on: element),
+            CFGetTypeID(rawRange) == AXValueGetTypeID()
+        else {
+            return nil
+        }
+
+        var range = CFRange(location: 0, length: 0)
+        guard AXValueGetValue(rawRange as! AXValue, .cfRange, &range) else {
+            return nil
+        }
+        return range
     }
 
     private static func attributeValue(

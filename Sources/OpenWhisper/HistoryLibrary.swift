@@ -10,7 +10,8 @@ enum HistoryKindFilter: String, CaseIterable, Identifiable, Sendable {
 
 enum HistoryStatusFilter: String, CaseIterable, Identifiable, Sendable {
     case all = "All statuses"
-    case pasted = "Pasted"
+    case verified = "Verified insertions"
+    case pasteSent = "Paste sent"
     case copied = "Copied"
     case errors = "Errors"
 
@@ -151,12 +152,15 @@ enum HistoryLibrary {
                 switch statusFilter {
                 case .all:
                     return true
-                case .pasted:
-                    return entry.outcome == "pasted"
+                case .verified:
+                    return TextDeliveryStatus.kind(for: entry.outcome) == .insertedAndVerified
+                case .pasteSent:
+                    return TextDeliveryStatus.kind(for: entry.outcome) == .pasteDispatched
                 case .copied:
-                    return entry.outcome == "clipboard"
+                    return TextDeliveryStatus.kind(for: entry.outcome) == .clipboard
                 case .errors:
-                    return entry.outcome == "error" || entry.kind == .recovery
+                    return TextDeliveryStatus.kind(for: entry.outcome) == .error ||
+                        entry.kind == .recovery
                 }
             }
             .filter { entry in

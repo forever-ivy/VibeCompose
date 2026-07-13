@@ -24,6 +24,25 @@ struct AppLaunchModeTests {
     }
 
     @Test
+    func pasteAcceptanceModeAndOutputRequireExplicitArguments() {
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--paste-acceptance"]
+            ) == .pasteAcceptance
+        )
+        #expect(
+            AppLaunchMode.pasteAcceptanceOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--paste-acceptance-output=/tmp/paste.json",
+                ]
+            )?.path == "/tmp/paste.json"
+        )
+    }
+
+    @Test
     func settingsModeAcceptsLaunchServicesArgument() {
         #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--settings"]) == .settings)
         #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--open-settings"]) == .settings)
@@ -158,6 +177,18 @@ struct AppLaunchModeTests {
                 environment: ["OPENWHISPER_OVERLAY_DEMO_STATE": "result"],
                 arguments: ["OpenWhisper"]
             ) == .overlayDemoState(.result)
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--overlay-demo-state=paste-sent"]
+            ) == .overlayDemoState(.pasteSent)
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: ["OPENWHISPER_OVERLAY_DEMO_STATE": "copied"],
+                arguments: ["OpenWhisper"]
+            ) == .overlayDemoState(.copied)
         )
     }
 

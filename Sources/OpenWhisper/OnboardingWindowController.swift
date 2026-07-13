@@ -296,7 +296,7 @@ private struct OnboardingView: View {
             onboardingFeature(
                 symbol: "doc.on.clipboard",
                 title: "Safe paste or clipboard",
-                detail: "OpenWhisper pastes only when it can verify an editable target. Otherwise, your result stays in the clipboard."
+                detail: "OpenWhisper sends paste only to a verified editable target. If insertion cannot be confirmed, your result stays in the clipboard."
             )
 
             Text(
@@ -403,7 +403,7 @@ private struct OnboardingView: View {
                     ? "Automatic paste is ready"
                     : "Clipboard Mode is ready",
                 detail: permissionMonitor.snapshot.accessibilityTrusted
-                    ? "OpenWhisper can paste into the focused editable field."
+                    ? "OpenWhisper can send paste to the focused editable field and verify insertion when the app exposes text through Accessibility."
                     : "Accessibility is optional. Without it, the transcript remains in your clipboard for Command-V.",
                 ready: true
             )

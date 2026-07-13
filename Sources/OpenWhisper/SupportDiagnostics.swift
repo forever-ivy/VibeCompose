@@ -183,7 +183,7 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
         totalProcessingMs = Self.nonnegative(sample.totalProcessingMs)
         resultStatus = Self.allowedValue(
             sample.resultStatus,
-            allowed: ["pasted", "clipboard", "error"]
+            allowed: TextDeliveryStatus.diagnosticsAllowedValues
         )
         errorCategory = sample.errorCategory.map {
             Self.allowedValue($0, allowed: ["transcribe", "inject"])

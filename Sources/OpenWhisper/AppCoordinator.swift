@@ -305,6 +305,9 @@ final class AppCoordinator {
                 config = (try? configStore.load()) ?? config
                 runOverlayDemoState(demoState)
                 return
+            case .pasteAcceptance:
+                runPasteAcceptance()
+                return
             case .benchmark:
                 config = try configStore.load()
                 Task {
@@ -1431,7 +1434,22 @@ final class AppCoordinator {
             self.overlay.showProcessing()
 
             try? await Task.sleep(nanoseconds: 1_300_000_000)
-            self.overlay.showResult(text: L10n.text("Demo"), outcome: .pasted)
+            self.overlay.showResult(
+                text: L10n.text("Demo"),
+                outcome: .insertedAndVerified
+            )
+
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            self.overlay.showResult(
+                text: L10n.text("Demo"),
+                outcome: .pasteDispatchedClipboardRetained
+            )
+
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            self.overlay.showResult(
+                text: L10n.text("Demo"),
+                outcome: .copiedToClipboard(reason: .noEditableTarget)
+            )
 
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             self.overlay.showError(L10n.text("Clipboard only"))
@@ -1455,7 +1473,20 @@ final class AppCoordinator {
         case .processing:
             overlay.showProcessing()
         case .result:
-            overlay.showResult(text: L10n.text("Demo"), outcome: .pasted)
+            overlay.showResult(
+                text: L10n.text("Demo"),
+                outcome: .insertedAndVerified
+            )
+        case .pasteSent:
+            overlay.showResult(
+                text: L10n.text("Demo"),
+                outcome: .pasteDispatchedClipboardRetained
+            )
+        case .copied:
+            overlay.showResult(
+                text: L10n.text("Demo"),
+                outcome: .copiedToClipboard(reason: .noEditableTarget)
+            )
         case .error:
             overlay.showError(L10n.text("Clipboard only"))
         case .retryableError:
@@ -1478,6 +1509,25 @@ final class AppCoordinator {
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func runPasteAcceptance() {
+        guard let outputURL = AppLaunchMode.pasteAcceptanceOutputURL(
+            environment: ProcessInfo.processInfo.environment,
+            arguments: ProcessInfo.processInfo.arguments
+        ) else {
+            print("Paste acceptance failed: missing --paste-acceptance-output")
+            NSApplication.shared.terminate(nil)
+            return
+        }
+
+        Task { @MainActor [injector] in
+            await PasteAcceptanceRunner.run(
+                injector: injector,
+                outputURL: outputURL
+            )
             NSApplication.shared.terminate(nil)
         }
     }
@@ -1527,8 +1577,10 @@ final class AppCoordinator {
 
     private func statusDetail(for outcome: InjectionOutcome) -> String {
         switch outcome {
-        case .pasted:
-            return L10n.text("Pasted transcript")
+        case .insertedAndVerified:
+            return L10n.text("Transcript insertion verified")
+        case .pasteDispatchedClipboardRetained:
+            return L10n.text("Paste sent. Transcript kept in clipboard.")
         case .copiedToClipboard(let reason):
             return reason.statusDetail
         }
@@ -1816,15 +1868,9 @@ final class AppCoordinator {
 
     private func latencyResultStatus(for outcome: InjectionOutcome?) -> String {
         guard let outcome else {
-            return "error"
+            return TextDeliveryStatus.error
         }
-
-        switch outcome {
-        case .pasted:
-            return "pasted"
-        case .copiedToClipboard:
-            return "clipboard"
-        }
+        return outcome.resultStatus
     }
 
     private func elapsedMilliseconds(since start: UInt64) -> Int {

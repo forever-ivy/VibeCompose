@@ -63,7 +63,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
             estimatedPolishOutputTokens: 80,
             injectMs: 10,
             totalProcessingMs: 486,
-            resultStatus: "pasted",
+            resultStatus: TextDeliveryStatus.pasteDispatched,
             errorCategory: nil
         ),
         retention: DiagnosticsRetentionPolicy(
@@ -228,6 +228,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
 
     #expect(exportedText.contains("\"authenticationState\" : \"ready\""))
     #expect(exportedText.contains("\"signatureState\" : \"stableTeamIdentity\""))
+    #expect(exportedText.contains("\"resultStatus\":\"paste_dispatched\""))
     #expect(exportedText.contains("\"textPolishErrorPresent\":true"))
     #expect(exportedText.contains("\"crashSummaryCount\" : 1"))
     #expect(exportedText.contains("\"buildVersion\" : \"1\""))

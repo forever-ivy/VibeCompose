@@ -55,13 +55,14 @@ func injectionFallsBackToClipboardWithoutEditableFocus() {
 }
 
 @Test
-func injectionPastesWhenEditableFocusAndAccessibilityPermissionAreAvailable() {
+func editableFocusOnlyProvesPasteCanBeDispatched() {
     let outcome = TextInjector.injectionOutcome(
         hasEditableTextFocus: true,
         accessibilityTrusted: true
     )
 
-    #expect(outcome == .pasted)
+    #expect(outcome == .pasteDispatchedClipboardRetained)
+    #expect(outcome.resultStatus == TextDeliveryStatus.pasteDispatched)
 }
 
 @Test
@@ -286,6 +287,132 @@ func injectionPlanStillUsesClipboardWhenNoEditorSignalExists() {
 }
 
 @Test
+func pasteTransitionVerifierConfirmsInsertionAtUTF16Caret() {
+    let before = EditableTextSnapshot(
+        value: "a🙂b",
+        selectedRange: CFRange(location: 3, length: 0)
+    )
+    let after = EditableTextSnapshot(
+        value: "a🙂OpenWhisperb",
+        selectedRange: CFRange(location: 14, length: 0)
+    )
+
+    #expect(
+        PasteTransitionVerifier.result(
+            before: before,
+            after: after,
+            insertedText: "OpenWhisper",
+            targetStillMatches: true
+        ) == .verified
+    )
+}
+
+@Test
+func pasteTransitionVerifierConfirmsSelectedTextReplacement() {
+    let before = EditableTextSnapshot(
+        value: "hello brave world",
+        selectedRange: CFRange(location: 6, length: 5)
+    )
+    let after = EditableTextSnapshot(
+        value: "hello OpenWhisper world",
+        selectedRange: CFRange(location: 17, length: 0)
+    )
+
+    #expect(
+        PasteTransitionVerifier.result(
+            before: before,
+            after: after,
+            insertedText: "OpenWhisper",
+            targetStillMatches: true
+        ) == .verified
+    )
+}
+
+@Test
+func pasteTransitionVerifierRequiresObservableChange() {
+    let snapshot = EditableTextSnapshot(
+        value: "OpenWhisper",
+        selectedRange: CFRange(location: 11, length: 0)
+    )
+
+    #expect(
+        PasteTransitionVerifier.result(
+            before: snapshot,
+            after: snapshot,
+            insertedText: "",
+            targetStillMatches: true
+        ) == .notObserved
+    )
+}
+
+@Test
+func pasteTransitionVerifierCanProveSameTextReplacementBySelectionCollapse() {
+    let before = EditableTextSnapshot(
+        value: "OpenWhisper",
+        selectedRange: CFRange(location: 0, length: 11)
+    )
+    let after = EditableTextSnapshot(
+        value: "OpenWhisper",
+        selectedRange: CFRange(location: 11, length: 0)
+    )
+
+    #expect(
+        PasteTransitionVerifier.result(
+            before: before,
+            after: after,
+            insertedText: "OpenWhisper",
+            targetStillMatches: true
+        ) == .verified
+    )
+}
+
+@Test
+func pasteTransitionVerifierRejectsUnrelatedValueChange() {
+    let before = EditableTextSnapshot(
+        value: "hello",
+        selectedRange: CFRange(location: 5, length: 0)
+    )
+    let after = EditableTextSnapshot(
+        value: "hello other",
+        selectedRange: CFRange(location: 11, length: 0)
+    )
+
+    #expect(
+        PasteTransitionVerifier.result(
+            before: before,
+            after: after,
+            insertedText: " OpenWhisper",
+            targetStillMatches: true
+        ) == .notObserved
+    )
+}
+
+@Test
+func pasteTransitionVerifierDistinguishesUnavailableAndChangedTarget() {
+    let snapshot = EditableTextSnapshot(
+        value: "hello",
+        selectedRange: CFRange(location: 5, length: 0)
+    )
+
+    #expect(
+        PasteTransitionVerifier.result(
+            before: nil,
+            after: snapshot,
+            insertedText: " world",
+            targetStillMatches: true
+        ) == .unavailable
+    )
+    #expect(
+        PasteTransitionVerifier.result(
+            before: snapshot,
+            after: snapshot,
+            insertedText: " world",
+            targetStillMatches: false
+        ) == .targetChanged
+    )
+}
+
+@Test
 func clipboardRestoreRequiresOpenWhisperToStillOwnThePasteboard() {
     #expect(TextInjector.shouldRestoreClipboard(currentChangeCount: 42, ownedChangeCount: 42))
     #expect(!TextInjector.shouldRestoreClipboard(currentChangeCount: 43, ownedChangeCount: 42))
@@ -348,4 +475,40 @@ func asyncPasteTargetWaiterIsCancellationAware() async {
     } catch {
         Issue.record("Unexpected cancellation error: \(error)")
     }
+}
+
+@MainActor
+@Test
+func asyncPasteVerificationWaiterPollsUntilInsertionIsObserved() async throws {
+    var checks = 0
+    let waiter = AsyncPasteVerificationWaiter(
+        timeout: .seconds(1),
+        pollInterval: .milliseconds(1)
+    )
+
+    let result = try await waiter.wait {
+        checks += 1
+        return checks >= 3 ? .verified : .notObserved
+    }
+
+    #expect(result == .verified)
+    #expect(checks == 3)
+}
+
+@MainActor
+@Test
+func asyncPasteVerificationWaiterStopsWhenTargetChanges() async throws {
+    var checks = 0
+    let waiter = AsyncPasteVerificationWaiter(
+        timeout: .seconds(1),
+        pollInterval: .milliseconds(1)
+    )
+
+    let result = try await waiter.wait {
+        checks += 1
+        return .targetChanged
+    }
+
+    #expect(result == .targetChanged)
+    #expect(checks == 1)
 }

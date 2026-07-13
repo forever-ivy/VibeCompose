@@ -48,7 +48,15 @@ func visualAcceptanceVerifierDocumentsRequiredStates() throws {
     let verifierURL = root.appendingPathComponent("scripts/verify_visual_acceptance.swift")
     let verifier = try String(contentsOf: verifierURL, encoding: .utf8)
 
-    for state in ["recording", "processing", "result", "error", "retryable-error"] {
+    for state in [
+        "recording",
+        "processing",
+        "result",
+        "paste-sent",
+        "copied",
+        "error",
+        "retryable-error",
+    ] {
         #expect(verifier.contains(state))
     }
     #expect(verifier.contains("visible HUD pixels"))

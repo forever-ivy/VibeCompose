@@ -104,8 +104,102 @@ enum ClipboardFallbackReason: Sendable, Equatable {
 }
 
 enum InjectionOutcome: Sendable, Equatable {
-    case pasted
+    case insertedAndVerified
+    case pasteDispatchedClipboardRetained
     case copiedToClipboard(reason: ClipboardFallbackReason)
+
+    var resultStatus: String {
+        switch self {
+        case .insertedAndVerified:
+            return TextDeliveryStatus.insertedAndVerified
+        case .pasteDispatchedClipboardRetained:
+            return TextDeliveryStatus.pasteDispatched
+        case .copiedToClipboard:
+            return TextDeliveryStatus.clipboard
+        }
+    }
+}
+
+enum PasteVerificationResult: Sendable, Equatable {
+    case verified
+    case unavailable
+    case notObserved
+    case targetChanged
+}
+
+enum PasteTransitionVerifier {
+    nonisolated static func result(
+        before: EditableTextSnapshot?,
+        after: EditableTextSnapshot?,
+        insertedText: String,
+        targetStillMatches: Bool
+    ) -> PasteVerificationResult {
+        guard targetStillMatches else {
+            return .targetChanged
+        }
+        guard
+            let before,
+            let after,
+            let expected = expectedSnapshot(
+                before: before,
+                insertedText: insertedText
+            )
+        else {
+            return .unavailable
+        }
+        guard after.value == expected.value else {
+            return .notObserved
+        }
+
+        let valueChanged = before.value != after.value
+        let selectionChanged = before.selectedRange.location != after.selectedRange.location ||
+            before.selectedRange.length != after.selectedRange.length
+        guard valueChanged || selectionChanged else {
+            return .notObserved
+        }
+
+        if valueChanged {
+            return .verified
+        }
+
+        return after.selectedRange.location == expected.selectedRange.location &&
+            after.selectedRange.length == expected.selectedRange.length
+            ? .verified
+            : .notObserved
+    }
+
+    private nonisolated static func expectedSnapshot(
+        before: EditableTextSnapshot,
+        insertedText: String
+    ) -> EditableTextSnapshot? {
+        let source = before.value as NSString
+        let selectedRange = before.selectedRange
+        guard
+            selectedRange.location >= 0,
+            selectedRange.length >= 0,
+            selectedRange.location <= source.length,
+            selectedRange.length <= source.length - selectedRange.location
+        else {
+            return nil
+        }
+
+        let replacementRange = NSRange(
+            location: selectedRange.location,
+            length: selectedRange.length
+        )
+        let expectedValue = source.replacingCharacters(
+            in: replacementRange,
+            with: insertedText
+        )
+        let expectedSelection = CFRange(
+            location: selectedRange.location + (insertedText as NSString).length,
+            length: 0
+        )
+        return EditableTextSnapshot(
+            value: expectedValue,
+            selectedRange: expectedSelection
+        )
+    }
 }
 
 struct AsyncPasteTargetWaiter: Sendable {
@@ -133,6 +227,32 @@ struct AsyncPasteTargetWaiter: Sendable {
     }
 }
 
+struct AsyncPasteVerificationWaiter: Sendable {
+    var timeout: Duration = .milliseconds(500)
+    var pollInterval: Duration = .milliseconds(25)
+
+    func wait(
+        check: @escaping @MainActor @Sendable () -> PasteVerificationResult
+    ) async throws -> PasteVerificationResult {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+
+        while clock.now < deadline {
+            try Task.checkCancellation()
+            let result = await check()
+            switch result {
+            case .verified, .unavailable, .targetChanged:
+                return result
+            case .notObserved:
+                try await Task.sleep(for: pollInterval)
+            }
+        }
+
+        try Task.checkCancellation()
+        return await check()
+    }
+}
+
 @MainActor
 protocol TextInjecting: AnyObject {
     func inject(
@@ -152,9 +272,14 @@ final class TextInjector: TextInjecting {
     )
     private var clipboardRestoreTask: Task<Void, Never>?
     private let pasteTargetWaiter: AsyncPasteTargetWaiter
+    private let pasteVerificationWaiter: AsyncPasteVerificationWaiter
 
-    init(pasteTargetWaiter: AsyncPasteTargetWaiter = .init()) {
+    init(
+        pasteTargetWaiter: AsyncPasteTargetWaiter = .init(),
+        pasteVerificationWaiter: AsyncPasteVerificationWaiter = .init()
+    ) {
         self.pasteTargetWaiter = pasteTargetWaiter
+        self.pasteVerificationWaiter = pasteVerificationWaiter
     }
 
     nonisolated static func injectionOutcome(
@@ -167,7 +292,7 @@ final class TextInjector: TextInjecting {
         guard hasEditableTextFocus else {
             return .copiedToClipboard(reason: .noEditableTarget)
         }
-        return .pasted
+        return .pasteDispatchedClipboardRetained
     }
 
     nonisolated static func injectionPlan(
@@ -263,6 +388,12 @@ final class TextInjector: TextInjecting {
             logger.error("Paste target changed after clipboard write; leaving transcript in clipboard")
             return .copiedToClipboard(reason: .noEditableTarget)
         }
+        guard let targetCapture = FocusedElementInspector.capturePasteTarget(
+            in: launchAppContext
+        ) else {
+            logger.error("Paste target could not be captured before dispatch; leaving transcript in clipboard")
+            return .copiedToClipboard(reason: .noEditableTarget)
+        }
 
         guard
             let source = CGEventSource(stateID: .hidSystemState),
@@ -274,38 +405,50 @@ final class TextInjector: TextInjecting {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
+        guard FocusedElementInspector.isCurrentTarget(targetCapture.target) else {
+            logger.error("Paste target changed immediately before dispatch; leaving transcript in clipboard")
+            return .copiedToClipboard(reason: .noEditableTarget)
+        }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
 
-        if let snapshot {
-            let boundedDelayMilliseconds = min(restoreDelayMilliseconds, 10_000)
-            let (delayNanoseconds, overflow) = boundedDelayMilliseconds
-                .multipliedReportingOverflow(by: 1_000_000)
-            if !overflow {
-                clipboardRestoreTask = Task { @MainActor [weak self] in
-                    do {
-                        try await Task.sleep(nanoseconds: delayNanoseconds)
-                    } catch {
-                        return
-                    }
-                    guard
-                        let self,
-                        !Task.isCancelled,
-                        NSPasteboard.general.changeCount == ownedChangeCount,
-                        Self.shouldRestoreClipboard(
-                            currentChangeCount: NSPasteboard.general.changeCount,
-                            ownedChangeCount: ownedChangeCount
-                        )
-                    else {
-                        return
-                    }
-                    snapshot.restore(to: pasteboard)
-                    self.clipboardRestoreTask = nil
-                }
+        guard let beforeSnapshot = targetCapture.editableTextSnapshot else {
+            logger.info("Paste command dispatched; AX text verification is unavailable, retaining transcript in clipboard")
+            return .pasteDispatchedClipboardRetained
+        }
+
+        let verificationResult = try await pasteVerificationWaiter.wait {
+            switch FocusedElementInspector.captureEditableTextSnapshot(
+                matching: targetCapture.target
+            ) {
+            case .captured(let afterSnapshot):
+                return PasteTransitionVerifier.result(
+                    before: beforeSnapshot,
+                    after: afterSnapshot,
+                    insertedText: text,
+                    targetStillMatches: true
+                )
+            case .unavailable:
+                return .unavailable
+            case .targetChanged:
+                return .targetChanged
             }
         }
 
-        return .pasted
+        guard verificationResult == .verified else {
+            logger.info(
+                "Paste command dispatched without verified insertion (\(String(describing: verificationResult), privacy: .public)); retaining transcript in clipboard"
+            )
+            return .pasteDispatchedClipboardRetained
+        }
+
+        scheduleClipboardRestore(
+            snapshot: snapshot,
+            pasteboard: pasteboard,
+            ownedChangeCount: ownedChangeCount,
+            restoreDelayMilliseconds: restoreDelayMilliseconds
+        )
+        return .insertedAndVerified
     }
 
     private func waitForPasteTarget(
@@ -355,6 +498,45 @@ final class TextInjector: TextInjecting {
             "Reactivating launch app before paste: pid=\(launchAppContext.processIdentifier, privacy: .public) bundleID=\(bundleIdentifier, privacy: .public)"
         )
         app.activate(options: [.activateIgnoringOtherApps])
+    }
+
+    private func scheduleClipboardRestore(
+        snapshot: PasteboardSnapshot?,
+        pasteboard: NSPasteboard,
+        ownedChangeCount: Int,
+        restoreDelayMilliseconds: UInt64
+    ) {
+        guard let snapshot else {
+            return
+        }
+
+        let boundedDelayMilliseconds = min(restoreDelayMilliseconds, 10_000)
+        let (delayNanoseconds, overflow) = boundedDelayMilliseconds
+            .multipliedReportingOverflow(by: 1_000_000)
+        guard !overflow else {
+            return
+        }
+
+        clipboardRestoreTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: delayNanoseconds)
+            } catch {
+                return
+            }
+            guard
+                let self,
+                !Task.isCancelled,
+                NSPasteboard.general.changeCount == ownedChangeCount,
+                Self.shouldRestoreClipboard(
+                    currentChangeCount: NSPasteboard.general.changeCount,
+                    ownedChangeCount: ownedChangeCount
+                )
+            else {
+                return
+            }
+            snapshot.restore(to: pasteboard)
+            self.clipboardRestoreTask = nil
+        }
     }
 
     @discardableResult

@@ -12,10 +12,17 @@ func historyLibraryFiltersByKindStatusDateAndSearch() throws {
     let transcripts = [
         TranscriptionHistoryRecord(
             timestamp: now.addingTimeInterval(-60),
-            finalText: "OpenWhisper pasted result",
+            finalText: "OpenWhisper verified result",
             appName: "Notes",
             appBundleIdentifier: "com.apple.Notes",
-            outcome: "pasted"
+            outcome: TextDeliveryStatus.insertedAndVerified
+        ),
+        TranscriptionHistoryRecord(
+            timestamp: now.addingTimeInterval(-90),
+            finalText: "OpenWhisper legacy paste result",
+            appName: "TextEdit",
+            appBundleIdentifier: "com.apple.TextEdit",
+            outcome: TextDeliveryStatus.legacyPasteDispatched
         ),
         TranscriptionHistoryRecord(
             timestamp: now.addingTimeInterval(-8 * 24 * 60 * 60),
@@ -39,18 +46,31 @@ func historyLibraryFiltersByKindStatusDateAndSearch() throws {
         ),
     ]
 
-    let pasted = HistoryLibrary.filteredEntries(
+    let verified = HistoryLibrary.filteredEntries(
         transcripts: transcripts,
         recovery: recovery,
         query: "openwhisper",
         kindFilter: .transcripts,
-        statusFilter: .pasted,
+        statusFilter: .verified,
         dateFilter: .today,
         now: now,
         calendar: calendar
     )
-    #expect(pasted.count == 1)
-    #expect(pasted.first?.target == "Notes")
+    #expect(verified.count == 1)
+    #expect(verified.first?.target == "Notes")
+
+    let pasteSent = HistoryLibrary.filteredEntries(
+        transcripts: transcripts,
+        recovery: recovery,
+        query: "legacy",
+        kindFilter: .transcripts,
+        statusFilter: .pasteSent,
+        dateFilter: .today,
+        now: now,
+        calendar: calendar
+    )
+    #expect(pasteSent.count == 1)
+    #expect(pasteSent.first?.target == "TextEdit")
 
     let errors = HistoryLibrary.filteredEntries(
         transcripts: transcripts,

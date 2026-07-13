@@ -141,7 +141,7 @@ private final class FakeCoordinatorInjector: TextInjecting {
         launchContexts.append(launchAppContext)
         automaticPastePermissions.append(automaticPasteAllowed)
         return automaticPasteAllowed
-            ? .pasted
+            ? .insertedAndVerified
             : .copiedToClipboard(reason: .retryRequiresManualPaste)
     }
 }
@@ -161,7 +161,7 @@ private final class BlockingCoordinatorInjector: TextInjecting {
         didStart = true
         try await Task.sleep(for: .seconds(5))
         didComplete = true
-        return .pasted
+        return .insertedAndVerified
     }
 }
 

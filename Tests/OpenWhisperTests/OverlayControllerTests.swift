@@ -24,7 +24,9 @@ func minimalOverlayPresetUsesNineBarVoiceGlyph() {
 func overlayStatesStillDifferentiateLeadingVisualFamilies() {
     #expect(OverlayVisualState.recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:03").leadingVisual == .waveform)
     #expect(OverlayVisualState.processing.leadingVisual == .waveform)
-    #expect(OverlayVisualState.success(.pasted).leadingVisual == .icon(symbolName: "checkmark.circle.fill"))
+    #expect(OverlayVisualState.success(.inserted).leadingVisual == .icon(symbolName: "checkmark.circle.fill"))
+    #expect(OverlayVisualState.success(.pasteSent).leadingVisual == .icon(symbolName: "arrow.right.circle.fill"))
+    #expect(OverlayVisualState.success(.copied).leadingVisual == .icon(symbolName: "doc.on.clipboard.fill"))
     #expect(OverlayVisualState.error("Microphone permission is missing").leadingVisual == .icon(symbolName: "exclamationmark.triangle.fill"))
 }
 
@@ -32,7 +34,7 @@ func overlayStatesStillDifferentiateLeadingVisualFamilies() {
 func overlayStatesStayCompactExceptErrors() {
     #expect(OverlayVisualState.recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:03").allowsSupplementaryText == false)
     #expect(OverlayVisualState.processing.allowsSupplementaryText == false)
-    #expect(OverlayVisualState.success(.pasted).allowsSupplementaryText == false)
+    #expect(OverlayVisualState.success(.inserted).allowsSupplementaryText == false)
     #expect(OverlayVisualState.error("Microphone permission is missing").allowsSupplementaryText == true)
 }
 
@@ -55,7 +57,7 @@ func processingOverlayStateShowsCancelControlWithoutTimer() {
 
 @Test
 func successAndOrdinaryErrorStatesRemainNonInteractive() {
-    #expect(OverlayVisualState.success(.pasted).showsCancelControl == false)
+    #expect(OverlayVisualState.success(.inserted).showsCancelControl == false)
     #expect(OverlayVisualState.error("boom").showsCancelControl == false)
     #expect(OverlayVisualState.error("boom").showsRetryControl == false)
 }
@@ -133,7 +135,7 @@ func overlayPrimaryStatesUseStableGeometryAndErrorsHaveRoomForRecoveryCopy() {
     )
 
     #expect(recordingSize == preset.size(for: .processing))
-    #expect(recordingSize == preset.size(for: .success(.pasted)))
+    #expect(recordingSize == preset.size(for: .success(.inserted)))
     #expect(preset.size(for: .error("boom")).width == preset.errorPillWidth)
     #expect(preset.size(for: .error("boom")).height == preset.errorPillHeight)
     #expect(recordingSize.width >= preset.inlineControlReservedWidth)
@@ -199,7 +201,7 @@ func overlayControllerOnlyShowsInlineCancelControlForActiveSessionStates() {
     #expect(overlay.debugSnapshot.isCancelControlVisible == true)
     #expect(overlay.debugSnapshot.isTimerVisible == false)
 
-    overlay.showResult(text: "Done", outcome: .pasted)
+    overlay.showResult(text: "Done", outcome: .insertedAndVerified)
     #expect(overlay.debugSnapshot.isCancelControlVisible == false)
     #expect(overlay.debugSnapshot.isRetryControlVisible == false)
 }
@@ -210,7 +212,7 @@ func overlayControllerRetryableErrorShowsRetryControlOnly() {
     let overlay = OverlayController()
     defer { overlay.hide() }
 
-    overlay.showResult(text: "Done", outcome: .pasted)
+    overlay.showResult(text: "Done", outcome: .insertedAndVerified)
     let resultGeneration = overlay.debugSnapshot.presentationGeneration
     overlay.showRetryableError("Cloudflare 403")
 

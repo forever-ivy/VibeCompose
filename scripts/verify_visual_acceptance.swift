@@ -20,7 +20,7 @@ enum VerificationError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "Usage: verify_visual_acceptance.swift recording processing result error retryable-error"
+            return "Usage: verify_visual_acceptance.swift recording processing result paste-sent copied error retryable-error"
         case .unreadableImage(let path):
             return "Could not read screenshot: \(path)"
         case .missingHud(let state, let visiblePixels):
@@ -51,6 +51,8 @@ let expectedStateNames = [
     "recording",
     "processing",
     "result",
+    "paste-sent",
+    "copied",
     "error",
     "retryable-error",
 ]
@@ -132,7 +134,7 @@ do {
     }
 
     let primary = states[0]
-    for state in states[1...2] {
+    for state in states[1...4] {
         guard state.width == primary.width, state.height == primary.height else {
             throw VerificationError.unstablePrimaryGeometry(
                 state.name,
@@ -143,7 +145,7 @@ do {
             )
         }
     }
-    for state in states[3...4] {
+    for state in states[5...6] {
         guard state.width >= primary.width, state.height >= primary.height else {
             throw VerificationError.invalidErrorGeometry(
                 state.name,

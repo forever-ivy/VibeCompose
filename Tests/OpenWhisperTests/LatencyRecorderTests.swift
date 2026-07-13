@@ -24,7 +24,7 @@ func latencyRecorderAppendsJsonlSamples() throws {
             estimatedPolishOutputTokens: 400,
             injectMs: 40,
             totalProcessingMs: 1_012,
-            resultStatus: "pasted",
+            resultStatus: TextDeliveryStatus.insertedAndVerified,
             errorCategory: nil
         )
     )

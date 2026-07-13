@@ -60,7 +60,7 @@ func liveTextInjectorPastesIntoLaunchAppEditorAfterFocusMovesAway() async throws
         launchAppContext: launchAppContext,
         automaticPasteAllowed: true
     )
-    #expect(outcome == .pasted)
+    #expect(outcome == .insertedAndVerified)
 
     try await Task.sleep(nanoseconds: 400_000_000)
     let documentText = try runAppleScript("""
@@ -113,7 +113,10 @@ func liveTextInjectorPastesIntoCodexComposerAfterFocusMovesAway() async throws {
         launchAppContext: launchAppContext,
         automaticPasteAllowed: true
     )
-    #expect(outcome == .pasted)
+    #expect(
+        outcome == .insertedAndVerified ||
+            outcome == .pasteDispatchedClipboardRetained
+    )
 
     try await Task.sleep(nanoseconds: 500_000_000)
     _ = try runAppleScript("""

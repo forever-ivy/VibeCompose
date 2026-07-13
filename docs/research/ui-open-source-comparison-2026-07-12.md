@@ -116,7 +116,7 @@ OpenWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 
 ### 3.3 当前 HUD 视觉证据
 
-旧名称时期的 HUD 离屏截图也已清理。OpenWhisper 后续只接受安装版生成的 recording、processing、pasted、copied、error 和 retryable-error 证据。
+旧名称时期的 HUD 离屏截图也已清理。OpenWhisper 后续只接受安装版生成的 recording、processing、verified insert、paste sent、copied、error 和 retryable-error 证据。
 
 HUD 的视觉语言可以保留，但需要解决：
 
@@ -317,7 +317,8 @@ OpenWhisper 应借鉴：
 2. **HUD**
    - recording
    - processing
-   - pasted
+   - verified insert
+   - paste sent
    - copied
    - error
    - retryable error

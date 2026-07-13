@@ -19,6 +19,13 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Accessibility"] == "辅助功能")
     #expect(strings["Ready. Press F5 to dictate"] == "已就绪。按 F5 开始听写")
     #expect(strings["F5 again to transcribe"] == "再次按 F5 开始转写")
+    #expect(strings["Inserted"] == "已确认插入")
+    #expect(strings["Paste sent"] == "已发送粘贴")
+    #expect(strings["Verified insertions"] == "已确认插入")
+    #expect(
+        strings["Transcript insertion verified"]
+            == "已确认转写结果插入成功"
+    )
     #expect(strings["Saved automatically"] == "已自动保存")
     #expect(strings["Save failed"] == "保存失败")
     #expect(strings["Configuration"] == "配置")

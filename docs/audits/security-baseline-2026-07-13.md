@@ -46,7 +46,7 @@
 
 | 审计 ID | 状态 | 当前证据 | 残余工作 |
 | --- | --- | --- | --- |
-| OW-AUD-001 错误目标自动粘贴 | 部分关闭 | `TextInjector.injectionPlan` 不再把旧启动上下文视为可编辑证明；Retry/Recovery Retry 强制复制；发送前重新检查当前可编辑焦点 | `.pasted` 仍表示“已发送事件”，不是目标应用确认插入；需完成真实 Notes/Terminal 等矩阵 |
+| OW-AUD-001 错误目标自动粘贴 | 部分关闭 | `TextInjector.injectionPlan` 不再把旧启动上下文视为可编辑证明；Retry/Recovery Retry 强制复制；发送前重新检查当前可编辑焦点与同一 AX target；发送后用 AX value/range 前后快照区分 `inserted_verified`、`paste_dispatched` 和 `clipboard`，无法确认时保留转写剪贴板 | 需完成真实 Notes/TextEdit/Terminal 及第三方编辑器矩阵；不支持可靠 AX 文本快照的目标应稳定落入 `paste_dispatched`，不能误报已确认插入 |
 | OW-AUD-002 Managed Token 任意 endpoint | 关闭 | `ManagedEndpointPolicy` 固定 `https://chatgpt.com` 两个 path；拒绝 query、fragment、userinfo、非 443 端口；`SecureHTTPClient` 拒绝重定向；自定义 endpoint 只使用独立 Keychain API Key；`OPENAI_API_KEY` 单独存在不能启用或授权 Recovery | 继续保留 managed/user-owned credential 隔离和重定向回归测试 |
 | OW-AUD-003 Recovery 路径逃逸 | 关闭 | 记录只持久化 UUID；文件名由 UUID 派生；Recovery 根目录、JSONL index、Audio 目录与音频文件均检查 symlink；同时检查普通文件、包含关系、25 MB 与 RIFF/WAVE 头；启动时把遗留音频权限收紧为 `0600` | 增加更大规模损坏 JSONL/path fuzz 作为持续门禁 |
 | OW-AUD-004 refresh 竞态/注销复活 | 关闭 | `RefreshFlight` 合并并发 refresh；generation 与原 refresh token 双重提交校验；Sign out 取消 flight 并递增 generation | 可进一步迁移到 actor，减少锁式状态管理复杂度 |
@@ -55,7 +55,7 @@
 | OW-AUD-007 OAuth callback 生命周期 | 关闭 | 校验 method/path/state；重复 query 返回 400 且不会结束合法等待；timeout/cancel 会停止 listener 并释放 continuation | 仍需真实浏览器关闭、网络切换和端口冲突验收 |
 | OW-AUD-008 发布完整性 | 部分关闭 | 严格 env parser；Hardened Runtime；Developer ID/Team ID 强校验；notarytool/stapler 路径；Gatekeeper fail-closed；安装 staging/旧版备份/失败恢复；ZIP/DMG SHA-256 与 release manifest；Cask 默认全零 checksum fail-closed；Sparkle 2.9.4 已固定、嵌入、签名并接入菜单/设置；支持外部私钥或 Keychain 生成签名 appcast，并用内置公钥对 ZIP 做 CryptoKit 实际验签；本地 ad-hoc 构建仅为无 Team ID 框架加载临时关闭 library validation，商业 gate 明确拒绝该 entitlement | 当前证书已撤销，尚无真实 Developer ID + notarization/staple 产物；生产 feed/公钥/私钥未配置，尚无真实签名 appcast、自动更新和回滚实机证据 |
 | OW-AUD-009 技术字面量归一化 | 关闭 | `TechnicalLiteralTokenizer` 保护 URL、邮箱、POSIX/Windows 路径、文件名、版本、IP、UUID、hash、CLI flag、环境变量、inline/fenced code 和代码符号；本地处理使用 private-use token，AI Polish 使用显式 model-safe token；token 缺失或重复即回退；Settings 支持简体、繁体、原样及自动/全角/半角/原样标点 | 扩充真实混输语料和边缘文件名 corpus，保持 round-trip 门禁 |
-| OW-AUD-010 MainActor/旧回调污染 | 关闭 | 协调器使用 `activeSessionID`，取消后迟到 pipeline 或注入结果不能写入新状态；`AsyncPasteTargetWaiter` 使用 `ContinuousClock` 和可取消 `Task.sleep`，只在短检查/激活阶段回到 MainActor；HUD apply/hide 使用 presentation generation 拒绝 stale auto-hide 与动画 completion | `.pasted` 仍只证明按键事件已发送，属于 OW-AUD-001 的残余验收边界 |
+| OW-AUD-010 MainActor/旧回调污染 | 关闭 | 协调器使用 `activeSessionID`，取消后迟到 pipeline 或注入结果不能写入新状态；`AsyncPasteTargetWaiter` 与 `AsyncPasteVerificationWaiter` 使用 `ContinuousClock` 和可取消 `Task.sleep`，只在短检查/激活/AX 采样阶段回到 MainActor；HUD apply/hide 使用 presentation generation 拒绝 stale auto-hide 与动画 completion | 多应用真实验证矩阵继续归入 OW-AUD-001，不再用单一 `.pasted` 状态掩盖验证边界 |
 | OW-AUD-011 剪贴板恢复竞态 | 关闭 | 恢复前校验 pasteboard change count 与 OpenWhisper 所有权 | 真实跨应用复制/Universal Clipboard 场景继续验收 |
 | OW-AUD-012 首次麦克风顺序 | 部分关闭 | `.notDetermined` 有独立请求动作；录音层正确等待授权结果；四步 Onboarding 产品表面已实现 | clean TCC 下的完整首次成功听写仍缺可信安装版原生 GUI 证据 |
 | OW-AUD-013 配置 URL 崩溃 | 关闭 | 可配置 endpoint 经 `validatedUserOwnedURL` 返回可理解错误；Managed URL 为编译时常量 | 对全部高风险文本字段统一失焦/提交校验 |
@@ -181,7 +181,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ## 8. 下一安全工作序列
 
 1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID、生产 Sparkle 与 Capability Policy 独立密钥/托管地址，完成真实签名、公证、签名 appcast、首份能力策略、更新回滚与事故演练；
-2. 区分 paste 事件发送与目标应用确认插入，并完成真实 Notes/TextEdit/Terminal 等矩阵；
+2. 完成安全粘贴真实 Notes/TextEdit/Terminal 等矩阵，验证 `inserted_verified`、`paste_dispatched`、`clipboard` 与剪贴板恢复行为均符合实现；
 3. 完成 clean TCC Onboarding、键盘和 VoiceOver 安装版验收；
 4. 把私有 Alpha 双语政策定稿为带永久运营主体、联系方式和结账条款的公开版本；
 5. 对磁盘满、SIGKILL 后重启、慢网络和大文件取消做持续压力测试。
