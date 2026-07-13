@@ -273,6 +273,10 @@ private final class FakeProductMetricsRecorder:
 private enum ScriptedCoordinatorPipelineOutcome: Sendable {
     case success(String)
     case retryableCloudflare(Int)
+    case providerFailure(
+        ProviderErrorCategory,
+        retryAfterSeconds: Int?
+    )
 }
 
 private final class CoordinatorPipelineScript: @unchecked Sendable {
@@ -320,6 +324,13 @@ private final class CoordinatorPipelineScript: @unchecked Sendable {
             )
         case .retryableCloudflare(let attempts):
             throw TranscriptionError.retryableCloudflareChallenge(attempts: attempts)
+        case .providerFailure(let category, let retryAfterSeconds):
+            throw ProviderRequestFailure(
+                route: .managedTranscription,
+                category: category,
+                statusCode: category == .rateLimited ? 429 : nil,
+                retryAfterSeconds: retryAfterSeconds
+            )
         }
     }
 }
@@ -890,7 +901,7 @@ struct AppCoordinatorCancellationTests {
             productMetricsRecorder.samples
                 .filter { $0.event == .dictationFailed }
                 .allSatisfy {
-                    $0.failureCategory == .transcription
+                    $0.failureCategory == .transcriptionChallenge
                 }
         )
 
@@ -906,6 +917,93 @@ struct AppCoordinatorCancellationTests {
             .loadRecent(limit: 10)
         #expect(history.map(\.finalText) == ["retry final"])
         #expect(history.allSatisfy { $0.rawText == nil })
+    }
+
+    @Test
+    func providerRateLimitKeepsRetryAudioAndRecordsBoundedCategory() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let originalAudioURL = root.appendingPathComponent("original.wav")
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(
+            fileURL: originalAudioURL,
+            durationMs: 1_000
+        )
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let latencyRecorder = FakeLatencyRecorder()
+        let productMetricsRecorder = FakeProductMetricsRecorder()
+        let script = CoordinatorPipelineScript(outcomes: [
+            .providerFailure(.rateLimited, retryAfterSeconds: 30),
+        ])
+        var config = AppConfig()
+        config.privacy.productMetricsEnabled = true
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(
+                fileManager: .default,
+                homeDirectoryURL: root
+            ),
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: latencyRecorder,
+            productMetricsRecorder: productMetricsRecorder,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: {
+                _, _, policy, _, _ in
+                script.makePipeline(policy: policy)
+            }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { overlay.retryableErrors.count == 1 }
+
+        #expect(
+            overlay.retryableErrors.first?
+                .contains("30") == true
+        )
+        #expect(
+            latencyRecorder.samples.last?.errorCategory
+                == "transcribe.rate_limited"
+        )
+        #expect(
+            productMetricsRecorder.samples.last?.failureCategory
+                == .transcriptionRateLimited
+        )
+
+        let retryDirectory = root
+            .appendingPathComponent(
+                "Library/Application Support/OpenWhisper/Retry",
+                isDirectory: true
+            )
+        let retryFiles = (
+            try? FileManager.default.contentsOfDirectory(
+                atPath: retryDirectory.path
+            )
+        ) ?? []
+        #expect(retryFiles.count == 1)
+
+        coordinator.shutdown()
+        #expect(
+            (
+                try? FileManager.default.contentsOfDirectory(
+                    atPath: retryDirectory.path
+                )
+            )?.isEmpty == true
+        )
     }
 
     @Test

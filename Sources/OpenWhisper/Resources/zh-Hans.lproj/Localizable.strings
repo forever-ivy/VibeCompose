@@ -532,6 +532,22 @@
 "Transcription prompt returned empty text." = "转写提示词返回了空文本。";
 "AI Polish output looked truncated; OpenWhisper used the normalized transcript instead." = "AI 润色结果似乎被截断，OpenWhisper 已改用规范化后的转写文本。";
 "AI Polish changed a protected technical literal; OpenWhisper used the normalized transcript instead." = "AI 润色改动了受保护的技术字面量，OpenWhisper 已改用规范化后的转写文本。";
+"ChatGPT transcription" = "ChatGPT 转写";
+"OpenAI-Compatible transcription" = "OpenAI 兼容转写";
+"%@ rejected the credential. Sign in again or update the API key." = "%@ 拒绝了当前凭据。请重新登录或更新 API Key。";
+"%@ hit an upstream challenge. OpenWhisper kept the normalized transcript." = "%@ 遇到上游验证拦截。OpenWhisper 已保留规范化文本。";
+"%@ hit an upstream challenge. Recording kept—wait briefly, then Retry." = "%@ 遇到上游验证拦截。录音已保留，请稍等片刻后重试。";
+"%@ is rate limited. OpenWhisper kept the normalized transcript; try again in about %ld seconds." = "%@ 当前受到频率限制。OpenWhisper 已保留规范化文本，请约 %ld 秒后再试。";
+"%@ is rate limited. Recording kept—retry in about %ld seconds." = "%@ 当前受到频率限制。录音已保留，请约 %ld 秒后重试。";
+"%@ rejected the request format." = "%@ 拒绝了当前请求格式。";
+"%@ contract changed. Update OpenWhisper before retrying this provider." = "%@ 的接口格式已发生变化。请更新 OpenWhisper 后再使用此服务。";
+"%@ is temporarily unavailable after %ld attempts. OpenWhisper kept the normalized transcript." = "%@ 在尝试 %ld 次后仍暂时不可用。OpenWhisper 已保留规范化文本。";
+"%@ is unavailable after %ld attempts. Recording kept—try again later." = "%@ 在尝试 %ld 次后仍不可用。录音已保留，请稍后重试。";
+"%@ could not reach the network after %ld attempts. OpenWhisper kept the normalized transcript." = "%@ 在尝试 %ld 次后仍无法连接网络。OpenWhisper 已保留规范化文本。";
+"%@ could not reach the network after %ld attempts. Recording kept—retry when online." = "%@ 在尝试 %ld 次后仍无法连接网络。录音已保留，请在联网后重试。";
+"%@ returned an invalid or empty response." = "%@ 返回了无效或空响应。";
+"%@ is temporarily paused after repeated failures. Try again in about %ld seconds." = "%@ 因连续失败而暂时暂停。请约 %ld 秒后重试。";
+"%@ failed unexpectedly." = "%@ 意外失败。";
 
 /* Language and punctuation */
 "Chinese output" = "中文输出";

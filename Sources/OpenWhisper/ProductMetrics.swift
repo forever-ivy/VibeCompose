@@ -53,6 +53,15 @@ enum ProductMetricFailureCategory: String, Codable, CaseIterable, Sendable {
     case setup
     case recording
     case transcription
+    case transcriptionAuthentication = "transcription_authentication"
+    case transcriptionChallenge = "transcription_challenge"
+    case transcriptionRateLimited = "transcription_rate_limited"
+    case transcriptionContractChanged = "transcription_contract_changed"
+    case transcriptionServiceUnavailable =
+        "transcription_service_unavailable"
+    case transcriptionNetwork = "transcription_network"
+    case transcriptionInvalidResponse =
+        "transcription_invalid_response"
     case injection
 }
 

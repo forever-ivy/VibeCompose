@@ -48,32 +48,6 @@ enum TextPolishError: LocalizedError {
     }
 }
 
-private struct TextPolishHTTPError: LocalizedError {
-    let statusCode: Int
-    let message: String
-    let contentType: String?
-    let server: String?
-    let bodyPrefix: String?
-
-    var shouldRefreshAuthToken: Bool {
-        statusCode == 401 || statusCode == 403
-    }
-
-    var errorDescription: String? {
-        var parts = ["Text polish failed: status \(statusCode)", message]
-        if let contentType {
-            parts.append("content-type=\(contentType)")
-        }
-        if let server {
-            parts.append("server=\(server)")
-        }
-        if let bodyPrefix, !bodyPrefix.isEmpty {
-            parts.append("body=\(bodyPrefix)")
-        }
-        return parts.joined(separator: "; ")
-    }
-}
-
 struct TextPolishProviderSelector: Sendable {
     func selectProvider(
         config: TextPolishConfig,
@@ -173,12 +147,20 @@ struct TextPolishTokenEstimator: Sendable {
 }
 
 struct OpenAICompatibleTextPolisher: TextPolishing {
+    typealias RetrySleeper = @Sendable (Int) async throws -> Void
+    typealias RetryJitter = @Sendable () -> Double
+
     let config: TextPolishConfig
     let chatGPTAuthProvider: (any ChatGPTAuthProviding)?
     let chatGPTAuthAvailable: Bool
     let providerCapabilityPolicy: any ProviderCapabilityChecking
+    let providerHealthMonitor: any ProviderHealthMonitoring
     let promptBuilder: TextPolishPromptBuilder
     let selector: TextPolishProviderSelector
+    let transientFailureMaxAttempts: Int
+    let retrySchedule: ProviderRetrySchedule
+    let retrySleeper: RetrySleeper
+    let retryJitter: RetryJitter
     let dataLoader: @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
     init(
@@ -186,8 +168,20 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         chatGPTAuthProvider: (any ChatGPTAuthProviding)? = nil,
         chatGPTAuthAvailable: Bool,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
+        providerHealthMonitor: any ProviderHealthMonitoring =
+            ProviderHealthMonitor(),
         promptBuilder: TextPolishPromptBuilder = .init(),
         selector: TextPolishProviderSelector = .init(),
+        transientFailureMaxAttempts: Int = 2,
+        retrySchedule: ProviderRetrySchedule = .default,
+        retrySleeper: @escaping RetrySleeper = { delayMilliseconds in
+            try await Task.sleep(
+                for: .milliseconds(delayMilliseconds)
+            )
+        },
+        retryJitter: @escaping RetryJitter = {
+            Double.random(in: 0...1)
+        },
         dataLoader: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse) = { request in
             try await SecureHTTPClient.data(for: request)
         }
@@ -196,8 +190,16 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         self.chatGPTAuthProvider = chatGPTAuthProvider
         self.chatGPTAuthAvailable = chatGPTAuthAvailable
         self.providerCapabilityPolicy = providerCapabilityPolicy
+        self.providerHealthMonitor = providerHealthMonitor
         self.promptBuilder = promptBuilder
         self.selector = selector
+        self.transientFailureMaxAttempts = max(
+            1,
+            transientFailureMaxAttempts
+        )
+        self.retrySchedule = retrySchedule
+        self.retrySleeper = retrySleeper
+        self.retryJitter = retryJitter
         self.dataLoader = dataLoader
     }
 
@@ -290,7 +292,9 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
 
         do {
             return try await executeResponsesRequest(request)
-        } catch let error as TextPolishHTTPError where error.shouldRefreshAuthToken {
+        } catch let error as ProviderRequestFailure
+            where error.shouldRefreshAuthentication
+        {
             let refreshedToken = try await chatGPTAuthProvider?.refreshAccessToken() ?? token
             request.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
             return try await executeResponsesRequest(request)
@@ -298,27 +302,87 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
     }
 
     private func executeResponsesRequest(_ request: URLRequest) async throws -> String {
-        let (data, response) = try await dataLoader(request)
+        var attempt = 1
+        while true {
+            do {
+                return try await executeSingleResponsesRequest(request)
+            } catch let failure as ProviderRequestFailure {
+                let reportedFailure = failure.withAttempts(attempt)
+                guard
+                    !failure.circuitOpen,
+                    failure.isAutomaticallyRetryable,
+                    attempt < transientFailureMaxAttempts
+                else {
+                    throw reportedFailure
+                }
+
+                let delay = retrySchedule.delayMilliseconds(
+                    afterFailedAttempt: attempt,
+                    jitterUnit: retryJitter()
+                )
+                if delay > 0 {
+                    try await retrySleeper(delay)
+                }
+                attempt += 1
+            }
+        }
+    }
+
+    private func executeSingleResponsesRequest(
+        _ request: URLRequest
+    ) async throws -> String {
+        try await providerHealthMonitor.requireRequestPermission(
+            for: .textPolish
+        )
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await dataLoader(request)
+        } catch is CancellationError {
+            await providerHealthMonitor.recordCancellation(for: .textPolish)
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            await providerHealthMonitor.recordCancellation(for: .textPolish)
+            throw CancellationError()
+        } catch {
+            let failure = ProviderFailureClassifier.network(
+                route: .textPolish
+            )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
+        }
+
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw TextPolishError.requestFailed("missing HTTP response")
+            let failure = ProviderFailureClassifier.invalidResponse(
+                route: .textPolish
+            )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw TextPolishHTTPError(
-                statusCode: httpResponse.statusCode,
-                message: decodeProviderMessage(from: data) ?? "status \(httpResponse.statusCode)",
-                contentType: httpResponse.value(forHTTPHeaderField: "Content-Type"),
-                server: httpResponse.value(forHTTPHeaderField: "Server"),
+            let failure = ProviderFailureClassifier.http(
+                route: .textPolish,
+                response: httpResponse,
                 bodyPrefix: String(data: data.prefix(512), encoding: .utf8)
             )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
         }
 
         if let text = decodeResponsesText(from: data) {
+            await providerHealthMonitor.recordSuccess(for: .textPolish)
             return text
         }
         if let text = decodeResponsesSSEText(from: data) {
+            await providerHealthMonitor.recordSuccess(for: .textPolish)
             return text
         }
-        throw TextPolishError.invalidResponse
+        let failure = ProviderFailureClassifier.invalidResponse(
+            route: .textPolish
+        )
+        await providerHealthMonitor.recordFailure(failure)
+        throw failure
     }
 
     private func decodeResponsesText(from data: Data) -> String? {
@@ -371,13 +435,4 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func decodeProviderMessage(from data: Data) -> String? {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        if let error = object["error"] as? [String: Any], let message = error["message"] as? String {
-            return message
-        }
-        return object["message"] as? String
-    }
 }

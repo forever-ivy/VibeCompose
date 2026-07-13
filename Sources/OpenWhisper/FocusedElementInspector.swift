@@ -233,10 +233,14 @@ enum FocusedElementInspector {
             kAXFocusedUIElementAttribute as CFString,
             &focusedElement
         )
-        guard status == .success, let focusedElement else {
+        guard
+            status == .success,
+            let focusedElement,
+            CFGetTypeID(focusedElement) == AXUIElementGetTypeID()
+        else {
             return nil
         }
-        return focusedElement as! AXUIElement
+        return unsafeDowncast(focusedElement, to: AXUIElement.self)
     }
 
     private static func focusedElement() -> AXUIElement? {
@@ -247,10 +251,14 @@ enum FocusedElementInspector {
             kAXFocusedUIElementAttribute as CFString,
             &focusedElement
         )
-        guard status == .success, let focusedElement else {
+        guard
+            status == .success,
+            let focusedElement,
+            CFGetTypeID(focusedElement) == AXUIElementGetTypeID()
+        else {
             return nil
         }
-        return focusedElement as! AXUIElement
+        return unsafeDowncast(focusedElement, to: AXUIElement.self)
     }
 
     private static func processIdentifier(of element: AXUIElement) -> pid_t? {
@@ -346,10 +354,13 @@ enum FocusedElementInspector {
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
             return nil
         }
-        guard let value else {
+        guard
+            let value,
+            CFGetTypeID(value) == AXUIElementGetTypeID()
+        else {
             return nil
         }
-        return value as! AXUIElement
+        return unsafeDowncast(value, to: AXUIElement.self)
     }
 
     private static func isAttributeSettable(

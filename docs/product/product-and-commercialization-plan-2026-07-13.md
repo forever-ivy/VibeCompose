@@ -495,12 +495,13 @@ Sources/OpenWhisper/LatencyRecorder.swift
 `managedTranscription` / `chatGPTTextPolish`，并使用 31 天硬到期、build 范围和
 单调 revision 拒绝重放。生产托管、密钥和事故演练仍未完成。
 
-后续仍需新增：
+客户端请求可靠性层也已落地：
 
 ```text
 ProviderHealthMonitor
 ProviderErrorCategory
-ProviderCircuitBreaker
+ProviderFailureClassifier
+ProviderRetrySchedule
 ```
 
 处理规则：
@@ -508,11 +509,16 @@ ProviderCircuitBreaker
 | 上游结果 | OpenWhisper 行为 |
 | --- | --- |
 | 401 | 刷新一次，失败后要求重新登录 |
-| 403 / Cloudflare | 避免连续无退避重试，保留录音并提示替代路径 |
+| 403 / Cloudflare | 与普通认证失败分离，有上限退避，保留录音并提示恢复路径 |
 | 429 | 尊重 `Retry-After`，显示可重试时间 |
-| 404 / Schema 变化 | 关闭对应 Provider，提示更新 |
+| 404 / Schema 变化 | 打开对应 route 熔断并提示更新 |
 | 5xx / 网络错误 | 有上限的退避和抖动重试 |
 | 大规模账号异常 | 暂停账号路径推广和新用户接入 |
+
+Managed ASR、Recovery ASR 和 AI Polish 的健康状态互相隔离；冷却结束后只允许
+一个 half-open probe，探测被取消时会释放占用。诊断和产品指标只记录有限错误枚举，
+不保存 Provider 响应正文。剩余工作是生产 Capability Policy 托管、独立密钥和事故演练，
+以及在 Closed Beta 中校准阈值，而不是继续使用无分类的密集重试。
 
 ### 6.5 数据留存
 

@@ -35,6 +35,41 @@ private final class RequestCapture: @unchecked Sendable {
     }
 }
 
+private final class PolishAttemptCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    func next() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        value += 1
+        return value
+    }
+
+    func current() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
+private final class PolishDelayCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [Int] = []
+
+    func append(_ value: Int) {
+        lock.lock()
+        values.append(value)
+        lock.unlock()
+    }
+
+    func snapshot() -> [Int] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
+}
+
 @Test
 func defaultTextPolishConfigUsesOnlyChatGPTAuthAndDoesNotEncodeKeys() throws {
     let config = AppConfig()
@@ -239,4 +274,114 @@ func chatGPTAuthTextPolisherRequestCarriesResequenceHint() async throws {
     #expect(body.contains("Do not summarize away requirements"))
     #expect(body.contains("gpt-5.5"))
     #expect(capture.urls() == ["https://chatgpt.com/backend-api/codex/responses"])
+}
+
+@Test
+func chatGPTAuthTextPolisherRetriesTransientFailuresThenRecovers() async throws {
+    var config = TextPolishConfig()
+    config.chatGPTAuthEnabled = true
+
+    let attempts = PolishAttemptCounter()
+    let delays = PolishDelayCapture()
+    let polisher = OpenAICompatibleTextPolisher(
+        config: config,
+        chatGPTAuthProvider: FakeChatGPTAuthManager(),
+        chatGPTAuthAvailable: true,
+        transientFailureMaxAttempts: 2,
+        retrySleeper: { delay in
+            delays.append(delay)
+        },
+        retryJitter: { 0.5 },
+        dataLoader: { request in
+            if attempts.next() == 1 {
+                return (
+                    Data(#"{"message":"temporary"}"#.utf8),
+                    HTTPURLResponse(
+                        url: request.url!,
+                        statusCode: 503,
+                        httpVersion: nil,
+                        headerFields: nil
+                    )!
+                )
+            }
+            return (
+                Data(#"{"output_text":"Recovered polish"}"#.utf8),
+                HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+            )
+        }
+    )
+
+    let result = try await polisher.polish(
+        text: "recover this",
+        terminologyEntries: [],
+        hintTerms: []
+    )
+
+    #expect(result.text == "Recovered polish")
+    #expect(attempts.current() == 2)
+    #expect(delays.snapshot() == [250])
+}
+
+@Test
+func chatGPTAuthTextPolisherRateLimitOpensSharedCircuit() async {
+    var config = TextPolishConfig()
+    config.chatGPTAuthEnabled = true
+
+    let attempts = PolishAttemptCounter()
+    let monitor = ProviderHealthMonitor()
+    let polisher = OpenAICompatibleTextPolisher(
+        config: config,
+        chatGPTAuthProvider: FakeChatGPTAuthManager(),
+        chatGPTAuthAvailable: true,
+        providerHealthMonitor: monitor,
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
+        dataLoader: { request in
+            _ = attempts.next()
+            return (
+                Data(#"{"message":"slow down"}"#.utf8),
+                HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 429,
+                    httpVersion: nil,
+                    headerFields: ["Retry-After": "15"]
+                )!
+            )
+        }
+    )
+
+    var firstFailure: ProviderRequestFailure?
+    do {
+        _ = try await polisher.polish(
+            text: "first",
+            terminologyEntries: [],
+            hintTerms: []
+        )
+    } catch let failure as ProviderRequestFailure {
+        firstFailure = failure
+    } catch {
+        Issue.record("Unexpected error: \(error)")
+    }
+    #expect(firstFailure?.category == .rateLimited)
+    #expect(firstFailure?.retryAfterSeconds == 15)
+
+    var secondFailure: ProviderRequestFailure?
+    do {
+        _ = try await polisher.polish(
+            text: "second",
+            terminologyEntries: [],
+            hintTerms: []
+        )
+    } catch let failure as ProviderRequestFailure {
+        secondFailure = failure
+    } catch {
+        Issue.record("Unexpected error: \(error)")
+    }
+    #expect(secondFailure?.circuitOpen == true)
+    #expect(attempts.current() == 1)
 }

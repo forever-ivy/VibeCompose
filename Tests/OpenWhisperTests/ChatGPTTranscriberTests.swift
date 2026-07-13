@@ -53,6 +53,23 @@ private final class AttemptCounter: @unchecked Sendable {
     }
 }
 
+private final class IntegerCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [Int] = []
+
+    func append(_ value: Int) {
+        lock.lock()
+        values.append(value)
+        lock.unlock()
+    }
+
+    func snapshot() -> [Int] {
+        lock.lock()
+        defer { lock.unlock() }
+        return values
+    }
+}
+
 private final class UploadObservation: @unchecked Sendable {
     private let lock = NSLock()
     private var bodyFileURL: URL?
@@ -285,6 +302,8 @@ func uploadFailureRemovesMultipartTemporaryFile() async throws {
         authManager: FakeChatGPTAuthManager(),
         config: config,
         bridgePromptCapability: capability,
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
         uploadLoader: { _, bodyFileURL in
             capture.append(bodyFileURL)
             #expect(FileManager.default.fileExists(atPath: bodyFileURL.path))
@@ -295,12 +314,18 @@ func uploadFailureRemovesMultipartTemporaryFile() async throws {
     let audio = try makeAudioFixture()
     defer { try? FileManager.default.removeItem(at: audio.fileURL) }
 
-    await #expect(throws: URLError.self) {
+    var failure: ProviderRequestFailure?
+    do {
         _ = try await transcriber.transcribe(audio)
+    } catch let providerFailure as ProviderRequestFailure {
+        failure = providerFailure
     }
 
+    #expect(failure?.category == .network)
+    #expect(failure?.attempts == 3)
     let uploadedFiles = capture.urls()
-    #expect(uploadedFiles.count == 1)
+    #expect(uploadedFiles.count == 3)
+    #expect(Set(uploadedFiles).count == 1)
     #expect(uploadedFiles.allSatisfy {
         !FileManager.default.fileExists(atPath: $0.path)
     })
@@ -473,7 +498,10 @@ func openAICompatibleRouteRedactsKeyFromProviderError() async throws {
 
     let message = caughtError?.localizedDescription ?? ""
     #expect(message.contains(secret) == false)
-    #expect(message.contains("[REDACTED]"))
+    #expect(
+        (caughtError as? ProviderRequestFailure)?.category
+            == .authentication
+    )
 }
 
 @Test
@@ -540,6 +568,8 @@ func managedAuthRefreshesAccessTokenAfterForbidden() async throws {
         authManager: authManager,
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
         uploadLoader: { request, bodyFileURL in
             let attempt = attempts.next()
             capture.append(
@@ -588,6 +618,8 @@ func managedAuthReportsRetryableErrorAfterThreeCloudflareChallenges() async thro
         authManager: authManager,
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
         uploadLoader: { request, bodyFileURL in
             capture.append(
                 request,
@@ -634,6 +666,8 @@ func managedAuthManualRetryPolicyAttemptsCloudflareChallengeOnlyOnce() async thr
         config: config,
         bridgePromptCapability: BridgePromptCapabilityStore(),
         cloudflareChallengeMaxAttempts: 1,
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
         uploadLoader: { request, bodyFileURL in
             capture.append(
                 request,
@@ -666,4 +700,111 @@ func managedAuthManualRetryPolicyAttemptsCloudflareChallengeOnlyOnce() async thr
     #expect(caughtError?.localizedDescription.contains("403") == true)
     #expect(capture.urls() == [ManagedEndpointPolicy.transcriptionURL.absoluteString])
     #expect(capture.authorizations() == ["Bearer desktop-token"])
+}
+
+@Test
+func managedAuthRetriesTransientServiceFailuresWithBoundedBackoff() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+
+    let attempts = AttemptCounter()
+    let delays = IntegerCapture()
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: BridgePromptCapabilityStore(),
+        transientFailureMaxAttempts: 3,
+        retrySleeper: { delay in
+            delays.append(delay)
+        },
+        retryJitter: { 0.5 },
+        uploadLoader: { request, _ in
+            let attempt = attempts.next()
+            if attempt < 3 {
+                return (
+                    Data(#"{"message":"temporarily unavailable"}"#.utf8),
+                    HTTPURLResponse(
+                        url: request.url!,
+                        statusCode: 503,
+                        httpVersion: nil,
+                        headerFields: nil
+                    )!
+                )
+            }
+            return (
+                Data(#"{"text":"recovered transcript"}"#.utf8),
+                HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+            )
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
+    let result = try await transcriber.transcribe(audio)
+
+    #expect(result.text == "recovered transcript")
+    #expect(attempts.current() == 3)
+    #expect(delays.snapshot() == [250, 500])
+}
+
+@Test
+func managedAuthRateLimitOpensCircuitAndPreservesRetryAfter() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+
+    let attempts = AttemptCounter()
+    let monitor = ProviderHealthMonitor()
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: BridgePromptCapabilityStore(),
+        providerHealthMonitor: monitor,
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
+        uploadLoader: { request, _ in
+            _ = attempts.next()
+            return (
+                Data(#"{"message":"slow down"}"#.utf8),
+                HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 429,
+                    httpVersion: nil,
+                    headerFields: ["Retry-After": "20"]
+                )!
+            )
+        }
+    )
+
+    let firstAudio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: firstAudio.fileURL) }
+    var firstFailure: ProviderRequestFailure?
+    do {
+        _ = try await transcriber.transcribe(firstAudio)
+    } catch let failure as ProviderRequestFailure {
+        firstFailure = failure
+    }
+
+    #expect(firstFailure?.category == .rateLimited)
+    #expect(firstFailure?.retryAfterSeconds == 20)
+    #expect(firstFailure?.isRetryableByUser == true)
+    #expect(attempts.current() == 1)
+
+    let secondAudio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: secondAudio.fileURL) }
+    var secondFailure: ProviderRequestFailure?
+    do {
+        _ = try await transcriber.transcribe(secondAudio)
+    } catch let failure as ProviderRequestFailure {
+        secondFailure = failure
+    }
+
+    #expect(secondFailure?.category == .rateLimited)
+    #expect(secondFailure?.circuitOpen == true)
+    #expect((secondFailure?.retryAfterSeconds ?? 0) > 0)
+    #expect(attempts.current() == 1)
 }

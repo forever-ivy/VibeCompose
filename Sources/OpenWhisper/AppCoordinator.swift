@@ -5,9 +5,16 @@ import OSLog
 
 struct TranscriptionAttemptPolicy: Sendable, Equatable {
     let cloudflareChallengeMaxAttempts: Int
+    let transientFailureMaxAttempts: Int
 
-    static let automatic = TranscriptionAttemptPolicy(cloudflareChallengeMaxAttempts: 3)
-    static let manualRetry = TranscriptionAttemptPolicy(cloudflareChallengeMaxAttempts: 1)
+    static let automatic = TranscriptionAttemptPolicy(
+        cloudflareChallengeMaxAttempts: 3,
+        transientFailureMaxAttempts: 3
+    )
+    static let manualRetry = TranscriptionAttemptPolicy(
+        cloudflareChallengeMaxAttempts: 1,
+        transientFailureMaxAttempts: 1
+    )
 }
 
 @MainActor
@@ -149,7 +156,8 @@ final class AppCoordinator {
                     config: textPolishConfig,
                     chatGPTAuthProvider: authManager,
                     chatGPTAuthAvailable: chatGPTAuthAvailable,
-                    providerCapabilityPolicy: providerCapabilityPolicy
+                    providerCapabilityPolicy: providerCapabilityPolicy,
+                    providerHealthMonitor: ProviderHealthMonitor.shared
                 )
                 : nil
 
@@ -158,8 +166,12 @@ final class AppCoordinator {
                     authManager: authManager,
                     config: transcriptionConfig,
                     providerCapabilityPolicy: providerCapabilityPolicy,
+                    providerHealthMonitor: ProviderHealthMonitor.shared,
                     recoveryCredentialStore: recoveryCredentialStore,
-                    cloudflareChallengeMaxAttempts: attemptPolicy.cloudflareChallengeMaxAttempts
+                    cloudflareChallengeMaxAttempts:
+                        attemptPolicy.cloudflareChallengeMaxAttempts,
+                    transientFailureMaxAttempts:
+                        attemptPolicy.transientFailureMaxAttempts
                 ),
                 normalizer: TerminologyNormalizer(
                     languagePreference: transcriptionConfig.languagePreference,
@@ -831,7 +843,8 @@ final class AppCoordinator {
                     self.recordTranscriptionFailure(
                         audio: audio,
                         transcriptionConfig: transcriptionConfig,
-                        processingStarted: processingStarted
+                        processingStarted: processingStarted,
+                        error: error
                     )
                     self.recordProductMetric(
                         event: attemptPolicy == .manualRetry
@@ -840,7 +853,8 @@ final class AppCoordinator {
                         provider: transcriptionConfig.provider,
                         audioDurationMs: audio.durationMs,
                         totalProcessingMs: totalProcessingMs,
-                        failureCategory: .transcription
+                        failureCategory:
+                            self.productMetricFailureCategory(for: error)
                     )
                     self.recordRecoveryFailure(
                         audio: audio,
@@ -1991,13 +2005,17 @@ final class AppCoordinator {
         if case TranscriptionError.retryableCloudflareChallenge = error {
             return true
         }
+        if let failure = error as? ProviderRequestFailure {
+            return failure.isRetryableByUser
+        }
         return false
     }
 
     private func recordTranscriptionFailure(
         audio: RecordedAudio,
         transcriptionConfig: TranscriptionConfig,
-        processingStarted: UInt64
+        processingStarted: UInt64,
+        error: Error
     ) {
         guard config.privacy.diagnosticsEnabled else {
             return
@@ -2017,12 +2035,51 @@ final class AppCoordinator {
             injectMs: 0,
             totalProcessingMs: elapsedMilliseconds(since: processingStarted),
             resultStatus: "error",
-            errorCategory: "transcribe"
+            errorCategory: latencyFailureCategory(for: error)
         )
         try? latencyRecorder.record(
             sample,
             retention: config.privacy.diagnosticsRetentionPolicy()
         )
+    }
+
+    private func latencyFailureCategory(for error: Error) -> String {
+        if case TranscriptionError.retryableCloudflareChallenge = error {
+            return "transcribe.challenge"
+        }
+        guard let failure = error as? ProviderRequestFailure else {
+            return "transcribe"
+        }
+        return "transcribe.\(failure.category.rawValue)"
+    }
+
+    private func productMetricFailureCategory(
+        for error: Error
+    ) -> ProductMetricFailureCategory {
+        if case TranscriptionError.retryableCloudflareChallenge = error {
+            return .transcriptionChallenge
+        }
+        guard let failure = error as? ProviderRequestFailure else {
+            return .transcription
+        }
+        switch failure.category {
+        case .authentication:
+            return .transcriptionAuthentication
+        case .challenge:
+            return .transcriptionChallenge
+        case .rateLimited:
+            return .transcriptionRateLimited
+        case .contractChanged:
+            return .transcriptionContractChanged
+        case .serviceUnavailable:
+            return .transcriptionServiceUnavailable
+        case .network:
+            return .transcriptionNetwork
+        case .invalidResponse:
+            return .transcriptionInvalidResponse
+        case .requestRejected, .unknown:
+            return .transcription
+        }
     }
 
     private func recordLatency(

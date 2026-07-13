@@ -35,5 +35,9 @@
   retention, are never uploaded automatically, and can be reviewed in support
   diagnostics or exported as an aggregate, timestamp-free JSON report for
   voluntary sharing.
+- Added bounded Provider resilience for managed transcription, recovery
+  transcription, and AI Polish: classified failures, one-shot authentication
+  refresh, `Retry-After` handling, exponential backoff with jitter, independent
+  route circuit breakers, and cancellation-safe half-open probes.
 
 OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.

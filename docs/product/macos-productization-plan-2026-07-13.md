@@ -65,6 +65,7 @@ macOS 首发策略：
 - 技术字面量 tokenizer、简繁与标点偏好、AI token 完整性回退已落地；
 - 粘贴等待已移出同步 MainActor sleep，HUD 使用 presentation generation；
 - Recorder partial、上传 multipart、退出处理中音频和下次启动 orphan cleanup 已覆盖。
+- Provider 请求已按认证、验证拦截、限流、接口变化、暂时不可用、网络和无效响应分类；401 只刷新一次，429 尊重 `Retry-After`，5xx/网络错误使用有上限的指数退避与抖动，并以每条 route 独立熔断。
 
 当前仍阻断商业发布的事项：
 
@@ -535,17 +536,17 @@ Application Support/OpenWhisper
 - `scripts/permission_surface_acceptance.sh` 从 `/Applications/OpenWhisper.app` 生成 Account 权限表面，并用 Vision OCR 要求麦克风和辅助功能两张卡片都显示 `Granted`/`已授权`；该路径读取真实 TCC 状态，但仍使用隐私隔离配置和空用户内容。
 - `OverlayController` 的辅助显示选项已改为可注入 provider；正常运行仍实时读取 macOS Reduce Motion / Increase Contrast，视觉验收则显式固定基线并生成 Reduce Motion 双时点与 Increase Contrast 快照。门禁要求 Reduce Motion 波形跨时点零/近零像素漂移、增强对比度产生明确像素变化且两者都不改变对应 HUD 几何。
 - 本机可用 Keychain 中的 Apple Development 身份仍被 Gatekeeper 返回 `CSSMERR_TP_CERT_REVOKED`，因此当前构建只能在显式本地调试开关下回退为稳定 designated requirement 的 ad-hoc 签名；这仍然阻断 Developer ID 商业发布。
-- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T084429Z` 安装版证据已在隔离 TextEdit 进程中观察到 marker，结果为 `inserted_verified`，并在验证后恢复原剪贴板。该结果只关闭当前 TextEdit 自动预检，不替代 Notes/Terminal/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
+- 在当前稳定 ad-hoc designated requirement 与已授权 TCC 状态下，`scripts/paste_acceptance.sh` 的 `20260713T111828Z` 安装版证据已在隔离 TextEdit 进程中观察到 marker，结果为 `inserted_verified`，并在验证后恢复原剪贴板。该结果只关闭当前 TextEdit 自动预检，不替代 Notes/Terminal/第三方编辑器矩阵、clean TCC 首次路径或 Developer ID 签名证据。
 
 本轮最新安装版证据：
 
-- 完整检查：2026-07-13 16:39（UTC+8）执行 `OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh`，退出码 `0`；
-- 已授权权限表面：`dist/permission-surface-acceptance/20260713T084418Z`，麦克风与辅助功能标签均被识别，`已授权` 状态识别数为 `2`；
-- TextEdit 安全粘贴：`dist/paste-acceptance/20260713T084429Z`，结果为 `inserted_verified` 且原剪贴板已恢复；
-- 无障碍结构：`dist/accessibility-acceptance/20260713T084431Z`，13 个产品表面均无可操作控件名称缺失；
+- 完整检查：2026-07-13 19:09（UTC+8）执行 `OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh`，退出码 `0`；
+- 已授权权限表面：`dist/permission-surface-acceptance/20260713T111946Z`，麦克风与辅助功能标签均被识别，`已授权` 状态识别数为 `2`；
+- TextEdit 安全粘贴：`dist/paste-acceptance/20260713T111828Z`，结果为 `inserted_verified` 且原剪贴板已恢复；
+- 无障碍结构：`dist/accessibility-acceptance/20260713T111949Z`，13 个产品表面均无可操作控件名称缺失；
 - 产品表面高对比度：`dist/accessibility-visual-acceptance/20260713T084453Z`；
-- History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T084724Z`；
-- HUD 状态、Reduce Motion 与 Increase Contrast：`dist/visual-acceptance/20260713T084731Z`。
+- History / Terminology / Quick Add：`dist/product-surface-acceptance/20260713T112011Z`；
+- HUD 状态、Reduce Motion 与 Increase Contrast：`dist/visual-acceptance/20260713T111636Z`。
 
 仍未完成的 Phase 3 出口项：
 
@@ -585,12 +586,15 @@ Application Support/OpenWhisper
 
 ### 8.3 Provider 健康与熔断
 
-- 401：刷新一次，失败后要求重新连接。
-- 403：停止密集重试，保留音频，提示恢复路径。
-- 429：尊重服务端等待信息并显示可重试时间。
-- 404/Schema 变化：禁用对应能力并提示更新。
-- 5xx/网络错误：有限指数退避和抖动。
-- 大范围故障：远程或本地 kill switch 停止继续发送。
+- `ProviderFailureClassifier` 将响应稳定归入认证、验证拦截、限流、请求拒绝、接口变化、暂时不可用、网络、无效响应和未知类别，不把响应正文写入诊断；
+- 401/403 认证失败只触发一次凭据刷新，二次失败要求重新连接；
+- Cloudflare/HTML 403 单独识别为 challenge，使用有上限的退避，保留失败录音并显示 Retry；
+- 429 解析秒数或 HTTP-date 形式的 `Retry-After`，立即打开对应 route 的熔断窗口；
+- 404/405/410 作为接口契约变化处理并暂时停用对应 route，提示用户更新；
+- 408/425/5xx 与网络失败使用有上限的指数退避和抖动，自动重试次数受自动/手动 Retry 策略约束；
+- Managed ASR、Recovery ASR 与 AI Polish 使用独立熔断状态；冷却后只允许一个 half-open probe；
+- half-open probe 被用户取消时会释放探测占用，避免该 Provider 永久卡在“正在探测”状态；
+- 成功响应清空该 route 的连续失败状态；错误指标只记录有限枚举类别。
 
 2026-07-13 已落地签名 Kill Switch 基础：策略只能停用
 `managedTranscription` 或 `chatGPTTextPolish`，不能改变 endpoint 或注入凭据；
@@ -884,6 +888,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-025 | P1 | 签名 Provider Capability Kill Switch（客户端与工具已实现，待生产运营） | Provider boundary/Release | 音频、Token、文本发送前阻断；无效/旧策略不能清除停用 |
 | OW-MAC-026 | P1 | 第三方依赖许可证门禁（已实现） | Package.resolved/Release | 每个 pin 均有精确 notices 与 SHA-256，App 资源和 release gate 一致 |
 | OW-MAC-027 | P1 | 测试临时音频生命周期（已实现） | CI/Storage | 完整检查前后不新增大体积临时 WAV；失败测试不长期占用系统盘 |
+| OW-MAC-028 | P1 | Provider 错误分类、退避与 route 熔断（已实现） | Provider boundary | 401 单次刷新、429 等待、5xx/网络有限重试、half-open 取消可恢复 |
 
 ## 14. 第一执行 Sprint（10 个工作日）
 

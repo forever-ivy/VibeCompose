@@ -289,52 +289,6 @@ enum TranscriptionError: LocalizedError {
     }
 }
 
-private struct TranscriptionHTTPError: LocalizedError {
-    let providerLabel: String
-    let statusCode: Int
-    let message: String
-    let contentType: String?
-    let server: String?
-    let bodyPrefix: String?
-
-    var isAuthFailure: Bool {
-        statusCode == 401 || statusCode == 403
-    }
-
-    var shouldRefreshAuthToken: Bool {
-        isAuthFailure && !isCloudflareChallenge
-    }
-
-    var canRetryWithoutPrompt: Bool {
-        statusCode == 400 || statusCode == 422
-    }
-
-    var isCloudflareChallenge: Bool {
-        guard statusCode == 403 else {
-            return false
-        }
-
-        let lowerContentType = contentType?.lowercased() ?? ""
-        let lowerServer = server?.lowercased() ?? ""
-        let lowerBodyPrefix = bodyPrefix?.lowercased() ?? ""
-        return lowerServer.contains("cloudflare")
-            || lowerContentType.contains("text/html")
-            || lowerBodyPrefix.contains("<html")
-            || lowerBodyPrefix.contains("cloudflare")
-    }
-
-    var errorDescription: String? {
-        if isCloudflareChallenge {
-            return L10n.format(
-                "%@ transcription failed because the private transcription endpoint returned a Cloudflare 403 challenge. This is not an expired OpenWhisper session.",
-                providerLabel
-            )
-        }
-
-        return L10n.format("%@ transcription failed: %@", providerLabel, message)
-    }
-}
-
 struct TranscriptionMetrics: Sendable, Equatable {
     let provider: TranscriptionProvider
     let audioDurationMs: Int
@@ -373,6 +327,8 @@ struct ChatGPTTranscriber: Sendable {
         URLRequest,
         URL
     ) async throws -> (Data, URLResponse)
+    typealias RetrySleeper = @Sendable (Int) async throws -> Void
+    typealias RetryJitter = @Sendable () -> Double
 
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? ProductIdentity.defaultBundleIdentifier,
@@ -384,8 +340,13 @@ struct ChatGPTTranscriber: Sendable {
     let promptBuilder: TranscriptionPromptBuilder
     let bridgePromptCapability: BridgePromptCapabilityStore
     let providerCapabilityPolicy: any ProviderCapabilityChecking
+    let providerHealthMonitor: any ProviderHealthMonitoring
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
     let cloudflareChallengeMaxAttempts: Int
+    let transientFailureMaxAttempts: Int
+    let retrySchedule: ProviderRetrySchedule
+    let retrySleeper: RetrySleeper
+    let retryJitter: RetryJitter
     let multipartTemporaryDirectoryURL: URL
     let uploadLoader: UploadLoader
 
@@ -395,8 +356,20 @@ struct ChatGPTTranscriber: Sendable {
         promptBuilder: TranscriptionPromptBuilder = .init(),
         bridgePromptCapability: BridgePromptCapabilityStore = .shared,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
+        providerHealthMonitor: any ProviderHealthMonitoring =
+            ProviderHealthMonitor(),
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting = KeychainOpenAICompatibleCredentialStore(),
         cloudflareChallengeMaxAttempts: Int = 3,
+        transientFailureMaxAttempts: Int = 3,
+        retrySchedule: ProviderRetrySchedule = .default,
+        retrySleeper: @escaping RetrySleeper = { delayMilliseconds in
+            try await Task.sleep(
+                for: .milliseconds(delayMilliseconds)
+            )
+        },
+        retryJitter: @escaping RetryJitter = {
+            Double.random(in: 0...1)
+        },
         multipartTemporaryDirectoryURL: URL = FileManager.default.temporaryDirectory,
         uploadLoader: @escaping UploadLoader = { request, bodyFileURL in
             try await SecureHTTPClient.upload(for: request, fromFile: bodyFileURL)
@@ -407,8 +380,16 @@ struct ChatGPTTranscriber: Sendable {
         self.promptBuilder = promptBuilder
         self.bridgePromptCapability = bridgePromptCapability
         self.providerCapabilityPolicy = providerCapabilityPolicy
+        self.providerHealthMonitor = providerHealthMonitor
         self.recoveryCredentialStore = recoveryCredentialStore
         self.cloudflareChallengeMaxAttempts = max(1, cloudflareChallengeMaxAttempts)
+        self.transientFailureMaxAttempts = max(
+            1,
+            transientFailureMaxAttempts
+        )
+        self.retrySchedule = retrySchedule
+        self.retrySleeper = retrySleeper
+        self.retryJitter = retryJitter
         self.multipartTemporaryDirectoryURL = multipartTemporaryDirectoryURL
         self.uploadLoader = uploadLoader
     }
@@ -445,8 +426,12 @@ struct ChatGPTTranscriber: Sendable {
                     token: token,
                     prompt: prompt
                 )
-            } catch let error as TranscriptionHTTPError where error.shouldRefreshAuthToken {
-                Self.logger.info("ChatGPT transcription requested an access-token refresh after HTTP \(error.statusCode, privacy: .public)")
+            } catch let error as ProviderRequestFailure
+                where error.shouldRefreshAuthentication
+            {
+                Self.logger.info(
+                    "ChatGPT transcription requested an access-token refresh after HTTP \(error.statusCode ?? 0, privacy: .public)"
+                )
                 let refreshStarted = DispatchTime.now().uptimeNanoseconds
                 token = try await authManager.refreshAccessToken()
                 authMs += elapsedMilliseconds(since: refreshStarted)
@@ -514,16 +499,18 @@ struct ChatGPTTranscriber: Sendable {
                     token: token,
                     prompt: prompt
                 )
-            } catch let error as TranscriptionHTTPError where error.isCloudflareChallenge {
+            } catch let error as ProviderRequestFailure
+                where error.category == .challenge
+            {
                 Self.logger.error(
-                    "ChatGPT transcription attempt \(attempt, privacy: .public) hit Cloudflare HTTP \(error.statusCode, privacy: .public)"
+                    "ChatGPT transcription attempt \(attempt, privacy: .public) hit upstream challenge HTTP \(error.statusCode ?? 0, privacy: .public)"
                 )
                 if attempt == cloudflareChallengeMaxAttempts {
                     throw TranscriptionError.retryableCloudflareChallenge(
                         attempts: cloudflareChallengeMaxAttempts
                     )
                 }
-                continue
+                try await sleepBeforeRetry(afterFailedAttempt: attempt)
             }
         }
 
@@ -547,7 +534,8 @@ struct ChatGPTTranscriber: Sendable {
                     token: token,
                     prompt: nil
                 ),
-                providerLabel: "ChatGPT"
+                providerLabel: "ChatGPT",
+                route: .managedTranscription
             )
             return (text, false)
         }
@@ -560,13 +548,19 @@ struct ChatGPTTranscriber: Sendable {
                     token: token,
                     prompt: prompt
                 ),
-                providerLabel: "ChatGPT"
+                providerLabel: "ChatGPT",
+                route: .managedTranscription
             )
             bridgePromptCapability.mark(true)
             return (text, true)
-        } catch let error as TranscriptionHTTPError where error.shouldRefreshAuthToken || error.isCloudflareChallenge {
+        } catch let error as ProviderRequestFailure
+            where error.shouldRefreshAuthentication
+                || error.category == .challenge
+        {
             throw error
-        } catch let error as TranscriptionHTTPError where !error.canRetryWithoutPrompt {
+        } catch let error as ProviderRequestFailure
+            where !error.permitsPromptFallback
+        {
             throw error
         } catch {
             let fallbackText = try await executeTranscriptionRequest(
@@ -576,7 +570,8 @@ struct ChatGPTTranscriber: Sendable {
                     token: token,
                     prompt: nil
                 ),
-                providerLabel: "ChatGPT"
+                providerLabel: "ChatGPT",
+                route: .managedTranscription
             )
             bridgePromptCapability.mark(false)
             return (fallbackText, false)
@@ -641,7 +636,8 @@ struct ChatGPTTranscriber: Sendable {
 
         return try await executeTranscriptionRequest(
             MultipartUpload(request: request, body: body),
-            providerLabel: "OpenAI-compatible"
+            providerLabel: "OpenAI-compatible",
+            route: .recoveryTranscription
         )
     }
 
@@ -662,56 +658,122 @@ struct ChatGPTTranscriber: Sendable {
 
     private func executeTranscriptionRequest(
         _ upload: MultipartUpload,
-        providerLabel: String
+        providerLabel: String,
+        route: ProviderRoute
     ) async throws -> String {
         defer {
             try? FileManager.default.removeItem(at: upload.body.fileURL)
         }
+
+        var attempt = 1
+        while true {
+            do {
+                return try await executeSingleTranscriptionRequest(
+                    upload,
+                    providerLabel: providerLabel,
+                    route: route
+                )
+            } catch let failure as ProviderRequestFailure {
+                let reportedFailure = failure.withAttempts(attempt)
+                guard
+                    !failure.circuitOpen,
+                    failure.isAutomaticallyRetryable,
+                    attempt < transientFailureMaxAttempts
+                else {
+                    throw reportedFailure
+                }
+
+                Self.logger.error(
+                    "\(providerLabel, privacy: .public) transcription transient failure category=\(failure.category.rawValue, privacy: .public) attempt=\(attempt, privacy: .public)/\(transientFailureMaxAttempts, privacy: .public)"
+                )
+                try await sleepBeforeRetry(afterFailedAttempt: attempt)
+                attempt += 1
+            }
+        }
+    }
+
+    private func executeSingleTranscriptionRequest(
+        _ upload: MultipartUpload,
+        providerLabel: String,
+        route: ProviderRoute
+    ) async throws -> String {
         let request = upload.request
+        try await providerHealthMonitor.requireRequestPermission(for: route)
         Self.logger.info(
             "Sending \(providerLabel, privacy: .public) transcription request host=\(request.url?.host ?? "unknown", privacy: .public) path=\(request.url?.path ?? "unknown", privacy: .public) bodyBytes=\(upload.body.byteCount, privacy: .public)"
         )
-        let (responseData, response) = try await uploadLoader(
-            request,
-            upload.body.fileURL
-        )
+
+        let responseData: Data
+        let response: URLResponse
+        do {
+            (responseData, response) = try await uploadLoader(
+                request,
+                upload.body.fileURL
+            )
+        } catch is CancellationError {
+            await providerHealthMonitor.recordCancellation(for: route)
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            await providerHealthMonitor.recordCancellation(for: route)
+            throw CancellationError()
+        } catch {
+            let failure = ProviderFailureClassifier.network(route: route)
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
+        }
+
         guard let httpResponse = response as? HTTPURLResponse else {
             Self.logger.error("\(providerLabel, privacy: .public) transcription response was not HTTP")
-            throw TranscriptionError.transcriptionFailed("\(providerLabel) missing HTTP response")
+            let failure = ProviderFailureClassifier.invalidResponse(
+                route: route
+            )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
         }
         Self.logger.info(
             "\(providerLabel, privacy: .public) transcription response status=\(httpResponse.statusCode, privacy: .public) responseBytes=\(responseData.count, privacy: .public)"
         )
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            let providerMessage = decodeProviderMessage(
-                from: responseData,
-                authorizationHeader: request.value(
-                    forHTTPHeaderField: "Authorization"
-                )
-            ) ?? "status \(httpResponse.statusCode)"
             Self.logger.error(
                 "\(providerLabel, privacy: .public) transcription failed status=\(httpResponse.statusCode, privacy: .public) contentType=\(httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "unknown", privacy: .public) server=\(httpResponse.value(forHTTPHeaderField: "Server") ?? "unknown", privacy: .public)"
             )
-            throw TranscriptionHTTPError(
-                providerLabel: providerLabel,
-                statusCode: httpResponse.statusCode,
-                message: providerMessage,
-                contentType: httpResponse.value(forHTTPHeaderField: "Content-Type"),
-                server: httpResponse.value(forHTTPHeaderField: "Server"),
+            let failure = ProviderFailureClassifier.http(
+                route: route,
+                response: httpResponse,
                 bodyPrefix: String(data: responseData.prefix(512), encoding: .utf8)
             )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
         }
 
-        let object = try JSONSerialization.jsonObject(with: responseData) as? [String: Any]
+        let object = try? JSONSerialization
+            .jsonObject(with: responseData) as? [String: Any]
         if let text = object?["text"] as? String, !text.isEmpty {
+            await providerHealthMonitor.recordSuccess(for: route)
             return text
         }
         if let text = object?["transcript"] as? String, !text.isEmpty {
+            await providerHealthMonitor.recordSuccess(for: route)
             return text
         }
 
-        throw TranscriptionError.invalidResponse
+        let failure = ProviderFailureClassifier.invalidResponse(route: route)
+        await providerHealthMonitor.recordFailure(failure)
+        throw failure
+    }
+
+    private func sleepBeforeRetry(
+        afterFailedAttempt attempt: Int
+    ) async throws {
+        let delay = retrySchedule.delayMilliseconds(
+            afterFailedAttempt: attempt,
+            jitterUnit: retryJitter()
+        )
+        guard delay > 0 else {
+            return
+        }
+        try await retrySleeper(delay)
     }
 
     private func makeBoundary() -> String {
@@ -727,58 +789,6 @@ struct ChatGPTTranscriber: Sendable {
         } onCancel: {
             worker.cancel()
         }
-    }
-
-    private func decodeProviderMessage(
-        from data: Data,
-        authorizationHeader: String?
-    ) -> String? {
-        guard
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            return nil
-        }
-
-        let rawMessage: String?
-        if let error = object["error"] as? [String: Any], let message = error["message"] as? String {
-            rawMessage = message
-        } else {
-            rawMessage = object["message"] as? String
-        }
-        guard var sanitized = rawMessage else {
-            return nil
-        }
-
-        if let authorizationHeader {
-            sanitized = sanitized.replacingOccurrences(
-                of: authorizationHeader,
-                with: "Bearer [REDACTED]"
-            )
-            if authorizationHeader.hasPrefix("Bearer ") {
-                sanitized = sanitized.replacingOccurrences(
-                    of: String(authorizationHeader.dropFirst("Bearer ".count)),
-                    with: "[REDACTED]"
-                )
-            }
-        }
-        sanitized = sanitized.replacingOccurrences(
-            of: #"(?i)\bbearer\s+[^\s"']+"#,
-            with: "Bearer [REDACTED]",
-            options: .regularExpression
-        )
-        sanitized = sanitized.replacingOccurrences(
-            of: #"(?i)\b(?:sk|token|key)-[A-Za-z0-9._-]{8,}\b"#,
-            with: "[REDACTED]",
-            options: .regularExpression
-        )
-        sanitized = sanitized
-            .components(separatedBy: .newlines)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !sanitized.isEmpty else {
-            return nil
-        }
-        return String(sanitized.prefix(400))
     }
 
     private func elapsedMilliseconds(since start: UInt64) -> Int {

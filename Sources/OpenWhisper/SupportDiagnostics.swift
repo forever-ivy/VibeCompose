@@ -235,7 +235,22 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
             allowed: TextDeliveryStatus.diagnosticsAllowedValues
         )
         errorCategory = sample.errorCategory.map {
-            Self.allowedValue($0, allowed: ["transcribe", "inject"])
+            Self.allowedValue(
+                $0,
+                allowed: [
+                    "transcribe",
+                    "transcribe.authentication",
+                    "transcribe.challenge",
+                    "transcribe.rate_limited",
+                    "transcribe.request_rejected",
+                    "transcribe.contract_changed",
+                    "transcribe.service_unavailable",
+                    "transcribe.network",
+                    "transcribe.invalid_response",
+                    "transcribe.unknown",
+                    "inject",
+                ]
+            )
         }
     }
 
