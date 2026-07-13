@@ -35,6 +35,7 @@ OpenWhisper may store the following data under `~/Library/Application Support/Op
 | Failed recordings for Retry | 24 hours, at most 10 records |
 | Successful recordings | Deleted after processing |
 | Performance diagnostics | 14 days, at most 1,000 records |
+| Local product metrics | Off by default; if enabled, 30 days and at most 5,000 events |
 | Settings and terminology | Until changed or deleted |
 
 Known password managers, Keychain Access, and macOS Passwords are excluded from transcript history and failed-audio recovery by default. You can add more sensitive applications.
@@ -53,11 +54,19 @@ transcript history, diagnostics, screenshots, or logs.
 
 Performance diagnostics contain timing, byte counts, provider categories, result categories, and error categories. They do not intentionally contain audio, transcript text, clipboard contents, or credentials.
 
+Optional local product metrics are disabled by default. If enabled, they
+contain only product version/build, completed Onboarding step, provider
+category, audio-duration bucket, processing-latency bucket, delivery category,
+and failure category. They do not contain audio, transcript or clipboard text,
+app names, bundle identifiers, file paths, account details, or a persistent
+user/install identifier. OpenWhisper does not upload them automatically.
+
 When you choose **Settings → Advanced → Export Diagnostics**, OpenWhisper creates a local ZIP for you to review and share manually. The archive contains:
 
 - product, operating-system, permission, authentication-state, and signing-state summaries;
 - non-secret configuration flags and retention values;
 - redacted latency records;
+- opt-in local product metrics with enum and bucket values only;
 - whitelisted metadata from up to five recent OpenWhisper crash reports;
 - checksums for the included files.
 
@@ -71,13 +80,13 @@ OpenWhisper writes the completed transcript to the macOS pasteboard. If Accessib
 
 You can:
 
-- disable or limit transcript history, failed-audio recovery, and diagnostics;
+- disable or limit transcript history, failed-audio recovery, diagnostics, and local product metrics;
 - disable raw transcript storage;
 - add sensitive applications that must not create history or Recovery records;
 - delete individual history or Recovery records;
 - sign out of ChatGPT;
 - remove the OpenAI-Compatible Recovery key without deleting other data;
-- use **Delete All Data** to remove local settings, terminology, history, failed recordings, diagnostics, Retry files, the saved ChatGPT session, and the Recovery API key.
+- use **Delete All Data** to remove local settings, terminology, history, failed recordings, diagnostics, product metrics, Retry files, the saved ChatGPT session, and the Recovery API key.
 
 Deleting local OpenWhisper data does not delete information already sent to or retained by a third-party service. Use that service's account and privacy controls for third-party data.
 

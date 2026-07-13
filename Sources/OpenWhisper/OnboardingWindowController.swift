@@ -37,6 +37,7 @@ final class OnboardingWindowController: NSWindowController {
         persistCompletion: Bool = true,
         stateStore: OnboardingStateStore = OnboardingStateStore(),
         onRequestMicrophoneAccess: @escaping () async -> Result<Void, any Error>,
+        onStepCompleted: @escaping (OnboardingStep) -> Void = { _ in },
         onCompleted: @escaping () -> Void
     ) {
         self.stateStore = stateStore
@@ -45,6 +46,7 @@ final class OnboardingWindowController: NSWindowController {
             authManager: authManager,
             initialStep: initialStep,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
+            onStepCompleted: onStepCompleted,
             onComplete: {}
         )
         let hostingController = NSHostingController(rootView: placeholder)
@@ -70,6 +72,7 @@ final class OnboardingWindowController: NSWindowController {
             authManager: authManager,
             initialStep: initialStep,
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
+            onStepCompleted: onStepCompleted,
             onComplete: { [weak self] in
                 guard let self else {
                     return
@@ -208,16 +211,19 @@ private struct OnboardingView: View {
 
     let authManager: ChatGPTAuthManager
     let onRequestMicrophoneAccess: () async -> Result<Void, any Error>
+    let onStepCompleted: (OnboardingStep) -> Void
     let onComplete: () -> Void
 
     init(
         authManager: ChatGPTAuthManager,
         initialStep: OnboardingStep = .welcome,
         onRequestMicrophoneAccess: @escaping () async -> Result<Void, any Error>,
+        onStepCompleted: @escaping (OnboardingStep) -> Void = { _ in },
         onComplete: @escaping () -> Void
     ) {
         self.authManager = authManager
         self.onRequestMicrophoneAccess = onRequestMicrophoneAccess
+        self.onStepCompleted = onStepCompleted
         self.onComplete = onComplete
         _step = State(initialValue: initialStep)
         _authSnapshot = State(initialValue: authManager.authSnapshot())
@@ -494,12 +500,16 @@ private struct OnboardingView: View {
             }
             Spacer()
             if step == .practice {
-                Button(L10n.text("Finish Setup"), action: onComplete)
+                Button(L10n.text("Finish Setup")) {
+                    onStepCompleted(.practice)
+                    onComplete()
+                }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
             } else {
                 Button(L10n.text("Continue")) {
                     message = nil
+                    onStepCompleted(step)
                     step = OnboardingStep(rawValue: step.rawValue + 1) ?? .practice
                 }
                 .buttonStyle(.borderedProminent)

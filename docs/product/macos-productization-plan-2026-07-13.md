@@ -620,6 +620,16 @@ Settings 新增 Privacy：
 
 默认策略应在隐私文档和 UI 中保持一致。
 
+2026-07-13 已落地 OW-MAC-016 的本地 Alpha 基础：
+
+- 产品指标默认关闭，不存在网络上传客户端；
+- 用户可在 Privacy 中显式开启，并配置 1–365 天、100–50,000 条的本地留存；
+- 当前只记录启动、Onboarding 步骤完成、听写/Retry 开始、成功、失败和用户主动丢弃；
+- 维度只允许版本/构建、Provider 枚举、音频时长桶、处理延迟桶、交付结果和失败类别；
+- 不生成用户 ID、安装 ID，也不记录应用名称、Bundle ID、路径、账户信息、音频或正文；
+- `product-metrics.jsonl` 使用仅当前用户可读写权限、拒绝符号链接，并随关闭开关或 Delete All Data 删除；
+- 用户主动导出的支持诊断只包含再次枚举化和版本字符白名单处理后的指标，且不会自动上传。
+
 ## 10. 签名、安装、更新和 CI/CD
 
 ### 10.1 构建通道
@@ -842,7 +852,7 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-013 | P1 | Terminology manager（已实现，待键盘/VoiceOver 验收） | Dictionary model | 常规管理不编辑 JSON |
 | OW-MAC-014 | P1 | Release fail-closed | Signing identity | Gatekeeper/签名失败阻断 |
 | OW-MAC-015 | P1 | Notarization + updater（Sparkle 2.9.4 已集成，待生产签名与实机更新） | 014 | 新机安装和更新成功 |
-| OW-MAC-016 | P2 | Product metrics | Privacy spec | 无敏感内容事件 |
+| OW-MAC-016 | P2 | Product metrics（本地、默认关闭的 Alpha 基础已实现；待 Beta 分析与自愿分享流程） | Privacy spec | 无敏感内容事件 |
 | OW-MAC-017 | P2 | Voice Modes（Auto 决策引擎与 Direct 快路径已实现，待模式 UI/商业模块） | Text polish engine | Direct 无额外延迟 |
 | OW-MAC-018 | P2 | License Manager | Commercial boundary | 离线宽限与设备限制可恢复 |
 | OW-MAC-019 | P2 | App compatibility matrix | Closed Beta | 目标 App 成功/降级明确 |

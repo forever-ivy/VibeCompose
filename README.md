@@ -22,6 +22,9 @@ The current implementation already includes:
 - bounded local history, failed-audio recovery, privacy controls, and benchmark tooling
 - sensitive-app exclusions and a Delete All Data action
 - redacted support-diagnostics ZIP export
+- opt-in, local-only product metrics for activation and dictation-result
+  analysis, using enums and duration/latency buckets without persistent user
+  identifiers or automatic upload
 - signed provider-safety policy enforcement for managed transcription and AI
   Polish incidents
 - OpenAI-compatible transcription as an advanced recovery route, with native
@@ -117,6 +120,7 @@ Current privacy defaults:
 | Successful recordings | Deleted after processing and never added to Recovery |
 | Failed recordings | Enabled for retry; 24 hours and at most 10 records |
 | Local diagnostics | Enabled; 14 days and at most 1,000 records |
+| Local product metrics | Disabled; when enabled, 30 days and at most 5,000 enum/bucket events |
 | Sensitive apps | Known password managers, Keychain, and Passwords are excluded from history and recovery |
 | Retry files | Temporary, time-limited, and removed on the next startup if orphaned |
 
@@ -125,7 +129,13 @@ decision reasons, and error categories. They do not contain audio, transcript
 text, clipboard contents, or tokens. Local data files are created with
 owner-only permissions where supported.
 
-**Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
+Optional product metrics are disabled by default and remain on this Mac. They
+contain only product version/build, completed Onboarding step, provider
+category, duration and latency buckets, result category, and failure category.
+They do not contain app names, paths, account details, content, or persistent
+identifiers and are never uploaded automatically.
+
+**Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, optional product-metric, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
 
 The ChatGPT session is stored in Keychain under
 `app.openwhisper.mac.ChatGPTSession`. The optional OpenAI-Compatible Recovery
@@ -137,9 +147,9 @@ confirmation, and switch back to the ChatGPT account route. Recovery changes
 dictation ASR only; AI Polish remains ChatGPT-authenticated.
 
 **Settings → Privacy → Delete All Data** removes settings, terminology,
-transcript history, failed recordings, diagnostics, retry files, the saved
-ChatGPT session, and the Recovery API key, then returns OpenWhisper to its
-signed-out defaults.
+transcript history, failed recordings, diagnostics, product metrics, retry
+files, the saved ChatGPT session, and the Recovery API key, then returns
+OpenWhisper to its signed-out defaults.
 
 ## Repository Layout
 

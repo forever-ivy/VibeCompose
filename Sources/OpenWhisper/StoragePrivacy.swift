@@ -72,6 +72,17 @@ extension PrivacyConfig {
             now: now
         )
     }
+
+    func productMetricsRetentionPolicy(
+        now: Date = Date()
+    ) -> DiagnosticsRetentionPolicy {
+        DiagnosticsRetentionPolicy(
+            maxRecords:
+                productMetricsEnabled ? productMetricsRecordLimit : 0,
+            retentionDays: productMetricsRetentionDays,
+            now: now
+        )
+    }
 }
 
 enum SensitiveAppPolicy {

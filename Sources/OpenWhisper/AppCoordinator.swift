@@ -42,6 +42,7 @@ final class AppCoordinator {
     let overlay: any OverlayControlling
     let authManager: any ChatGPTAuthProviding
     let latencyRecorder: any LatencyRecording
+    let productMetricsRecorder: any ProductMetricsRecording
     let historyRecorder: any TranscriptionHistoryRecording
     let recoveryRecorder: any RecoveryRecording
     let soundFeedback: any SoundFeedbackPlaying
@@ -104,6 +105,7 @@ final class AppCoordinator {
         overlay: (any OverlayControlling)? = nil,
         authManager: any ChatGPTAuthProviding = ChatGPTAuthManager(),
         latencyRecorder: (any LatencyRecording)? = nil,
+        productMetricsRecorder: (any ProductMetricsRecording)? = nil,
         historyRecorder: (any TranscriptionHistoryRecording)? = nil,
         recoveryRecorder: (any RecoveryRecording)? = nil,
         soundFeedback: any SoundFeedbackPlaying = SoundFeedbackService(),
@@ -179,6 +181,10 @@ final class AppCoordinator {
         self.overlay = resolvedOverlay
         self.authManager = authManager
         self.latencyRecorder = latencyRecorder ?? LatencyRecorder(directoryURL: configStore.directoryURL)
+        self.productMetricsRecorder = productMetricsRecorder
+            ?? ProductMetricsRecorder(
+                directoryURL: configStore.directoryURL
+            )
         self.historyRecorder = historyRecorder ?? TranscriptionHistoryRecorder(directoryURL: configStore.directoryURL)
         self.recoveryRecorder = recoveryRecorder ?? RecoveryStore(
             directoryURL: configStore.directoryURL.appendingPathComponent("Recovery", isDirectory: true)
@@ -248,6 +254,9 @@ final class AppCoordinator {
                 } else {
                     config = try configStore.load()
                     enforceStoragePolicies()
+                    if launchMode == .normal {
+                        recordProductMetric(event: .appLaunch)
+                    }
                     Task { [providerCapabilityPolicy] in
                         _ = await providerCapabilityPolicy.refresh(force: false)
                     }
@@ -401,6 +410,10 @@ final class AppCoordinator {
             return
         }
 
+        recordProductMetric(
+            event: .dictationDiscarded,
+            provider: config.transcription.provider
+        )
         startRecordingTask?.cancel()
         startRecordingTask = nil
         processingTask?.cancel()
@@ -503,6 +516,11 @@ final class AppCoordinator {
                     self.statusMenu?.update(state: .setupRequired, detail: message)
                     self.overlay.showError(message)
                     self.notifier.notify(title: L10n.text("OpenWhisper setup required"), body: message)
+                    self.recordProductMetric(
+                        event: .dictationFailed,
+                        provider: self.config.transcription.provider,
+                        failureCategory: .setup
+                    )
                     self.openSettings()
                     return
                 }
@@ -528,6 +546,10 @@ final class AppCoordinator {
                 self.state = .recording
                 self.statusMenu?.update(state: .recording, detail: L10n.text("Recording on F5"))
                 self.overlay.showRecording(elapsedText: "00:00")
+                self.recordProductMetric(
+                    event: .dictationStarted,
+                    provider: self.config.transcription.provider
+                )
                 self.soundFeedback.play(.recordingStarted, enabled: self.config.transcription.feedbackSoundsEnabled)
                 self.startRecordingLevelUpdates()
             } catch is CancellationError {
@@ -543,6 +565,11 @@ final class AppCoordinator {
                 self.overlay.showError(error.localizedDescription)
                 self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
                 self.launchAppContext = nil
+                self.recordProductMetric(
+                    event: .dictationFailed,
+                    provider: self.config.transcription.provider,
+                    failureCategory: .recording
+                )
             }
 
             if self.activeSessionID == sessionID {
@@ -593,6 +620,11 @@ final class AppCoordinator {
             statusMenu?.update(state: .error, detail: error.localizedDescription)
             overlay.showError(error.localizedDescription)
             notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+            recordProductMetric(
+                event: .dictationFailed,
+                provider: config.transcription.provider,
+                failureCategory: .recording
+            )
         }
     }
 
@@ -612,6 +644,11 @@ final class AppCoordinator {
         state = .processing
         statusMenu?.update(state: .processing, detail: L10n.text("Retrying"))
         overlay.showProcessing()
+        recordProductMetric(
+            event: .retryStarted,
+            provider: pendingRetry.transcriptionConfig.provider,
+            audioDurationMs: pendingRetry.audio.durationMs
+        )
 
         startProcessing(
             audio: pendingRetry.audio,
@@ -709,6 +746,18 @@ final class AppCoordinator {
                             totalProcessingMs: totalProcessingMs,
                             errorCategory: "inject"
                         )
+                        self.recordProductMetric(
+                            event: attemptPolicy == .manualRetry
+                                ? .retryFailed
+                                : .dictationFailed,
+                            provider:
+                                prepared.metrics.transcription.provider,
+                            audioDurationMs:
+                                prepared.metrics.transcription
+                                    .audioDurationMs,
+                            totalProcessingMs: totalProcessingMs,
+                            failureCategory: .injection
+                        )
                         self.clearPendingRetry()
                         self.state = .idle
                         self.activeSessionID = nil
@@ -737,6 +786,18 @@ final class AppCoordinator {
                         outcome: outcome,
                         launchAppContext: launchAppContext
                     )
+                    self.recordProductMetric(
+                        event: attemptPolicy == .manualRetry
+                            ? .retrySucceeded
+                            : .dictationSucceeded,
+                        provider:
+                            prepared.metrics.transcription.provider,
+                        audioDurationMs:
+                            prepared.metrics.transcription.audioDurationMs,
+                        totalProcessingMs: totalProcessingMs,
+                        deliveryStatus:
+                            ProductMetricDeliveryStatus(outcome)
+                    )
                     self.clearPendingRetry()
                     self.state = .idle
                     self.activeSessionID = nil
@@ -760,10 +821,22 @@ final class AppCoordinator {
                 await MainActor.run {
                     guard self.shouldContinue(sessionID: sessionID) else { return }
 
+                    let totalProcessingMs = self.elapsedMilliseconds(
+                        since: processingStarted
+                    )
                     self.recordTranscriptionFailure(
                         audio: audio,
                         transcriptionConfig: transcriptionConfig,
                         processingStarted: processingStarted
+                    )
+                    self.recordProductMetric(
+                        event: attemptPolicy == .manualRetry
+                            ? .retryFailed
+                            : .dictationFailed,
+                        provider: transcriptionConfig.provider,
+                        audioDurationMs: audio.durationMs,
+                        totalProcessingMs: totalProcessingMs,
+                        failureCategory: .transcription
                     )
                     self.recordRecoveryFailure(
                         audio: audio,
@@ -1270,6 +1343,13 @@ final class AppCoordinator {
                     } catch {
                         return .failure(error)
                     }
+                },
+                onStepCompleted: { [weak self] step in
+                    self?.recordProductMetric(
+                        event: .onboardingStepCompleted,
+                        onboardingStep:
+                            ProductMetricOnboardingStep(step)
+                    )
                 },
                 onCompleted: { [weak self] in
                     self?.refreshReadyState()
@@ -1904,6 +1984,32 @@ final class AppCoordinator {
         )
     }
 
+    private func recordProductMetric(
+        event: ProductMetricEvent,
+        onboardingStep: ProductMetricOnboardingStep? = nil,
+        provider: TranscriptionProvider? = nil,
+        audioDurationMs: Int? = nil,
+        totalProcessingMs: Int? = nil,
+        deliveryStatus: ProductMetricDeliveryStatus? = nil,
+        failureCategory: ProductMetricFailureCategory? = nil
+    ) {
+        guard config.privacy.productMetricsEnabled else {
+            return
+        }
+        try? productMetricsRecorder.record(
+            ProductMetricSample(
+                event: event,
+                onboardingStep: onboardingStep,
+                provider: provider,
+                audioDurationMs: audioDurationMs,
+                totalProcessingMs: totalProcessingMs,
+                deliveryStatus: deliveryStatus,
+                failureCategory: failureCategory
+            ),
+            retention: config.privacy.productMetricsRetentionPolicy()
+        )
+    }
+
     private func recordHistory(
         prepared: PreparedDictation,
         outcome: InjectionOutcome,
@@ -1973,6 +2079,10 @@ final class AppCoordinator {
             try historyRecorder.prune(retention: config.privacy.historyRetentionPolicy())
             try recoveryRecorder.prune(retention: config.privacy.recoveryRetentionPolicy())
             try latencyRecorder.prune(retention: config.privacy.diagnosticsRetentionPolicy())
+            try productMetricsRecorder.prune(
+                retention: config.privacy
+                    .productMetricsRetentionPolicy()
+            )
         } catch {
             logger.error("Storage retention cleanup failed: \(error.localizedDescription, privacy: .public)")
         }

@@ -14,6 +14,9 @@ func privacyConfigDefaultsAreBoundedAndMinimizeStoredContent() throws {
     #expect(config.privacy.failedAudioRetentionHours == 24)
     #expect(config.privacy.failedAudioRecordLimit == 10)
     #expect(config.privacy.diagnosticsEnabled)
+    #expect(config.privacy.productMetricsEnabled == false)
+    #expect(config.privacy.productMetricsRetentionDays == 30)
+    #expect(config.privacy.productMetricsRecordLimit == 5_000)
     #expect(config.privacy.excludeSensitiveApps)
 
     let decoded = try JSONDecoder().decode(

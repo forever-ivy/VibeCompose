@@ -251,6 +251,25 @@ private final class FakeLatencyRecorder: LatencyRecording, @unchecked Sendable {
     func prune(retention _: DiagnosticsRetentionPolicy) throws {}
 }
 
+private final class FakeProductMetricsRecorder:
+    ProductMetricsRecording,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private(set) var samples: [ProductMetricSample] = []
+
+    func record(
+        _ sample: ProductMetricSample,
+        retention _: DiagnosticsRetentionPolicy
+    ) throws {
+        lock.lock()
+        samples.append(sample)
+        lock.unlock()
+    }
+
+    func prune(retention _: DiagnosticsRetentionPolicy) throws {}
+}
+
 private enum ScriptedCoordinatorPipelineOutcome: Sendable {
     case success(String)
     case retryableCloudflare(Int)
@@ -418,13 +437,17 @@ struct AppCoordinatorCancellationTests {
         let recorder = FakeCoordinatorRecorder()
         let overlay = FakeCoordinatorOverlay()
         let statusMenu = FakeCoordinatorStatusMenu()
+        let productMetricsRecorder = FakeProductMetricsRecorder()
+        var config = AppConfig()
+        config.privacy.productMetricsEnabled = true
         let coordinator = AppCoordinator(
-            config: AppConfig(),
+            config: config,
             notifier: FakeCoordinatorNotifier(),
             injector: FakeCoordinatorInjector(),
             overlay: overlay,
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: FakeLatencyRecorder(),
+            productMetricsRecorder: productMetricsRecorder,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
@@ -446,6 +469,10 @@ struct AppCoordinatorCancellationTests {
         #expect(coordinator.launchAppContext == nil)
         #expect(overlay.hideCallCount == 1)
         #expect(statusMenu.updates.last?.0 == .ready)
+        #expect(
+            productMetricsRecorder.samples.map(\.event)
+                == [.dictationDiscarded]
+        )
     }
 
     @Test
@@ -796,6 +823,7 @@ struct AppCoordinatorCancellationTests {
         let statusMenu = FakeCoordinatorStatusMenu()
         let injector = FakeCoordinatorInjector()
         let latencyRecorder = FakeLatencyRecorder()
+        let productMetricsRecorder = FakeProductMetricsRecorder()
         let capturedContext = LaunchAppContext(
             bundleIdentifier: "com.example.editor",
             localizedName: "Editor",
@@ -806,14 +834,17 @@ struct AppCoordinatorCancellationTests {
             .success("retry final"),
         ])
         let configStore = ConfigStore(fileManager: .default, homeDirectoryURL: root)
+        var config = AppConfig()
+        config.privacy.productMetricsEnabled = true
         let coordinator = AppCoordinator(
             configStore: configStore,
-            config: AppConfig(),
+            config: config,
             notifier: FakeCoordinatorNotifier(),
             injector: injector,
             overlay: overlay,
             authManager: FakeChatGPTAuthManager(),
             latencyRecorder: latencyRecorder,
+            productMetricsRecorder: productMetricsRecorder,
             recorderFactory: { _ in recorder },
             statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
             pipelineFactory: { _, _, policy, _, _ in script.makePipeline(policy: policy) },
@@ -842,6 +873,26 @@ struct AppCoordinatorCancellationTests {
         #expect(injector.launchContexts == [capturedContext])
         #expect(injector.automaticPastePermissions == [false])
         #expect(latencyRecorder.samples.map(\.resultStatus) == ["error", "clipboard"])
+        #expect(
+            productMetricsRecorder.samples.map(\.event)
+                == [
+                    .dictationStarted,
+                    .dictationFailed,
+                    .retryStarted,
+                    .retrySucceeded,
+                ]
+        )
+        #expect(
+            productMetricsRecorder.samples.last?.deliveryStatus
+                == .clipboard
+        )
+        #expect(
+            productMetricsRecorder.samples
+                .filter { $0.event == .dictationFailed }
+                .allSatisfy {
+                    $0.failureCategory == .transcription
+                }
+        )
 
         let recoveryStore = RecoveryStore(
             directoryURL: configStore.directoryURL.appendingPathComponent("Recovery", isDirectory: true)

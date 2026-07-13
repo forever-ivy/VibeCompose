@@ -273,10 +273,19 @@ management windows.
 - `LatencyRecorder` rewrites a bounded JSONL sample set using the configured
   retention policy and records only the bounded AI Polish decision reason,
   not the transcript used to make that decision.
+- `ProductMetricsRecorder` is a separate, opt-in, local-only JSONL store.
+  It records app launch, completed Onboarding steps, dictation/Retry
+  start/success/failure, user-discarded sessions, provider category,
+  delivery/failure enums, and duration/latency buckets. It has no user/install
+  identifier, app name, bundle identifier, path, account field, or content
+  field.
+- Product metrics default off, use owner-only permissions and bounded
+  retention, reject symbolic-link storage, and are never uploaded
+  automatically.
 - `scripts/benchmark_stt.sh` runs explicit audio inputs through packaged-app benchmark mode.
 - Benchmark output includes cold/warm `auth_ms`, `transcribe_ms`, and `total_ms` p50/p95 summaries.
-- Product diagnostics are local-only in the current alpha; no product analytics upload is enabled.
-- `SupportDiagnosticsExporter` creates an owner-only local ZIP containing a non-secret runtime/configuration summary, redacted latency rows, whitelisted metadata from up to five crash reports, and per-file SHA-256 values.
+- Product diagnostics and optional product metrics are local-only in the current alpha; no product analytics upload is enabled.
+- `SupportDiagnosticsExporter` creates an owner-only local ZIP containing a non-secret runtime/configuration summary, redacted latency rows, enum/bucket-only product metrics, whitelisted metadata from up to five crash reports, and per-file SHA-256 values.
 - Support exports exclude audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoint values, raw crash bodies, history, Recovery metadata, and `config.json`; they are never uploaded automatically.
 
 ## 10. Packaging and Verification
@@ -346,7 +355,9 @@ Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the 
 
 The current alpha must not be described as commercially release-ready while these remain:
 
-- paste success is event-dispatch success, not destination insertion confirmation;
+- insertion-verified, paste-dispatched, and clipboard results are separate,
+  but the trusted installed-app Notes/TextEdit/Terminal focus matrix remains
+  incomplete;
 - Settings now uses `NavigationSplitView` with immediate persistence, and the
   HUD implementation respects Reduce Motion, strengthens Increase Contrast,
   and posts state announcements; trusted installed-app keyboard/VoiceOver and

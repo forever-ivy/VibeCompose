@@ -28,6 +28,9 @@ struct PrivacyConfig: Codable, Sendable, Equatable {
     var diagnosticsEnabled: Bool = true
     var diagnosticsRetentionDays: Int = 14
     var diagnosticsRecordLimit: Int = 1_000
+    var productMetricsEnabled: Bool = false
+    var productMetricsRetentionDays: Int = 30
+    var productMetricsRecordLimit: Int = 5_000
     var excludeSensitiveApps: Bool = true
     var additionalSensitiveAppBundleIdentifiers: [String] = []
 
@@ -68,6 +71,26 @@ struct PrivacyConfig: Codable, Sendable, Equatable {
             try container.decodeIfPresent(Int.self, forKey: .diagnosticsRecordLimit) ?? 1_000,
             minimum: 100,
             maximum: 20_000
+        )
+        productMetricsEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .productMetricsEnabled
+        ) ?? false
+        productMetricsRetentionDays = Self.bounded(
+            try container.decodeIfPresent(
+                Int.self,
+                forKey: .productMetricsRetentionDays
+            ) ?? 30,
+            minimum: 1,
+            maximum: 365
+        )
+        productMetricsRecordLimit = Self.bounded(
+            try container.decodeIfPresent(
+                Int.self,
+                forKey: .productMetricsRecordLimit
+            ) ?? 5_000,
+            minimum: 100,
+            maximum: 50_000
         )
         excludeSensitiveApps = try container.decodeIfPresent(Bool.self, forKey: .excludeSensitiveApps) ?? true
         additionalSensitiveAppBundleIdentifiers = Self.normalizedBundleIdentifiers(

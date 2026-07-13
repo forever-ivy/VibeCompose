@@ -30,9 +30,29 @@ func privacyPoliciesMatchCurrentLocalRetentionAndDiagnosticsBoundary() throws {
             )
                 || text.contains("\(config.diagnosticsRecordLimit)")
         )
+        #expect(text.contains("\(config.productMetricsRetentionDays)"))
+        #expect(
+            text.contains(
+                NumberFormatter.localizedString(
+                    from: NSNumber(
+                        value: config.productMetricsRecordLimit
+                    ),
+                    number: .decimal
+                )
+            )
+                || text.contains("\(config.productMetricsRecordLimit)")
+        )
         #expect(text.contains("app.openwhisper.mac.ChatGPTSession"))
         #expect(text.contains("Export Diagnostics") || text.contains("导出诊断"))
         #expect(text.contains("not uploaded automatically") || text.contains("不会自动上传"))
+        #expect(text.contains("Off by default") || text.contains("默认关闭"))
+        #expect(
+            (
+                text.contains("persistent")
+                    && text.contains("user/install identifier")
+            )
+                || text.contains("持久用户/安装标识")
+        )
         #expect(text.contains("audio") || text.contains("音频"))
         #expect(text.contains("transcript") || text.contains("转写"))
         #expect(text.contains("token") || text.contains("令牌"))

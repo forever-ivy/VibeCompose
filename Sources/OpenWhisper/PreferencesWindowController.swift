@@ -657,7 +657,7 @@ private struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, terminology, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
+                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
                 )
             )
         }
@@ -1131,6 +1131,45 @@ private struct PreferencesView: View {
 
                 Divider()
 
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        L10n.text("Keep local anonymous product metrics"),
+                        isOn: $config.privacy.productMetricsEnabled
+                    )
+                    Text(
+                        L10n.text(
+                            "Product metrics contain only version, onboarding step, provider category, duration and latency buckets, result category, and failure category. They never include audio, transcript text, app names, paths, account details, or persistent identifiers, and are never uploaded automatically."
+                        )
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                    if config.privacy.productMetricsEnabled {
+                        Stepper(
+                            L10n.format(
+                                "Keep product metrics for %ld days",
+                                config.privacy
+                                    .productMetricsRetentionDays
+                            ),
+                            value: $config.privacy
+                                .productMetricsRetentionDays,
+                            in: 1...365
+                        )
+                        Stepper(
+                            L10n.format(
+                                "Keep at most %ld product metric events",
+                                config.privacy.productMetricsRecordLimit
+                            ),
+                            value: $config.privacy
+                                .productMetricsRecordLimit,
+                            in: 100...50_000,
+                            step: 100
+                        )
+                    }
+                }
+
+                Divider()
+
                 Toggle(
                     L10n.text("Do not save history or recovery audio for sensitive apps"),
                     isOn: $config.privacy.excludeSensitiveApps
@@ -1151,7 +1190,7 @@ private struct PreferencesView: View {
                             .font(.system(size: 12, weight: .semibold))
                         Text(
                             L10n.text(
-                                "Deletes settings, terminology, history, failed recordings, diagnostics, retry files, the saved ChatGPT session, and the OpenAI-Compatible API key."
+                                "Deletes settings, terminology, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, and the OpenAI-Compatible API key."
                             )
                         )
                         .font(.system(size: 11))
@@ -1525,7 +1564,7 @@ private struct PreferencesView: View {
                 }
                 Text(
                     L10n.text(
-                        "Creates a local ZIP with redacted runtime, permission, latency, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, tokens, API keys, terminology, custom endpoints, and raw crash reports."
+                        "Creates a local ZIP with redacted runtime, permission, latency, optional product-metric, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, tokens, API keys, terminology, custom endpoints, and raw crash reports."
                     )
                 )
                 .font(.system(size: 11))

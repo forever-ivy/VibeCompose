@@ -74,6 +74,27 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
             now: generatedAt
         )
     )
+    try ProductMetricsRecorder(
+        directoryURL: applicationSupportURL
+    ).record(
+        ProductMetricSample(
+            timestamp: generatedAt,
+            environment: ProductMetricsEnvironment(
+                productVersion: "PRIVATE VERSION /Users/alice",
+                productBuild: "1"
+            ),
+            event: .dictationSucceeded,
+            provider: .chatGPTManagedAuth,
+            audioDurationMs: 1_500,
+            totalProcessingMs: 486,
+            deliveryStatus: .pasteDispatched
+        ),
+        retention: DiagnosticsRetentionPolicy(
+            maxRecords: 10,
+            retentionDays: 30,
+            now: generatedAt
+        )
+    )
 
     try Data("PRIVATE HISTORY BODY".utf8).write(
         to: applicationSupportURL
@@ -136,6 +157,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
     config.privacy.additionalSensitiveAppBundleIdentifiers = [
         "com.private.secret",
     ]
+    config.privacy.productMetricsEnabled = true
 
     let exporter = SupportDiagnosticsExporter(
         applicationSupportURL: applicationSupportURL,
@@ -190,6 +212,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
                 "README.txt",
                 "summary.json",
                 "latency.jsonl",
+                "product-metrics.jsonl",
                 "crash-summary.json",
                 "SHA256SUMS",
             ]
@@ -224,6 +247,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
         "com.private.secret",
         "PRIVATE AUTH DETAIL",
         "PRIVATE_TEAM_ID",
+        "PRIVATE VERSION",
     ] {
         #expect(!exportedText.contains(forbidden))
     }
@@ -237,6 +261,17 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
         )
     )
     #expect(exportedText.contains("\"textPolishErrorPresent\":true"))
+    #expect(exportedText.contains("\"event\":\"dictation_succeeded\""))
+    #expect(
+        exportedText.contains(
+            "\"productMetricSampleCount\" : 1"
+        )
+    )
+    #expect(
+        exportedText.contains(
+            "\"productMetricsEnabled\" : true"
+        )
+    )
     #expect(exportedText.contains("\"crashSummaryCount\" : 1"))
     #expect(exportedText.contains("\"buildVersion\" : \"1\""))
     #expect(exportedText.contains("\"operatingSystemBuild\" : \"25F90\""))

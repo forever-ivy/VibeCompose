@@ -23,5 +23,10 @@
   Computer Use keyboard/focus acceptance without reading or persisting the
   user's live configuration, credentials, transcripts, Recovery data, or
   terminology.
+- Added opt-in local product metrics for app launch, Onboarding-step
+  completion, dictation, discard, and Retry outcomes. Metrics use only
+  version/build, enums, and duration/latency buckets, have bounded owner-only
+  retention, are never uploaded automatically, and can be reviewed in support
+  diagnostics.
 
 OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.

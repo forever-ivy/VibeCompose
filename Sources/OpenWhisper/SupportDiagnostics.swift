@@ -120,13 +120,63 @@ private struct SupportDiagnosticsSummary: Codable, Sendable, Equatable {
         let diagnosticsEnabled: Bool
         let diagnosticsRetentionDays: Int
         let diagnosticsRecordLimit: Int
+        let productMetricsEnabled: Bool
+        let productMetricsRetentionDays: Int
+        let productMetricsRecordLimit: Int
         let excludesSensitiveApps: Bool
         let additionalSensitiveAppCount: Int
     }
 
     struct Included: Codable, Sendable, Equatable {
         let redactedLatencySampleCount: Int
+        let productMetricSampleCount: Int
         let crashSummaryCount: Int
+    }
+}
+
+private struct SupportProductMetricSample:
+    Codable,
+    Sendable,
+    Equatable
+{
+    let schemaVersion: Int
+    let timestamp: Date
+    let productVersion: String
+    let productBuild: String
+    let event: ProductMetricEvent
+    let onboardingStep: ProductMetricOnboardingStep?
+    let provider: TranscriptionProvider?
+    let audioDurationBucket: ProductMetricAudioDurationBucket?
+    let latencyBucket: ProductMetricLatencyBucket?
+    let deliveryStatus: ProductMetricDeliveryStatus?
+    let failureCategory: ProductMetricFailureCategory?
+
+    init(_ sample: ProductMetricSample) {
+        schemaVersion = ProductMetricSample.currentSchemaVersion
+        timestamp = sample.timestamp
+        productVersion = Self.safeVersion(sample.productVersion)
+        productBuild = Self.safeVersion(sample.productBuild)
+        event = sample.event
+        onboardingStep = sample.onboardingStep
+        provider = sample.provider
+        audioDurationBucket = sample.audioDurationBucket
+        latencyBucket = sample.latencyBucket
+        deliveryStatus = sample.deliveryStatus
+        failureCategory = sample.failureCategory
+    }
+
+    private static func safeVersion(_ value: String) -> String {
+        let allowed = CharacterSet(
+            charactersIn: "0123456789.-+"
+        )
+        let bounded = String(value.prefix(32))
+        guard
+            !bounded.isEmpty,
+            bounded.unicodeScalars.allSatisfy(allowed.contains)
+        else {
+            return "other"
+        }
+        return bounded
     }
 }
 
@@ -282,7 +332,12 @@ struct SupportDiagnosticsExporter {
             attributes: [.posixPermissions: NSNumber(value: Int16(0o700))]
         )
 
-        let latencySamples = loadRedactedLatencySamples(fileManager: fileManager)
+        let latencySamples = loadRedactedLatencySamples(
+            fileManager: fileManager
+        )
+        let productMetricSamples = loadRedactedProductMetricSamples(
+            fileManager: fileManager
+        )
         let crashSummaries = loadCrashSummaries(fileManager: fileManager)
         let summary = makeSummary(
             config: config,
@@ -290,6 +345,7 @@ struct SupportDiagnosticsExporter {
             permissionSnapshot: permissionSnapshot,
             signatureState: signatureState,
             latencySampleCount: latencySamples.count,
+            productMetricSampleCount: productMetricSamples.count,
             crashSummaryCount: crashSummaries.count
         )
 
@@ -297,6 +353,9 @@ struct SupportDiagnosticsExporter {
             "README.txt": Data(Self.readmeText.utf8),
             "summary.json": try encodedJSON(summary),
             "latency.jsonl": try encodedJSONLines(latencySamples),
+            "product-metrics.jsonl": try encodedJSONLines(
+                productMetricSamples
+            ),
             "crash-summary.json": try encodedJSON(crashSummaries),
         ]
         files["SHA256SUMS"] = Data(
@@ -358,6 +417,7 @@ struct SupportDiagnosticsExporter {
         permissionSnapshot: PermissionStatusSnapshot,
         signatureState: AccessibilityPermission.SignatureState,
         latencySampleCount: Int,
+        productMetricSampleCount: Int,
         crashSummaryCount: Int
     ) -> SupportDiagnosticsSummary {
         SupportDiagnosticsSummary(
@@ -417,12 +477,19 @@ struct SupportDiagnosticsExporter {
                     .diagnosticsRetentionDays,
                 diagnosticsRecordLimit: config.privacy
                     .diagnosticsRecordLimit,
+                productMetricsEnabled:
+                    config.privacy.productMetricsEnabled,
+                productMetricsRetentionDays:
+                    config.privacy.productMetricsRetentionDays,
+                productMetricsRecordLimit:
+                    config.privacy.productMetricsRecordLimit,
                 excludesSensitiveApps: config.privacy.excludeSensitiveApps,
                 additionalSensitiveAppCount: config.privacy
                     .additionalSensitiveAppBundleIdentifiers.count
             ),
             included: .init(
                 redactedLatencySampleCount: latencySampleCount,
+                productMetricSampleCount: productMetricSampleCount,
                 crashSummaryCount: crashSummaryCount
             )
         )
@@ -443,6 +510,26 @@ struct SupportDiagnosticsExporter {
                 directoryURL: applicationSupportURL
             ).loadRecent(limit: 1_000)) ?? []
         ).map(SupportLatencySample.init)
+    }
+
+    private func loadRedactedProductMetricSamples(
+        fileManager: FileManager
+    ) -> [SupportProductMetricSample] {
+        let dataURL = applicationSupportURL
+            .appendingPathComponent("product-metrics.jsonl")
+        guard isRegularNonSymbolicFile(
+            dataURL,
+            fileManager: fileManager
+        ) else {
+            return []
+        }
+
+        return (
+            (try? ProductMetricsRecorder(
+                fileManager: fileManager,
+                directoryURL: applicationSupportURL
+            ).loadRecent(limit: 5_000)) ?? []
+        ).map(SupportProductMetricSample.init)
     }
 
     private func loadCrashSummaries(
@@ -782,6 +869,7 @@ struct SupportDiagnosticsExporter {
     - product, operating-system, permission, authentication-state, and signing-state summaries
     - non-secret configuration flags and retention values
     - redacted local latency records
+    - opt-in local product metrics with enum and bucket values only
     - whitelisted metadata from up to five recent OpenWhisper crash reports
     - SHA-256 checksums for every included file
 

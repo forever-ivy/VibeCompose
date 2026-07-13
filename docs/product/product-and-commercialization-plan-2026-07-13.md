@@ -557,6 +557,7 @@ StorageCleanupService
 - 产品界面自动截图使用独立隐私模式，默认配置、空内存认证和空用户内容，避免发布素材意外包含真实邮箱、端点、历史、Recovery 或术语。
 - 安装版无障碍结构门禁覆盖六个 Settings pane、Onboarding 全部四步、History、Terminology 和 Quick Add；它验证可操作控件名称并保持用户数据隔离，但不替代真实键盘、VoiceOver、高对比度和权限交互。
 - 长时间安装版交互验收可通过显式私有模式启动，使用默认展示数据、不写回真实配置或 Onboarding 状态，并在官方 Computer Use 验收后恢复正常菜单栏进程。
+- 隐私友好的产品指标 Alpha 基础已完成：默认关闭、只在本机保存，不生成用户/安装标识；只记录启动、Onboarding 步骤和听写/Retry 的枚举结果、用户主动丢弃及音频时长/处理延迟区间，并可由用户随 Delete All Data 删除或主动纳入脱敏诊断。
 
 持续验收：
 
@@ -807,7 +808,7 @@ North Star：
 - 统一首页、README、设置页、定价页和结账文案；
 - 统一 GitHub owner、Release、落地页和 Homebrew 链接；
 - 增加独立项目和非官方关系声明；
-- 增加隐私友好的匿名漏斗指标；
+- 增加隐私友好的匿名漏斗指标（本地、默认关闭的 Alpha 基础已完成）；
 - 禁止上传录音、文本、剪贴板、账号和 Token；
 - 修复 Managed Token endpoint 白名单；
 - 招募 30 名 ChatGPT + Mac 测试用户；
