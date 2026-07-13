@@ -72,6 +72,9 @@ final class PreferencesWindowController: NSWindowController {
             onOpenOnboarding: onOpenOnboarding,
             focusPane: focusPane
         )
+        .applyingAccessibilityDisplayOptionsOverride(
+            .currentVisualAcceptance
+        )
         let hostingController = NSHostingController(rootView: view)
 
         let window = CommandClosingWindow(
@@ -92,6 +95,8 @@ final class PreferencesWindowController: NSWindowController {
             window.center()
         }
         window.contentViewController = hostingController
+        AccessibilityDisplayOptionsOverride.currentVisualAcceptance
+            .applyAppearance(to: window)
 
         super.init(window: window)
     }

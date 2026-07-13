@@ -100,6 +100,77 @@ func productSurfaceAcceptanceCoversInstalledManagementWindows() throws {
     #expect(verifier.contains("sampledColorBucketCount"))
 }
 
+@Test
+func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
+    let root = repositoryRoot()
+    let script = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/accessibility_visual_acceptance.sh"
+        ),
+        encoding: .utf8
+    )
+    let verifier = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_accessibility_visual_acceptance.swift"
+        ),
+        encoding: .utf8
+    )
+
+    #expect(script.contains("/Applications/$APP_NAME.app"))
+    #expect(script.contains("--visual-acceptance-increase-contrast"))
+    #expect(script.contains("--visual-acceptance-reduce-motion=off"))
+    #expect(script.contains("verify_accessibility_visual_acceptance.swift"))
+    #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
+    for surface in [
+        "settings-account",
+        "settings-dictation",
+        "settings-ai-polish",
+        "settings-paste",
+        "settings-privacy",
+        "settings-advanced",
+        "onboarding-welcome",
+        "onboarding-connect",
+        "onboarding-microphone",
+        "onboarding-practice",
+        "history",
+        "terminology",
+        "quick-add",
+    ] {
+        #expect(script.contains(surface))
+        #expect(verifier.contains(surface))
+    }
+    #expect(verifier.contains("changed pixels"))
+    #expect(verifier.contains("luminance spread"))
+    #expect(verifier.contains("geometryMismatch"))
+    #expect(verifier.contains("weakerContrast"))
+}
+
+@Test
+func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
+    let root = repositoryRoot()
+    for source in [
+        "PreferencesWindowController.swift",
+        "OnboardingWindowController.swift",
+        "HistoryWindowController.swift",
+        "TerminologyWindowController.swift",
+        "TerminologyQuickAddWindowController.swift",
+        "MicrophonePermissionWindowController.swift",
+    ] {
+        let content = try String(
+            contentsOf: root
+                .appendingPathComponent("Sources/OpenWhisper")
+                .appendingPathComponent(source),
+            encoding: .utf8
+        )
+        #expect(
+            content.contains(
+                "applyingAccessibilityDisplayOptionsOverride"
+            )
+        )
+        #expect(content.contains("applyAppearance(to: window)"))
+    }
+}
+
 private func repositoryRoot() -> URL {
     URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()

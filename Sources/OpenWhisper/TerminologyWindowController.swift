@@ -68,7 +68,13 @@ final class TerminologyWindowController: NSWindowController {
         config: AppConfig,
         onSave: @escaping (AppConfig) -> Result<Void, any Error>
     ) {
-        let view = TerminologyManagerView(initialConfig: config, onSave: onSave)
+        let view = TerminologyManagerView(
+            initialConfig: config,
+            onSave: onSave
+        )
+        .applyingAccessibilityDisplayOptionsOverride(
+            .currentVisualAcceptance
+        )
         let hostingController = NSHostingController(rootView: view)
         let window = TerminologyCommandClosingWindow(
             contentRect: NSRect(x: 0, y: 0, width: 920, height: 620),
@@ -88,6 +94,8 @@ final class TerminologyWindowController: NSWindowController {
             window.center()
         }
         window.contentViewController = hostingController
+        AccessibilityDisplayOptionsOverride.currentVisualAcceptance
+            .applyAppearance(to: window)
 
         super.init(window: window)
     }

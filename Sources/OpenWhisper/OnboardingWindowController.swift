@@ -41,6 +41,8 @@ final class OnboardingWindowController: NSWindowController {
         onCompleted: @escaping () -> Void
     ) {
         self.stateStore = stateStore
+        let accessibilityDisplayOptionsOverride =
+            AccessibilityDisplayOptionsOverride.currentVisualAcceptance
 
         let placeholder = OnboardingView(
             authManager: authManager,
@@ -48,6 +50,9 @@ final class OnboardingWindowController: NSWindowController {
             onRequestMicrophoneAccess: onRequestMicrophoneAccess,
             onStepCompleted: onStepCompleted,
             onComplete: {}
+        )
+        .applyingAccessibilityDisplayOptionsOverride(
+            accessibilityDisplayOptionsOverride
         )
         let hostingController = NSHostingController(rootView: placeholder)
         let window = OnboardingWindow(
@@ -65,23 +70,28 @@ final class OnboardingWindowController: NSWindowController {
         window.contentMaxSize = NSSize(width: 760, height: 540)
         window.center()
         window.contentViewController = hostingController
+        accessibilityDisplayOptionsOverride.applyAppearance(to: window)
 
         super.init(window: window)
 
-        hostingController.rootView = OnboardingView(
-            authManager: authManager,
-            initialStep: initialStep,
-            onRequestMicrophoneAccess: onRequestMicrophoneAccess,
-            onStepCompleted: onStepCompleted,
-            onComplete: { [weak self] in
-                guard let self else {
-                    return
+        hostingController.rootView =
+            OnboardingView(
+                authManager: authManager,
+                initialStep: initialStep,
+                onRequestMicrophoneAccess: onRequestMicrophoneAccess,
+                onStepCompleted: onStepCompleted,
+                onComplete: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.stateStore.markCompleted(if: persistCompletion)
+                    self.window?.orderOut(nil)
+                    onCompleted()
                 }
-                self.stateStore.markCompleted(if: persistCompletion)
-                self.window?.orderOut(nil)
-                onCompleted()
-            }
-        )
+            )
+            .applyingAccessibilityDisplayOptionsOverride(
+                accessibilityDisplayOptionsOverride
+            )
     }
 
     @available(*, unavailable)

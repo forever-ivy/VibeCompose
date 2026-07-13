@@ -42,6 +42,9 @@ final class HistoryWindowController: NSWindowController {
             onDeleteTranscriptionRecord: onDeleteTranscriptionRecord,
             onDeleteRecoveryRecord: onDeleteRecoveryRecord
         )
+        .applyingAccessibilityDisplayOptionsOverride(
+            .currentVisualAcceptance
+        )
         let hostingController = NSHostingController(rootView: view)
         let window = HistoryCommandClosingWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 640),
@@ -61,6 +64,8 @@ final class HistoryWindowController: NSWindowController {
             window.center()
         }
         window.contentViewController = hostingController
+        AccessibilityDisplayOptionsOverride.currentVisualAcceptance
+            .applyAppearance(to: window)
 
         super.init(window: window)
     }

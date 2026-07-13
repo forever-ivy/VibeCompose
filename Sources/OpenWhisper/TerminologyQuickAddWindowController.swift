@@ -91,6 +91,9 @@ final class TerminologyQuickAddWindowController: NSWindowController {
                 weakWindow?.close()
             }
         )
+        .applyingAccessibilityDisplayOptionsOverride(
+            .currentVisualAcceptance
+        )
         let hostingController = NSHostingController(rootView: view)
         let window = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 390),
@@ -108,6 +111,8 @@ final class TerminologyQuickAddWindowController: NSWindowController {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.tabbingMode = .disallowed
         window.contentViewController = hostingController
+        AccessibilityDisplayOptionsOverride.currentVisualAcceptance
+            .applyAppearance(to: window)
         window.center()
 
         super.init(window: window)

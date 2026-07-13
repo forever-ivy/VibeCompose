@@ -10,7 +10,12 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
             onContinue: {},
             onCancel: {}
         )
-        let hostingController = NSHostingController(rootView: view)
+        let hostingController = NSHostingController(
+            rootView:
+                view.applyingAccessibilityDisplayOptionsOverride(
+                    .currentVisualAcceptance
+                )
+        )
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 250),
@@ -26,17 +31,23 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
         window.center()
         window.level = .normal
         window.contentViewController = hostingController
+        AccessibilityDisplayOptionsOverride.currentVisualAcceptance
+            .applyAppearance(to: window)
 
         super.init(window: window)
 
-        hostingController.rootView = MicrophonePermissionView(
-            onContinue: { [weak self] in
-                self?.finish(with: true)
-            },
-            onCancel: { [weak self] in
-                self?.finish(with: false)
-            }
-        )
+        hostingController.rootView =
+            MicrophonePermissionView(
+                onContinue: { [weak self] in
+                    self?.finish(with: true)
+                },
+                onCancel: { [weak self] in
+                    self?.finish(with: false)
+                }
+            )
+            .applyingAccessibilityDisplayOptionsOverride(
+                .currentVisualAcceptance
+            )
         window.delegate = self
     }
 

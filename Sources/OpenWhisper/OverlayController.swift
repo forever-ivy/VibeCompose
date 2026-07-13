@@ -57,36 +57,6 @@ struct OverlayPresentationGeneration: Sendable, Equatable {
     }
 }
 
-struct AccessibilityDisplayOptions: Sendable, Equatable {
-    let reduceMotion: Bool
-    let increaseContrast: Bool
-
-    @MainActor
-    static var system: AccessibilityDisplayOptions {
-        AccessibilityDisplayOptions(
-            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-            increaseContrast: NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-        )
-    }
-}
-
-struct AccessibilityDisplayOptionsOverride: Sendable, Equatable {
-    let reduceMotion: Bool?
-    let increaseContrast: Bool?
-
-    static let none = AccessibilityDisplayOptionsOverride(
-        reduceMotion: nil,
-        increaseContrast: nil
-    )
-
-    func applying(to base: AccessibilityDisplayOptions) -> AccessibilityDisplayOptions {
-        AccessibilityDisplayOptions(
-            reduceMotion: reduceMotion ?? base.reduceMotion,
-            increaseContrast: increaseContrast ?? base.increaseContrast
-        )
-    }
-}
-
 struct OverlayAccessibilityAppearance: Sendable, Equatable {
     let backgroundBorderWidth: CGFloat
     let backgroundBorderAlpha: CGFloat
