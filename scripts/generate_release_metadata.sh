@@ -11,7 +11,23 @@ ARCH="${OPENWHISPER_RELEASE_ARCHITECTURE:-$(uname -m)}"
 ZIP_PATH="$ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-macos-${ARCH}.zip"
 DMG_PATH="$ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-macos-${ARCH}.dmg"
 OUTPUT_PATH="${OPENWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
-RELEASE_BASE_URL="https://github.com/${OPENWHISPER_REPOSITORY}/releases/download/v${OPENWHISPER_VERSION}"
+DEFAULT_RELEASE_BASE_URL="https://github.com/${OPENWHISPER_REPOSITORY}/releases/download/v${OPENWHISPER_VERSION}"
+RELEASE_BASE_URL="${OPENWHISPER_RELEASE_BASE_URL:-$DEFAULT_RELEASE_BASE_URL}"
+RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"
+
+if [[ "${OPENWHISPER_REQUIRE_DEVELOPER_ID:-0}" == "1" \
+  && -z "${OPENWHISPER_RELEASE_BASE_URL:-}" ]]; then
+  echo "Commercial release metadata requires OPENWHISPER_RELEASE_BASE_URL pointing to a public HTTPS artifact host." >&2
+  exit 1
+fi
+[[ "$RELEASE_BASE_URL" == https://* \
+  && "$RELEASE_BASE_URL" != *"@"* \
+  && "$RELEASE_BASE_URL" != *"?"* \
+  && "$RELEASE_BASE_URL" != *"#"* \
+  && "$RELEASE_BASE_URL" != *[[:space:]\<\>\"\'\\]* ]] || {
+  echo "OPENWHISPER_RELEASE_BASE_URL must be a credential-free HTTPS directory URL without query or fragment." >&2
+  exit 1
+}
 
 [[ -f "$ZIP_PATH" ]] || {
   echo "Missing release ZIP: $ZIP_PATH" >&2

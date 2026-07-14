@@ -1,7 +1,7 @@
 # OpenWhisper macOS 产品化改造计划
 
 > 日期：2026-07-13
-> 状态：执行版 v1
+> 状态：执行版 v2；仓库内产品能力与发布门禁基础已完成，商业发布外部证据仍阻断
 > 范围：只启动 macOS 产品线
 > 当前版本：`0.1.0 Alpha`
 > 输入依据：安全审计、UI 对标调研、产品与商业化分析
@@ -76,6 +76,29 @@ macOS 首发策略：
 - 私有 Alpha 双语政策和诊断导出已完成；永久商业运营主体、法律/隐私/支持联系方式和结账条款未完成；
 - 远程签名能力 Kill Switch 的客户端、缓存、反重放、生成/验签脚本和发布门禁已完成；生产 URL、独立密钥、首份签名策略和事故演练未完成；
 - 当前自动化全绿仍只属于 precheck，不能替代 `/Applications/OpenWhisper.app` 的真实交互证据。
+- 当前工作名 `OpenWhisper` 与另一款已经发布的 macOS 语音转文字产品发生同品类名称冲突；`release/brand-clearance.json` 必须保持 `blocked`，直到选择独立名称或取得书面法律清查结论。
+
+2026-07-14 商业发布基础进展：
+
+- 新增 `scripts/verify_productization_readiness.py`，将仓库/source、
+  commercial prebuild 和 commercial final 三类门禁分开；商业门禁会拒绝
+  缺失或占位的运营主体、品牌、Beta、安装版、签名、托管、密钥隔离、
+  Git/tag、产物和 Cask 证据；
+- 新增 `scripts/release_commercial.sh prepare|finalize`，Prepare 只构建和
+  签名一次，Finalize 不重新构建；
+- 新增候选包归档与恢复脚本，以独立 SHA-256、源码 commit、仓库、产品
+  identity、版本、build、架构、manifest 和 ZIP/DMG 哈希绑定跨 Actions run
+  的精确候选产物；
+- GitHub Actions 商业发布 workflow 固定 macOS 26、Xcode 26.6 和三个
+  action commit；Developer ID、notary、Sparkle 私钥和 Capability 私钥只在
+  `prepare` 阶段可见，`finalize` 只恢复候选产物和执行公开验证；
+- 商业 Developer ID metadata 必须使用显式公共 HTTPS 下载根地址，不能把
+  private GitHub repository 当作 Sparkle 或公共下载源；
+- Homebrew Cask 同时由 manifest 写入精确 ZIP URL 与 SHA-256；
+- 远程发布验证会下载 ZIP、DMG、appcast 和 Provider Policy，校验产物
+  SHA-256，并要求远程 appcast / Policy 与门禁通过的本地文件逐字节一致；
+- 已提供双语 `0.1.0 Alpha` 发布说明、商业证据模板和生产变量清单；模板
+  即使只把状态改成 approved 也无法通过门禁。
 
 2026-07-13 Phase 4 进展：
 
@@ -198,6 +221,11 @@ UI 调研确认的主要问题：
 - 中英文名称、口号和独立项目声明定稿；
 - MIT 许可证原始版权与许可声明保留；
 - 第三方依赖许可证清单生成。
+
+当前清查结论不是“待确认”，而是**已发现直接冲突并阻断发布**。详见
+`docs/product/brand-clearance-2026-07-14.md`。在名称决策前，代码中的
+OpenWhisper 只作为工作 identity，不得被解释为已取得商标、域名或市场
+可用性。
 
 ### 4.3 仓库目标结构
 
@@ -783,7 +811,7 @@ OpenWhisperLicensing   许可证与收据
 
 ## 12. 版本路线图
 
-### Phase 0：身份与仓库基线（已启动）
+### Phase 0：身份与仓库基线（仓库实现已完成）
 
 目标：形成单一 OpenWhisper 产品身份。
 
@@ -796,7 +824,7 @@ OpenWhisperLicensing   许可证与收据
 - `0.1.0` Alpha 基线可构建、安装和运行；
 - 三份输入报告纳入新的文档结构。
 
-### Phase 1：安全阻断项（第 1–2 周）
+### Phase 1：安全阻断项（代码与回归已完成）
 
 - OW-SEC-001 至 OW-SEC-004；
 - URL 强校验；
@@ -807,7 +835,7 @@ OpenWhisperLicensing   许可证与收据
 
 退出条件：所有 P0 关闭，PoC 无法复现。
 
-### Phase 2：隐私与状态机（第 3–4 周）
+### Phase 2：隐私与状态机（代码与回归已完成）
 
 - DictationSession generation；
 - 录音硬上限；
@@ -819,7 +847,7 @@ OpenWhisperLicensing   许可证与收据
 
 退出条件：隐私默认值与文档一致，迟到异步结果不能污染新会话。
 
-### Phase 3：原生体验（第 5–7 周）
+### Phase 3：原生体验（实现完成；真实安装版交互证据待补）
 
 - Settings 原生化；
 - 4 步 Onboarding；
@@ -830,7 +858,7 @@ OpenWhisperLicensing   许可证与收据
 
 退出条件：clean TCC 新用户可完成首次成功听写，关键流程可键盘和 VoiceOver 操作。
 
-### Phase 4：分发基础（第 8–9 周）
+### Phase 4：分发基础（失败关闭工具完成；生产身份与托管待补）
 
 - Developer ID；
 - notarization/staple；
@@ -842,7 +870,7 @@ OpenWhisperLicensing   许可证与收据
 
 退出条件：全新 Mac 可下载、验证、安装、更新和卸载。
 
-### Phase 5：Closed Beta（第 10–12 周）
+### Phase 5：Closed Beta（未启动）
 
 - 30–50 名目标用户；
 - 首次成功漏斗；
@@ -854,7 +882,7 @@ OpenWhisperLicensing   许可证与收据
 
 退出条件：Beta 指标达标，无未关闭 P0/P1 发布阻断项。
 
-### Phase 6：Founder Pro（第 13–16 周）
+### Phase 6：Founder Pro（本地许可证与高级工作流基础完成；商业服务未启动）
 
 - License Manager；
 - Direct/Reply/Email/Agent Plan；
@@ -866,7 +894,7 @@ OpenWhisperLicensing   许可证与收据
 
 退出条件：付费理由来自工作流价值，不是上游额度承诺。
 
-### Phase 7：1.0 商业发布
+### Phase 7：1.0 商业发布（阻断）
 
 只有同时满足以下条件才发布：
 
@@ -877,6 +905,17 @@ OpenWhisperLicensing   许可证与收据
 - 品牌名称完成公开发布清查；
 - 上游故障时存在可用恢复路径；
 - 安装版真实流程验收通过。
+
+当前阶段判定：
+
+| 阶段 | 仓库内实现 | 外部/人工证据 | 发布判定 |
+| --- | --- | --- | --- |
+| Phase 0–2 | 已完成 | 需随发布持续回归 | 可继续 |
+| Phase 3 | UI、状态与自动化已完成 | clean TCC、键盘、VoiceOver、Notes/第三方矩阵未完成 | 不可签收 |
+| Phase 4 | 签名、公证、Sparkle、Policy、Cask、候选包和门禁工具已完成 | Developer ID、notary、公共托管、真实更新/回滚未完成 | 阻断 |
+| Phase 5 | 指标采集边界和模板已完成 | 30–50 人 Beta 未执行 | 阻断 |
+| Phase 6 | 本地签名收据和 Pro 权益边界已完成 | Checkout、激活/停用、席位恢复、退款撤销未完成 | 阻断付费 |
+| Phase 7 | Go/No-Go 门禁已编码 | 品牌、主体、支持、发布与 installed evidence 未通过 | 阻断 |
 
 ## 13. 统一 Backlog
 
@@ -910,6 +949,8 @@ OpenWhisperLicensing   许可证与收据
 | OW-MAC-026 | P1 | 第三方依赖许可证门禁（已实现） | Package.resolved/Release | 每个 pin 均有精确 notices 与 SHA-256，App 资源和 release gate 一致 |
 | OW-MAC-027 | P1 | 测试临时音频生命周期（已实现） | CI/Storage | 完整检查前后不新增大体积临时 WAV；失败测试不长期占用系统盘 |
 | OW-MAC-028 | P1 | Provider 错误分类、退避与 route 熔断（已实现） | Provider boundary | 401 单次刷新、429 等待、5xx/网络有限重试、half-open 取消可恢复 |
+| OW-MAC-029 | P1 | 两阶段商业发布与产品化 readiness（已实现，待真实配置） | Developer ID/Hosting/Evidence | Prepare 与 Finalize 不重建；候选 commit/hash/manifest 一致 |
+| OW-MAC-030 | P0 | 选择可清查的新名称或取得书面法律 clearance | Product owner/Legal | `brand-clearance.json` 真实 approved 且无冲突 |
 
 ## 14. 第一执行 Sprint（10 个工作日）
 
@@ -1017,7 +1058,7 @@ Founder Pro Go：
 | --- | ---: | ---: | --- |
 | 上游私有路径变化 | 高 | 严重 | Provider 抽象、熔断、恢复路径、快速更新 |
 | 账户限制或 OAuth 变化 | 中高 | 严重 | 降低重试、明确边界、准备 BYOK/本地替代 |
-| 品牌名称冲突 | 中 | 高 | 付费公开发布前完成 clearance |
+| 品牌名称冲突 | 已发生 | 高 | 停止当前名称的公开商业发布；改名或取得书面 clearance |
 | TCC/签名不稳定 | 中 | 高 | 固定 Developer ID、安装路径和真实验收 |
 | 音频/文本隐私事故 | 中 | 严重 | 默认删除、最小留存、敏感 App 策略 |
 | 自动粘贴到错误目标 | 中 | 严重 | 每次重新验证、无法证明即复制 |

@@ -7,14 +7,16 @@ on:
 
 jobs:
   macos:
-    runs-on: macos-latest
+    runs-on: macos-26
     env:
       OPENWHISPER_ALLOW_ADHOC_SIGNING: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
       - name: Shell Syntax
         run: find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Productization Source Readiness
+        run: python3 scripts/verify_productization_readiness.py --stage source
       - name: Product Check
         run: ./scripts/check.sh

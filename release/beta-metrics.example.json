@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "status": "template",
+  "measuredAt": "2026-07-14T00:00:00Z",
+  "participants": 30,
+  "firstSuccessRate": 0.95,
+  "retrySuccessRate": 0.99,
+  "crashFreeSessionRate": 0.995,
+  "wrongTargetPasteCount": 0,
+  "openP0Blockers": 0,
+  "openP1Blockers": 0,
+  "evidenceLocation": "REPLACE WITH REVIEWABLE AGGREGATE BETA REPORT"
+}

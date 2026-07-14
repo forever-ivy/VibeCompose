@@ -10,7 +10,7 @@ load_version_env "$ROOT/version.env"
 APP="$ROOT/dist/$OPENWHISPER_APP_NAME.app"
 DMG="$ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-macos-$(uname -m).dmg"
 MANIFEST="${OPENWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
-CASK="$ROOT/packaging/homebrew/Casks/openwhisper.rb"
+CASK="${OPENWHISPER_CASK_PATH:-$ROOT/packaging/homebrew/Casks/openwhisper.rb}"
 EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
 APPCAST="${OPENWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
 CAPABILITY_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
@@ -21,6 +21,10 @@ CAPABILITY_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-cap
 }
 [[ -d "$APP" && -f "$DMG" && -f "$MANIFEST" ]] || {
   echo "Missing signed release artifacts or release manifest." >&2
+  exit 1
+}
+[[ -f "$CASK" && ! -L "$CASK" ]] || {
+  echo "Missing regular Homebrew Cask release file: $CASK" >&2
   exit 1
 }
 
@@ -56,7 +60,11 @@ ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$APP" 2>/dev/null || tru
 
 MANIFEST_VERSION="$(/usr/bin/plutil -extract release.version raw -o - "$MANIFEST")"
 MANIFEST_BUILD="$(/usr/bin/plutil -extract release.build raw -o - "$MANIFEST")"
+ZIP_FILENAME="$(/usr/bin/plutil -extract artifacts.0.fileName raw -o - "$MANIFEST")"
 ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$MANIFEST")"
+ZIP_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.0.downloadURL raw -o - "$MANIFEST")"
+DMG_FILENAME="$(/usr/bin/plutil -extract artifacts.1.fileName raw -o - "$MANIFEST")"
+DMG_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.1.downloadURL raw -o - "$MANIFEST")"
 [[ "$MANIFEST_VERSION" == "$OPENWHISPER_VERSION" ]] || {
   echo "Release manifest version mismatch." >&2
   exit 1
@@ -65,8 +73,17 @@ ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$MANIFEST")"
   echo "Release manifest build mismatch." >&2
   exit 1
 }
+if [[ -n "${OPENWHISPER_RELEASE_BASE_URL:-}" ]]; then
+  EXPECTED_RELEASE_BASE_URL="${OPENWHISPER_RELEASE_BASE_URL%/}"
+  [[ "$ZIP_DOWNLOAD_URL" == "$EXPECTED_RELEASE_BASE_URL/$ZIP_FILENAME" \
+    && "$DMG_DOWNLOAD_URL" == "$EXPECTED_RELEASE_BASE_URL/$DMG_FILENAME" ]] || {
+    echo "Release manifest artifact URLs do not match OPENWHISPER_RELEASE_BASE_URL." >&2
+    exit 1
+  }
+fi
 grep -q "version \"$OPENWHISPER_VERSION\"" "$CASK"
 grep -q "sha256 \"$ZIP_SHA256\"" "$CASK"
+grep -Fq "url \"$ZIP_DOWNLOAD_URL\"" "$CASK"
 if grep -q "sha256 :no_check" "$CASK"; then
   echo "Homebrew Cask checksum verification is disabled." >&2
   exit 1
@@ -120,6 +137,16 @@ fi
   echo "Signed updater public key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
+if [[ -n "${OPENWHISPER_SPARKLE_FEED_URL:-}" \
+  && "$FEED_URL" != "$OPENWHISPER_SPARKLE_FEED_URL" ]]; then
+  echo "Signed updater feed does not match the configured production feed." >&2
+  exit 1
+fi
+if [[ -n "${OPENWHISPER_SPARKLE_PUBLIC_ED_KEY:-}" \
+  && "$PUBLIC_KEY" != "$OPENWHISPER_SPARKLE_PUBLIC_ED_KEY" ]]; then
+  echo "Signed updater public key does not match the configured production key." >&2
+  exit 1
+fi
 
 if ! CAPABILITY_POLICY_URL="$(/usr/bin/plutil -extract OWCapabilityPolicyURL raw -o - "$PLIST" 2>/dev/null)"; then
   echo "Signed provider capability policy is not configured (missing OWCapabilityPolicyURL)." >&2
@@ -140,6 +167,16 @@ fi
   echo "Signed provider capability policy key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
+if [[ -n "${OPENWHISPER_CAPABILITY_POLICY_URL:-}" \
+  && "$CAPABILITY_POLICY_URL" != "$OPENWHISPER_CAPABILITY_POLICY_URL" ]]; then
+  echo "Provider capability policy URL does not match the production configuration." >&2
+  exit 1
+fi
+if [[ -n "${OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}" \
+  && "$CAPABILITY_PUBLIC_KEY" != "$OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY" ]]; then
+  echo "Provider capability public key does not match the production configuration." >&2
+  exit 1
+fi
 
 PRO_PREVIEW_ENABLED="$(/usr/bin/plutil -extract OWProPreviewEnabled raw -o - "$PLIST" 2>/dev/null || true)"
 [[ "$PRO_PREVIEW_ENABLED" == "false" ]] || {
@@ -154,6 +191,11 @@ fi
   echo "Commercial license verification key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
+if [[ -n "${OPENWHISPER_LICENSE_PUBLIC_ED_KEY:-}" \
+  && "$LICENSE_PUBLIC_KEY" != "$OPENWHISPER_LICENSE_PUBLIC_ED_KEY" ]]; then
+  echo "Commercial license public key does not match the production configuration." >&2
+  exit 1
+fi
 
 [[ -f "$CAPABILITY_POLICY" && ! -L "$CAPABILITY_POLICY" ]] || {
   echo "Missing regular signed provider capability policy: $CAPABILITY_POLICY" >&2
@@ -179,7 +221,6 @@ grep -Eq \
     echo "Sparkle appcast build does not match the release build." >&2
     exit 1
   }
-ZIP_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.0.downloadURL raw -o - "$MANIFEST")"
 grep -Fq "$ZIP_DOWNLOAD_URL" "$APPCAST" || {
   echo "Sparkle appcast download URL does not match the release manifest." >&2
   exit 1

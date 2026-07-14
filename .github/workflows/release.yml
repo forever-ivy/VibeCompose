@@ -1,0 +1,264 @@
+name: Commercial Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Prepare a notarized candidate or finalize already-published assets
+        required: true
+        type: choice
+        options:
+          - prepare
+          - finalize
+      prepare_run_id:
+        description: Required for finalize; Actions run ID that produced the candidate
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    environment: production
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate release phase input
+        env:
+          PHASE: ${{ inputs.phase }}
+          PREPARE_RUN_ID: ${{ inputs.prepare_run_id }}
+        run: |
+          set -euo pipefail
+          case "$PHASE" in
+            prepare)
+              ;;
+            finalize)
+              [[ "$PREPARE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || {
+                echo "finalize requires the numeric run ID from the successful prepare workflow." >&2
+                exit 64
+              }
+              ;;
+            *)
+              echo "Unsupported release phase: $PHASE" >&2
+              exit 64
+              ;;
+          esac
+
+      - name: Select fixed Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          test "$(uname -m)" = arm64
+          swift --version
+          xcodebuild -version
+
+      - name: Configure protected signing material
+        if: inputs.phase == 'prepare'
+        env:
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          RELEASE_KEYCHAIN_PASSWORD: ${{ secrets.RELEASE_KEYCHAIN_PASSWORD }}
+          SPARKLE_PRIVATE_KEY_BASE64: ${{ secrets.SPARKLE_PRIVATE_KEY_BASE64 }}
+          CAPABILITY_PRIVATE_KEY_BASE64: ${{ secrets.CAPABILITY_PRIVATE_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in \
+            APPLE_DEVELOPER_ID_P12_BASE64 \
+            APPLE_DEVELOPER_ID_P12_PASSWORD \
+            APPLE_NOTARY_KEY_P8_BASE64 \
+            APPLE_NOTARY_KEY_ID \
+            APPLE_NOTARY_ISSUER_ID \
+            RELEASE_KEYCHAIN_PASSWORD \
+            SPARKLE_PRIVATE_KEY_BASE64 \
+            CAPABILITY_PRIVATE_KEY_BASE64; do
+            [[ -n "${!name:-}" ]] || {
+              echo "Missing protected release secret: $name" >&2
+              exit 1
+            }
+          done
+
+          umask 077
+          RELEASE_DIRECTORY="$RUNNER_TEMP/openwhisper-release"
+          RELEASE_KEYCHAIN="$RUNNER_TEMP/openwhisper-release.keychain-db"
+          mkdir -p "$RELEASE_DIRECTORY"
+          printf '%s' "$APPLE_DEVELOPER_ID_P12_BASE64" \
+            | /usr/bin/base64 -D >"$RELEASE_DIRECTORY/developer-id.p12"
+          printf '%s' "$APPLE_NOTARY_KEY_P8_BASE64" \
+            | /usr/bin/base64 -D >"$RELEASE_DIRECTORY/AuthKey.p8"
+          printf '%s' "$SPARKLE_PRIVATE_KEY_BASE64" \
+            | /usr/bin/base64 -D >"$RELEASE_DIRECTORY/sparkle.key"
+          printf '%s' "$CAPABILITY_PRIVATE_KEY_BASE64" \
+            | /usr/bin/base64 -D >"$RELEASE_DIRECTORY/capability.key"
+          chmod 600 "$RELEASE_DIRECTORY/"*
+
+          security create-keychain -p "$RELEASE_KEYCHAIN_PASSWORD" "$RELEASE_KEYCHAIN"
+          security set-keychain-settings -lut 7200 "$RELEASE_KEYCHAIN"
+          security unlock-keychain -p "$RELEASE_KEYCHAIN_PASSWORD" "$RELEASE_KEYCHAIN"
+          security import "$RELEASE_DIRECTORY/developer-id.p12" \
+            -k "$RELEASE_KEYCHAIN" \
+            -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$RELEASE_KEYCHAIN_PASSWORD" \
+            "$RELEASE_KEYCHAIN"
+          security list-keychains -d user -s "$RELEASE_KEYCHAIN" login.keychain-db
+
+          xcrun notarytool store-credentials openwhisper-ci-notary \
+            --key "$RELEASE_DIRECTORY/AuthKey.p8" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --keychain "$RELEASE_KEYCHAIN"
+
+      - name: Download prepared candidate
+        if: inputs.phase == 'finalize'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: openwhisper-commercial-candidate
+          path: ${{ runner.temp }}/openwhisper-candidate-download
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.prepare_run_id }}
+
+      - name: Restore exact prepared candidate
+        if: inputs.phase == 'finalize'
+        run: |
+          set -euo pipefail
+          source scripts/lib/load_env.sh
+          load_version_env "$GITHUB_WORKSPACE/version.env"
+          scripts/restore_release_candidate.sh \
+            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.zip" \
+            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.sha256"
+
+      - name: Prepare notarized commercial candidate
+        if: inputs.phase == 'prepare'
+        env:
+          OPENWHISPER_CODESIGN_IDENTITY: ${{ secrets.OPENWHISPER_CODESIGN_IDENTITY }}
+          OPENWHISPER_TEAM_ID: ${{ secrets.OPENWHISPER_TEAM_ID }}
+          OPENWHISPER_NOTARY_PROFILE: openwhisper-ci-notary
+          OPENWHISPER_NOTARY_KEYCHAIN: ${{ runner.temp }}/openwhisper-release.keychain-db
+          OPENWHISPER_RELEASE_BASE_URL: ${{ vars.OPENWHISPER_RELEASE_BASE_URL }}
+          OPENWHISPER_SPARKLE_FEED_URL: ${{ vars.OPENWHISPER_SPARKLE_FEED_URL }}
+          OPENWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_SPARKLE_PUBLIC_ED_KEY }}
+          OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE: ${{ runner.temp }}/openwhisper-release/sparkle.key
+          OPENWHISPER_CAPABILITY_POLICY_URL: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_URL }}
+          OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
+          OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE: ${{ runner.temp }}/openwhisper-release/capability.key
+          OPENWHISPER_CAPABILITY_POLICY_REVISION: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_REVISION }}
+          OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT }}
+          OPENWHISPER_LICENSE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_LICENSE_PUBLIC_ED_KEY }}
+          OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
+        run: scripts/release_commercial.sh prepare
+
+      - name: Archive exact prepared candidate
+        if: inputs.phase == 'prepare'
+        env:
+          OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
+        run: |
+          set -euo pipefail
+          source scripts/lib/load_env.sh
+          load_version_env "$GITHUB_WORKSPACE/version.env"
+          scripts/archive_release_candidate.sh \
+            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.zip" \
+            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.sha256"
+
+      - name: Persist prepared candidate for finalize
+        if: inputs.phase == 'prepare'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openwhisper-commercial-candidate
+          path: |
+            ${{ runner.temp }}/OpenWhisper-*-commercial-candidate.zip
+            ${{ runner.temp }}/OpenWhisper-*-commercial-candidate.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Finalize published commercial release
+        if: inputs.phase == 'finalize'
+        env:
+          OPENWHISPER_TEAM_ID: ${{ secrets.OPENWHISPER_TEAM_ID }}
+          OPENWHISPER_RELEASE_BASE_URL: ${{ vars.OPENWHISPER_RELEASE_BASE_URL }}
+          OPENWHISPER_SPARKLE_FEED_URL: ${{ vars.OPENWHISPER_SPARKLE_FEED_URL }}
+          OPENWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_SPARKLE_PUBLIC_ED_KEY }}
+          OPENWHISPER_CAPABILITY_POLICY_URL: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_URL }}
+          OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
+          OPENWHISPER_LICENSE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_LICENSE_PUBLIC_ED_KEY }}
+          OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
+        run: scripts/release_commercial.sh finalize
+
+      - name: Upload reviewable release evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openwhisper-${{ inputs.phase }}-${{ github.sha }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*.xml
+            dist/*.json
+            dist/SHA256SUMS
+            dist/openwhisper.rb
+            dist/productization-readiness/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or refresh draft GitHub release after final gate
+        if: inputs.phase == 'finalize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source scripts/lib/load_env.sh
+          load_version_env "$GITHUB_WORKSPACE/version.env"
+          TAG="v$OPENWHISPER_VERSION"
+          ASSETS=(
+            "dist/OpenWhisper-$OPENWHISPER_VERSION-macos-arm64.zip"
+            "dist/OpenWhisper-$OPENWHISPER_VERSION-macos-arm64.dmg"
+            "dist/OpenWhisper-$OPENWHISPER_VERSION-release-evidence.zip"
+            "dist/appcast.xml"
+            "dist/provider-capabilities.json"
+            "dist/release-manifest.json"
+            "dist/SHA256SUMS"
+            "dist/openwhisper.rb"
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+            [[ "$IS_DRAFT" == "true" ]] || {
+              echo "Refusing to replace an existing published GitHub release." >&2
+              exit 1
+            }
+            gh release edit "$TAG" \
+              --draft \
+              --title "OpenWhisper $OPENWHISPER_VERSION" \
+              --notes-file "docs/releases/v$OPENWHISPER_VERSION.md"
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" \
+              --draft \
+              --verify-tag \
+              --title "OpenWhisper $OPENWHISPER_VERSION" \
+              --notes-file "docs/releases/v$OPENWHISPER_VERSION.md" \
+              "${ASSETS[@]}"
+          fi
+
+      - name: Destroy temporary release credentials
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/openwhisper-release.keychain-db" 2>/dev/null || true
+          rm -rf \
+            "$RUNNER_TEMP/openwhisper-release" \
+            "$RUNNER_TEMP/openwhisper-candidate-download"
+          rm -f \
+            "$RUNNER_TEMP"/OpenWhisper-*-commercial-candidate.zip \
+            "$RUNNER_TEMP"/OpenWhisper-*-commercial-candidate.sha256

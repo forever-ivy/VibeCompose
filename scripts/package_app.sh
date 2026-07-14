@@ -39,6 +39,7 @@ REQUIRE_DEVELOPER_ID="${OPENWHISPER_REQUIRE_DEVELOPER_ID:-0}"
 EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
 NOTARIZE="${OPENWHISPER_NOTARIZE:-0}"
 NOTARY_PROFILE="${OPENWHISPER_NOTARY_PROFILE:-}"
+NOTARY_KEYCHAIN="${OPENWHISPER_NOTARY_KEYCHAIN:-}"
 SPARKLE_FEED_URL="${OPENWHISPER_SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${OPENWHISPER_SPARKLE_PUBLIC_ED_KEY:-}"
 CAPABILITY_POLICY_URL="${OPENWHISPER_CAPABILITY_POLICY_URL:-}"
@@ -399,10 +400,19 @@ if [[ "$NOTARIZE" == "1" ]]; then
     exit 1
   fi
 
+  NOTARY_AUTH_ARGUMENTS=(--keychain-profile "$NOTARY_PROFILE")
+  if [[ -n "$NOTARY_KEYCHAIN" ]]; then
+    [[ -f "$NOTARY_KEYCHAIN" && ! -L "$NOTARY_KEYCHAIN" ]] || {
+      echo "OPENWHISPER_NOTARY_KEYCHAIN must name a regular keychain file." >&2
+      exit 1
+    }
+    NOTARY_AUTH_ARGUMENTS+=(--keychain "$NOTARY_KEYCHAIN")
+  fi
+
   /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$NOTARY_ZIP_PATH"
   /usr/bin/xcrun notarytool submit \
     "$NOTARY_ZIP_PATH" \
-    --keychain-profile "$NOTARY_PROFILE" \
+    "${NOTARY_AUTH_ARGUMENTS[@]}" \
     --wait
   /usr/bin/xcrun stapler staple "$APP_DIR"
   /usr/bin/xcrun stapler validate "$APP_DIR"
@@ -422,7 +432,7 @@ cp -R "$APP_DIR" "$DMG_STAGING_DIR/"
 if [[ "$NOTARIZE" == "1" ]]; then
   /usr/bin/xcrun notarytool submit \
     "$DMG_PATH" \
-    --keychain-profile "$NOTARY_PROFILE" \
+    "${NOTARY_AUTH_ARGUMENTS[@]}" \
     --wait
   /usr/bin/xcrun stapler staple "$DMG_PATH"
   /usr/bin/xcrun stapler validate "$DMG_PATH"

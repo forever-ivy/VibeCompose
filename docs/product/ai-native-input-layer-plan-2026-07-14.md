@@ -1,14 +1,28 @@
 # OpenWhisper AI-native 输入层完整方案
 
 > 日期：2026-07-14
-> 状态：产品与技术方案 v2；Phase 1–5 已落地，Phase 6 安全研究边界已完成
+> 状态：实施收口版 v3；Phase 0–5 仓库实现完成，Phase 6 安全研究边界完成，商业安装版证据另受发布门禁约束
 > 当前基线：`0.1.0 Alpha`
 > 范围：macOS 原生客户端、Skills、上下文、个性化、视觉反馈与可自定义全局热键
 > 与现有计划的关系：本方案是当前 V1 听写闭环之上的 AI-native 实施主线，不替代签名、公证、更新、权限和安全粘贴等发布门禁。
 
 ## 实施进度更新
 
-截至 2026-07-14，本方案已完成 Phase 0–5 的 macOS 本地产品能力，并完成 Phase 6 的 Registry、Connector 与 Action 安全研究边界。Phase 6 当前是“设计与门禁完成”，不是“已经开放远程 Registry 或外部动作”。
+截至 2026-07-14，本方案定义的 Phase 0–5 macOS 本地产品能力已经进入源码、
+配置迁移、双语 UI、自动化测试、安装版脚本和工程文档；Phase 6 的 Registry、
+Connector 与 Action 安全研究边界也已完成。Phase 6 当前是“设计与门禁完成”，
+不是“已经开放远程 Registry 或外部动作”。
+
+“规划完成”在本文中的含义是：
+
+- 当前 AI-native Alpha 的仓库内功能、数据模型、安全边界和回归测试已落地；
+- 远程 Registry、认证发布者和外部 Action 被明确排除，而不是以未完成代码
+  留在运行时；
+- 剩余事项属于商业发布与真实 installed-app acceptance：Developer ID、
+  notarization、公共托管、品牌/主体/Beta、clean TCC、键盘、VoiceOver、
+  Notes/第三方编辑器、更新和回滚证据；
+- 自动化或 ad-hoc 安装版不能替代上述人工/生产证据，也不能把当前 Alpha
+  描述为商业可发布。
 
 Phase 1–3 已完成：
 
@@ -1360,7 +1374,7 @@ struct VisualFeedbackConfig: Codable {
 - 确认声明式 Skill 边界；
 - 确认首批内置 Skills。
 
-### Phase 1 — 交互基础：自定义热键与新 HUD（已完成）
+### Phase 1 — 交互基础：自定义热键与新 HUD（仓库实现完成）
 
 交付：
 
@@ -1371,15 +1385,19 @@ struct VisualFeedbackConfig: Codable {
 - Blue Signal Frame；
 - Hidden；
 - Appearance & Feedback 设置；
-- 安装版视觉、快捷键和无障碍验收。
+- 安装版视觉、快捷键和无障碍验收脚本。
 
-退出条件：
+仓库退出条件：
 
 - 默认 F5 行为完全不回退；
 - 自定义快捷键重启后仍生效；
 - 冲突不会破坏旧快捷键；
 - 三种 HUD 模式覆盖完整状态；
 - 正常安装版最终保持运行。
+
+商业发布仍需补充官方 Computer Use / 人工可审阅的真实键盘、VoiceOver、
+多显示器、全屏、Spaces 和 Stage Manager 证据。该证据缺失不反向否定
+Phase 1 的代码完成，但会继续阻断商业 release。
 
 ### Phase 2 — Skill Runtime 内核（已完成）
 
@@ -1400,7 +1418,7 @@ struct VisualFeedbackConfig: Codable {
 - Skill 不能绕过输出和隐私规则；
 - Golden tests 全绿。
 
-### Phase 3 — 选区上下文与 Preview（已完成）
+### Phase 3 — 选区上下文与 Preview（仓库实现完成）
 
 交付：
 
@@ -1411,12 +1429,15 @@ struct VisualFeedbackConfig: Codable {
 - Context Reply；
 - 权限卡和撤销入口。
 
-退出条件：
+仓库退出条件：
 
 - 选区变化时绝不自动覆盖；
 - 敏感 App 默认拒绝；
 - 无 Accessibility 时稳定 copy-only；
-- TextEdit、Notes、浏览器编辑器和 Codex 的安装版矩阵有明确结果。
+- 自动化覆盖同目标替换、选区变化 copy-only、敏感 App 和无 Accessibility。
+
+发布级矩阵仍需在 TextEdit、Notes、浏览器编辑器和 Codex/第三方编辑器中
+使用 `/Applications/OpenWhisper.app` 留下可审阅结果。
 
 ### Phase 4 — Style Capsule 与 Terminology Packs（已完成）
 
@@ -1755,18 +1776,19 @@ struct VisualFeedbackConfig: Codable {
 
 > **Speak your intent. Get usable output.**
 
-## 23. 推荐下一步
+## 23. 实施收口与发布前下一步
 
-Phase 1–5 已完成，Phase 6 已完成研究边界。下一阶段不是继续扩张权限，而是把当前 macOS Alpha 做成可发布、可验证、可运营的产品：
+Phase 1–5 的仓库实现和 Phase 6 研究边界已经完成。下一阶段不再属于本
+AI-native 功能计划的范围扩张，而是把当前 macOS Alpha 做成可发布、可验证、
+可运营的产品：
 
 1. 对 Context、Terminology、AI Polish / Community Skills 三个 Settings 页面执行安装版键盘、焦点、VoiceOver、导入、回滚和删除验收；
 2. 用真实可编辑目标完成 F5 开始/停止、Esc、inline close、Retry、选区未变化替换和选区变化 copy-only 的完整安装版证明；
-3. 增加 Community Skill 真实安装包的中文错误文案、损坏包恢复和版本迁移回归；
-4. 对 Style Capsule 创建流程做隐私文案和“样本已清空”可见反馈验收；
-5. 继续收紧性能、崩溃恢复、权限状态和 Provider 故障体验；
-6. 完成 Developer ID、Hardened Runtime、公证、生产 Sparkle、签名 Provider Policy、签名 License 和商业运营信息门禁；
-7. 在真实用户质量数据证明 Skills、Preview 和术语层有价值之前，不启用远程 Registry；
-8. 在 Connector 权限、Action Preview、幂等、不确定结果和 installed-app 矩阵全部完成之前，不启用任何外部 Action。
+3. 对 Style Capsule 的“样本已清空”反馈和 Community Skill 的中文错误、损坏包恢复、版本回滚执行真实安装版验收；
+4. 完成 Developer ID、Hardened Runtime、公证、生产 Sparkle、签名 Provider Policy、签名 License、公共 HTTPS 托管和真实更新/回滚；
+5. 完成永久商业运营主体、法律/隐私/支持/Checkout、30–50 人 Beta 和品牌名称决策；当前 `OpenWhisper` 名称冲突继续阻断商业发布；
+6. 在真实用户质量数据证明 Skills、Preview 和术语层有价值之前，不启用远程 Registry；
+7. 在 Connector 权限、Action Preview、幂等、不确定结果和 installed-app 矩阵全部完成之前，不启用任何外部 Action。
 
 当前落地已经解决：
 
@@ -1779,3 +1801,22 @@ Phase 1–5 已完成，Phase 6 已完成研究边界。下一阶段不是继续
 - **社区扩展缺少可审计、不可执行的本地包边界**。
 
 因此，产品化重点现在从“继续增加能力”转为“完成安装版交互证据、发行基础设施、商业门禁和受控用户验证”。远程生态和外部动作必须继续晚于稳定性、隐私和安全证明。
+
+## 24. 规划完成判定
+
+本计划的仓库内实施判定为 **完成**：
+
+| 范围 | 判定 | 主要证据 |
+| --- | --- | --- |
+| Phase 0–1 | 完成 | `HotkeyBinding`、原子注册、三种 Feedback Surface、设置与视觉脚本 |
+| Phase 2 | 完成 | `SkillRuntime.swift`、稳定 Skill ID、Resolver、Compiler、Validator、迁移测试 |
+| Phase 3 | 完成 | `ContextRuntime.swift`、`PreviewRuntime.swift`、选区冻结/复验与 Diff Preview 测试 |
+| Phase 4 | 完成 | `PersonalizationRuntime.swift`、Style Capsule、Domain Packs、风险与优先级测试 |
+| Phase 5 | 完成 | `CommunitySkillRuntime.swift`、本地包审查、版本回滚、Inspector、Golden tests 与 SDK |
+| Phase 6 | 安全研究完成，运行时关闭 | `registry-and-actions-boundary.md` 与导入器的 `externalAction` / `actionPreview` 拒绝 |
+
+本计划的商业发布判定仍为 **阻断**，且阻断项由
+`docs/product/macos-productization-plan-2026-07-13.md`、
+`scripts/verify_productization_readiness.py` 和 `release/` 证据文件管理。
+二者不能混为一谈：AI-native 功能计划完成，不代表 Developer ID、品牌、
+运营、Beta 或真实 installed-app release acceptance 已经完成。

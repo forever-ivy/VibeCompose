@@ -2,7 +2,9 @@
 
 > Decision date: July 13, 2026
 >
-> Status: Sparkle 2.9.4 integrated in the private alpha; production feed and signing key not yet configured
+> Status: Sparkle 2.9.4 and fail-closed publication verification integrated;
+> production feed, signing key, hosting, and installed update/rollback evidence
+> not yet configured
 >
 > Commercial release gate: blocked until the implementation and installed update/rollback proof are complete
 
@@ -31,15 +33,34 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
 8. Reject a feed or archive whose signature, bundle ID, Team ID, version, architecture, or minimum macOS requirement is invalid.
 9. Test update from the previous supported build, interrupted download, invalid signature, malformed appcast, downgrade attempt, failed relaunch, and rollback.
 10. Archive the notarized artifact, appcast, signatures, symbols, release metadata, and checksums.
+11. Publish from the exact prepared candidate. Finalization must restore the
+    source-commit-bound candidate from the earlier prepare run rather than
+    rebuilding or regenerating the update archive.
 
 ## Current Repository Guards
 
-- `scripts/generate_release_metadata.sh` creates a machine-readable manifest for the ZIP and DMG with exact SHA-256 values and byte counts.
-- `scripts/update_homebrew_cask.sh` replaces the fail-closed Cask checksum only from that manifest.
+- `scripts/generate_release_metadata.sh` creates a machine-readable manifest
+  for the ZIP and DMG with exact SHA-256 values, byte counts, and public HTTPS
+  URLs. A Developer ID release requires an explicit public artifact base URL;
+  the private GitHub repository is not treated as the production feed.
+- `scripts/update_homebrew_cask.sh` replaces both the fail-closed Cask URL and
+  checksum only from that manifest.
 - `scripts/package_app.sh` embeds and signs the pinned Sparkle framework and rejects partial or unsafe updater configuration.
 - Ad-hoc local builds add `com.apple.security.cs.disable-library-validation` because ad-hoc code has no shared Team ID; the Developer ID release gate explicitly rejects that local-only entitlement.
 - `scripts/check_packaged_app.sh` verifies the embedded framework version, runtime link/rpath, and paired HTTPS feed/public-key configuration.
 - `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper success, manifest/Cask consistency, the pinned Sparkle framework, `SUFeedURL`, `SUPublicEDKey`, and a matching signed appcast.
+- `scripts/verify_remote_release_assets.sh` downloads the published ZIP, DMG,
+  appcast, and provider policy without redirects, verifies artifact hashes,
+  requires the remote appcast/policy to be byte-identical to the locally gated
+  files, and verifies their signatures.
+- `scripts/archive_release_candidate.sh` and
+  `scripts/restore_release_candidate.sh` preserve executable modes and the
+  exact signed App across separate `prepare` and `finalize` Actions runs. The
+  archive is checked against a separate SHA-256 and the exact source commit,
+  version, build, architecture, manifest, and artifact hashes.
+- The commercial workflow exposes the Sparkle private key only during
+  `prepare`; `finalize` verifies published assets without receiving that
+  private key.
 - Private-alpha builds intentionally omit production feed/key values. The commercial release gate therefore remains fail-closed until permanent update hosting and signing-key material are supplied.
 
 ## Key Management
@@ -48,6 +69,9 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
 - Store the private key in a dedicated secrets manager or release keychain.
 - Restrict CI access to protected release environments.
 - Pin only the public key in the app.
+- Keep Sparkle, provider capability, and license signing keys distinct.
+- Never place private keys under the repository tree; the source-readiness
+  gate and `.gitignore` reserve common release secret paths.
 - Document key rotation before the first public build. Rotation must be authorized by an already trusted release or a separately authenticated recovery process.
 
 ## Rollback and Minimum Versions

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "status": "template",
+  "installedApp": "/Applications/OpenWhisper.app",
+  "checks": {
+    "installedApplicationsPath": true,
+    "developerIDSignature": true,
+    "notarizedAndStapled": true,
+    "cleanTCCOnboarding": true,
+    "defaultF5StartStop": true,
+    "customHotkeyStartStop": true,
+    "escapeCancel": true,
+    "inlineCloseCancel": true,
+    "retryReentry": true,
+    "textEditVerifiedInsert": true,
+    "notesDelivery": true,
+    "thirdPartyEditorDelivery": true,
+    "selectionStableReplace": true,
+    "selectionChangedCopyOnly": true,
+    "settingsKeyboard": true,
+    "onboardingKeyboard": true,
+    "historyKeyboard": true,
+    "terminologyKeyboard": true,
+    "voiceOver": true,
+    "reduceMotion": true,
+    "increaseContrast": true,
+    "multiDisplay": true,
+    "fullScreen": true,
+    "spaces": true,
+    "stageManager": true,
+    "updateFromPrevious": true,
+    "interruptedUpdate": true,
+    "invalidUpdateSignature": true,
+    "downgradeRejected": true,
+    "rollbackAfterFailedRelaunch": true,
+    "uninstall": true
+  },
+  "evidence": [
+    {
+      "id": "installed-interaction",
+      "observer": "REPLACE WITH HUMAN OBSERVER",
+      "observedAt": "2026-07-14T00:00:00Z",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "accessibility",
+      "observer": "REPLACE WITH HUMAN OBSERVER",
+      "observedAt": "2026-07-14T00:00:00Z",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "compatibility",
+      "observer": "REPLACE WITH HUMAN OBSERVER",
+      "observedAt": "2026-07-14T00:00:00Z",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "update-rollback",
+      "observer": "REPLACE WITH HUMAN OBSERVER",
+      "observedAt": "2026-07-14T00:00:00Z",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

@@ -1,5 +1,8 @@
 # OpenWhisper Brand and Product Identity
 
+> Working identity only. Commercial/public launch clearance is currently
+> **blocked**; see `brand-clearance-2026-07-14.md`.
+
 ## Canonical Identity
 
 | Surface | Value |
@@ -30,4 +33,20 @@
 
 ## Public-Launch Clearance
 
-OpenWhisper is the current working product name. Before a paid public launch, complete name, trademark, domain, App Store, GitHub, and social-handle clearance. If clearance fails, repeat the identity migration before issuing stable licenses or notarized updates.
+OpenWhisper remains the current repository and alpha working name, but the
+clearance gate has failed: an independently maintained macOS speech-to-text
+application already uses the same name and publishes releases.
+
+Until the product owner chooses a distinct name or obtains documented legal
+clearance:
+
+- do not issue paid licenses or a Stable notarized release under this name;
+- do not publish production domains, Sparkle feeds, Homebrew listings, or
+  marketplace entries under this name;
+- do not mark `release/brand-clearance.json` as approved;
+- continue repository engineering only as a working identity.
+
+Any future rename must repeat the single-identity migration across source,
+bundle ID, data paths, Keychain, packaging, update metadata, legal copy,
+support surfaces, and release evidence while preserving the MIT license
+notice.

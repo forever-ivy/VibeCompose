@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "status": "template",
+  "legalName": "REPLACE WITH COMMERCIAL OPERATOR",
+  "tradingName": "REPLACE WITH PUBLIC PRODUCT OPERATOR",
+  "jurisdiction": "REPLACE WITH JURISDICTION",
+  "legalAddress": "REPLACE WITH PUBLIC LEGAL ADDRESS",
+  "legalEmail": "legal@example.invalid",
+  "privacyEmail": "privacy@example.invalid",
+  "supportEmail": "support@example.invalid",
+  "operatorURL": "https://example.invalid/",
+  "privacyURL": "https://example.invalid/privacy",
+  "termsURL": "https://example.invalid/terms",
+  "refundURL": "https://example.invalid/refunds",
+  "supportURL": "https://example.invalid/support",
+  "securityURL": "https://example.invalid/security",
+  "checkoutProvider": "REPLACE WITH CHECKOUT PROVIDER",
+  "checkoutURL": "https://example.invalid/checkout",
+  "merchantOfRecord": "REPLACE WITH MERCHANT OF RECORD",
+  "effectiveAt": "2026-07-14T00:00:00Z"
+}

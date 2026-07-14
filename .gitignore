@@ -9,6 +9,15 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 *.log
+__pycache__/
+*.pyc
 *.owlicense
 *license-private*.key
 /.secrets
+/release/production.env
+/release/private/
+/release/secrets/
+/release/*.key
+/release/*.p8
+/release/*.p12
+/release/*.pem

@@ -67,6 +67,8 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(!packageScript.contains("source \"$VERSION_ENV\""))
     #expect(packageScript.contains("OPENWHISPER_REQUIRE_DEVELOPER_ID"))
     #expect(packageScript.contains("notarytool submit"))
+    #expect(packageScript.contains("OPENWHISPER_NOTARY_KEYCHAIN"))
+    #expect(packageScript.contains("NOTARY_AUTH_ARGUMENTS"))
     #expect(packageScript.contains("stapler validate"))
     #expect(packageScript.contains("spctl --assess"))
     #expect(packageScript.contains("SHA256SUMS"))
@@ -339,10 +341,50 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
         ),
         encoding: .utf8
     )
+    let metadataScript = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/generate_release_metadata.sh"
+        ),
+        encoding: .utf8
+    )
     let releaseGate = try String(
         contentsOf: root.appendingPathComponent(
             "scripts/verify_release_gate.sh"
         ),
+        encoding: .utf8
+    )
+    let remoteReleaseVerifier = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_remote_release_assets.sh"
+        ),
+        encoding: .utf8
+    )
+    let commercialRelease = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/release_commercial.sh"
+        ),
+        encoding: .utf8
+    )
+    let releaseWorkflow = try String(
+        contentsOf: root.appendingPathComponent(
+            ".github/workflows/release.yml"
+        ),
+        encoding: .utf8
+    )
+    let candidateArchiver = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/archive_release_candidate.sh"
+        ),
+        encoding: .utf8
+    )
+    let candidateRestorer = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/restore_release_candidate.sh"
+        ),
+        encoding: .utf8
+    )
+    let gitignore = try String(
+        contentsOf: root.appendingPathComponent(".gitignore"),
         encoding: .utf8
     )
     let updaterDecision = try String(
@@ -386,6 +428,15 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     )
     #expect(updateCaskScript.contains("^[0-9a-f]{64}$"))
     #expect(updateCaskScript.contains("must not use the unreleased fail-closed value"))
+    #expect(updateCaskScript.contains("ZIP_DOWNLOAD_URL"))
+    #expect(updateCaskScript.contains("OPENWHISPER_CASK_OUTPUT_PATH"))
+    #expect(metadataScript.contains("OPENWHISPER_RELEASE_BASE_URL"))
+    #expect(metadataScript.contains("OPENWHISPER_REQUIRE_DEVELOPER_ID"))
+    #expect(
+        metadataScript.contains(
+            "pointing to a public HTTPS artifact host"
+        )
+    )
     #expect(releaseGate.contains("Developer ID Application:"))
     #expect(releaseGate.contains("verify_repository_hygiene.py"))
     #expect(releaseGate.contains("OWLicensePublicEDKey"))
@@ -418,6 +469,8 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(appcastScript.contains("sparkle:edSignature"))
     #expect(appcastScript.contains("verify_sparkle_appcast.swift"))
     #expect(releaseGate.contains("verify_sparkle_appcast.swift"))
+    #expect(releaseGate.contains("OPENWHISPER_RELEASE_BASE_URL"))
+    #expect(releaseGate.contains("url \\\"$ZIP_DOWNLOAD_URL\\\""))
     #expect(
         capabilityPolicyGenerator.contains(
             "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE"
@@ -432,7 +485,238 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(packageManifest.contains(".product(name: \"Sparkle\""))
     #expect(packageResolution.contains("\"version\" : \"2.9.4\""))
     #expect(updaterDecision.contains("Sparkle 2"))
-    #expect(updaterDecision.contains("integrated in the private alpha"))
+    #expect(
+        updaterDecision.contains(
+            "fail-closed publication verification integrated"
+        )
+    )
+    #expect(remoteReleaseVerifier.contains("/usr/bin/cmp -s"))
+    #expect(remoteReleaseVerifier.contains("Published appcast does not exactly match"))
+    #expect(commercialRelease.contains("prepare|finalize"))
+    #expect(commercialRelease.contains("verify_remote_release_assets.sh"))
+    #expect(releaseWorkflow.contains("runs-on: macos-26"))
+    #expect(
+        releaseWorkflow.contains(
+            "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
+        )
+    )
+    #expect(
+        releaseWorkflow.contains(
+            "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
+        )
+    )
+    #expect(
+        releaseWorkflow.contains(
+            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        )
+    )
+    #expect(releaseWorkflow.contains("prepare_run_id"))
+    #expect(releaseWorkflow.contains("/usr/bin/base64 -D"))
+    #expect(releaseWorkflow.contains("load_version_env"))
+    #expect(!releaseWorkflow.contains("source version.env"))
+    #expect(!releaseWorkflow.contains("base64 --decode"))
+    #expect(releaseWorkflow.contains("scripts/release_commercial.sh prepare"))
+    #expect(releaseWorkflow.contains("scripts/release_commercial.sh finalize"))
+    #expect(releaseWorkflow.contains("scripts/archive_release_candidate.sh"))
+    #expect(releaseWorkflow.contains("scripts/restore_release_candidate.sh"))
+    #expect(candidateArchiver.contains("candidate-metadata.json"))
+    #expect(candidateArchiver.contains("sourceCommit"))
+    #expect(candidateArchiver.contains("/usr/bin/shasum -a 256"))
+    #expect(candidateRestorer.contains("Candidate source commit does not match"))
+    #expect(candidateRestorer.contains("maximum_uncompressed_bytes"))
+    #expect(candidateRestorer.contains("release-manifest.json"))
+    #expect(gitignore.contains("/release/production.env"))
+    #expect(gitignore.contains("/release/*.p12"))
+    #expect(gitignore.contains("/release/*.key"))
+}
+
+@Test
+func homebrewCaskUpdaterWritesManifestURLAndChecksumTogether() throws {
+    let root = repositoryRoot()
+    let temporaryDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "OpenWhisperCaskTests-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    try FileManager.default.createDirectory(
+        at: temporaryDirectory,
+        withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+    let manifestURL = temporaryDirectory.appendingPathComponent("release-manifest.json")
+    let outputURL = temporaryDirectory.appendingPathComponent("openwhisper.rb")
+    let checksum = String(repeating: "a", count: 64)
+    let downloadURL = "https://downloads.example.com/openwhisper/v0.1.0/OpenWhisper-0.1.0-macos-arm64.zip"
+    let manifest: [String: Any] = [
+        "release": ["version": "0.1.0"],
+        "artifacts": [
+            [
+                "kind": "zip",
+                "sha256": checksum,
+                "downloadURL": downloadURL,
+            ],
+        ],
+    ]
+    try JSONSerialization.data(
+        withJSONObject: manifest,
+        options: [.prettyPrinted, .sortedKeys]
+    ).write(to: manifestURL)
+
+    let updaterURL = root.appendingPathComponent(
+        "scripts/update_homebrew_cask.sh"
+    )
+    let result = try runBash(
+        """
+        OPENWHISPER_RELEASE_MANIFEST_PATH="$2" \
+        OPENWHISPER_CASK_OUTPUT_PATH="$3" \
+        "$1"
+        """,
+        arguments: [updaterURL.path, manifestURL.path, outputURL.path]
+    )
+    #expect(result.status == 0)
+    let cask = try String(contentsOf: outputURL, encoding: .utf8)
+    #expect(cask.contains("version \"0.1.0\""))
+    #expect(cask.contains("sha256 \"\(checksum)\""))
+    #expect(cask.contains("url \"\(downloadURL)\""))
+
+    var unsafeManifest = manifest
+    unsafeManifest["artifacts"] = [
+        [
+            "kind": "zip",
+            "sha256": checksum,
+            "downloadURL": "\(downloadURL)?token=secret",
+        ],
+    ]
+    try JSONSerialization.data(
+        withJSONObject: unsafeManifest,
+        options: [.prettyPrinted, .sortedKeys]
+    ).write(to: manifestURL)
+    let unsafeResult = try runBash(
+        """
+        OPENWHISPER_RELEASE_MANIFEST_PATH="$2" \
+        OPENWHISPER_CASK_OUTPUT_PATH="$3" \
+        "$1"
+        """,
+        arguments: [updaterURL.path, manifestURL.path, outputURL.path]
+    )
+    #expect(unsafeResult.status != 0)
+}
+
+@Test
+func productizationReadinessPassesSourceAndFailsClosedForCommercialTemplates() throws {
+    let root = repositoryRoot()
+    let verifierURL = root.appendingPathComponent(
+        "scripts/verify_productization_readiness.py"
+    )
+
+    let sourceResult = try runBash(
+        "python3 \"$1\" --root \"$2\" --stage source",
+        arguments: [verifierURL.path, root.path]
+    )
+    #expect(sourceResult.status == 0)
+    let sourceReport = try #require(
+        try JSONSerialization.jsonObject(
+            with: Data(sourceResult.stdout.utf8)
+        ) as? [String: Any]
+    )
+    #expect(sourceReport["passed"] as? Bool == true)
+
+    let temporaryDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(
+            "OpenWhisperReadinessTests-\(UUID().uuidString)",
+            isDirectory: true
+        )
+    let releaseDirectory = temporaryDirectory.appendingPathComponent(
+        "release",
+        isDirectory: true
+    )
+    try FileManager.default.createDirectory(
+        at: releaseDirectory,
+        withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+    for name in [
+        "commercial-operator",
+        "beta-metrics",
+        "installed-acceptance",
+    ] {
+        let source = root.appendingPathComponent(
+            "release/\(name).example.json"
+        )
+        let destination = releaseDirectory.appendingPathComponent(
+            "\(name).json"
+        )
+        var value = try #require(
+            try JSONSerialization.jsonObject(
+                with: Data(contentsOf: source)
+            ) as? [String: Any]
+        )
+        value["status"] = "approved"
+        try JSONSerialization.data(
+            withJSONObject: value,
+            options: [.prettyPrinted, .sortedKeys]
+        ).write(to: destination)
+    }
+
+    let templateResult = try runBash(
+        """
+        python3 - "$1" "$2" <<'PY'
+        import importlib.util
+        import pathlib
+        import sys
+
+        spec = importlib.util.spec_from_file_location("readiness", sys.argv[1])
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        root = pathlib.Path(sys.argv[2])
+
+        audits = []
+        for function in (
+            module.audit_operator,
+            module.audit_metrics,
+            module.audit_acceptance,
+        ):
+            audit = module.Audit()
+            function(root, audit)
+            audits.append(audit.passed)
+
+        if any(audits):
+            raise SystemExit("An approved template unexpectedly passed.")
+        PY
+        """,
+        arguments: [verifierURL.path, temporaryDirectory.path]
+    )
+    #expect(templateResult.status == 0)
+
+    let missingCask = temporaryDirectory.appendingPathComponent("missing.rb")
+    let finalResult = try runBash(
+        """
+        OPENWHISPER_CASK_PATH="$3" \
+        python3 "$1" --root "$2" --stage commercial --phase final
+        """,
+        arguments: [verifierURL.path, root.path, missingCask.path]
+    )
+    #expect(finalResult.status != 0)
+    #expect(!finalResult.stderr.contains("Traceback"))
+    let finalReport = try #require(
+        try JSONSerialization.jsonObject(
+            with: Data(finalResult.stdout.utf8)
+        ) as? [String: Any]
+    )
+    #expect(finalReport["passed"] as? Bool == false)
+    let gates = try #require(finalReport["gates"] as? [[String: Any]])
+    let caskGate = gates.first {
+        $0["identifier"] as? String == "commercial.cask-published-values"
+    }
+    #expect(caskGate?["passed"] as? Bool == false)
+    #expect(
+        gates.contains {
+            $0["identifier"] as? String == "commercial.private-key-files"
+        } == false
+    )
 }
 
 private func repositoryRoot() -> URL {

@@ -58,5 +58,35 @@
   disabled and a generated proof file, verifies the expected
   `paste_dispatched` clipboard fallback, removes every temporary artifact, and
   restores the complete pre-acceptance clipboard snapshot.
+- Replaced fixed Voice Modes with eight stable, versioned declarative Skills,
+  a deterministic resolver, fixed-order prompt compiler, local validators,
+  Direct fallback, app rules, migration compatibility, and redacted history
+  and diagnostics.
+- Added explicit selected-text context grants, sensitive-app denial before
+  capture, frozen AX element/range/text hashes, Context Rewrite and Context
+  Reply, local Diff Preview, and copy-only fallback when the selection changes.
+- Added five local Style Capsules, user-created Capsule analysis/edit/export/
+  deletion, per-Skill assignments, sample clearing, three built-in Domain
+  Packs, deterministic terminology precedence, conflict visibility, and
+  mandatory Preview for high-risk medical terminology.
+- Added constrained local `.openwhisperskill` import with package-size and
+  file-type limits, path/symlink/executable rejection, permission review,
+  content hashes, multi-version activation and rollback, disable/uninstall,
+  Skill Inspector, Golden contract tests, bilingual errors, and a maintained
+  example package.
+- Documented and enforced the Phase 6 boundary: no remote Registry, publisher
+  trust badge, arbitrary Action, Shell, file-system, custom-network, Keychain,
+  or generic MCP authority is enabled by Community Skills.
+- Added source, commercial-prebuild, and commercial-final productization
+  readiness gates for real operator, brand, beta, installed-app, signing,
+  public-hosting, key-isolation, tag, artifact, and Cask evidence. Approved
+  copies of placeholder templates remain fail-closed.
+- Added a pinned two-phase commercial GitHub Actions workflow. `prepare`
+  creates one Developer ID/notarized candidate; `finalize` restores the exact
+  source-commit-bound candidate with a separate SHA-256 instead of rebuilding
+  on a fresh runner, verifies byte-identical published appcast/policy files,
+  and withholds private signing keys from finalization.
+- Recorded a same-category OpenWhisper naming conflict as a blocking commercial
+  release gate rather than claiming trademark/domain clearance.
 
 OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.
