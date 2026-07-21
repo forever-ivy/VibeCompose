@@ -13,7 +13,7 @@ struct AppLaunchModeTests {
                     "--visual-feedback-mode",
                     "blue-signal-frame",
                 ]
-            ) == .blueSignalFrame
+            ) == .aiActivityGlow
         )
         #expect(
             AppLaunchMode.visualFeedbackModeOverride(
@@ -70,6 +70,39 @@ struct AppLaunchModeTests {
                     fileURLWithPath:
                         "/tmp/preview.png"
                 )
+        )
+    }
+
+    @Test
+    func previewDemoScenarioDefaultsAndParsesExplicitValues() {
+        #expect(
+            AppLaunchMode.previewDemoScenario(arguments: [])
+                == .replace
+        )
+        #expect(
+            AppLaunchMode.previewDemoScenario(
+                arguments: [
+                    "OpenWhisper",
+                    "--preview-demo-scenario",
+                    "paste",
+                ]
+            ) == .paste
+        )
+        #expect(
+            AppLaunchMode.previewDemoScenario(
+                arguments: [
+                    "OpenWhisper",
+                    "--preview-demo-scenario=fallback",
+                ]
+            ) == .fallback
+        )
+        #expect(
+            AppLaunchMode.previewDemoScenario(
+                arguments: [
+                    "OpenWhisper",
+                    "--preview-demo-scenario=unknown",
+                ]
+            ) == .replace
         )
     }
 
@@ -241,6 +274,26 @@ struct AppLaunchModeTests {
                 arguments: ["OpenWhisper", "--open-quick-add"]
             ) == .quickAdd
         )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--open-skill-library"]
+            ) == .skillLibrary
+        )
+        #expect(
+            AppLaunchMode.resolve(
+                environment: [:],
+                arguments: ["OpenWhisper", "--open-skill-switcher"]
+            ) == .skillSwitcher
+        )
+        #expect(
+            AppLaunchMode.skillLibrarySection(
+                arguments: [
+                    "OpenWhisper",
+                    "--skill-library-section=created",
+                ]
+            ) == .created
+        )
     }
 
     @Test
@@ -270,6 +323,24 @@ struct AppLaunchModeTests {
                     "/tmp/quick-add.png",
                 ]
             )?.path == "/tmp/quick-add.png"
+        )
+        #expect(
+            AppLaunchMode.skillLibrarySnapshotOutputURL(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--skill-library-snapshot-output",
+                    "/tmp/skill-library.png",
+                ]
+            )?.path == "/tmp/skill-library.png"
+        )
+        #expect(
+            AppLaunchMode.skillSwitcherSnapshotOutputURL(
+                environment: [
+                    "OPENWHISPER_SKILL_SWITCHER_SNAPSHOT_OUTPUT":
+                        "/tmp/skill-switcher.png",
+                ]
+            )?.path == "/tmp/skill-switcher.png"
         )
     }
 
@@ -493,6 +564,36 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
             AppLaunchMode.settingsSnapshotSize(
                 environment: [
                     "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "not-a-size",
+                ]
+            ) == nil
+        )
+    }
+
+    @Test
+    func settingsSnapshotLanguageIsExplicitAndBounded() {
+        #expect(
+            AppLaunchMode.settingsSnapshotLanguage(
+                environment: [
+                    "OPENWHISPER_SETTINGS_SNAPSHOT_LANGUAGE": "zh-Hans",
+                ]
+            ) == .simplifiedChinese
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotLanguage(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--settings-snapshot-language=en",
+                ]
+            ) == .english
+        )
+        #expect(
+            AppLaunchMode.settingsSnapshotLanguage(
+                environment: [:],
+                arguments: [
+                    "OpenWhisper",
+                    "--settings-snapshot-language",
+                    "unsupported",
                 ]
             ) == nil
         )

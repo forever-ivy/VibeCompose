@@ -72,6 +72,7 @@ final class TerminologyWindowController: NSWindowController {
             initialConfig: config,
             onSave: onSave
         )
+        .applyingOpenWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
         )
@@ -86,6 +87,8 @@ final class TerminologyWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.TerminologyWindow")
+        window.collectionBehavior.remove(.fullScreenPrimary)
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.minSize = NSSize(width: 760, height: 500)
         window.tabbingMode = .disallowed
         let restored = window.setFrameUsingName("OpenWhisper.TerminologyWindow")
@@ -106,8 +109,13 @@ final class TerminologyWindowController: NSWindowController {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     func writeSnapshot(to url: URL) throws {
@@ -129,11 +137,139 @@ private final class TerminologyCommandClosingWindow: NSWindow {
     }
 }
 
-private struct TerminologyManagerView: View {
+private struct TerminologyToolbarView: View {
+    @Binding var query: String
+    @Binding var isEnabled: Bool
+    @Binding var filter: TerminologyManagerFilter
+    @Binding var sort: TerminologyManagerSort
+    /// Embedded mode moves the enable toggle and Add button into the pane
+    /// header, so the secondary row only carries search and filtering.
+    var showsControls: Bool = true
+    let canExport: Bool
+    let onAdd: () -> Void
+    let onImport: () -> Void
+    let onExport: () -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            regularLayout
+            compactLayout
+        }
+        .controlSize(.small)
+        .openWhisperToolbar()
+    }
+
+    private var regularLayout: some View {
+        VStack(spacing: OpenWhisperMetrics.space10) {
+            HStack(spacing: OpenWhisperMetrics.space12) {
+                searchField
+                    .frame(minWidth: 190, maxWidth: .infinity)
+                if showsControls {
+                    enabledToggle
+                    addButton
+                }
+            }
+
+            HStack(spacing: OpenWhisperMetrics.space12) {
+                filterPicker
+                Spacer(minLength: 0)
+                sortMenu
+                importExportMenu
+            }
+        }
+    }
+
+    private var compactLayout: some View {
+        VStack(spacing: OpenWhisperMetrics.space10) {
+            searchField
+                .frame(maxWidth: .infinity)
+            if showsControls {
+                HStack(spacing: OpenWhisperMetrics.space10) {
+                    enabledToggle
+                    Spacer(minLength: 0)
+                    addButton
+                }
+            }
+            HStack(spacing: OpenWhisperMetrics.space10) {
+                filterPicker
+                    .frame(maxWidth: .infinity)
+                sortMenu
+                importExportMenu
+            }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .medium))
+            TextField(L10n.text("Search terminology"), text: $query)
+                .textFieldStyle(.plain)
+        }
+        .openWhisperSearchField()
+    }
+
+    private var enabledToggle: some View {
+        Toggle(L10n.text("Terminology enabled"), isOn: $isEnabled)
+            .toggleStyle(.switch)
+            .fixedSize()
+    }
+
+    /// Primary filter as App Store-style segmented control.
+    private var filterPicker: some View {
+        Picker(L10n.text("Filter"), selection: $filter) {
+            ForEach(TerminologyManagerFilter.allCases) { filter in
+                Text(L10n.text(filter.rawValue)).tag(filter)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 300)
+    }
+
+    /// Sort collapses into a menu so the toolbar never truncates at min width.
+    private var sortMenu: some View {
+        Menu {
+            Picker(L10n.text("Sort"), selection: $sort) {
+                ForEach(TerminologyManagerSort.allCases) { sort in
+                    Text(L10n.text(sort.rawValue)).tag(sort)
+                }
+            }
+        } label: {
+            Label(L10n.text(sort.rawValue), systemImage: "arrow.up.arrow.down.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+    }
+
+    private var addButton: some View {
+        Button(action: onAdd) {
+            Label(L10n.text("Add Entry"), systemImage: "plus")
+        }
+        .buttonStyle(OpenWhisperPrimaryButtonStyle())
+    }
+
+    private var importExportMenu: some View {
+        Menu {
+            Button(L10n.text("Import Dictionary…"), action: onImport)
+            Button(L10n.text("Export Dictionary…"), action: onExport)
+                .disabled(!canExport)
+        } label: {
+            Label(
+                L10n.text("Import / Export"),
+                systemImage: "square.and.arrow.down"
+            )
+        }
+    }
+}
+
+struct TerminologyManagerView: View {
     @State private var config: AppConfig
     @State private var query = ""
     @State private var filter: TerminologyManagerFilter = .all
     @State private var sort: TerminologyManagerSort = .alphabetical
+    @State private var filteredEntries: [TerminologyEntry]
     @State private var selectedEntryID: UUID?
     @State private var draft: TerminologyEditorDraft?
     @State private var pendingImport: TerminologyImportPreview?
@@ -142,28 +278,62 @@ private struct TerminologyManagerView: View {
     @State private var messageIsError = false
 
     let onSave: (AppConfig) -> Result<Void, any Error>
+    let isEmbedded: Bool
 
     init(
         initialConfig: AppConfig,
+        isEmbedded: Bool = false,
         onSave: @escaping (AppConfig) -> Result<Void, any Error>
     ) {
         _config = State(initialValue: initialConfig)
+        _filteredEntries = State(
+            initialValue: Self.makeFilteredEntries(
+                entries: initialConfig.transcription.terminology.entries,
+                query: "",
+                filter: .all,
+                sort: .alphabetical
+            )
+        )
+        self.isEmbedded = isEmbedded
         self.onSave = onSave
+    }
+
+    private var terminologyEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { config.transcription.terminology.enabled },
+            set: { value in
+                setTerminologyEnabled(value)
+            }
+        )
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            if isEmbedded {
+                OpenWhisperPaneHeader(title: L10n.text("Terminology")) {
+                    Toggle(
+                        L10n.text("Terminology enabled"),
+                        isOn: terminologyEnabledBinding
+                    )
+                    .toggleStyle(.switch)
+                    .fixedSize()
+                    addEntryButton
+                        .controlSize(.large)
+                }
+            }
             toolbar
-            Divider()
+            Divider().opacity(0.45)
 
-            NavigationSplitView {
+            HStack(spacing: 0) {
                 entryList
-                    .navigationSplitViewColumnWidth(min: 310, ideal: 360, max: 430)
-            } detail: {
+                    .frame(width: 320)
+                Divider().opacity(0.45)
                 editorDetail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 760, minHeight: 500)
+        .frame(minHeight: 500)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onChange(of: selectedEntryID) { id in
             guard let id,
                   let entry = config.transcription.terminology.entries.first(where: { $0.id == id })
@@ -174,6 +344,18 @@ private struct TerminologyManagerView: View {
                 return
             }
             draft = TerminologyEditorDraft(entry: entry)
+        }
+        .onChange(of: config.transcription.terminology.entries) { _ in
+            refreshFilteredEntries()
+        }
+        .onChange(of: query) { _ in
+            refreshFilteredEntries()
+        }
+        .onChange(of: filter) { _ in
+            refreshFilteredEntries()
+        }
+        .onChange(of: sort) { _ in
+            refreshFilteredEntries()
         }
         .sheet(item: $pendingImport) { preview in
             TerminologyImportPreviewView(
@@ -205,63 +387,29 @@ private struct TerminologyManagerView: View {
     }
 
     private var toolbar: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Text(L10n.text("Terminology enabled"))
-                    .font(.system(size: 12, weight: .medium))
-                Toggle(
-                    L10n.text("Terminology enabled"),
-                    isOn: Binding(
-                        get: { config.transcription.terminology.enabled },
-                        set: { value in
-                            setTerminologyEnabled(value)
-                        }
-                    )
-                )
-                .labelsHidden()
-                .toggleStyle(.switch)
+        TerminologyToolbarView(
+            query: $query,
+            isEnabled: terminologyEnabledBinding,
+            filter: $filter,
+            sort: $sort,
+            showsControls: !isEmbedded,
+            canExport: !config.transcription.terminology.entries.isEmpty,
+            onAdd: addEntry,
+            onImport: chooseImport,
+            onExport: exportDictionary
+        )
+    }
 
-                TextField(L10n.text("Search terminology"), text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 180, maxWidth: .infinity)
+    private func addEntry() {
+        selectedEntryID = nil
+        draft = .empty
+    }
 
-                Button {
-                    selectedEntryID = nil
-                    draft = .empty
-                } label: {
-                    Label(L10n.text("Add Entry"), systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-
-            HStack(spacing: 10) {
-                Picker(L10n.text("Filter"), selection: $filter) {
-                    ForEach(TerminologyManagerFilter.allCases) { filter in
-                        Text(L10n.text(filter.rawValue)).tag(filter)
-                    }
-                }
-                .frame(width: 160)
-
-                Picker(L10n.text("Sort"), selection: $sort) {
-                    ForEach(TerminologyManagerSort.allCases) { sort in
-                        Text(L10n.text(sort.rawValue)).tag(sort)
-                    }
-                }
-                .frame(width: 140)
-
-                Spacer()
-
-                Menu {
-                    Button(L10n.text("Import Dictionary…"), action: chooseImport)
-                    Button(L10n.text("Export Dictionary…"), action: exportDictionary)
-                        .disabled(config.transcription.terminology.entries.isEmpty)
-                } label: {
-                    Label(L10n.text("Import / Export"), systemImage: "square.and.arrow.down")
-                }
-            }
+    private var addEntryButton: some View {
+        Button(action: addEntry) {
+            Label(L10n.text("Add Entry"), systemImage: "plus")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .buttonStyle(OpenWhisperPrimaryButtonStyle())
     }
 
     private var entryList: some View {
@@ -309,36 +457,37 @@ private struct TerminologyManagerView: View {
                     }
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(
+                Color(nsColor: OpenWhisperPalette.insetSurface)
+            )
             .overlay {
                 if filteredEntries.isEmpty {
-                    VStack(spacing: 9) {
-                        Image(systemName: "text.book.closed")
-                            .font(.system(size: 27))
-                            .foregroundStyle(.secondary)
-                        Text(L10n.text("No matching terminology"))
-                            .font(.system(size: 14, weight: .semibold))
-                        Text(L10n.text("Add a term, import a dictionary, or change the search and filters."))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 250)
-                    }
+                    OpenWhisperEmptyState(
+                        systemImage: "text.book.closed",
+                        title: L10n.text("No matching terminology"),
+                        detail: L10n.text("Add a term, import a dictionary, or change the search and filters.")
+                    )
                 }
             }
         }
     }
 
     private func entryRow(_ entry: TerminologyEntry) -> some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .top, spacing: 10) {
             Image(
                 systemName: entry.type == .correction
                     ? "arrow.left.arrow.right"
                     : "textformat"
             )
-            .foregroundStyle(
-                entry.type == .correction ? Color.orange : Color.accentColor
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color(nsColor: OpenWhisperPalette.brandBlue))
+            .frame(width: 32, height: 32)
+            .background(
+                Color(nsColor: OpenWhisperPalette.brandBlue).opacity(0.09),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
-            .frame(width: 18)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(
@@ -366,7 +515,11 @@ private struct TerminologyManagerView: View {
             Spacer()
 
             Image(systemName: entry.isEnabled ? "checkmark.circle.fill" : "pause.circle")
-                .foregroundStyle(entry.isEnabled ? .green : .secondary)
+                .foregroundStyle(
+                    entry.isEnabled
+                        ? Color(nsColor: OpenWhisperPalette.success)
+                        : Color.secondary
+                )
                 .accessibilityLabel(L10n.text(entry.isEnabled ? "enabled" : "disabled"))
         }
         .padding(.vertical, 4)
@@ -375,105 +528,54 @@ private struct TerminologyManagerView: View {
 
     @ViewBuilder
     private var editorDetail: some View {
-        if let draftBinding = Binding($draft) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text(
-                        L10n.text(
-                            draftBinding.wrappedValue.id == nil ? "Add Entry" : "Edit Entry"
-                        )
-                    )
-                    .font(.system(size: 24, weight: .semibold))
-
-                    Form {
-                        Picker(
-                            L10n.text("Type"),
-                            selection: draftBinding.type
-                        ) {
-                            Text(L10n.text("Term")).tag(TerminologyEntryType.term)
-                            Text(L10n.text("Correction")).tag(TerminologyEntryType.correction)
-                        }
-                        .pickerStyle(.segmented)
-
-                        TextField(
-                            L10n.text(
-                                draftBinding.wrappedValue.type == .correction
-                                    ? "Wrong text"
-                                    : "Term"
-                            ),
-                            text: draftBinding.original
-                        )
-
-                        if draftBinding.wrappedValue.type == .correction {
-                            TextField(
-                                L10n.text("Correct text"),
-                                text: draftBinding.replacement
-                            )
-                        }
-
-                        TextField(
-                            L10n.text("Aliases separated by commas"),
-                            text: draftBinding.aliases
-                        )
-
-                        Toggle(
-                            L10n.text("Enabled"),
-                            isOn: draftBinding.isEnabled
-                        )
-                    }
-                    .formStyle(.grouped)
-
-                    if let message {
-                        Text(message)
-                            .font(.system(size: 11))
-                            .foregroundStyle(messageIsError ? .red : .secondary)
-                    }
-
-                    HStack {
-                        if draftBinding.wrappedValue.id != nil {
-                            Button(L10n.text("Delete"), role: .destructive) {
-                                pendingDeletionID = draftBinding.wrappedValue.id
-                            }
-                        }
-                        Spacer()
-                        Button(L10n.text("Cancel")) {
-                            selectedEntryID = nil
-                            draft = nil
-                        }
-                        Button(L10n.text("Save Entry")) {
-                            saveDraft(draftBinding.wrappedValue)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!canSave(draftBinding.wrappedValue))
-                        .keyboardShortcut(.defaultAction)
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
+        // Use a snapshot of draft rather than Binding($draft).
+        // Binding($draft) relies on BindingOperations.ForceUnwrapping internally,
+        // which crashes when the SwiftUI attribute graph updates the binding
+        // on a layout pass after draft has been set to nil by onChange.
+        // Passing a stable value snapshot + explicit callbacks avoids the race.
+        if let currentDraft = draft {
+            TerminologyEditorDetailView(
+                draft: currentDraft,
+                message: message,
+                messageIsError: messageIsError,
+                canSave: canSave,
+                onDraftChange: { draft = $0 },
+                onCancel: {
+                    selectedEntryID = nil
+                    draft = nil
+                },
+                onSave: { saveDraft($0) },
+                onRequestDelete: { pendingDeletionID = $0 }
+            )
         } else {
-            VStack(spacing: 10) {
-                Image(systemName: "text.book.closed")
-                    .font(.system(size: 30))
-                    .foregroundStyle(.secondary)
-                Text(L10n.text("Select or add an entry"))
-                    .font(.system(size: 17, weight: .semibold))
-                Text(L10n.text("Terms guide recognition. Corrections replace predictable mistakes after transcription."))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
-            }
-            .padding(30)
+            OpenWhisperEmptyState(
+                systemImage: "text.book.closed",
+                title: L10n.text("Select or add an entry"),
+                detail: L10n.text("Terms guide recognition. Corrections replace predictable mistakes after transcription.")
+            )
         }
     }
 
-    private var filteredEntries: [TerminologyEntry] {
+    private func refreshFilteredEntries() {
+        filteredEntries = Self.makeFilteredEntries(
+            entries: config.transcription.terminology.entries,
+            query: query,
+            filter: filter,
+            sort: sort
+        )
+    }
+
+    private static func makeFilteredEntries(
+        entries: [TerminologyEntry],
+        query: String,
+        filter: TerminologyManagerFilter,
+        sort: TerminologyManagerSort
+    ) -> [TerminologyEntry] {
         let normalizedQuery = query
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
 
-        let filtered = config.transcription.terminology.entries
+        let filtered = entries
             .filter { entry in
                 switch filter {
                 case .all:
@@ -738,9 +840,7 @@ private struct TerminologyImportPreviewView: View {
                 HStack {
                     Text(L10n.text(entry.type == .correction ? "Correction" : "Term"))
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(
-                            entry.type == .correction ? Color.orange : Color.accentColor
-                        )
+                        .foregroundStyle(Color(nsColor: OpenWhisperPalette.brandBlue))
                         .frame(width: 78, alignment: .leading)
                     Text(
                         entry.type == .correction
@@ -785,5 +885,108 @@ private struct TerminologyImportPreviewView: View {
         }
         .padding(22)
         .frame(width: 580, height: 420)
+    }
+}
+
+// MARK: - Isolated editor detail view
+
+/// Separate View struct so its @State-based rendering is isolated from the parent's
+/// optional `draft` state. Avoids the BindingOperations.ForceUnwrapping crash that
+/// occurs when `Binding($draft)` is used directly and the attribute graph tries to
+/// update the binding on a layout pass after `draft` has been set to nil.
+private struct TerminologyEditorDetailView: View {
+    var draft: TerminologyEditorDraft
+    var message: String?
+    var messageIsError: Bool
+    var canSave: (TerminologyEditorDraft) -> Bool
+    var onDraftChange: (TerminologyEditorDraft) -> Void
+    var onCancel: () -> Void
+    var onSave: (TerminologyEditorDraft) -> Void
+    var onRequestDelete: (UUID?) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(
+                    L10n.text(draft.id == nil ? "Add Entry" : "Edit Entry")
+                )
+                .font(OpenWhisperTypography.title())
+                .tracking(-0.18)
+
+                Form {
+                    Picker(
+                        L10n.text("Type"),
+                        selection: Binding(
+                            get: { draft.type },
+                            set: { var d = draft; d.type = $0; onDraftChange(d) }
+                        )
+                    ) {
+                        Text(L10n.text("Term")).tag(TerminologyEntryType.term)
+                        Text(L10n.text("Correction")).tag(TerminologyEntryType.correction)
+                    }
+                    .pickerStyle(.segmented)
+
+                    TextField(
+                        L10n.text(draft.type == .correction ? "Wrong text" : "Term"),
+                        text: Binding(
+                            get: { draft.original },
+                            set: { var d = draft; d.original = $0; onDraftChange(d) }
+                        )
+                    )
+
+                    if draft.type == .correction {
+                        TextField(
+                            L10n.text("Correct text"),
+                            text: Binding(
+                                get: { draft.replacement },
+                                set: { var d = draft; d.replacement = $0; onDraftChange(d) }
+                            )
+                        )
+                    }
+
+                    TextField(
+                        L10n.text("Aliases separated by commas"),
+                        text: Binding(
+                            get: { draft.aliases },
+                            set: { var d = draft; d.aliases = $0; onDraftChange(d) }
+                        )
+                    )
+
+                    Toggle(
+                        L10n.text("Enabled"),
+                        isOn: Binding(
+                            get: { draft.isEnabled },
+                            set: { var d = draft; d.isEnabled = $0; onDraftChange(d) }
+                        )
+                    )
+                }
+                .formStyle(.grouped)
+
+                if let message {
+                    Text(message)
+                        .font(.system(size: 11))
+                        .foregroundStyle(messageIsError ? .red : .secondary)
+                }
+
+                HStack {
+                    if draft.id != nil {
+                        Button(L10n.text("Delete"), role: .destructive) {
+                            onRequestDelete(draft.id)
+                        }
+                    }
+                    Spacer()
+                    Button(L10n.text("Cancel"), action: onCancel)
+                    Button(L10n.text("Save Entry")) {
+                        onSave(draft)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canSave(draft))
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 620, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .top)
+        }
     }
 }

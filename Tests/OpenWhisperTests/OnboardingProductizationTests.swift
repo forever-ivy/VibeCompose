@@ -37,7 +37,7 @@ func privateAcceptanceDoesNotPersistOnboardingCompletion() throws {
 }
 
 @Test
-func onboardingSourceKeepsPermissionsRequiredAndOptional() throws {
+func onboardingSourceKeepsMicrophoneRequiredAndPasteOptional() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
@@ -53,8 +53,13 @@ func onboardingSourceKeepsPermissionsRequiredAndOptional() throws {
     #expect(source.contains("case connect"))
     #expect(source.contains("case microphone"))
     #expect(source.contains("case practice"))
-    #expect(source.contains("Microphone is required"))
-    #expect(source.contains("Accessibility is optional"))
+    #expect(
+        source.contains(
+            "Microphone access is required only while you record a dictation."
+        )
+    )
+    #expect(source.contains("Clipboard Mode is ready"))
+    #expect(source.contains("Enable Automatic Paste"))
     #expect(source.contains("TextEditor(text: $practiceText)"))
     #expect(source.contains("onRequestMicrophoneAccess"))
     #expect(source.contains("permissionMonitor.requestMicrophoneAccess"))

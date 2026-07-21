@@ -6,7 +6,7 @@ OpenWhisper is an MIT-licensed, native macOS push-to-talk voice input app. Press
 
 ## Status
 
-OpenWhisper is currently a **macOS alpha** under productization. The working version is `0.1.0`; no production-ready commercial release is declared yet.
+OpenWhisper is currently a **macOS alpha**. The working version is `0.1.0`; no production-ready signed release is declared yet.
 
 The current implementation already includes:
 
@@ -20,10 +20,14 @@ The current implementation already includes:
 - browser-based ChatGPT connection with Keychain-backed local session storage
 - transcription, terminology alignment, and optional AI polish with an Auto
   mode that skips short, low-complexity dictation to avoid unnecessary latency
-- a versioned declarative Skill Runtime for Direct, Reply, Email, Backend
-  Prompt, Code Prompt, and Translate; app rules use only the application name
+- a versioned declarative Skill Runtime with 13 reviewed built-in tasks,
+  including Direct, Reply, Email, developer, meeting, product, support, and
+  selected-text workflows; app rules use only the application name
   and exact bundle identifier, Skill resolution is frozen when recording
   starts, and invalid model output falls back before delivery
+- a global Skill Switcher, dedicated Installed/Discover/Created Skill Library,
+  editable Preview, redacted Skill Run receipts, safe Undo, and Creator/Test
+  Bench flow for standard Agent Skills
 - opt-in selected-text context for Context Rewrite and Context Reply, with
   per-Skill Ask/Always/Never permissions, sensitive-app blocking, a local Diff
   Preview, and exact target/range/text verification before replacement
@@ -43,14 +47,14 @@ The current implementation already includes:
 - bounded local history, failed-audio recovery, privacy controls, and benchmark tooling
 - sensitive-app exclusions and a Delete All Data action
 - redacted support-diagnostics ZIP export
-- opt-in, local-only product metrics for activation and dictation-result
+- opt-in, local-only product metrics for onboarding and dictation-result
   analysis, using enums and duration/latency buckets without persistent user
   identifiers or automatic upload
 - signed provider-safety policy enforcement for managed transcription and AI
   Polish incidents
 - OpenAI-compatible transcription as an advanced recovery route, with native
-  endpoint/model controls, a Keychain-backed API key, explicit paid-API
-  confirmation, and a synthetic-silence connection test
+  endpoint/model controls, a Keychain-backed API key, a third-party billing
+  disclosure, and a synthetic-silence connection test
 - pinned third-party dependency notices, SHA-256 license verification, and
   packaged in-app license review
 
@@ -60,11 +64,11 @@ The default ChatGPT account route depends on undocumented upstream behavior. It 
 
 The current alpha closes the original managed-endpoint, recovery-path,
 auth-refresh, and unsafe-context-paste findings. Sparkle 2.9.4 and the signed
-provider capability-policy client are integrated, but commercial distribution
+provider capability-policy client are integrated, but signed distribution
 is still gated by Developer ID signing, notarization, production update and
 capability-policy hosting/keys, installed update/incident proof, full
-installed-app onboarding/interaction acceptance, and final commercial
-operator/contact details. See the
+installed-app onboarding/interaction acceptance, and final signed-release
+support/contact details. See the
 [current security baseline](docs/audits/security-baseline-2026-07-13.md).
 
 ## Requirements
@@ -155,7 +159,7 @@ contain only product version/build, completed Onboarding step, provider
 category, duration and latency buckets, result category, and failure category.
 They do not contain app names, paths, account details, content, or persistent
 identifiers and are never uploaded automatically. When metrics are enabled,
-**Settings → Privacy → Export Product Metrics** creates an aggregate JSON
+**Settings → Context & Privacy → Export Product Metrics** creates an aggregate JSON
 report without individual event timestamps for you to review or share
 manually.
 
@@ -171,11 +175,11 @@ The ChatGPT session is stored in Keychain under
 API key is stored separately under
 `app.openwhisper.mac.OpenAICompatibleAPIKey`; it is never read from
 `OPENAI_API_KEY` or written to `config.json`. **Settings → Advanced** manages
-the endpoint, model, Keychain credential, real connection test, paid-route
-confirmation, and switch back to the ChatGPT account route. Recovery changes
+the endpoint, model, Keychain credential, real connection test, third-party
+billing disclosure, and switch back to the ChatGPT account route. Recovery changes
 dictation ASR only; AI Polish remains ChatGPT-authenticated.
 
-**Settings → Privacy → Delete All Data** removes settings, terminology, custom
+**Settings → Context & Privacy → Delete All Data** removes settings, terminology, custom
 Style Capsules, installed Community Skills, transcript history, failed
 recordings, diagnostics, product metrics, retry files, the saved ChatGPT
 session, and the Recovery API key, then returns OpenWhisper to its signed-out
@@ -189,7 +193,7 @@ Tests/OpenWhisperTests/       unit and integration tests
 scripts/                      build, package, install, benchmark, and acceptance tools
 examples/skills/              reviewed declarative Community Skill template
 packaging/homebrew/           Homebrew Cask metadata
-docs/product/                 PRD, commercialization, brand, and productization plans
+docs/product/                 PRD, Community Skills, brand, and product plans
 docs/audits/                  security and logic audits
 docs/research/                UI and competitive research
 docs/engineering/             architecture, release, and acceptance documentation
@@ -199,8 +203,7 @@ docs/design/                  visual specifications
 ## Key Documentation
 
 - [Documentation index](docs/README.md)
-- [macOS productization plan](docs/product/macos-productization-plan-2026-07-13.md)
-- [Product and commercialization analysis](docs/product/product-and-commercialization-plan-2026-07-13.md)
+- [Community Skills core plan](docs/product/community-skills-core-next-step-plan-2026-07-15.md)
 - [Security audit](docs/audits/security-audit-2026-07-13.md)
 - [Current security baseline](docs/audits/security-baseline-2026-07-13.md)
 - [UI comparison research](docs/research/ui-open-source-comparison-2026-07-12.md)
@@ -213,7 +216,6 @@ docs/design/                  visual specifications
 - [Updater decision](docs/engineering/updater.md)
 - [Privacy Policy](docs/legal/privacy-policy.md)
 - [Terms of Use](docs/legal/terms-of-use.md)
-- [Refund Policy](docs/legal/refund-policy.md)
 - [Support Policy](docs/support/support-policy.md)
 - [Security reporting](SECURITY.md)
 
@@ -226,5 +228,5 @@ their own licenses. The exact pinned dependency metadata and full notices are
 stored under
 [`Sources/OpenWhisper/Resources/Legal`](Sources/OpenWhisper/Resources/Legal)
 and are available in **Settings → Advanced → View Third-Party Licenses**.
-Build, package, packaged-app, and commercial-release checks fail if
+Build, package, packaged-app, and signed-release checks fail if
 `Package.resolved`, license hashes, notices, or App resources diverge.

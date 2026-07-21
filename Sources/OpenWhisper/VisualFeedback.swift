@@ -8,7 +8,7 @@ enum VisualFeedbackMode:
     Sendable
 {
     case refinedHUD
-    case blueSignalFrame
+    case aiActivityGlow
     case hidden
 
     var id: String {
@@ -18,7 +18,12 @@ enum VisualFeedbackMode:
     init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
-        self = Self(rawValue: rawValue) ?? .refinedHUD
+        switch rawValue {
+        case "blueSignalFrame", "aiActivityGlow":
+            self = .aiActivityGlow
+        default:
+            self = Self(rawValue: rawValue) ?? .refinedHUD
+        }
     }
 
     static func fromLaunchValue(
@@ -40,8 +45,12 @@ enum VisualFeedbackMode:
             return .refinedHUD
         case "bluesignalframe",
              "blue-signal-frame",
-             "blue-frame":
-            return .blueSignalFrame
+             "blue-frame",
+             "aiactivityglow",
+             "ai-activity-glow",
+             "activity-glow",
+             "agent-activity-indicator":
+            return .aiActivityGlow
         case "hidden",
              "none":
             return .hidden
@@ -53,9 +62,9 @@ enum VisualFeedbackMode:
     var title: String {
         switch self {
         case .refinedHUD:
-            return L10n.text("Refined HUD")
-        case .blueSignalFrame:
-            return L10n.text("Blue Signal Frame")
+            return L10n.text("Compact HUD")
+        case .aiActivityGlow:
+            return L10n.text("Ambient Glow")
         case .hidden:
             return L10n.text("Hidden")
         }
@@ -65,15 +74,15 @@ enum VisualFeedbackMode:
         switch self {
         case .refinedHUD:
             return L10n.text(
-                "A compact top-center status surface with text, timer, cancel, and Retry controls."
+                "A quiet top-center pill with status, timer, cancel, and Retry."
             )
-        case .blueSignalFrame:
+        case .aiActivityGlow:
             return L10n.text(
-                "A quiet cold-blue signal around the active display, with compact text only when an action or error needs explanation."
+                "A soft edge glow on the active display or focused window while OpenWhisper works."
             )
         case .hidden:
             return L10n.text(
-                "No visible HUD. Sounds, menu status, notifications, Esc cancellation, and menu Retry remain available."
+                "No on-screen HUD. Menu status, sounds, Esc cancel, and Retry still work."
             )
         }
     }

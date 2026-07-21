@@ -1,6 +1,6 @@
 # OpenWhisper Brand and Product Identity
 
-> Working identity only. Commercial/public launch clearance is currently
+> Working identity only. Public-distribution name clearance is currently
 > **blocked**; see `brand-clearance-2026-07-14.md`.
 
 ## Canonical Identity
@@ -40,7 +40,7 @@ application already uses the same name and publishes releases.
 Until the product owner chooses a distinct name or obtains documented legal
 clearance:
 
-- do not issue paid licenses or a Stable notarized release under this name;
+- do not issue a Stable notarized release under this name;
 - do not publish production domains, Sparkle feeds, Homebrew listings, or
   marketplace entries under this name;
 - do not mark `release/brand-clearance.json` as approved;
@@ -50,3 +50,25 @@ Any future rename must repeat the single-identity migration across source,
 bundle ID, data paths, Keychain, packaging, update metadata, legal copy,
 support surfaces, and release evidence while preserving the MIT license
 notice.
+
+## Visual Identity
+
+| Surface | Asset / rule |
+| --- | --- |
+| Editable logo source | `packaging/assets/OpenWhisperLogoSource.png` |
+| Application icon | Color infinity-knot emblem on a light native macOS rounded-square plate |
+| Menu bar icon | Monochrome transparent template derived from the same knot silhouette |
+| Generated iconset | `dist/AppIcon.iconset` |
+| Packaged application icon | `OpenWhisper.app/Contents/Resources/AppIcon.icns` |
+| Packaged menu bar template | `OpenWhisper.app/Contents/Resources/StatusBarLogoTemplate.png` |
+| Canonical interaction blue | `#0074FF` / `RGB 0, 116, 255` |
+| Light sidebar selection | `#EFEFEF` background with canonical-blue icon and label |
+
+`scripts/render_app_icon.swift` is the canonical asset generator. Generated
+iconset, ICNS, and status-bar PNG files must not be edited independently.
+The menu bar must use the template variant so macOS can supply the correct
+light/dark tint; it must not display the white App Icon plate in the menu bar.
+Native control tint, selected-sidebar labels and icons, active links, and the
+website accent use the canonical interaction blue. The sidebar selection fill
+uses the approved light reference color and switches to a translucent neutral
+fill in Dark Appearance.

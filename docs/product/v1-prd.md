@@ -2,29 +2,32 @@
 
 ## Summary
 
-`OpenWhisper` is a native macOS voice input tool for office users who already pay for ChatGPT. The core promise is simple: install once, connect ChatGPT through the default browser, no API key, no local model setup, press `F5`, speak, get text back.
+`OpenWhisper` is a native macOS voice input tool for people who want a private,
+repeatable writing workflow. The core promise is simple: install once, connect
+ChatGPT through the default browser, no API key, no local model setup, press
+`F5`, speak, choose a trusted Skill, and get an understandable result back.
 
 ## Product Comparison Matrix
 
-| Product | Main model posture | Setup burden | Ongoing user cost | Cross-app insertion | Zero-config for existing ChatGPT payer | Core weakness vs OpenWhisper |
+| Product | Main model posture | Setup burden | Cross-app insertion | Zero-config browser route | Core weakness vs OpenWhisper |
 | --- | --- | --- | --- | --- | --- | --- |
-| Wispr Flow | cloud-first | low | extra subscription | yes | no | user pays again |
-| Aqua Voice | cloud/model-provider heavy | low-medium | extra subscription | yes | no | broader, heavier product surface |
-| VoiceInk | local-first | medium | low-medium | yes | no | local model setup and tuning burden |
-| Superwhisper | hybrid local/cloud | medium | subscription or BYOK | yes | no | still a model/config product |
-| TapWisper | BYO provider | medium | provider spend | yes | no | still needs provider setup |
-| VoiceCommand | local STT + cloud command | medium | provider spend | yes | no | still needs keys and cloud selection |
-| **OpenWhisper** | **OpenWhisper-managed ChatGPT session to ChatGPT backend** | **very low** | **no extra app subscription** | **yes** | **yes** | **private backend dependency** |
+| Wispr Flow | cloud-first | low | yes | no | cloud-first and broader surface |
+| Aqua Voice | cloud/model-provider heavy | low-medium | yes | no | broader, heavier product surface |
+| VoiceInk | local-first | medium | yes | no | local model setup and tuning burden |
+| Superwhisper | hybrid local/cloud | medium | yes | no | still a model/config product |
+| TapWisper | BYO provider | medium | yes | no | still needs provider setup |
+| VoiceCommand | local STT + cloud command | medium | yes | no | still needs provider selection |
+| **OpenWhisper** | **browser ChatGPT session** | **very low** | **yes** | **yes** | **private backend dependency; Community Skills are inspectable** |
 
 ## Product Positioning
 
 - Product name: `OpenWhisper`
 - Category: desktop voice input for office work
-- Primary user: existing ChatGPT payer who wants faster writing without API keys or local model ops
+- Primary user: a repeat writer who wants faster writing without API keys or local model ops
 - Primary jobs:
   - dictate emails, notes, chat replies, prompts, and briefs
   - avoid local model setup
-  - avoid a second dictation subscription
+  - reuse a familiar browser account without adding another service setup
 
 ## Core Value Proposition
 

@@ -53,7 +53,7 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["API Key"] == "API 密钥")
     #expect(strings["Save API Key"] == "保存 API 密钥")
     #expect(strings["Remove API Key"] == "移除 API 密钥")
-    #expect(strings["Use Paid API"] == "使用付费 API")
+    #expect(strings["Use Recovery API"] == "使用恢复 API")
     #expect(
         strings["Switch Back to ChatGPT Account"]
             == "切回 ChatGPT 账户"
@@ -73,8 +73,23 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     #expect(strings["Backend Prompt"] == "后端任务提示词")
     #expect(strings["Code Prompt"] == "代码提示词")
     #expect(strings["Application Rules"] == "应用规则")
-    #expect(strings["Skills require OpenWhisper Pro"] == "技能需要 OpenWhisper Pro")
+    #expect(strings["Skills require OpenWhisper Pro"] == nil)
     #expect(strings["Context"] == "上下文")
+    #expect(strings["App Language"] == "应用语言")
+    #expect(strings["General"] == "通用")
+    #expect(strings["Global Context"] == "全局上下文")
+    #expect(strings["Basics"] == "基础")
+    #expect(strings["Intelligence"] == "智能")
+    #expect(strings["AI Activity Glow"] == "AI 活动光晕")
+    #expect(strings["Skills Library"] == "Skills 资料库")
+    #expect(strings["Skill Creator"] == "Skill 创建器")
+    #expect(strings["Simple"] == "简单")
+    #expect(strings["What you say"] == "你会说的内容")
+    #expect(
+        strings["What the Skill should produce"]
+            == "Skill 应生成的结果"
+    )
+    #expect(strings["Coding Prompt"] == "代码提示词")
     #expect(strings["Context Rewrite"] == "选区改写")
     #expect(strings["Context Reply"] == "选区回复")
     #expect(strings["Replace Selection"] == "替换选区")

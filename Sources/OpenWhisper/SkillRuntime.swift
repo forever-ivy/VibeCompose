@@ -14,6 +14,25 @@ enum SkillCapability:
     case clipboard
     case styleCapsule
     case externalAction
+
+    var localizedLabel: String {
+        switch self {
+        case .voice:
+            return L10n.text("Voice")
+        case .selection:
+            return L10n.text("Selected text")
+        case .focusedParagraph:
+            return L10n.text("Focused paragraph")
+        case .conversationWindow:
+            return L10n.text("Conversation window")
+        case .clipboard:
+            return L10n.text("Clipboard")
+        case .styleCapsule:
+            return L10n.text("Style Capsule")
+        case .externalAction:
+            return L10n.text("Unsupported action")
+        }
+    }
 }
 
 enum SkillOutputFormat:
@@ -28,6 +47,17 @@ enum SkillOutputFormat:
     case json
     case template
     case actionPreview
+
+    var localizedLabel: String {
+        switch self {
+        case .plainText: return L10n.text("Plain Text")
+        case .markdown: return "Markdown"
+        case .code: return L10n.text("Code")
+        case .json: return "JSON"
+        case .template: return L10n.text("Template")
+        case .actionPreview: return L10n.text("Action Preview")
+        }
+    }
 }
 
 enum SkillDeliveryPolicy:
@@ -39,6 +69,17 @@ enum SkillDeliveryPolicy:
     case automaticPasteWhenVerified
     case previewThenPaste
     case copyOnly
+
+    var localizedLabel: String {
+        switch self {
+        case .automaticPasteWhenVerified:
+            return L10n.text("Automatic when verified")
+        case .previewThenPaste:
+            return L10n.text("Preview then Paste")
+        case .copyOnly:
+            return L10n.text("Copy Only")
+        }
+    }
 }
 
 enum SkillRiskLevel:
@@ -50,6 +91,14 @@ enum SkillRiskLevel:
     case low
     case medium
     case high
+
+    var localizedLabel: String {
+        switch self {
+        case .low: return L10n.text("Low")
+        case .medium: return L10n.text("Medium")
+        case .high: return L10n.text("High")
+        }
+    }
 }
 
 struct SkillOutputContract:
@@ -390,6 +439,126 @@ struct SkillDefinition:
     }
 }
 
+extension SkillDefinition {
+    var localizedSummary: String {
+        switch id {
+        case SkillRegistry.directSkillID:
+            return L10n.text(
+                "Faithful dictation with light cleanup and no structural rewrite."
+            )
+        case SkillRegistry.replySkillID:
+            return L10n.text(
+                "Turn speech into a concise, natural reply that is ready to review."
+            )
+        case SkillRegistry.emailSkillID:
+            return L10n.text(
+                "Draft a polished email with a clear purpose and next step."
+            )
+        case SkillRegistry.agentPlanSkillID:
+            return L10n.text(
+                "Turn speech into an implementation task with constraints and acceptance criteria."
+            )
+        case SkillRegistry.codePromptSkillID:
+            return L10n.text(
+                "Create a coding request that preserves paths, commands, APIs, and identifiers."
+            )
+        case SkillRegistry.translateSkillID:
+            return L10n.text(
+                "Translate into the language you name while preserving meaning and technical literals."
+            )
+        case SkillRegistry.contextRewriteSkillID:
+            return L10n.text(
+                "Rewrite selected text while preserving its facts and technical details."
+            )
+        case SkillRegistry.contextReplySkillID:
+            return L10n.text(
+                "Draft a reply grounded in the selected message and your spoken intent."
+            )
+        case SkillRegistry.bugReportSkillID:
+            return L10n.text(
+                "Turn observed behavior into a reproducible bug report without inventing evidence."
+            )
+        case SkillRegistry.commitMessageSkillID:
+            return L10n.text(
+                "Create an imperative commit message that explains the change and why it matters."
+            )
+        case SkillRegistry.meetingActionItemsSkillID:
+            return L10n.text(
+                "Extract decisions, explicit action items, owners, dates, and open questions from meeting notes."
+            )
+        case SkillRegistry.productBriefSkillID:
+            return L10n.text(
+                "Shape a product idea into a concise brief with scope and measurable success."
+            )
+        case SkillRegistry.customerSupportReplySkillID:
+            return L10n.text(
+                "Draft an empathetic support reply with verified steps and no unsupported promises."
+            )
+        default:
+            return promptInstruction
+        }
+    }
+
+    var localizedUseCase: String {
+        switch id {
+        case SkillRegistry.directSkillID:
+            return L10n.text(
+                "Use for fast, faithful dictation when you do not need a structured transformation."
+            )
+        case SkillRegistry.replySkillID:
+            return L10n.text(
+                "Use when you know what to say but want a concise conversational reply."
+            )
+        case SkillRegistry.emailSkillID:
+            return L10n.text(
+                "Use for email drafts that need a clear subject, purpose, and request."
+            )
+        case SkillRegistry.agentPlanSkillID:
+            return L10n.text(
+                "Use when a spoken idea must become an implementation-ready task."
+            )
+        case SkillRegistry.codePromptSkillID:
+            return L10n.text(
+                "Use to hand a coding agent a precise request without losing technical literals."
+            )
+        case SkillRegistry.translateSkillID:
+            return L10n.text(
+                "Use when you can name the target language and want a reviewable translation."
+            )
+        case SkillRegistry.contextRewriteSkillID:
+            return L10n.text(
+                "Use after selecting existing text that you want to shorten, clarify, or reshape without losing facts."
+            )
+        case SkillRegistry.contextReplySkillID:
+            return L10n.text(
+                "Use after selecting a message or passage that needs a grounded reply."
+            )
+        case SkillRegistry.bugReportSkillID:
+            return L10n.text(
+                "Use when you can state what happened, what you expected, and how to reproduce it."
+            )
+        case SkillRegistry.commitMessageSkillID:
+            return L10n.text(
+                "Use after completing a focused change that needs a clear commit subject and optional rationale."
+            )
+        case SkillRegistry.meetingActionItemsSkillID:
+            return L10n.text(
+                "Use after a meeting to separate decisions, explicit follow-ups, and unresolved questions."
+            )
+        case SkillRegistry.productBriefSkillID:
+            return L10n.text(
+                "Use when a spoken product idea needs a bounded problem, audience, goals, non-goals, and success criteria."
+            )
+        case SkillRegistry.customerSupportReplySkillID:
+            return L10n.text(
+                "Use when replying to a customer issue with empathy, factual steps, and a clear next action."
+            )
+        default:
+            return localizedSummary
+        }
+    }
+}
+
 struct SkillRegistry:
     Sendable,
     Equatable
@@ -410,6 +579,16 @@ struct SkillRegistry:
         "app.openwhisper.skill.context-rewrite"
     static let contextReplySkillID =
         "app.openwhisper.skill.context-reply"
+    static let bugReportSkillID =
+        "app.openwhisper.skill.bug-report"
+    static let commitMessageSkillID =
+        "app.openwhisper.skill.commit-message"
+    static let meetingActionItemsSkillID =
+        "app.openwhisper.skill.meeting-action-items"
+    static let productBriefSkillID =
+        "app.openwhisper.skill.product-brief"
+    static let customerSupportReplySkillID =
+        "app.openwhisper.skill.customer-support-reply"
 
     static let builtIn = SkillRegistry(
         definitions: [
@@ -567,8 +746,11 @@ struct SkillRegistry:
                 id: contextRewriteSkillID,
                 version: "1.0.0",
                 name: "Context Rewrite",
-                optionalCapabilities: [
+                requiredCapabilities: [
+                    .voice,
                     .selection,
+                ],
+                optionalCapabilities: [
                     .styleCapsule,
                 ],
                 promptInstruction:
@@ -585,8 +767,11 @@ struct SkillRegistry:
                 id: contextReplySkillID,
                 version: "1.0.0",
                 name: "Context Reply",
-                optionalCapabilities: [
+                requiredCapabilities: [
+                    .voice,
                     .selection,
+                ],
+                optionalCapabilities: [
                     .styleCapsule,
                 ],
                 promptInstruction:
@@ -603,6 +788,119 @@ struct SkillRegistry:
                         preserveTechnicalLiterals:
                             false
                     )
+            ),
+            SkillDefinition(
+                id: bugReportSkillID,
+                version: "1.0.0",
+                name: "Bug Report",
+                optionalCapabilities: [
+                    .selection,
+                    .styleCapsule,
+                ],
+                promptInstruction:
+                    "Turn the dictation and any authorized selection into a reproducible bug report. Use only stated observations and evidence. Include Observed Behavior, Expected Behavior, Reproduction Steps, Environment, Evidence, and Impact. Mark missing facts as not provided; never invent logs, versions, steps, severity, or root cause.",
+                output: SkillOutputContract(
+                    format: .markdown,
+                    delivery: .previewThenPaste,
+                    risk: .medium
+                ),
+                validators: SkillValidatorPolicy(
+                    requireClosedMarkdownFences: true,
+                    requiredSectionAlternatives: [
+                        ["Observed Behavior", "Observed", "实际行为"],
+                        ["Expected Behavior", "Expected", "预期行为"],
+                        ["Reproduction Steps", "Steps to Reproduce", "复现步骤"],
+                    ]
+                )
+            ),
+            SkillDefinition(
+                id: commitMessageSkillID,
+                version: "1.0.0",
+                name: "Commit Message",
+                optionalCapabilities: [
+                    .selection,
+                    .styleCapsule,
+                ],
+                promptInstruction:
+                    "Create a concise imperative commit subject, followed only when useful by a short body explaining why the change was made and any important behavior or compatibility impact. Preserve identifiers, paths, issue references, and commands exactly. Do not invent tests, files, issue numbers, or outcomes.",
+                output: SkillOutputContract(
+                    format: .plainText,
+                    delivery: .previewThenPaste,
+                    risk: .medium
+                ),
+                validators: SkillValidatorPolicy(
+                    maximumCharacters: 1_200
+                )
+            ),
+            SkillDefinition(
+                id: meetingActionItemsSkillID,
+                version: "1.0.0",
+                name: "Meeting Action Items",
+                optionalCapabilities: [
+                    .selection,
+                    .styleCapsule,
+                ],
+                promptInstruction:
+                    "Structure the supplied meeting dictation into Decisions, Action Items, and Open Questions. Include an owner or due date only when explicitly stated. Keep uncertainty visible and do not infer attendance, agreement, responsibility, deadlines, or completed work.",
+                output: SkillOutputContract(
+                    format: .markdown,
+                    delivery: .previewThenPaste,
+                    risk: .medium
+                ),
+                validators: SkillValidatorPolicy(
+                    requiredSectionAlternatives: [
+                        ["Decisions", "决定", "决策"],
+                        ["Action Items", "行动项", "待办"],
+                        ["Open Questions", "开放问题", "待确认"],
+                    ]
+                )
+            ),
+            SkillDefinition(
+                id: productBriefSkillID,
+                version: "1.0.0",
+                name: "Product Brief",
+                optionalCapabilities: [
+                    .selection,
+                    .styleCapsule,
+                ],
+                promptInstruction:
+                    "Turn the spoken idea into a concise product brief with Problem, Target Users, Goals, Non-goals, Proposed Scope, Risks, and Success Criteria. Preserve stated constraints and uncertainty. Do not invent research findings, customer demand, dates, metrics, commitments, or technical feasibility.",
+                output: SkillOutputContract(
+                    format: .markdown,
+                    delivery: .previewThenPaste,
+                    risk: .medium
+                ),
+                validators: SkillValidatorPolicy(
+                    requiredSectionAlternatives: [
+                        ["Problem", "问题"],
+                        ["Goals", "目标"],
+                        ["Non-goals", "非目标"],
+                        ["Success Criteria", "成功标准", "验收指标"],
+                    ]
+                )
+            ),
+            SkillDefinition(
+                id: customerSupportReplySkillID,
+                version: "1.0.0",
+                name: "Customer Support Reply",
+                optionalCapabilities: [
+                    .selection,
+                    .styleCapsule,
+                ],
+                promptInstruction:
+                    "Draft a concise, empathetic customer support reply. Acknowledge the stated issue, provide only verified troubleshooting or next steps from the input, state any uncertainty, and make the next action clear. Never invent refunds, credits, timelines, escalations, policy, completed investigation, or guaranteed resolution.",
+                output: SkillOutputContract(
+                    format: .plainText,
+                    delivery: .previewThenPaste,
+                    risk: .medium
+                ),
+                validators: SkillValidatorPolicy(
+                    preserveTechnicalLiterals: true,
+                    forbiddenPhrases: [
+                        "I have issued a refund",
+                        "guaranteed resolution",
+                    ]
+                )
             ),
         ]
     )
@@ -737,6 +1035,7 @@ struct AppSkillRule:
         case appName
         case bundleIdentifier
         case skillID
+        case skillInstallationID
         case isEnabled
     }
 
@@ -744,6 +1043,7 @@ struct AppSkillRule:
     var appName: String?
     var bundleIdentifier: String
     var skillID: String
+    var skillInstallationID: UUID
     var isEnabled: Bool
 
     init(
@@ -751,6 +1051,7 @@ struct AppSkillRule:
         appName: String?,
         bundleIdentifier: String,
         skillID: String,
+        skillInstallationID: UUID? = nil,
         isEnabled: Bool = true
     ) {
         self.id = id
@@ -762,6 +1063,11 @@ struct AppSkillRule:
                     bundleIdentifier
                 )
         self.skillID = skillID
+        self.skillInstallationID =
+            skillInstallationID
+            ?? Self.stableInstallationID(
+                skillID: skillID
+            )
         self.isEnabled = isEnabled
     }
 
@@ -770,6 +1076,7 @@ struct AppSkillRule:
         appName: String?,
         bundleIdentifier: String,
         skillID: String,
+        skillInstallationID: UUID? = nil,
         isEnabled: Bool = true,
         registry: SkillRegistry = .builtIn
     ) throws -> AppSkillRule {
@@ -796,6 +1103,11 @@ struct AppSkillRule:
             bundleIdentifier:
                 normalizedBundleIdentifier,
             skillID: skillID,
+            skillInstallationID:
+                skillInstallationID
+                ?? Self.stableInstallationID(
+                    skillID: skillID
+                ),
             isEnabled: isEnabled
         )
     }
@@ -836,6 +1148,18 @@ struct AppSkillRule:
                     )
             ) ?? SkillRegistry
                 .directSkillID
+        skillInstallationID =
+            (
+                try? container
+                    .decodeIfPresent(
+                        UUID.self,
+                        forKey:
+                            .skillInstallationID
+                    )
+            )
+            ?? Self.stableInstallationID(
+                skillID: skillID
+            )
         isEnabled =
             (
                 try? container
@@ -860,6 +1184,16 @@ struct AppSkillRule:
                     skillID,
                 ]
             )
+    }
+
+    private static func stableInstallationID(
+        skillID: String
+    ) -> UUID {
+        StableIdentifier.uuid(
+            namespace:
+                "OpenWhisper.AppSkillRule.Installation",
+            components: [skillID]
+        )
     }
 
     private static func normalizedAppName(
@@ -888,6 +1222,7 @@ struct SkillsConfig:
 
     var defaultSkillID: String =
         SkillRegistry.directSkillID
+    var defaultSkillInstallationID: UUID?
     var applicationRules:
         [AppSkillRule] = []
     var enabledSkillIDs:
@@ -898,6 +1233,7 @@ struct SkillsConfig:
 
     init(
         defaultSkillID: String,
+        defaultSkillInstallationID: UUID? = nil,
         applicationRules:
             [AppSkillRule],
         enabledSkillIDs:
@@ -917,6 +1253,10 @@ struct SkillsConfig:
                     self.enabledSkillIDs,
                 registry: registry
             )
+        self.defaultSkillInstallationID =
+            self.defaultSkillID == defaultSkillID
+            ? defaultSkillInstallationID
+            : nil
         self.applicationRules =
             Self.normalizedRules(
                 applicationRules,
@@ -933,6 +1273,7 @@ struct SkillsConfig:
     ) {
         defaultSkillID =
             legacy.defaultMode.skillID
+        defaultSkillInstallationID = nil
         applicationRules =
             legacy.applicationRules.map {
                 AppSkillRule(
@@ -949,6 +1290,8 @@ struct SkillsConfig:
         self = SkillsConfig(
             defaultSkillID:
                 defaultSkillID,
+            defaultSkillInstallationID:
+                defaultSkillInstallationID,
             applicationRules:
                 applicationRules,
             enabledSkillIDs:
@@ -981,6 +1324,11 @@ struct SkillsConfig:
                     .directSkillID,
                 enabledSkillIDs:
                     enabledSkillIDs
+            )
+        defaultSkillInstallationID =
+            try container.decodeIfPresent(
+                UUID.self,
+                forKey: .defaultSkillInstallationID
             )
         applicationRules =
             Self.normalizedRules(
@@ -1045,7 +1393,23 @@ struct SkillsConfig:
             defaultSkillID =
                 SkillRegistry
                     .directSkillID
+            defaultSkillInstallationID = nil
         }
+    }
+
+    mutating func setDefault(
+        skillID: String,
+        installationID: UUID?,
+        registry: SkillRegistry = .builtIn
+    ) {
+        guard
+            isEnabled(skillID),
+            registry.contains(id: skillID)
+        else {
+            return
+        }
+        defaultSkillID = skillID
+        defaultSkillInstallationID = installationID
     }
 
     mutating func upsert(
@@ -1100,6 +1464,8 @@ struct SkillsConfig:
         )
         defaultSkillID =
             migrated.defaultSkillID
+        defaultSkillInstallationID =
+            migrated.defaultSkillInstallationID
         applicationRules =
             migrated.applicationRules
         enabledSkillIDs =
@@ -1148,6 +1514,8 @@ struct SkillsConfig:
         SkillsConfig(
             defaultSkillID:
                 plan.skill.id,
+            defaultSkillInstallationID:
+                plan.installation.id,
             applicationRules: [],
             enabledSkillIDs: [
                 SkillRegistry
@@ -1244,6 +1612,8 @@ struct SkillsConfig:
                 bundleIdentifier:
                     bundleIdentifier,
                 skillID: rule.skillID,
+                skillInstallationID:
+                    rule.skillInstallationID,
                 isEnabled:
                     rule.isEnabled
             )
@@ -1260,9 +1630,25 @@ enum SkillResolutionSource:
     Equatable
 {
     case manual
+    case nextRun
     case applicationRule
     case globalDefault
     case directFallback
+
+    var localizedLabel: String {
+        switch self {
+        case .manual:
+            return L10n.text("Manual")
+        case .nextRun:
+            return L10n.text("Next use")
+        case .applicationRule:
+            return L10n.text("Current app default")
+        case .globalDefault:
+            return L10n.text("Global default")
+        case .directFallback:
+            return L10n.text("Safe fallback")
+        }
+    }
 }
 
 struct ResolvedSkillExecutionPlan:
@@ -1273,6 +1659,146 @@ struct ResolvedSkillExecutionPlan:
     let skill: SkillDefinition
     let source: SkillResolutionSource
     let matchedApplicationRuleID: UUID?
+    let installation: InstalledSkillIdentity
+    let package: AgentSkillPackage
+    let profile: OpenWhisperSkillProfile
+    let resources: [ResolvedSkillResource]
+    let contextSnapshot: ContextSnapshot
+
+    init(
+        skill: SkillDefinition,
+        source: SkillResolutionSource,
+        matchedApplicationRuleID: UUID?,
+        installation: InstalledSkillIdentity? = nil,
+        package: AgentSkillPackage? = nil,
+        profile: OpenWhisperSkillProfile? = nil,
+        resources: [ResolvedSkillResource] = [],
+        contextSnapshot: ContextSnapshot? = nil
+    ) {
+        self.skill = skill
+        self.source = source
+        self.matchedApplicationRuleID =
+            matchedApplicationRuleID
+        let resolvedInstallation =
+            installation
+            ?? InstalledSkillIdentity.normalized(
+                definition: skill,
+                sourceID:
+                    SkillRegistry.builtIn
+                        .contains(id: skill.id)
+                    ? "builtin"
+                    : "installed"
+            )
+        self.installation = resolvedInstallation
+        self.package = package
+            ?? AgentSkillPackage(
+                rootURL: URL(
+                    fileURLWithPath:
+                        "/builtin/\(skill.id)",
+                    isDirectory: true
+                ),
+                metadata: AgentSkillMetadata(
+                    name: skill.name,
+                    description:
+                        skill.promptInstruction,
+                    license: nil,
+                    compatibility: nil,
+                    metadata: [:],
+                    allowedTools: nil
+                ),
+                instructions:
+                    skill.promptInstruction,
+                resources: [],
+                vendorExtensions: [:],
+                contentSHA256:
+                    resolvedInstallation.revision
+            )
+        self.profile = profile
+            ?? Self.profile(for: skill)
+        self.resources = resources
+        self.contextSnapshot =
+            contextSnapshot
+            ?? .empty(
+                installationID:
+                    resolvedInstallation.id
+            )
+    }
+
+    private enum CodingKeys:
+        String,
+        CodingKey
+    {
+        case skill
+        case source
+        case matchedApplicationRuleID
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(
+            keyedBy: CodingKeys.self
+        )
+        self.init(
+            skill: try container.decode(
+                SkillDefinition.self,
+                forKey: .skill
+            ),
+            source: try container.decode(
+                SkillResolutionSource.self,
+                forKey: .source
+            ),
+            matchedApplicationRuleID:
+                try container.decodeIfPresent(
+                    UUID.self,
+                    forKey:
+                        .matchedApplicationRuleID
+                )
+        )
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(
+            keyedBy: CodingKeys.self
+        )
+        try container.encode(skill, forKey: .skill)
+        try container.encode(source, forKey: .source)
+        try container.encodeIfPresent(
+            matchedApplicationRuleID,
+            forKey: .matchedApplicationRuleID
+        )
+    }
+
+    func freezing(
+        contextSnapshot: ContextSnapshot,
+        resources: [ResolvedSkillResource]? = nil
+    ) -> ResolvedSkillExecutionPlan {
+        ResolvedSkillExecutionPlan(
+            skill: skill,
+            source: source,
+            matchedApplicationRuleID:
+                matchedApplicationRuleID,
+            installation: installation,
+            package: package,
+            profile: profile,
+            resources: resources ?? self.resources,
+            contextSnapshot: contextSnapshot
+        )
+    }
+
+    func replacingResolutionSource(
+        _ source: SkillResolutionSource
+    ) -> ResolvedSkillExecutionPlan {
+        ResolvedSkillExecutionPlan(
+            skill: skill,
+            source: source,
+            matchedApplicationRuleID:
+                matchedApplicationRuleID,
+            installation: installation,
+            package: package,
+            profile: profile,
+            resources: resources,
+            contextSnapshot: contextSnapshot
+        )
+    }
 
     var legacyMode: DictationMode {
         skill.legacyMode ?? .direct
@@ -1292,6 +1818,47 @@ struct ResolvedSkillExecutionPlan:
             matchedApplicationRuleID: nil
         )
     }
+
+    private static func profile(
+        for skill: SkillDefinition
+    ) -> OpenWhisperSkillProfile {
+        let required = skill.requiredCapabilities
+            .compactMap(ContextSourceKind.init)
+        let optional = skill.optionalCapabilities
+            .compactMap(ContextSourceKind.init)
+        return OpenWhisperSkillProfile(
+            contextRequest: ContextRequest(
+                required: required,
+                optional: optional
+            ),
+            resourceBindings:
+                SkillResourceBindings(),
+            output: skill.output,
+            validators: skill.validators,
+            risk: skill.output.risk
+        )
+    }
+}
+
+private extension ContextSourceKind {
+    init?(_ capability: SkillCapability) {
+        switch capability {
+        case .voice:
+            self = .voice
+        case .selection:
+            self = .selection
+        case .focusedParagraph:
+            self = .focusedParagraph
+        case .conversationWindow:
+            self = .conversationWindow
+        case .clipboard:
+            self = .clipboard
+        case .styleCapsule:
+            self = .styleCapsule
+        case .externalAction:
+            return nil
+        }
+    }
 }
 
 struct SkillResolver: Sendable {
@@ -1307,13 +1874,8 @@ struct SkillResolver: Sendable {
         manualSkillID: String? = nil,
         config: SkillsConfig,
         launchAppContext:
-            LaunchAppContext?,
-        skillsAllowed: Bool = true
+            LaunchAppContext?
     ) -> ResolvedSkillExecutionPlan {
-        guard skillsAllowed else {
-            return .direct
-        }
-
         if
             let manualSkillID,
             config.isEnabled(manualSkillID),
@@ -1361,12 +1923,27 @@ struct SkillResolver: Sendable {
                     id: rule.skillID
                 )
         {
+            let baseInstallation = InstalledSkillIdentity.normalized(
+                definition: skill,
+                sourceID: SkillRegistry.builtIn.contains(id: skill.id)
+                    ? "builtin"
+                    : "installed"
+            )
             return ResolvedSkillExecutionPlan(
                 skill: skill,
                 source:
                     .applicationRule,
                 matchedApplicationRuleID:
-                    rule.id
+                    rule.id,
+                installation: InstalledSkillIdentity(
+                    id: rule.skillInstallationID,
+                    portableName: baseInstallation.portableName,
+                    sourceID: baseInstallation.sourceID,
+                    packageID: baseInstallation.packageID,
+                    version: baseInstallation.version,
+                    revision: baseInstallation.revision,
+                    publisher: baseInstallation.publisher
+                )
             )
         }
 
@@ -1381,11 +1958,27 @@ struct SkillResolver: Sendable {
                             .defaultSkillID
                 )
         {
+            let baseInstallation = InstalledSkillIdentity.normalized(
+                definition: skill,
+                sourceID: SkillRegistry.builtIn.contains(id: skill.id)
+                    ? "builtin"
+                    : "installed"
+            )
             return ResolvedSkillExecutionPlan(
                 skill: skill,
                 source: .globalDefault,
                 matchedApplicationRuleID:
-                    nil
+                    nil,
+                installation: InstalledSkillIdentity(
+                    id: config.defaultSkillInstallationID
+                        ?? baseInstallation.id,
+                    portableName: baseInstallation.portableName,
+                    sourceID: baseInstallation.sourceID,
+                    packageID: baseInstallation.packageID,
+                    version: baseInstallation.version,
+                    revision: baseInstallation.revision,
+                    publisher: baseInstallation.publisher
+                )
             )
         }
 
@@ -1417,6 +2010,8 @@ struct SkillPromptCompiler: Sendable {
         "[OUTPUT_CONTRACT]"
     static let skillMarker =
         "[SKILL_INSTRUCTIONS]"
+    static let resourcesMarker =
+        "[APPROVED_SKILL_RESOURCES]"
     static let styleMarker =
         "[STYLE_CAPSULE]"
     static let terminologyMarker =
@@ -1469,6 +2064,20 @@ struct SkillPromptCompiler: Sendable {
             \(plan.skill.promptInstruction)
             """,
         ]
+
+        let approvedResources = plan.resources
+            .filter {
+                $0.descriptor.runtimeVisibility
+                    == .runtime
+            }
+        if !approvedResources.isEmpty {
+            sections.append(Self.resourcesMarker)
+            sections.append(
+                approvedResources.map { resource in
+                    "<resource path=\"\(resource.descriptor.relativePath)\">\n\(resource.content)\n</resource>"
+                }.joined(separator: "\n")
+            )
+        }
 
         if
             let style =
@@ -1662,6 +2271,7 @@ struct SkillValidatorEngine: Sendable {
         SkillPromptCompiler.systemMarker,
         SkillPromptCompiler.outputMarker,
         SkillPromptCompiler.skillMarker,
+        SkillPromptCompiler.resourcesMarker,
         SkillPromptCompiler.styleMarker,
         SkillPromptCompiler
             .terminologyMarker,

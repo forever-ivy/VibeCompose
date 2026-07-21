@@ -148,34 +148,6 @@ func resolvedTranscriptionConfigFreezesModeAndRemovesRuleList() throws {
 }
 
 @Test
-func unlicensedRuntimeForcesDirectAndStripsApplicationRules() throws {
-    var transcription = TranscriptionConfig()
-    transcription.voiceModes = VoiceModeConfig(
-        defaultMode: .email,
-        applicationRules: [
-            try AppModeRule.validated(
-                appName: "Codex",
-                bundleIdentifier: "com.openai.codex",
-                mode: .agentPlan
-            ),
-        ]
-    )
-
-    let resolved = transcription.resolvingVoiceMode(
-        for: LaunchAppContext(
-            bundleIdentifier: "com.openai.codex",
-            localizedName: "Codex",
-            processIdentifier: 9
-        ),
-        voiceModesAllowed: false
-    )
-
-    #expect(resolved.voiceModes.defaultMode == .direct)
-    #expect(resolved.voiceModes.applicationRules.isEmpty)
-    #expect(transcription.voiceModes.defaultMode == .email)
-}
-
-@Test
 func voiceModeConfigUpsertKeepsOneRulePerBundleIdentifier() throws {
     var config = VoiceModeConfig()
     config.upsert(

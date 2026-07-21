@@ -6,10 +6,12 @@ import Testing
 @Test
 func defaultConfigUsesChatGPTAccountDefaults() throws {
     let config = AppConfig()
+    #expect(config.appLanguage == .system)
     #expect(
         config.transcription.dictationHotkey
             == .f5
     )
+    #expect(config.skillSwitcherHotkey == nil)
     #expect(config.transcription.provider == .chatGPTManagedAuth)
     #expect(config.transcription.openAITranscriptionURL == "https://api.openai.com/v1/audio/transcriptions")
     #expect(config.transcription.openAIModel == "gpt-4o-mini-transcribe")
@@ -22,10 +24,39 @@ func defaultConfigUsesChatGPTAccountDefaults() throws {
     #expect(config.auth.preferredLoginSurface == .defaultBrowser)
     #expect(config.auth.allowEmbeddedFallback == false)
     #expect(config.auth.persistCapturedSession == true)
+    #expect(config.skillEcosystem.remoteRegistryEnabled == false)
     #expect(
         config.visualFeedback.mode
             == .refinedHUD
     )
+}
+
+@Test
+func configRoundTripPreservesAppLanguageAndSkillEcosystem() throws {
+    var config = AppConfig()
+    config.appLanguage = .english
+    config.skillEcosystem.favoriteInstallationIDs = [UUID()]
+    config.skillEcosystem.collections = [
+        SkillCollection(
+            name: "Writing",
+            summary: "Portable writing Skills",
+            category: "Productivity",
+            items: []
+        ),
+    ]
+
+    let data = try JSONEncoder().encode(config)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+
+    #expect(decoded.appLanguage == .english)
+    #expect(decoded.skillEcosystem == config.skillEcosystem)
+
+    let legacy = try JSONDecoder().decode(
+        AppConfig.self,
+        from: Data("{}".utf8)
+    )
+    #expect(legacy.appLanguage == .system)
+    #expect(!legacy.skillEcosystem.remoteRegistryEnabled)
 }
 
 @Test
@@ -74,6 +105,24 @@ func configRoundTripPreservesModifiedDictationHotkey() throws {
     #expect(
         decoded.transcription.dictationHotkey
             == config.transcription.dictationHotkey
+    )
+}
+
+@Test
+func configRoundTripPreservesOptionalSkillSwitcherHotkey() throws {
+    var config = AppConfig()
+    config.skillSwitcherHotkey = .skillSwitcher
+
+    let data = try JSONEncoder().encode(config)
+    let decoded = try JSONDecoder().decode(
+        AppConfig.self,
+        from: data
+    )
+
+    #expect(decoded.skillSwitcherHotkey == .skillSwitcher)
+    try OpenWhisperShortcutSetValidator.validate(
+        dictation: decoded.transcription.dictationHotkey,
+        skillSwitcher: decoded.skillSwitcherHotkey
     )
 }
 

@@ -25,12 +25,23 @@ func thirdPartyLicenseCatalogCoversResolvedDependencies() throws {
         pins.compactMap { $0["identity"] as? String }
     )
 
-    #expect(Set(documents.map(\.entry.identity)) == resolvedIdentities)
-    #expect(documents.map(\.entry.identity) == ["permissionflow", "sparkle"])
+    let packageDocuments = documents.filter {
+        $0.entry.sourceKind != .vendored
+    }
+    #expect(Set(packageDocuments.map(\.entry.identity)) == resolvedIdentities)
+    #expect(
+        documents.map(\.entry.identity)
+            == ["permissionflow", "sparkle", "edgeglow"]
+    )
     #expect(documents.allSatisfy { !$0.licenseText.isEmpty })
     #expect(
         documents.first(where: { $0.id == "sparkle" })?
             .licenseText.contains("EXTERNAL LICENSES") == true
+    )
+    #expect(
+        documents.first(where: { $0.id == "edgeglow" })?
+            .entry.revision
+            == "d39d0471a25af97d8de077591f69f938efa8bea8"
     )
 }
 

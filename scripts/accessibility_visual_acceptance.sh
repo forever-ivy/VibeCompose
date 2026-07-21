@@ -175,6 +175,12 @@ capture_surface() {
 }
 
 capture_surface \
+  "settings-general" \
+  "--open-settings" \
+  "settings-snapshot-output" \
+  "settings" \
+  "general"
+capture_surface \
   "settings-account" \
   "--open-settings" \
   "settings-snapshot-output" \
@@ -204,18 +210,6 @@ capture_surface \
   "settings-snapshot-output" \
   "settings" \
   "context"
-capture_surface \
-  "settings-terminology" \
-  "--open-settings" \
-  "settings-snapshot-output" \
-  "settings" \
-  "terminology"
-capture_surface \
-  "settings-paste" \
-  "--open-settings" \
-  "settings-snapshot-output" \
-  "settings" \
-  "paste"
 capture_surface \
   "settings-privacy" \
   "--open-settings" \
@@ -285,7 +279,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_BINARY\`
-- Surfaces: nine Settings panes, four Onboarding steps, History, Terminology, Quick Add
+- Surfaces: five canonical Settings panes plus legacy deep-link aliases, four Onboarding steps, History, Terminology, Quick Add
 - Profiles: baseline and forced app-specific Increase Contrast
 - Validation: normalized 2x capture geometry, visible logical-pixel difference, non-decreasing local edge contrast
 - Diagnostics: whole-image luminance spread is recorded but is not used as the contrast gate

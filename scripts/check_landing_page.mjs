@@ -35,7 +35,7 @@ for (const id of ["hero", "workflow", "product", "safety"]) {
 }
 
 hasHref("https://github.com/forever-ivy/openwhisper");
-hasHref("product/macos-productization-plan-2026-07-13.md");
+hasHref("product/community-skills-core-next-step-plan-2026-07-15.md");
 hasHref("audits/security-audit-2026-07-13.md");
 
 assert.ok(!html.includes("releases/tag/"), "alpha landing page must not claim a published release");

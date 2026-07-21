@@ -225,9 +225,123 @@ struct CommunitySkillPackage:
     let relativeFiles: [String]
     let contentSHA256: String
     var isActive: Bool
+    let format: SkillPackageFormat
+    let installation: InstalledSkillIdentity
+    let agentPackage: AgentSkillPackage?
+    let profile: OpenWhisperSkillProfile
+    let compatibility: SkillCompatibilityReport
+    let resolvedResources: [ResolvedSkillResource]
+
+    init(
+        definition: SkillDefinition,
+        packageURL: URL,
+        relativeFiles: [String],
+        contentSHA256: String,
+        isActive: Bool,
+        format: SkillPackageFormat = .legacyOpenWhisperV1,
+        installation: InstalledSkillIdentity? = nil,
+        agentPackage: AgentSkillPackage? = nil,
+        profile: OpenWhisperSkillProfile? = nil,
+        compatibility: SkillCompatibilityReport? = nil,
+        resolvedResources: [ResolvedSkillResource] = []
+    ) {
+        self.definition = definition
+        self.packageURL = packageURL
+        self.relativeFiles = relativeFiles
+        self.contentSHA256 = contentSHA256
+        self.isActive = isActive
+        self.format = format
+        self.installation = installation
+            ?? InstalledSkillIdentity.normalized(
+                definition: definition,
+                sourceID:
+                    format == .agentSkillsStandard
+                    ? "local.agent-skills"
+                    : "local.legacy-v1",
+                revision: contentSHA256
+            )
+        self.agentPackage = agentPackage
+        self.profile = profile
+            ?? OpenWhisperSkillProfile(
+                contextRequest: ContextRequest(
+                    required: [.voice],
+                    optional: definition.optionalCapabilities
+                        .compactMap { capability in
+                            switch capability {
+                            case .selection: .selection
+                            case .focusedParagraph: .focusedParagraph
+                            case .conversationWindow: .conversationWindow
+                            case .clipboard: .clipboard
+                            case .styleCapsule: .styleCapsule
+                            case .voice, .externalAction: nil
+                            }
+                        }
+                ),
+                resourceBindings: SkillResourceBindings(),
+                output: definition.output,
+                validators: definition.validators,
+                risk: definition.output.risk
+            )
+        self.compatibility = compatibility
+            ?? SkillCompatibilityReport(
+                standardFormatStatus: .valid,
+                runtimeStatus: .compatible,
+                level: .openWhisperEnhanced,
+                issues: [],
+                ignoredVendorFeatures: [],
+                quarantinedResources: []
+            )
+        self.resolvedResources = resolvedResources
+    }
 
     var id: String {
         "\(definition.id)@\(definition.version)"
+    }
+
+    func replacingInstallation(
+        _ value: InstalledSkillIdentity
+    ) -> CommunitySkillPackage {
+        CommunitySkillPackage(
+            definition: definition,
+            packageURL: packageURL,
+            relativeFiles: relativeFiles,
+            contentSHA256: contentSHA256,
+            isActive: isActive,
+            format: format,
+            installation: value,
+            agentPackage: agentPackage,
+            profile: profile,
+            compatibility: compatibility,
+            resolvedResources: resolvedResources
+        )
+    }
+}
+
+/// Explicit compatibility boundary for the original OpenWhisper v1 package.
+/// Legacy files are normalized into the same in-memory package model used by
+/// standard Agent Skills; no legacy parser state reaches prompt compilation.
+struct LegacyOpenWhisperV1Adapter:
+    Sendable
+{
+    func normalize(
+        definition: SkillDefinition,
+        packageURL: URL,
+        relativeFiles: [String],
+        contentSHA256: String
+    ) -> CommunitySkillPackage {
+        CommunitySkillPackage(
+            definition: definition,
+            packageURL: packageURL,
+            relativeFiles: relativeFiles,
+            contentSHA256: contentSHA256,
+            isActive: false,
+            format: .legacyOpenWhisperV1,
+            installation: InstalledSkillIdentity.normalized(
+                definition: definition,
+                sourceID: "local.legacy-v1",
+                revision: contentSHA256
+            )
+        )
     }
 }
 
@@ -264,6 +378,79 @@ struct CommunitySkillInventory:
     var registry: SkillRegistry {
         SkillRegistry.builtIn
             .merging(activeDefinitions)
+    }
+
+    func executionPlan(
+        installationID: UUID,
+        source: SkillResolutionSource
+    ) -> ResolvedSkillExecutionPlan? {
+        if let definition = SkillRegistry.builtIn
+            .orderedDefinitions.first(where: {
+                InstalledSkillIdentity.normalized(
+                    definition: $0,
+                    sourceID: "builtin"
+                ).id == installationID
+            })
+        {
+            return ResolvedSkillExecutionPlan(
+                skill: definition,
+                source: source,
+                matchedApplicationRuleID: nil
+            )
+        }
+        guard let package = packages.first(where: {
+            $0.isActive
+                && $0.installation.id == installationID
+                && $0.compatibility.runtimeStatus
+                    == .compatible
+        }) else {
+            return nil
+        }
+        return ResolvedSkillExecutionPlan(
+            skill: package.definition,
+            source: source,
+            matchedApplicationRuleID: nil,
+            installation: package.installation,
+            package: package.agentPackage,
+            profile: package.profile,
+            resources: package.resolvedResources,
+            contextSnapshot: .empty(
+                installationID: package.installation.id
+            )
+        )
+    }
+
+    func enriching(
+        _ plan: ResolvedSkillExecutionPlan
+    ) -> ResolvedSkillExecutionPlan {
+        guard
+            let package = packages.first(where: {
+                $0.isActive
+                    && $0.definition.id
+                        == plan.skill.id
+                    && $0.definition.version
+                        == plan.skill.version
+            })
+        else {
+            return plan
+        }
+        return ResolvedSkillExecutionPlan(
+            skill: package.definition,
+            source: plan.source,
+            matchedApplicationRuleID:
+                plan.matchedApplicationRuleID,
+            installation: package.installation,
+            package: package.agentPackage,
+            profile: package.profile,
+            resources:
+                package.resolvedResources,
+            contextSnapshot: .empty(
+                installationID:
+                    package.installation.id,
+                sessionID:
+                    plan.contextSnapshot.sessionID
+            )
+        )
     }
 }
 
@@ -321,6 +508,19 @@ private struct CommunitySkillFile {
     let byteCount: Int
 }
 
+private struct PersistedSkillSourceMetadata:
+    Codable,
+    Sendable,
+    Equatable
+{
+    let identity: InstalledSkillIdentity
+}
+
+private struct SkillArchiveExtraction {
+    let containerURL: URL
+    let packageRootURL: URL
+}
+
 struct SkillPackageStore:
     @unchecked Sendable
 {
@@ -334,6 +534,11 @@ struct SkillPackageStore:
 
     let fileManager: FileManager
     let rootURL: URL
+
+    private var metadataRootURL: URL {
+        rootURL.deletingLastPathComponent()
+            .appendingPathComponent("Metadata", isDirectory: true)
+    }
 
     init(
         fileManager: FileManager = .default,
@@ -357,6 +562,39 @@ struct SkillPackageStore:
     func inspect(
         packageURL: URL
     ) throws -> CommunitySkillPackage {
+        if try isSupportedArchive(packageURL) {
+            let extraction = try extractArchive(packageURL)
+            defer {
+                try? fileManager.removeItem(at: extraction.containerURL)
+            }
+            return try inspect(packageURL: extraction.packageRootURL)
+        }
+        let standardSkillURL = packageURL
+            .appendingPathComponent("SKILL.md")
+        if fileManager.fileExists(
+            atPath: standardSkillURL.path
+        ) {
+            let package = try AgentSkillPackageLoader(
+                fileManager: fileManager
+            ).load(from: packageURL)
+            let normalized = try AgentSkillNormalizer()
+                .normalize(package: package)
+            return CommunitySkillPackage(
+                definition: normalized.definition,
+                packageURL: packageURL,
+                relativeFiles: package.resources
+                    .map(\.relativePath)
+                    .sorted(),
+                contentSHA256: package.contentSHA256,
+                isActive: false,
+                format: normalized.format,
+                installation: normalized.installation,
+                agentPackage: normalized.package,
+                profile: normalized.profile,
+                compatibility: normalized.compatibility,
+                resolvedResources: normalized.resources
+            )
+        }
         let files =
             try validatedFiles(
                 in: packageURL
@@ -484,29 +722,38 @@ struct SkillPackageStore:
                 )
         }
 
-        return CommunitySkillPackage(
+        return LegacyOpenWhisperV1Adapter().normalize(
             definition: definition,
             packageURL: packageURL,
             relativeFiles:
                 files.map(\.relativePath)
                     .sorted(),
             contentSHA256:
-                try contentHash(files),
-            isActive: false
+                try contentHash(files)
         )
     }
 
     func install(
         from packageURL: URL
     ) throws -> CommunitySkillPackage {
-        guard
-            packageURL.pathExtension
-                .lowercased()
-                == "openwhisperskill"
-        else {
+        if try isSupportedArchive(packageURL) {
+            let extraction = try extractArchive(packageURL)
+            defer {
+                try? fileManager.removeItem(at: extraction.containerURL)
+            }
+            return try install(from: extraction.packageRootURL)
+        }
+        let isLegacyTransport = packageURL.pathExtension
+            .lowercased() == "openwhisperskill"
+        let isStandardDirectory = fileManager.fileExists(
+            atPath: packageURL.appendingPathComponent(
+                "SKILL.md"
+            ).path
+        )
+        guard isLegacyTransport || isStandardDirectory else {
             throw CommunitySkillPackageError
                 .invalidPackage(
-                    "choose a .openwhisperskill directory"
+                    "choose an Agent Skills directory or a .openwhisperskill directory"
                 )
         }
         let inspected =
@@ -551,7 +798,7 @@ struct SkillPackageStore:
                 inspected.relativeFiles
             {
                 let source =
-                    packageURL
+                    inspected.packageURL
                         .appendingPathComponent(
                             relativePath,
                             isDirectory: false
@@ -580,7 +827,13 @@ struct SkillPackageStore:
                     values.isSymbolicLink
                         != true,
                     (values.fileSize ?? 0)
-                        <= Self.maximumFileBytes
+                        <= (
+                            inspected.format
+                                == .agentSkillsStandard
+                            ? AgentSkillPackageLoader
+                                .maximumFileBytes
+                            : Self.maximumFileBytes
+                        )
                 else {
                     throw CommunitySkillPackageError
                         .invalidPackage(
@@ -630,7 +883,29 @@ struct SkillPackageStore:
                     copied.relativeFiles,
                 contentSHA256:
                     copied.contentSHA256,
-                isActive: true
+                isActive:
+                    copied.compatibility
+                        .runtimeStatus
+                        == .compatible,
+                format: copied.format,
+                installation:
+                    copied.installation,
+                agentPackage:
+                    copied.agentPackage.map {
+                        AgentSkillPackage(
+                            rootURL: destination,
+                            metadata: $0.metadata,
+                            instructions: $0.instructions,
+                            resources: $0.resources,
+                            vendorExtensions: $0.vendorExtensions,
+                            contentSHA256: $0.contentSHA256
+                        )
+                    },
+                profile: copied.profile,
+                compatibility:
+                    copied.compatibility,
+                resolvedResources:
+                    copied.resolvedResources
             )
         } catch {
             try? fileManager.removeItem(
@@ -638,6 +913,50 @@ struct SkillPackageStore:
             )
             throw error
         }
+    }
+
+    func installRegistryPackage(
+        from archiveURL: URL,
+        source: TrustedSkillRegistrySource,
+        package registryPackage: TrustedSkillRegistryPackage
+    ) throws -> CommunitySkillPackage {
+        let installed = try install(from: archiveURL)
+        guard installed.contentSHA256.lowercased()
+                == registryPackage.contentSHA256.lowercased(),
+              installed.definition.version == registryPackage.version,
+              installed.definition.name == registryPackage.portableName
+                || installed.agentPackage?.metadata.name
+                    == registryPackage.portableName
+        else {
+            try? uninstall(
+                skillID: installed.definition.id,
+                version: installed.definition.version
+            )
+            throw TrustedSkillRegistryError.hashMismatch
+        }
+        let identity = InstalledSkillIdentity(
+            id: StableIdentifier.uuid(
+                namespace: "OpenWhisper.RegistrySkillInstallation",
+                components: [
+                    source.id.uuidString,
+                    registryPackage.packageID,
+                    registryPackage.version,
+                    registryPackage.revision,
+                ]
+            ),
+            portableName: registryPackage.portableName,
+            sourceID: "registry:\(source.id.uuidString)",
+            packageID: registryPackage.packageID,
+            version: registryPackage.version,
+            revision: registryPackage.revision,
+            publisher: registryPackage.publisherID
+        )
+        try persist(
+            metadata: PersistedSkillSourceMetadata(identity: identity),
+            skillID: installed.definition.id,
+            version: installed.definition.version
+        )
+        return installed.replacingInstallation(identity)
     }
 
     func loadInventory(
@@ -701,7 +1020,14 @@ struct SkillPackageStore:
                                     .lastPathComponent
                             )
                     }
-                    packages.append(package)
+                    packages.append(
+                        package.replacingInstallation(
+                            persistedInstallation(
+                                skillID: package.definition.id,
+                                version: package.definition.version
+                            ) ?? package.installation
+                        )
+                    )
                 } catch {
                     rejected.append(
                         RejectedCommunitySkillPackage(
@@ -745,7 +1071,11 @@ struct SkillPackageStore:
                         ) == .orderedDescending
                 }.first
             if let selected {
-                activeIDs.insert(selected.id)
+                if selected.compatibility
+                    .runtimeStatus == .compatible
+                {
+                    activeIDs.insert(selected.id)
+                }
             }
         }
         packages = packages.map {
@@ -849,6 +1179,17 @@ struct SkillPackageStore:
         try fileManager.removeItem(
             at: target
         )
+        let metadataTarget: URL
+        if let version {
+            metadataTarget = metadataURL(
+                skillID: skillID,
+                version: version
+            )
+        } else {
+            metadataTarget = metadataRootURL
+                .appendingPathComponent(skillID, isDirectory: true)
+        }
+        try? fileManager.removeItem(at: metadataTarget)
         if
             target != skillRoot,
             (
@@ -1021,6 +1362,257 @@ struct SkillPackageStore:
                     Set(issueCodes)
                 ).sorted()
         )
+    }
+
+    private func isSupportedArchive(
+        _ url: URL
+    ) throws -> Bool {
+        guard url.isFileURL,
+              fileManager.fileExists(atPath: url.path)
+        else {
+            return false
+        }
+        let values = try url.resourceValues(
+            forKeys: [.isRegularFileKey, .isSymbolicLinkKey]
+        )
+        guard values.isSymbolicLink != true else {
+            throw CommunitySkillPackageError.symbolicLink(
+                url.lastPathComponent
+            )
+        }
+        guard values.isRegularFile == true else {
+            return false
+        }
+        let pathExtension = url.pathExtension.lowercased()
+        guard pathExtension == "zip"
+                || pathExtension == "openwhisperskill"
+        else {
+            return false
+        }
+        return true
+    }
+
+    private func extractArchive(
+        _ archiveURL: URL
+    ) throws -> SkillArchiveExtraction {
+        let archiveValues = try archiveURL.resourceValues(
+            forKeys: [.fileSizeKey]
+        )
+        guard (archiveValues.fileSize ?? 0) <= 8 * 1_024 * 1_024 else {
+            throw CommunitySkillPackageError.packageTooLarge
+        }
+
+        let listing = try runArchiveTool(
+            executable: "/usr/bin/zipinfo",
+            arguments: ["-1", archiveURL.path]
+        )
+        let rawEntries = listing
+            .split(whereSeparator: \.isNewline)
+            .map(String.init)
+        guard !rawEntries.isEmpty,
+              rawEntries.count <= 256
+        else {
+            throw CommunitySkillPackageError.tooManyFiles
+        }
+        for rawEntry in rawEntries {
+            let entry = rawEntry.hasSuffix("/")
+                ? String(rawEntry.dropLast())
+                : rawEntry
+            guard !entry.isEmpty,
+                  !entry.hasPrefix("/"),
+                  !entry.contains("\\"),
+                  entry.utf8.count <= 500
+            else {
+                throw CommunitySkillPackageError.pathTraversal(rawEntry)
+            }
+            let components = entry.split(
+                separator: "/",
+                omittingEmptySubsequences: false
+            )
+            guard !components.contains(where: {
+                $0.isEmpty || $0 == "." || $0 == ".."
+            }) else {
+                throw CommunitySkillPackageError.pathTraversal(rawEntry)
+            }
+        }
+
+        let summary = try runArchiveTool(
+            executable: "/usr/bin/zipinfo",
+            arguments: ["-t", archiveURL.path]
+        )
+        if let match = summary.range(
+            of: #"[0-9]+ bytes uncompressed"#,
+            options: .regularExpression
+        ),
+           let bytes = Int(
+               summary[match]
+                   .split(separator: " ")
+                   .first ?? ""
+           ),
+           bytes > 6 * 1_024 * 1_024
+        {
+            throw CommunitySkillPackageError.packageTooLarge
+        }
+
+        let container = fileManager.temporaryDirectory
+            .appendingPathComponent(
+                "OpenWhisper-SkillArchive-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try secureCreateDirectory(container)
+        do {
+            _ = try runArchiveTool(
+                executable: "/usr/bin/ditto",
+                arguments: ["-x", "-k", archiveURL.path, container.path]
+            )
+            let root = try archivePackageRoot(in: container)
+            try? fileManager.removeItem(
+                at: container.appendingPathComponent("__MACOSX", isDirectory: true)
+            )
+            return SkillArchiveExtraction(
+                containerURL: container,
+                packageRootURL: root
+            )
+        } catch {
+            try? fileManager.removeItem(at: container)
+            throw error
+        }
+    }
+
+    private func archivePackageRoot(
+        in container: URL
+    ) throws -> URL {
+        func isPackageRoot(_ url: URL) -> Bool {
+            fileManager.fileExists(
+                atPath: url.appendingPathComponent("SKILL.md").path
+            ) || fileManager.fileExists(
+                atPath: url.appendingPathComponent("skill.yaml").path
+            )
+        }
+        if isPackageRoot(container) {
+            return container
+        }
+        let children = try fileManager.contentsOfDirectory(
+            at: container,
+            includingPropertiesForKeys: [
+                .isDirectoryKey, .isSymbolicLinkKey,
+            ],
+            options: [.skipsHiddenFiles]
+        ).filter {
+            $0.lastPathComponent != "__MACOSX"
+                && $0.lastPathComponent != ".DS_Store"
+        }
+        let candidates = try children.filter { child in
+            let values = try child.resourceValues(
+                forKeys: [.isDirectoryKey, .isSymbolicLinkKey]
+            )
+            guard values.isSymbolicLink != true else {
+                throw CommunitySkillPackageError.symbolicLink(
+                    child.lastPathComponent
+                )
+            }
+            return values.isDirectory == true && isPackageRoot(child)
+        }
+        guard candidates.count == 1,
+              children.count == 1
+        else {
+            throw CommunitySkillPackageError.invalidPackage(
+                "the archive must contain one standard Skill directory"
+            )
+        }
+        return candidates[0]
+    }
+
+    private func runArchiveTool(
+        executable: String,
+        arguments: [String]
+    ) throws -> String {
+        let process = Process()
+        let captureRoot = fileManager.temporaryDirectory
+            .appendingPathComponent(
+                "OpenWhisper-ArchiveTool-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        try secureCreateDirectory(captureRoot)
+        defer { try? fileManager.removeItem(at: captureRoot) }
+        let outputURL = captureRoot.appendingPathComponent("stdout")
+        let errorURL = captureRoot.appendingPathComponent("stderr")
+        _ = fileManager.createFile(atPath: outputURL.path, contents: nil)
+        _ = fileManager.createFile(atPath: errorURL.path, contents: nil)
+        let output = try FileHandle(forWritingTo: outputURL)
+        let errorOutput = try FileHandle(forWritingTo: errorURL)
+        defer {
+            try? output.close()
+            try? errorOutput.close()
+        }
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.environment = [
+            "PATH": "/usr/bin:/bin",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "COPYFILE_DISABLE": "1",
+        ]
+        process.standardOutput = output
+        process.standardError = errorOutput
+        try process.run()
+        process.waitUntilExit()
+        try output.synchronize()
+        try errorOutput.synchronize()
+        let stdout = try Data(contentsOf: outputURL)
+        let stderr = try Data(contentsOf: errorURL)
+        guard process.terminationStatus == 0 else {
+            let detail = String(data: stderr, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw CommunitySkillPackageError.invalidPackage(
+                detail?.isEmpty == false ? detail! : "the archive could not be read"
+            )
+        }
+        guard let text = String(data: stdout, encoding: .utf8) else {
+            throw CommunitySkillPackageError.invalidPackage(
+                "the archive listing is not UTF-8"
+            )
+        }
+        return text
+    }
+
+    private func metadataURL(
+        skillID: String,
+        version: String
+    ) -> URL {
+        metadataRootURL
+            .appendingPathComponent(skillID, isDirectory: true)
+            .appendingPathComponent(version)
+            .appendingPathExtension("json")
+    }
+
+    private func persist(
+        metadata: PersistedSkillSourceMetadata,
+        skillID: String,
+        version: String
+    ) throws {
+        let url = metadataURL(skillID: skillID, version: version)
+        try secureCreateDirectory(url.deletingLastPathComponent())
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(metadata).write(to: url, options: [.atomic])
+        try setFilePermissions(url)
+    }
+
+    private func persistedInstallation(
+        skillID: String,
+        version: String
+    ) -> InstalledSkillIdentity? {
+        let url = metadataURL(skillID: skillID, version: version)
+        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]),
+              let metadata = try? JSONDecoder().decode(
+                  PersistedSkillSourceMetadata.self,
+                  from: data
+              )
+        else {
+            return nil
+        }
+        return metadata.identity
     }
 
     private func validatedFiles(
@@ -2470,7 +3062,7 @@ private struct FlatYAMLDocument {
     }
 }
 
-private enum SemanticVersion {
+enum SemanticVersion {
     static func compare(
         _ lhs: String,
         _ rhs: String

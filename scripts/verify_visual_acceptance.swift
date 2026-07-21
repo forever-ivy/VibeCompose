@@ -15,7 +15,6 @@ enum VerificationError: Error, CustomStringConvertible {
     case missingHud(String, Int)
     case duplicateState(String, String, Int)
     case unstablePrimaryGeometry(String, Int, Int, Int, Int)
-    case invalidErrorGeometry(String, Int, Int, Int, Int)
     case accessibilityVariantGeometryMismatch(String, String, Int, Int, Int, Int)
     case insufficientAccessibilityDifference(String, String, Int)
     case unstableReducedMotion(Int)
@@ -38,14 +37,6 @@ enum VerificationError: Error, CustomStringConvertible {
             let actualHeight
         ):
             return "\(state) changed the primary HUD geometry from \(expectedWidth)x\(expectedHeight) to \(actualWidth)x\(actualHeight)"
-        case .invalidErrorGeometry(
-            let state,
-            let primaryWidth,
-            let primaryHeight,
-            let actualWidth,
-            let actualHeight
-        ):
-            return "\(state) must be at least as large as the \(primaryWidth)x\(primaryHeight) primary HUD, got \(actualWidth)x\(actualHeight)"
         case .accessibilityVariantGeometryMismatch(
             let baseline,
             let variant,
@@ -143,6 +134,7 @@ do {
     }
     let minimumVisiblePixels = 2_500
     let minimumChangedPixels = 500
+    let minimumControlChangedPixels = 150
     let minimumAccessibilityChangedPixels = 80
     let maximumReducedMotionChangedPixels = 4
 
@@ -155,7 +147,7 @@ do {
     }
 
     let primary = states[0]
-    for state in states[1...4] {
+    for state in states[1...6] {
         guard state.width == primary.width, state.height == primary.height else {
             throw VerificationError.unstablePrimaryGeometry(
                 state.name,
@@ -166,18 +158,6 @@ do {
             )
         }
     }
-    for state in states[5...6] {
-        guard state.width >= primary.width, state.height >= primary.height else {
-            throw VerificationError.invalidErrorGeometry(
-                state.name,
-                primary.width,
-                primary.height,
-                state.width,
-                state.height
-            )
-        }
-    }
-
     for index in 0..<6 {
         let left = states[index]
         let right = states[index + 1]
@@ -187,7 +167,11 @@ do {
         }
 
         let changedPixels = changedPixelCount(from: left, to: right)
-        guard changedPixels >= minimumChangedPixels else {
+        let requiredChangedPixels = left.name == "error"
+            && right.name == "retryable-error"
+            ? minimumControlChangedPixels
+            : minimumChangedPixels
+        guard changedPixels >= requiredChangedPixels else {
             throw VerificationError.duplicateState(left.name, right.name, changedPixels)
         }
         print("\(left.name) -> \(right.name): \(changedPixels) changed HUD-window pixels")

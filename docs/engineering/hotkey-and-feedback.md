@@ -8,7 +8,7 @@ AI-native input-layer plan:
 - one configurable global dictation shortcut, default `F5`;
 - atomic registration, persistence, rollback, and startup fallback;
 - dynamic shortcut copy across runtime product surfaces;
-- Refined HUD, Blue Signal Frame, and Hidden feedback modes;
+- Refined HUD, AI Activity Glow, and Hidden feedback modes;
 - installed-app visual and accessibility acceptance.
 
 The shortcut still has one invariant: the same binding starts and stops a
@@ -100,16 +100,20 @@ The router sends that state to one of three presentations:
 - explicit Inserted, Paste Sent, Copied, Error, and Retry states;
 - ordinary errors remain visible for at least five seconds.
 
-### Blue Signal Frame
+### AI Activity Glow
 
 - nonactivating and mouse-transparent;
 - freezes the active display or focused-window target when the session starts;
-- uses a low-frequency cold-blue perimeter signal, not a screen capture or
-  blurred overlay;
-- recording level changes only the bounded local highlight strength;
+- combines a restrained core stroke, ambient shadow, and fixed multi-stop energy gradient,
+  not a screen capture or blurred overlay;
+- recording uses a slow blue/ice/cyan breath; stopping keeps the same panel
+  continuously visible and crossfades into a distinct indigo/blue/cyan
+  processing state with three animated ambient layers and a `0.95 s` half-cycle;
+- success has a green pulse, clipboard fallback an amber pulse, and error a
+  red double pulse;
 - completion and error states retain compact text when configured, so Copied
   and Inserted are not distinguished by color alone;
-- system Reduce Motion or `alwaysReduceMotion` disables continuous scanning.
+- system Reduce Motion or `alwaysReduceMotion` disables continuous breathing.
 
 ### Hidden
 
@@ -124,7 +128,7 @@ Settings → Appearance & Feedback persists:
 
 - visual mode;
 - intensity;
-- Blue Signal frame target;
+- AI Activity Glow frame target;
 - explanatory status text;
 - feedback sounds;
 - completion notifications;
@@ -151,7 +155,7 @@ The second command:
 
 1. packages and installs `/Applications/OpenWhisper.app`;
 2. captures the complete Refined HUD state matrix;
-3. runs Refined HUD, Blue Signal Frame, and Hidden mode assertions;
+3. runs Refined HUD, AI Activity Glow, and Hidden mode assertions;
 4. verifies explicit Reduce Motion behavior;
 5. relaunches the normal installed app and leaves it running.
 

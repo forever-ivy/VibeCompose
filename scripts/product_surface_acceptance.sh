@@ -67,6 +67,7 @@ capture_surface() {
   local launch_mode="$1"
   local snapshot_argument="$2"
   local output_file="$3"
+  local section="${4:-}"
   local temporary_file="$TMP_DIR/$output_file"
 
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
@@ -75,10 +76,15 @@ capture_surface() {
     exit 1
   fi
 
-  /usr/bin/open -W -n "$APP_DIR" --args \
-    "--open-$launch_mode" \
-    "--$snapshot_argument" \
+  local -a launch_arguments=(
+    "--open-$launch_mode"
+    "--$snapshot_argument"
     "$temporary_file"
+  )
+  if [[ -n "$section" ]]; then
+    launch_arguments+=("--skill-library-section" "$section")
+  fi
+  /usr/bin/open -W -n "$APP_DIR" --args "${launch_arguments[@]}"
 
   if [[ ! -s "$temporary_file" ]]; then
     echo "$launch_mode did not produce a product surface snapshot" >&2
@@ -90,11 +96,19 @@ capture_surface() {
 capture_surface "history" "history-snapshot-output" "01-history.png"
 capture_surface "terminology" "terminology-snapshot-output" "02-terminology.png"
 capture_surface "quick-add" "quick-add-snapshot-output" "03-quick-add.png"
+capture_surface "skill-library" "skill-library-snapshot-output" "04-skill-library-installed.png" "installed"
+capture_surface "skill-library" "skill-library-snapshot-output" "05-skill-library-discover.png" "discover"
+capture_surface "skill-library" "skill-library-snapshot-output" "06-skill-library-created.png" "created"
+capture_surface "skill-switcher" "skill-switcher-snapshot-output" "07-skill-switcher.png"
 
 swift "$ROOT/scripts/verify_product_surfaces.swift" \
   "$OUT_DIR/01-history.png" \
   "$OUT_DIR/02-terminology.png" \
-  "$OUT_DIR/03-quick-add.png" | tee "$OUT_DIR/verification.txt"
+  "$OUT_DIR/03-quick-add.png" \
+  "$OUT_DIR/04-skill-library-installed.png" \
+  "$OUT_DIR/05-skill-library-discover.png" \
+  "$OUT_DIR/06-skill-library-created.png" \
+  "$OUT_DIR/07-skill-switcher.png" | tee "$OUT_DIR/verification.txt"
 
 trap - EXIT
 rm -rf "$TMP_DIR"
@@ -112,12 +126,16 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 - Run ID: \`$RUN_ID\`
 - App: \`$APP_BINARY\`
 - Capture: installed-app self-rendered window snapshots through local temporary files
-- Surfaces: History, Terminology, Quick Add
+- Surfaces: History, Terminology, Quick Add, Skill Switcher, Skill Library Installed/Discover/Created
 - Final live state: normal installed app relaunched and left running as PID \`$RUNNING_PID\`
 - Evidence:
   - \`01-history.png\`
   - \`02-terminology.png\`
   - \`03-quick-add.png\`
+  - \`04-skill-library-installed.png\`
+  - \`05-skill-library-discover.png\`
+  - \`06-skill-library-created.png\`
+  - \`07-skill-switcher.png\`
   - \`verification.txt\`
 
 SUMMARY

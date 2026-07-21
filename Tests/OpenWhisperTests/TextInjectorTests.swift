@@ -386,6 +386,47 @@ func pasteTransitionVerifierCanProveSameTextReplacementBySelectionCollapse() {
 }
 
 @Test
+func safeUndoRequiresExactInsertedTextButAllowsCursorMovement() {
+    let before = EditableTextSnapshot(
+        value: "hello world",
+        selectedRange: CFRange(location: 6, length: 5)
+    )
+    let expected = PasteTransitionVerifier.expectedSnapshot(
+        before: before,
+        insertedText: "OpenWhisper"
+    )!
+    let movedCursor = EditableTextSnapshot(
+        value: expected.value,
+        selectedRange: CFRange(location: 0, length: 0)
+    )
+
+    #expect(
+        SafeUndoVerifier.canRestore(
+            expectedAfter: expected,
+            current: movedCursor,
+            targetStillMatches: true
+        )
+    )
+    #expect(
+        !SafeUndoVerifier.canRestore(
+            expectedAfter: expected,
+            current: EditableTextSnapshot(
+                value: expected.value + "!",
+                selectedRange: movedCursor.selectedRange
+            ),
+            targetStillMatches: true
+        )
+    )
+    #expect(
+        !SafeUndoVerifier.canRestore(
+            expectedAfter: expected,
+            current: movedCursor,
+            targetStillMatches: false
+        )
+    )
+}
+
+@Test
 func pasteTransitionVerifierRejectsUnrelatedValueChange() {
     let before = EditableTextSnapshot(
         value: "hello",
@@ -501,7 +542,10 @@ func asyncPasteTargetWaiterIsCancellationAware() async {
 func asyncPasteVerificationWaiterPollsUntilInsertionIsObserved() async throws {
     var checks = 0
     let waiter = AsyncPasteVerificationWaiter(
-        timeout: .seconds(1),
+        // The full suite runs many MainActor tests concurrently. Give the
+        // scheduler enough wall-clock headroom without changing the
+        // production waiter's deliberately short timeout.
+        timeout: .seconds(10),
         pollInterval: .milliseconds(1)
     )
 

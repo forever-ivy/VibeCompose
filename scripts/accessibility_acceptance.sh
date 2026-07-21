@@ -73,6 +73,8 @@ capture_audit() {
       args+=("--settings-pane" "$pane")
     elif [[ "$surface" == onboarding-* ]]; then
       args+=("--onboarding-step" "$pane")
+    elif [[ "$surface" == skill-library-* ]]; then
+      args+=("--skill-library-section" "$pane")
     fi
   fi
 
@@ -85,13 +87,12 @@ capture_audit() {
   cp "$temporary_file" "$OUT_DIR/$surface.json"
 }
 
+capture_audit "settings-general" "--open-settings" "general"
 capture_audit "settings-account" "--open-settings" "account"
 capture_audit "settings-dictation" "--open-settings" "dictation"
 capture_audit "settings-appearance" "--open-settings" "appearance"
 capture_audit "settings-ai-polish" "--open-settings" "ai-polish"
 capture_audit "settings-context" "--open-settings" "context"
-capture_audit "settings-terminology" "--open-settings" "terminology"
-capture_audit "settings-paste" "--open-settings" "paste"
 capture_audit "settings-privacy" "--open-settings" "privacy"
 capture_audit "settings-advanced" "--open-settings" "advanced"
 capture_audit "onboarding-welcome" "--open-onboarding" "welcome"
@@ -101,6 +102,11 @@ capture_audit "onboarding-practice" "--open-onboarding" "practice"
 capture_audit "history" "--open-history"
 capture_audit "terminology" "--open-terminology"
 capture_audit "quick-add" "--open-quick-add"
+capture_audit "skill-library-installed" "--open-skill-library" "installed"
+capture_audit "skill-library-discover" "--open-skill-library" "discover"
+capture_audit "skill-library-created" "--open-skill-library" "created"
+capture_audit "skill-switcher" "--open-skill-switcher"
+capture_audit "preview" "--preview-demo"
 
 python3 - "$OUT_DIR" <<'PY' | tee "$OUT_DIR/verification.txt"
 import json
@@ -109,13 +115,12 @@ import sys
 
 root = pathlib.Path(sys.argv[1])
 expected = {
+    "settings-general",
     "settings-account",
     "settings-dictation",
     "settings-appearance",
     "settings-ai-polish",
     "settings-context",
-    "settings-terminology",
-    "settings-paste",
     "settings-privacy",
     "settings-advanced",
     "onboarding-welcome",
@@ -125,6 +130,11 @@ expected = {
     "history",
     "terminology",
     "quick-add",
+    "skill-library-installed",
+    "skill-library-discover",
+    "skill-library-created",
+    "skill-switcher",
+    "preview",
 }
 
 failed = []
@@ -175,7 +185,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_DIR\`
-- Surfaces: nine Settings panes, four Onboarding steps, History, Terminology, Quick Add
+- Surfaces: five canonical Settings panes (plus legacy deep-link aliases), four Onboarding steps, History, Terminology, Quick Add, Skill Switcher, Skill Library Installed/Discover/Created, Editable Preview
 - Validation: SwiftUI enhanced accessibility tree, actionable names, non-empty control surface
 - Privacy: capture mode uses default configuration and empty in-memory user data
 - Final live state: normal installed OpenWhisper relaunched and left running as PID \`$RUNNING_PID\`

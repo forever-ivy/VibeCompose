@@ -12,14 +12,6 @@ func productIdentityUsesCanonicalMacValues() {
         ProductIdentity.recoveryAPIKeychainService
             == "app.openwhisper.mac.OpenAICompatibleAPIKey"
     )
-    #expect(
-        ProductIdentity.licenseReceiptKeychainService
-            == "app.openwhisper.mac.LicenseReceipt"
-    )
-    #expect(
-        ProductIdentity.licenseDeviceKeychainService
-            == "app.openwhisper.mac.LicenseDevice"
-    )
     #expect(ProductIdentity.installedAppURL.path == "/Applications/OpenWhisper.app")
     #expect(ProductIdentity.userAgent.hasPrefix("OpenWhisper/"))
 }

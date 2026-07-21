@@ -25,3 +25,15 @@ version where applicable, vendored license SHA-256, and packaged App resource.
 
 Sparkle's license file includes the notices it ships for bsdiff/bspatch,
 sais-lite, Ed25519, and `SUSignatureVerifier.m`.
+
+## EdgeGlow
+
+- Source: `https://github.com/vector4wang/EdgeGlow.git`
+- Pinned revision: `d39d0471a25af97d8de077591f69f938efa8bea8`
+- License: MIT License
+- Full text: `ThirdPartyLicenses/EdgeGlow-LICENSE.txt`
+
+OpenWhisper's AI Activity Glow adapts EdgeGlow's four-layer segmented neon
+rendering architecture and iridescent palette. OpenWhisper retains its own
+dictation state machine, target selection, accessibility behavior, and
+completion/error choreography.

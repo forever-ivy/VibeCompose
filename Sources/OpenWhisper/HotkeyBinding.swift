@@ -32,6 +32,11 @@ struct HotkeyBinding:
         modifiers: UInt32(controlKey | optionKey)
     )
 
+    static let skillSwitcher = HotkeyBinding(
+        keyCode: UInt32(kVK_ANSI_S),
+        modifiers: UInt32(controlKey | optionKey)
+    )
+
     var displayName: String {
         modifierDisplayPrefix + Self.keyDisplayName(
             keyCode: keyCode
@@ -368,5 +373,40 @@ enum HotkeyBindingValidator {
             UInt32(kVK_Space),
         ]
         return editingKeys.contains(binding.keyCode)
+    }
+}
+
+enum OpenWhisperShortcutConflictError:
+    Error,
+    Equatable,
+    Sendable,
+    LocalizedError
+{
+    case dictationAndSkillSwitcherMatch
+
+    var errorDescription: String? {
+        switch self {
+        case .dictationAndSkillSwitcherMatch:
+            return L10n.text(
+                "The Skill Switcher shortcut must be different from the dictation shortcut."
+            )
+        }
+    }
+}
+
+enum OpenWhisperShortcutSetValidator {
+    static func validate(
+        dictation: HotkeyBinding,
+        skillSwitcher: HotkeyBinding?
+    ) throws {
+        _ = try dictation.validated()
+        guard let skillSwitcher else {
+            return
+        }
+        _ = try skillSwitcher.validated()
+        guard skillSwitcher != dictation else {
+            throw OpenWhisperShortcutConflictError
+                .dictationAndSkillSwitcherMatch
+        }
     }
 }

@@ -63,9 +63,9 @@ managed transcription and ChatGPT AI Polish. A policy:
 - is cached owner-only, and an invalid or older response cannot replace a
   previously accepted active disable.
 
-The private alpha intentionally omits the production URL/key. Commercial release
-remains blocked until a separate production signing key, permanent HTTPS policy
-host, initial signed policy, and installed-app incident drill are operating.
+The private alpha intentionally omits the production URL/key. A signed public
+build requires a separate production signing key, permanent HTTPS policy host,
+initial signed policy, and installed-app incident drill.
 
 Generate and verify a policy without placing the private key in the repository:
 

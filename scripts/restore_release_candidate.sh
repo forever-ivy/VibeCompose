@@ -32,7 +32,7 @@ fi
 
 ACTUAL_SHA256="$(/usr/bin/shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"
 [[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]] || {
-  echo "Commercial release candidate SHA-256 mismatch." >&2
+  echo "Signed release candidate SHA-256 mismatch." >&2
   exit 1
 }
 
@@ -216,9 +216,11 @@ required = (
     dist / f"{app_name}.app",
     dist / "appcast.xml",
     dist / "provider-capabilities.json",
+    dist / "notarization-app.json",
+    dist / "notarization-dmg.json",
+    dist / "release-candidate-readiness.json",
     dist / "SHA256SUMS",
     dist / "openwhisper.rb",
-    dist / "productization-readiness" / "prebuild.json",
 )
 for path in required:
     if path.name == f"{app_name}.app":
@@ -227,6 +229,35 @@ for path in required:
         valid = path.is_file() and not path.is_symlink()
     if not valid:
         raise SystemExit(f"Candidate is missing required release evidence: {path.name}")
+
+readiness_path = dist / "release-candidate-readiness.json"
+readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+if (
+    not isinstance(readiness, dict)
+    or readiness.get("schemaVersion") != 1
+    or readiness.get("phase") != "candidate"
+    or readiness.get("passed") is not True
+    or readiness.get("sourceCommit") != source_commit
+    or readiness.get("release") != {"version": version, "build": build}
+):
+    raise SystemExit("Candidate readiness report is invalid or for another source commit.")
+
+notarization_ids = set()
+for name in ("notarization-app.json", "notarization-dmg.json"):
+    receipt = json.loads((dist / name).read_text(encoding="utf-8"))
+    submission_id = receipt.get("id") if isinstance(receipt, dict) else None
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("status") != "Accepted"
+        or not isinstance(submission_id, str)
+        or re.fullmatch(
+            r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
+            submission_id,
+        ) is None
+        or submission_id in notarization_ids
+    ):
+        raise SystemExit(f"Candidate notarization result is invalid: {name}")
+    notarization_ids.add(submission_id)
 PY
 
 rm -rf "$STAGED_DIST" "$BACKUP_DIST"
@@ -238,4 +269,4 @@ mv "$STAGED_DIST" "$TARGET_DIST"
 RESTORE_COMMITTED=1
 rm -rf "$BACKUP_DIST"
 
-echo "Restored verified commercial release candidate to $TARGET_DIST"
+echo "Restored verified signed release candidate to $TARGET_DIST"

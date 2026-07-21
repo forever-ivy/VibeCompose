@@ -16,10 +16,15 @@ func builtInSkillRegistryExposesStableVersionedDeclarations() {
             SkillRegistry.translateSkillID,
             SkillRegistry.contextRewriteSkillID,
             SkillRegistry.contextReplySkillID,
+            SkillRegistry.bugReportSkillID,
+            SkillRegistry.commitMessageSkillID,
+            SkillRegistry.meetingActionItemsSkillID,
+            SkillRegistry.productBriefSkillID,
+            SkillRegistry.customerSupportReplySkillID,
         ]
     )
     #expect(
-        Set(registry.skillIDs).count == 8
+        Set(registry.skillIDs).count == 13
     )
 
     for skill in
@@ -51,6 +56,94 @@ func builtInSkillRegistryExposesStableVersionedDeclarations() {
                 .contains(.externalAction)
         )
     }
+}
+
+@Test
+func pilotBuiltInSkillsHaveReviewableTaskContracts() throws {
+    let registry = SkillRegistry.builtIn
+    let pilotIDs = [
+        SkillRegistry.bugReportSkillID,
+        SkillRegistry.commitMessageSkillID,
+        SkillRegistry.meetingActionItemsSkillID,
+        SkillRegistry.productBriefSkillID,
+        SkillRegistry.customerSupportReplySkillID,
+    ]
+
+    for id in pilotIDs {
+        let skill = try #require(registry.definition(id: id))
+        #expect(!skill.localizedSummary.isEmpty)
+        #expect(!skill.localizedUseCase.isEmpty)
+        #expect(skill.output.delivery == .previewThenPaste)
+        #expect(skill.output.risk == .medium)
+        #expect(!skill.promptInstruction.isEmpty)
+        #expect(!skill.allCapabilities.contains(.externalAction))
+    }
+}
+
+@Test
+func skillSwitcherSearchHandlesOneHundredLocalSkills() {
+    let entries = (0..<100).map { index in
+        SkillMenuEntry(
+            installationID: UUID(),
+            skillID: "com.example.skill-\(index)",
+            displayName: "Workflow \(index)",
+            summary: index == 73
+                ? "Résumé customer escalation"
+                : "Local workflow \(index)",
+            sourceLabel: "Imported",
+            requiresSelection: false,
+            risk: .low
+        )
+    }
+
+    let result = SkillMenuSearch.results(
+        in: entries,
+        matching: "resume customer"
+    )
+    #expect(result.map(\.skillID) == ["com.example.skill-73"])
+    #expect(
+        SkillMenuSearch.results(
+            in: entries,
+            matching: "workflow"
+        ).count == 100
+    )
+}
+
+@Test
+func nextRunSelectionConsumesOnlyAfterMatchingRecordingStarts() {
+    let direct = ResolvedSkillExecutionPlan.direct
+    let nextPlan = ResolvedSkillExecutionPlan(
+        skill: direct.skill,
+        source: .nextRun,
+        matchedApplicationRuleID: nil,
+        installation: direct.installation
+    )
+    var selection = NextRunSkillSelection()
+    selection.select(nextPlan.installation.id)
+
+    #expect(selection.installationID == nextPlan.installation.id)
+    let consumedDirect = selection
+        .consumeAfterSuccessfulRecordingStart(
+            using: direct
+        )
+    #expect(!consumedDirect)
+    #expect(selection.installationID == nextPlan.installation.id)
+    let consumedNext = selection
+        .consumeAfterSuccessfulRecordingStart(
+            using: nextPlan
+        )
+    #expect(consumedNext)
+    #expect(selection.installationID == nil)
+
+    selection.select(UUID())
+    let consumedMismatched = selection
+        .consumeAfterSuccessfulRecordingStart(
+            using: nextPlan
+        )
+    #expect(!consumedMismatched)
+    #expect(selection.installationID != nil)
+    selection.clear()
+    #expect(selection.installationID == nil)
 }
 
 @Test
@@ -168,6 +261,7 @@ func skillResolverUsesManualThenAppThenDefaultAndFreezesVersion()
         app.matchedApplicationRuleID
             == rule.id
     )
+    #expect(app.installation.id == rule.skillInstallationID)
 
     let defaultPlan = resolver.resolve(
         config: config,
@@ -189,8 +283,15 @@ func skillResolverUsesManualThenAppThenDefaultAndFreezesVersion()
         transcription.resolvingVoiceMode(
             for: context
         )
+    #expect(frozen.resolvedSkillPlan?.skill == app.skill)
+    #expect(frozen.resolvedSkillPlan?.source == app.source)
     #expect(
-        frozen.resolvedSkillPlan == app
+        frozen.resolvedSkillPlan?.matchedApplicationRuleID
+            == app.matchedApplicationRuleID
+    )
+    #expect(
+        frozen.resolvedSkillPlan?.installation
+            == app.installation
     )
     #expect(
         frozen.skills.applicationRules
@@ -570,5 +671,39 @@ func pipelineRejectsInvalidSkillOutputAndFallsBackBeforeDelivery()
             .contains(
                 "failed local validation"
             ) == true
+    )
+}
+
+@Test
+func skillMenuSnapshotFreezesApplicationIdentityForScopedDefaults() {
+    let snapshot = SkillMenuCatalog.snapshot(
+        plan: .direct,
+        inventory: CommunitySkillInventory(
+            packages: [],
+            rejected: []
+        ),
+        ecosystem: SkillEcosystemConfig(),
+        nextRunInstallationID: nil,
+        currentApplicationName: "TextEdit",
+        currentApplicationBundleIdentifier: "com.apple.TextEdit"
+    )
+
+    #expect(snapshot.currentApplicationName == "TextEdit")
+    #expect(
+        snapshot.currentApplicationBundleIdentifier
+            == "com.apple.TextEdit"
+    )
+    #expect(
+        SkillMenuAction.setApplicationDefault(
+            installationID: snapshot.current.installationID,
+            appName: snapshot.currentApplicationName,
+            bundleIdentifier:
+                snapshot.currentApplicationBundleIdentifier!
+        )
+            == .setApplicationDefault(
+                installationID: snapshot.current.installationID,
+                appName: "TextEdit",
+                bundleIdentifier: "com.apple.TextEdit"
+            )
     )
 }

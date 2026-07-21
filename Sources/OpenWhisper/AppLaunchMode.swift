@@ -10,6 +10,12 @@ enum OverlayDemoState: String, Equatable, Sendable, CaseIterable {
     case retryableError = "retryable-error"
 }
 
+enum PreviewDemoScenario: String, Equatable, Sendable, CaseIterable {
+    case replace
+    case paste
+    case fallback
+}
+
 struct SettingsSnapshotSize: Equatable, Sendable {
     let width: Int
     let height: Int
@@ -25,6 +31,8 @@ enum AppLaunchMode: Equatable {
     case history
     case terminology
     case quickAdd
+    case skillLibrary
+    case skillSwitcher
     case previewDemo
     case overlayDemo
     case overlayDemoState(OverlayDemoState)
@@ -76,6 +84,18 @@ enum AppLaunchMode: Equatable {
 
         if arguments.contains("--quick-add") || arguments.contains("--open-quick-add") {
             return .quickAdd
+        }
+
+        if arguments.contains("--skill-library")
+            || arguments.contains("--open-skill-library")
+        {
+            return .skillLibrary
+        }
+
+        if arguments.contains("--skill-switcher")
+            || arguments.contains("--open-skill-switcher")
+        {
+            return .skillSwitcher
         }
 
         if arguments.contains("--preview-demo")
@@ -314,6 +334,35 @@ enum AppLaunchMode: Equatable {
         )
     }
 
+    static func previewDemoScenario(
+        arguments: [String]
+    ) -> PreviewDemoScenario {
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--preview-demo-scenario",
+               index + 1 < arguments.count,
+               let scenario = PreviewDemoScenario(
+                   rawValue: arguments[index + 1]
+                       .trimmingCharacters(in: .whitespacesAndNewlines)
+                       .lowercased()
+               )
+            {
+                return scenario
+            }
+
+            let prefix = "--preview-demo-scenario="
+            if argument.hasPrefix(prefix),
+               let scenario = PreviewDemoScenario(
+                   rawValue: String(argument.dropFirst(prefix.count))
+                       .trimmingCharacters(in: .whitespacesAndNewlines)
+                       .lowercased()
+               )
+            {
+                return scenario
+            }
+        }
+        return .replace
+    }
+
     static func interactionAcceptanceRequested(
         environment: [String: String],
         arguments: [String] = []
@@ -437,6 +486,63 @@ enum AppLaunchMode: Equatable {
         )
     }
 
+    static func skillLibrarySnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_SKILL_LIBRARY_SNAPSHOT_OUTPUT",
+            argumentName: "--skill-library-snapshot-output"
+        )
+    }
+
+    static func skillSwitcherSnapshotOutputURL(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> URL? {
+        productSurfaceSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments,
+            environmentKey: "OPENWHISPER_SKILL_SWITCHER_SNAPSHOT_OUTPUT",
+            argumentName: "--skill-switcher-snapshot-output"
+        )
+    }
+
+    static func skillLibrarySection(
+        arguments: [String] = []
+    ) -> SkillLibrarySection {
+        for (index, argument) in arguments.enumerated() {
+            let rawValue: String?
+            if argument == "--skill-library-section",
+               index + 1 < arguments.count
+            {
+                rawValue = arguments[index + 1]
+            } else if argument.hasPrefix("--skill-library-section=") {
+                rawValue = String(
+                    argument.dropFirst(
+                        "--skill-library-section=".count
+                    )
+                )
+            } else {
+                continue
+            }
+            if let rawValue,
+               let section = SkillLibrarySection(
+                    rawValue: rawValue
+                        .trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        )
+                        .lowercased()
+               )
+            {
+                return section
+            }
+        }
+        return .discover
+    }
+
     static func previewSnapshotOutputURL(
         environment: [String: String],
         arguments: [String] = []
@@ -475,6 +581,34 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
+    static func settingsSnapshotLanguage(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> AppLanguage? {
+        if let value = environment[
+            "OPENWHISPER_SETTINGS_SNAPSHOT_LANGUAGE"
+        ], let language = snapshotLanguage(value) {
+            return language
+        }
+        for (index, argument) in arguments.enumerated() {
+            if argument == "--settings-snapshot-language",
+               index + 1 < arguments.count
+            {
+                return snapshotLanguage(arguments[index + 1])
+            }
+            if argument.hasPrefix("--settings-snapshot-language=") {
+                return snapshotLanguage(
+                    String(
+                        argument.dropFirst(
+                            "--settings-snapshot-language=".count
+                        )
+                    )
+                )
+            }
+        }
+        return nil
+    }
+
     private static func requestedSettingsPane(arguments: [String]) -> String? {
         for (index, argument) in arguments.enumerated() {
             if argument == "--settings-pane", index + 1 < arguments.count {
@@ -491,6 +625,23 @@ enum AppLaunchMode: Equatable {
         }
 
         return nil
+    }
+
+    private static func snapshotLanguage(
+        _ rawValue: String
+    ) -> AppLanguage? {
+        switch rawValue.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).lowercased() {
+        case "system":
+            return .system
+        case "en", "english":
+            return .english
+        case "zh", "zh-hans", "simplified-chinese":
+            return .simplifiedChinese
+        default:
+            return nil
+        }
     }
 
     private static func requestedOnboardingStep(

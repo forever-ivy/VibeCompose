@@ -107,7 +107,6 @@ func previewRequestUsesSelectionAsDiffSourceWhenAvailable() {
         contextCapabilities: [
             .selection,
         ],
-        validationPassed: true,
         allowsSelectionReplacement:
             true
     )
@@ -116,4 +115,39 @@ func previewRequestUsesSelectionAsDiffSourceWhenAvailable() {
         request.comparisonSource
             == "Old text"
     )
+}
+
+@Test
+func textDiffEngineUsesCharacterGranularityForCJKText() {
+    let diff = TextDiffEngine.diff(
+        original: "请保留发布日期。",
+        revised: "请保留版本号。"
+    )
+
+    #expect(diff.addedCount == 3)
+    #expect(diff.removedCount == 4)
+    #expect(
+        diff.segments.contains {
+            $0.kind == .unchanged
+                && $0.text.contains("请保留")
+        }
+    )
+    #expect(
+        diff.segments.contains {
+            $0.kind == .added
+                && $0.text == "版本号"
+        }
+    )
+}
+
+@Test
+func previewDecisionCarriesTheFinalEditedText() {
+    let decision = PreviewDecision
+        .replaceSelection(
+            text: "Edited result"
+        )
+
+    #expect(decision.action == .replaceSelection)
+    #expect(decision.finalText == "Edited result")
+    #expect(PreviewDecision.cancel.finalText == nil)
 }

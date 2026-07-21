@@ -38,7 +38,6 @@ OpenWhisper 可能在 `~/Library/Application Support/OpenWhisper/` 保存：
 | 设置和个人术语 | 直到修改或删除 |
 | 自定义 Style Capsule | 直到删除；创建源样本默认会被清空且不保存 |
 | 已安装的声明式 Community Skills | 直到禁用/卸载或执行“删除全部数据” |
-| 签名 Pro 激活收据和随机许可证设备 ID | 直到移除、通过“删除全部数据”重置，或在重新激活时替换 |
 
 已知密码管理器、钥匙串访问和 macOS“密码”默认不写入转写历史或失败音频 Recovery。你也可以添加其他敏感应用。
 
@@ -46,14 +45,12 @@ OpenWhisper 可能在 `~/Library/Application Support/OpenWhisper/` 保存：
 
 OpenWhisper 连接的 ChatGPT 会话保存在 macOS Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible Recovery API 密钥独立保存在 `app.openwhisper.mac.OpenAICompatibleAPIKey`。OpenWhisper 不会从 `OPENAI_API_KEY` 读取该密钥，也不会有意把访问令牌、刷新令牌、API 密钥、Cookie 或 Authorization Header 写入 `config.json`、转写历史、诊断、截图或日志。
 
-如果构建已配置 Pro 许可证验证，签名激活收据和随机、仅用于本应用的许可证设备 ID 会分别保存在 macOS Keychain 服务 `app.openwhisper.mac.LicenseReceipt` 和 `app.openwhisper.mac.LicenseDevice` 中。设备 ID 由 OpenWhisper 随机生成，不来源于硬件序列号、Apple ID、账户邮箱或文档内容。许可证收据可以包含许可证标识、激活标识、版本、启用功能列表、验证日期、可用构建版本和设备数量限制，不需要包含账户邮箱或支付信息。
-
 ## 2. 诊断与支持归档
 
 性能诊断只包含耗时、字节数、服务类别、结果类别、有限 Skill/术语数量与风险指标和错误类别，不应包含音频、转写正文、剪贴板内容、凭据、选中文本、Style Capsule 内容、术语正文、Community Skill Prompt/文件或安装包名称。
 
 可选的本地产品指标默认关闭。开启后只包含产品版本/构建、已完成的 Onboarding 步骤、服务类别、音频时长区间、处理延迟区间、交付类别和失败类别；不包含音频、转写或剪贴板正文、应用名称、Bundle Identifier、文件路径、账户信息或持久用户/安装标识，也不会由 OpenWhisper 自动上传。
-开启后，你可以使用 **设置 → 隐私 → 导出产品指标** 创建汇总 JSON，自行检查或自愿分享。报告只包含各维度计数，不包含单条事件时间戳。
+开启后，你可以使用 **设置 → 上下文与隐私 → 导出产品指标** 创建汇总 JSON，自行检查或自愿分享。报告只包含各维度计数，不包含单条事件时间戳。
 
 当你选择 **设置 → 高级 → 导出诊断** 时，OpenWhisper 会在本地创建一个 ZIP，由你检查后手动分享。归档包含：
 
@@ -83,7 +80,7 @@ OpenWhisper 会先把完成的转写写入 macOS 剪贴板。只有在辅助功�
 - 删除单条历史或 Recovery；
 - 退出 ChatGPT；
 - 单独移除 OpenAI-Compatible Recovery 密钥；
-- 使用“删除全部数据”删除本地设置、术语、自定义 Style Capsule、已安装 Community Skills、历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话、Recovery API 密钥、签名 Pro 收据和本地许可证设备 ID。
+- 使用“删除全部数据”删除本地设置、术语、自定义 Style Capsule、已安装 Community Skills、历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话和 Recovery API 密钥。
 
 删除 OpenWhisper 本地数据不会删除已经发送到第三方服务或由第三方保留的数据。第三方数据需要通过对应服务的账户和隐私控制处理。
 
@@ -93,7 +90,7 @@ OpenWhisper 目前不出售个人信息、不展示广告，也不会向 OpenWhi
 
 ## 6. 安全
 
-OpenWhisper 使用独立的 macOS Keychain 项保存 ChatGPT 会话、可选 Recovery API 密钥、签名 Pro 收据和随机许可证设备 ID；使用 App 内置的 Ed25519 公钥验证许可证收据；并采用系统支持范围内的仅用户可读写文件权限、有限留存、HTTPS 端点校验、拒绝重定向和保守粘贴策略。许可证私钥不会包含在 App 中。任何安全措施都无法保证绝对安全。请保持 macOS 更新，并在分享诊断归档前自行检查。
+OpenWhisper 使用独立的 macOS Keychain 项保存 ChatGPT 会话和可选 Recovery API 密钥，并采用系统支持范围内的仅用户可读写文件权限、有限留存、HTTPS 端点校验、拒绝重定向和保守粘贴策略。任何安全措施都无法保证绝对安全。请保持 macOS 更新，并在分享诊断归档前自行检查。
 
 ## 7. 未成年人
 
@@ -101,8 +98,8 @@ OpenWhisper 是面向有权使用所连接第三方服务的用户的生产力�
 
 ## 8. 政策变更
 
-重大变更会在本文件中标注日期，并在发布说明中概述。公开收费发布前，必须补齐明确的商业运营主体和永久隐私联系方式。
+重大变更会在本文件中标注日期，并在发布说明中概述。
 
 ## 9. 联系方式
 
-私有 Alpha 参与者应使用获授权的 OpenWhisper GitHub Issue Tracker。不要附加音频、转写正文、凭据、原始崩溃报告或无关个人信息。永久商业隐私联系方式仍是发布门禁。
+私有 Alpha 参与者应使用获授权的 OpenWhisper GitHub Issue Tracker。不要附加音频、转写正文、凭据、原始崩溃报告或无关个人信息。

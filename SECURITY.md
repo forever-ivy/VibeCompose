@@ -21,7 +21,7 @@ Include the affected commit/version, macOS version, installed app path, minimal 
 - Critical credential exposure, destructive data loss, or repeatable wrong-target paste: acknowledge within 2 business days.
 - Other security defects: acknowledge within 5 business days.
 
-These are private-alpha targets, not a commercial SLA.
+These are private-alpha response targets, not a guaranteed support SLA.
 
 ## Disclosure
 

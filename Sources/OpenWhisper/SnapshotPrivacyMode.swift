@@ -18,7 +18,9 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
         case .previewDemo,
              .overlayDemo,
              .overlayDemoState,
-             .pasteAcceptance:
+             .pasteAcceptance,
+             .skillLibrary,
+             .skillSwitcher:
             hasPrivateAcceptanceLaunchMode = true
         default:
             hasPrivateAcceptanceLaunchMode = false
@@ -42,6 +44,14 @@ struct SnapshotPrivacyMode: Equatable, Sendable {
                 arguments: arguments
             ) != nil
             || AppLaunchMode.quickAddSnapshotOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
+            || AppLaunchMode.skillLibrarySnapshotOutputURL(
+                environment: environment,
+                arguments: arguments
+            ) != nil
+            || AppLaunchMode.skillSwitcherSnapshotOutputURL(
                 environment: environment,
                 arguments: arguments
             ) != nil

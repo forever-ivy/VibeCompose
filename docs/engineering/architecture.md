@@ -87,17 +87,17 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - registers the configured global shortcut and the fixed internal Quick Add
     and Escape controls.
 - `FeedbackSurfaceController`
-  - owns one shared feedback state and routes it to Refined HUD, Blue Signal
-    Frame, or Hidden presentation;
+  - owns one shared feedback state and routes it to Refined HUD, AI Activity Glow, or Hidden presentation;
   - keeps Escape cancellation and accessibility announcements active even when
     no HUD is visible.
 - `OverlayController`
   - renders the top-center Refined HUD for recording, processing,
     verified-insert, paste-sent, copied, error, and retryable-error states;
   - uses a presentation generation so stale auto-hide tasks and animation completions cannot hide a newer state.
-- `BlueSignalFrameController`
-  - renders a nonactivating, mouse-transparent, frozen-target cold-blue frame
+- `AIActivityGlowController` (`BlueSignalFrameController` compatibility alias)
+  - renders a nonactivating, mouse-transparent, frozen-target ambient glow
     around the active display or focused window;
+  - uses Core Animation energy flow and state pulses without screen capture;
   - stops continuous animation under system or app-level Reduce Motion.
 - `PreferencesWindowController`
   - hosts the workflow-sidebar Settings surface, including shortcut recording,
@@ -141,8 +141,8 @@ The long-term target remains a dedicated `DictationSession` model rather than co
     recording begins;
   - removes the complete rule list from the per-session runtime
     configuration before provider use;
-  - resolves to Direct at the runtime boundary when the current signed
-    commercial entitlement does not allow Skills.
+  - resolves unknown, disabled, or missing installations to the Direct safety
+    fallback without consulting a product-access state.
 - `SkillPromptCompiler`
   - compiles the fixed system safety and factual-fidelity boundary before the
     output contract, Skill declaration, optional style/context data,
@@ -270,7 +270,7 @@ upstream or security incidents:
   endpoint data.
 
 Private-alpha packages omit this production configuration. Developer ID
-packaging and the commercial release gate require the URL, public key, and a
+packaging and the signed release gate require the URL, public key, and a
 matching locally verified signed policy before release.
 
 ## 5. Safe Output and Retry
@@ -332,9 +332,8 @@ Privacy behavior:
 
 The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `openwhisper-<UUID>.wav` and `openwhisper-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
 
-`AppCoordinator.deleteAllUserData()` deletes the ChatGPT session, Recovery API
-key, Pro receipt, and random License Device ID from their separate Keychain
-items, then
+`AppCoordinator.deleteAllUserData()` deletes the ChatGPT session and Recovery
+API key from their separate Keychain items, then
 `StorageCleanupService.deleteAllData()` validates the
 application-support boundary, refuses symbolic-link deletion, removes the
 complete local data root, recreates a secure empty directory, and saves a
@@ -362,8 +361,7 @@ Startup pruning removes unreferenced audio, drops records whose audio no longer 
 The current Settings window exposes:
 
 - account and permission state;
-- signed Pro license state, random Device ID, bounded receipt import/removal,
-  update-build entitlement, and offline-grace recovery guidance;
+- signed update state and recovery guidance;
 - dictation and text polish;
 - a default Skill plus optional exact bundle-identifier application rules,
   including an installed-application picker and explicit warnings when a
@@ -391,8 +389,9 @@ ChatGPT session.
 
 History and Terminology now use separate native management windows. History supports filtering, details, copy/retry, audio actions, deletion, and automatic refresh. Terminology uses stable entry identifiers and supports search, sorting, editing, enable/disable, deletion, CSV import/export, import conflict preview, and a global Quick Add panel.
 
-Settings uses a native resizable `NavigationSplitView` with nine panes and immediately
-persists configuration changes. Remaining productization work is full
+Settings uses a permanent two-column layout with a native `.sidebar` `List`, a
+system-Material floating sidebar, and an unboxed scrolling detail surface. It
+immediately persists configuration changes. Remaining productization work is full
 keyboard/VoiceOver/high-contrast acceptance across Settings and the
 management windows.
 
@@ -443,7 +442,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
 `scripts/verify_repository_hygiene.py` runs from the normal check, packaging,
-and commercial release paths. It fails closed when tracked product text
+and signed release paths. It fails closed when tracked product text
 reintroduces a legacy identity marker, matches a common committed-secret
 pattern, leaves a literal `L10n` key untranslated or duplicated in Simplified
 Chinese, or points a local Markdown link at a missing target.
@@ -473,8 +472,9 @@ The same privacy boundary applies to
 `--accessibility-audit-output`. `AccessibilityAudit` enables AppKit's enhanced
 accessibility interface for the transient process, walks the SwiftUI virtual
 accessibility tree, and records only roles, control names, identifiers, action
-names, and standard subroles. The installed-app harness covers all nine Settings
-panes, all four Onboarding steps, History, Terminology, and Quick Add and fails
+names, and standard subroles. The installed-app harness covers the five canonical
+Settings panes plus legacy deep-link aliases, all four Onboarding steps, History,
+Terminology, Quick Add, Skill Switcher, and all three Skill Library sections and fails
 when an actionable control has neither an explicit/associated name nor a
 standard AppKit subrole description. Values and user content are not exported.
 
@@ -485,44 +485,42 @@ configuration/data writes, and does not persist Onboarding completion.
 `scripts/interaction_acceptance.sh` launches one requested product surface and
 restores the normal installed menu bar runtime after acceptance.
 
-Ad-hoc signing is allowed only for local development. Commercial distribution still requires strict environment parsing, a fixed Developer ID/Team ID, Hardened Runtime, notarization and stapling, fail-closed Gatekeeper checks, staged atomic installation with rollback, fixed artifact SHA-256 values, and a signed updater.
+Ad-hoc signing is allowed only for local development. Signed distribution still requires strict environment parsing, a fixed Developer ID/Team ID, Hardened Runtime, notarization and stapling, fail-closed Gatekeeper checks, staged atomic installation with rollback, fixed artifact SHA-256 values, and a signed updater.
 
 Release metadata and distribution guards currently include:
 
 - exact ZIP/DMG byte counts, HTTPS download URLs, and SHA-256 values in `dist/release-manifest.json`;
 - a Homebrew Cask that uses an impossible all-zero checksum until the release preparation script records the exact notarized ZIP hash;
 - installer validation of bundle ID, version, build, architecture, signature, and—when release enforcement is enabled—the expected Developer ID Team ID;
+- a debug-by-default local package path with Developer ID candidates forced to
+  use Swift's optimized `release` configuration;
 - a dependency-license manifest that exactly covers `Package.resolved`,
   verifies source URL/revision/version and vendored license SHA-256, ships
-  notices inside the App, and is rechecked by package and commercial release
+  notices inside the App, and is rechecked by package and signed release
   gates;
-- a commercial release gate that requires Developer ID, stapling, Gatekeeper success, manifest/Cask consistency, and signed-updater `SUFeedURL`/`SUPublicEDKey` configuration.
+- a signed release gate that requires Developer ID, the expected Team ID,
+  trusted timestamp and Hardened Runtime flag for the App and embedded Sparkle
+  code, stapling, Gatekeeper success, manifest/Cask consistency, and
+  signed-updater `SUFeedURL`/`SUPublicEDKey` configuration;
+- two source-bound Apple notarization JSON receipts with `Accepted` status and
+  distinct submission IDs for the App and DMG;
 - a separate signed provider capability policy gate requiring
   `OWCapabilityPolicyURL`, `OWCapabilityPublicEDKey`, and a verified,
-  non-expired policy covering the release build.
-- an independent signed-license gate requiring
-  `OWProPreviewEnabled=false` and a valid `OWLicensePublicEDKey` in every
-  commercial build.
-
-`OpenWhisperLicensing` is a separate Swift target containing receipt models,
-Ed25519 verification, Keychain receipt/device stores, offline-grace and
-maximum-build decisions, and the commercial feature-access protocol. The
-private signing key is never part of the repository or app. The current
-private Alpha explicitly enables Pro Preview, while runtime and release gates
-fail closed for non-preview builds. The exact open-core and future private
-package policy is documented in
-[`commercial-module-boundary.md`](../product/commercial-module-boundary.md).
-
-Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the status menu and Advanced Settings. Packaging accepts only paired HTTPS feed and Ed25519 public-key configuration, and release tooling can generate a signed channel appcast without storing the private key in the repository. The commercial release gate intentionally remains closed until production hosting/keys, a real signed appcast, Developer ID notarization, and installed update/rollback proof exist.
+  non-expired policy covering the release build;
+- a separate candidate/public readiness report that rejects unsafe release
+  configuration and binds the exact source/tag plus ZIP hash to approved brand,
+  installed-app, privacy-bounded Pilot, product-owner Beta evidence, and
+  policy-synchronized public contact surfaces.
+Sparkle 2.9.4 is pinned, embedded, signed with the app, and exposed through the status menu and Advanced Settings. Packaging accepts only paired HTTPS feed and Ed25519 public-key configuration, and release tooling can generate a signed channel appcast without storing the private key in the repository. The signed release gate remains closed until production hosting/keys, a real signed appcast, Developer ID notarization, and installed update/rollback proof exist.
 
 ## 11. Known Architectural Gaps
 
-The current alpha must not be described as commercially release-ready while these remain:
+The current alpha must not be described as a production-ready signed release while these remain:
 
 - insertion-verified, paste-dispatched, and clipboard results are separate;
   installed TextEdit and an isolated Terminal process now have reproducible
   evidence, while Notes and third-party editor coverage remains incomplete;
-- Settings now uses `NavigationSplitView` with immediate persistence, and the
+- Settings now uses a permanent native sidebar List with immediate persistence, and the
   HUD implementation respects Reduce Motion, strengthens Increase Contrast,
   posts state announcements, and has deterministic installed-app pixel gates
   for both display options; trusted installed-app keyboard/VoiceOver and
@@ -532,3 +530,5 @@ The current alpha must not be described as commercially release-ready while thes
 - permanent capability-policy hosting, a separate production Ed25519 key, and
   an installed incident disable/restore drill are not complete;
 - clean-TCC microphone/accessibility ordering and the full installed-app F5/ESC/inline-close/Retry/paste-or-copy matrix still require trusted native GUI evidence.
+- the current brand record remains blocked and the four-week 30–50 person
+  Community Pilot has not started, so public readiness fails by design.

@@ -1,6 +1,8 @@
 import Foundation
 
 struct AppConfig: Codable, Sendable, Equatable {
+    var appLanguage: AppLanguage = .system
+    var skillSwitcherHotkey: HotkeyBinding?
     var transcription: TranscriptionConfig = .init()
     var injection: InjectionConfig = .init()
     var auth: AuthConfig = .init()
@@ -10,11 +12,24 @@ struct AppConfig: Codable, Sendable, Equatable {
     var styleCapsules: StyleCapsuleConfig = .init()
     var terminologyPacks: TerminologyPackConfig = .init()
     var communitySkills: CommunitySkillConfig = .init()
+    var skillEcosystem: SkillEcosystemConfig = .init()
 
     init() {}
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        appLanguage = try container.decodeIfPresent(
+            AppLanguage.self,
+            forKey: .appLanguage
+        ) ?? .system
+        if let decodedSkillSwitcherHotkey = try container.decodeIfPresent(
+            HotkeyBinding.self,
+            forKey: .skillSwitcherHotkey
+        ) {
+            skillSwitcherHotkey = try? decodedSkillSwitcherHotkey.validated()
+        } else {
+            skillSwitcherHotkey = nil
+        }
         transcription = try container.decodeIfPresent(TranscriptionConfig.self, forKey: .transcription) ?? .init()
         injection = try container.decodeIfPresent(InjectionConfig.self, forKey: .injection) ?? .init()
         auth = try container.decodeIfPresent(AuthConfig.self, forKey: .auth) ?? .init()
@@ -42,6 +57,10 @@ struct AppConfig: Codable, Sendable, Equatable {
                 CommunitySkillConfig.self,
                 forKey: .communitySkills
             ) ?? .init()
+        skillEcosystem = try container.decodeIfPresent(
+            SkillEcosystemConfig.self,
+            forKey: .skillEcosystem
+        ) ?? .init()
     }
 }
 

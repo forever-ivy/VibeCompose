@@ -3,6 +3,72 @@ import Foundation
 import Testing
 @testable import OpenWhisper
 
+@Test
+func ordinaryContextSettingsExposeOnlyAvailableSources() {
+    let visible = ContextSourceKind
+        .userVisibleSettingsSources
+
+    #expect(!visible.isEmpty)
+    #expect(
+        visible.allSatisfy {
+            $0.isAvailableInCurrentRuntime
+        }
+    )
+    #expect(visible.contains(.voice))
+    #expect(visible.contains(.selection))
+    #expect(!visible.contains(.focusedParagraph))
+    #expect(!visible.contains(.openFile))
+    #expect(!visible.contains(.terminalSession))
+    #expect(!visible.contains(.browserPage))
+    #expect(!visible.contains(.clipboard))
+}
+
+@Test
+func contextReceiptRecordsRedactedPerSourceDecisions() throws {
+    let installationID = UUID()
+    let sessionID = UUID()
+    let request = ContextRequest(
+        required: [.voice, .selection],
+        optional: [.focusedParagraph, .styleCapsule]
+    )
+    let selection = ContextSnapshotItem(
+        source: .selection,
+        content: "selected text",
+        contentSHA256: SelectionContextSnapshot.digest(
+            for: "selected text"
+        )
+    )
+    let snapshot = ContextSnapshot(
+        sessionID: sessionID,
+        installationID: installationID,
+        items: [selection]
+    )
+    let receipt = ContextReceipt.from(
+        request: request,
+        snapshot: snapshot,
+        deniedSources: [.styleCapsule],
+        unavailableSources: [.focusedParagraph]
+    )
+
+    let bySource = Dictionary(
+        uniqueKeysWithValues: receipt.decisions.map {
+            ($0.source, $0)
+        }
+    )
+    #expect(bySource[.voice]?.decisionCode == "granted")
+    #expect(bySource[.selection]?.decisionCode == "granted")
+    #expect(bySource[.focusedParagraph]?.decisionCode == "unavailable")
+    #expect(bySource[.styleCapsule]?.decisionCode == "denied")
+    #expect(bySource[.selection]?.characterCount == "selected text".count)
+    #expect(receipt.deniedSources.contains(.focusedParagraph))
+    #expect(receipt.deniedSources.contains(.styleCapsule))
+
+    let data = try JSONEncoder().encode(receipt)
+    let decoded = try JSONDecoder().decode(ContextReceipt.self, from: data)
+    #expect(decoded.decisions == receipt.decisions)
+    #expect(!String(decoding: data, as: UTF8.self).contains("selected text"))
+}
+
 @MainActor
 private final class FakeContextPermissionPrompter:
     ContextPermissionPrompting
@@ -199,6 +265,7 @@ func contextBrokerReadsSelectionOnlyAfterExplicitPermission()
     #expect(
         prepared.reason == .captured
     )
+    #expect(prepared.blocksExecution == false)
     #expect(
         prepared.promptContext
             .selection
@@ -263,6 +330,8 @@ func contextBrokerNeverReadsSensitiveOrDeniedSelection()
         denied.reason
             == .permissionDenied
     )
+    #expect(denied.blocksExecution)
+    #expect(denied.blockedRequiredSources == [.selection])
     #expect(captureCount == 0)
     #expect(prompter.requests.isEmpty)
 
@@ -291,7 +360,215 @@ func contextBrokerNeverReadsSensitiveOrDeniedSelection()
         sensitive.reason
             == .sensitiveApplication
     )
+    #expect(sensitive.blocksExecution)
     #expect(captureCount == 0)
+}
+
+@MainActor
+@Test
+func requiredSelectionBlocksWhileOptionalSelectionDegrades()
+    async
+{
+    let provider = SelectionContextProvider(
+        capture: { _, _ in .noSelection },
+        verify: { _ in .unchanged }
+    )
+    let prompter = FakeContextPermissionPrompter(
+        choice: .allowOnce
+    )
+    let requiredPlan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.contextRewriteSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    let required = await ContextBroker(
+        selectionProvider: provider
+    ).prepare(
+        plan: requiredPlan,
+        launchAppContext: nil,
+        contextConfig: ContextConfig(),
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter: prompter
+    )
+
+    #expect(required.reason == .noSelection)
+    #expect(required.blocksExecution)
+    #expect(required.blockedRequiredSources == [.selection])
+    #expect(required.emptySources == [.selection])
+    #expect(required.blockedMessage?.contains("selected text") == true)
+
+    let optionalSkill = SkillDefinition(
+        id: "com.example.optional-selection",
+        version: "1.0.0",
+        name: "Optional Selection",
+        optionalCapabilities: [.selection],
+        promptInstruction: "Use selection when available.",
+        output: SkillOutputContract(
+            format: .plainText,
+            delivery: .automaticPasteWhenVerified,
+            risk: .low
+        )
+    )
+    let optionalPlan = ResolvedSkillExecutionPlan(
+        skill: optionalSkill,
+        source: .manual,
+        matchedApplicationRuleID: nil
+    )
+    let optional = await ContextBroker(
+        selectionProvider: provider
+    ).prepare(
+        plan: optionalPlan,
+        launchAppContext: nil,
+        contextConfig: ContextConfig(),
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter: prompter
+    )
+
+    #expect(optional.reason == .noSelection)
+    #expect(optional.blocksExecution == false)
+    #expect(optional.blockedRequiredSources.isEmpty)
+}
+
+@MainActor
+@Test
+func requiredAndOptionalSelectionCaptureDecisionMatrix() async {
+    let requiredPlan = SkillResolver().resolve(
+        manualSkillID: SkillRegistry.contextRewriteSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    let optionalSkill = SkillDefinition(
+        id: "com.example.optional-selection-matrix",
+        version: "1.0.0",
+        name: "Optional Selection Matrix",
+        optionalCapabilities: [.selection],
+        promptInstruction: "Use selection when present.",
+        output: SkillOutputContract(
+            format: .plainText,
+            delivery: .previewThenPaste,
+            risk: .low
+        )
+    )
+    let optionalPlan = ResolvedSkillExecutionPlan(
+        skill: optionalSkill,
+        source: .manual,
+        matchedApplicationRuleID: nil
+    )
+    let cases: [
+        (
+            SelectionContextCaptureResult,
+            ContextPreparationReason,
+            String
+        )
+    ] = [
+        (.noSelection, .noSelection, "empty"),
+        (.unavailable, .unavailable, "unavailable"),
+        (
+            .tooLarge(actual: 9_000, maximum: 6_000),
+            .selectionTooLarge,
+            "empty"
+        ),
+    ]
+
+    for (captureResult, expectedReason, decisionCode) in cases {
+        let broker = ContextBroker(
+            selectionProvider: SelectionContextProvider(
+                capture: { _, _ in captureResult },
+                verify: { _ in .unchanged }
+            )
+        )
+        let required = await broker.prepare(
+            plan: requiredPlan,
+            launchAppContext: nil,
+            contextConfig: ContextConfig(),
+            privacyConfig: PrivacyConfig(),
+            permissionPrompter: FakeContextPermissionPrompter(
+                choice: .allowOnce
+            )
+        )
+        #expect(required.reason == expectedReason)
+        #expect(required.blocksExecution)
+        #expect(required.blockedRequiredSources == [.selection])
+        #expect(
+            required.contextReceipt?.decisions.first {
+                $0.source == .selection
+            }?.decisionCode == decisionCode
+        )
+
+        let optional = await broker.prepare(
+            plan: optionalPlan,
+            launchAppContext: nil,
+            contextConfig: ContextConfig(),
+            privacyConfig: PrivacyConfig(),
+            permissionPrompter: FakeContextPermissionPrompter(
+                choice: .allowOnce
+            )
+        )
+        #expect(optional.reason == expectedReason)
+        #expect(!optional.blocksExecution)
+        #expect(optional.blockedRequiredSources.isEmpty)
+        #expect(
+            optional.contextReceipt?.decisions.first {
+                $0.source == .selection
+            }?.decisionCode == decisionCode
+        )
+    }
+}
+
+@MainActor
+@Test
+func deniedOptionalSelectionDegradesWithoutProviderBlocking() async {
+    let skill = SkillDefinition(
+        id: "com.example.optional-selection-denied",
+        version: "1.0.0",
+        name: "Optional Selection Denied",
+        optionalCapabilities: [.selection],
+        promptInstruction: "Use selection when allowed.",
+        output: SkillOutputContract(
+            format: .plainText,
+            delivery: .previewThenPaste,
+            risk: .low
+        )
+    )
+    let plan = ResolvedSkillExecutionPlan(
+        skill: skill,
+        source: .manual,
+        matchedApplicationRuleID: nil
+    )
+    var config = ContextConfig()
+    config.setScope(
+        .denied,
+        skillID: skill.id,
+        capability: .selection
+    )
+    let prepared = await ContextBroker(
+        selectionProvider: SelectionContextProvider(
+            capture: { _, _ in
+                Issue.record(
+                    "Denied optional Context must not be captured"
+                )
+                return .noSelection
+            },
+            verify: { _ in .unchanged }
+        )
+    ).prepare(
+        plan: plan,
+        launchAppContext: nil,
+        contextConfig: config,
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter: FakeContextPermissionPrompter(
+            choice: .allowOnce
+        )
+    )
+
+    #expect(!prepared.blocksExecution)
+    #expect(prepared.deniedSources == [.selection])
+    #expect(
+        prepared.contextReceipt?.decisions.first {
+            $0.source == .selection
+        }?.decisionCode == "denied"
+    )
 }
 
 @MainActor

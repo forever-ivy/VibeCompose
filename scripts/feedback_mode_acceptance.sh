@@ -166,19 +166,19 @@ capture_mode \
   "1"
 capture_mode \
   "02-blue-processing" \
-  "blue-signal-frame" \
+  "ai-activity-glow" \
   "processing" \
   "off" \
   "1"
 capture_mode \
   "03-blue-processing-reduced-motion" \
-  "blue-signal-frame" \
+  "ai-activity-glow" \
   "processing" \
   "on" \
   "0"
 capture_mode \
   "04-blue-copied" \
-  "blue-signal-frame" \
+  "ai-activity-glow" \
   "copied" \
   "off" \
   "1"
@@ -208,34 +208,36 @@ def load(name):
 refined = load("01-refined-processing")
 assert refined["mode"] == "refinedHUD"
 assert refined["refinedHUDIsVisible"] is True
-assert refined["blueSignalFrameIsVisible"] is False
+assert refined["aiActivityGlowIsVisible"] is False
 assert refined["escapeCancellationIsActive"] is True
 
 blue = load("02-blue-processing")
-assert blue["mode"] == "blueSignalFrame"
+assert blue["mode"] == "aiActivityGlow"
 assert blue["refinedHUDIsVisible"] is False
-assert blue["blueSignalFrameIsVisible"] is True
+assert blue["aiActivityGlowIsVisible"] is True
+assert blue["aiActivityGlowState"] == "processing"
 assert blue["escapeCancellationIsActive"] is True
-assert blue["blueSignalAnimationIsActive"] is True
+assert blue["aiActivityGlowAnimationIsActive"] is True
 
 blue_reduced = load("03-blue-processing-reduced-motion")
-assert blue_reduced["blueSignalFrameIsVisible"] is True
-assert blue_reduced["blueSignalAnimationIsActive"] is False
+assert blue_reduced["aiActivityGlowIsVisible"] is True
+assert blue_reduced["aiActivityGlowState"] == "processing"
+assert blue_reduced["aiActivityGlowAnimationIsActive"] is False
 
 blue_copied = load("04-blue-copied")
-assert blue_copied["blueSignalFrameIsVisible"] is True
+assert blue_copied["aiActivityGlowIsVisible"] is True
 assert blue_copied["refinedHUDIsVisible"] is True
 assert blue_copied["escapeCancellationIsActive"] is False
 
 hidden_recording = load("05-hidden-recording")
 assert hidden_recording["mode"] == "hidden"
 assert hidden_recording["refinedHUDIsVisible"] is False
-assert hidden_recording["blueSignalFrameIsVisible"] is False
+assert hidden_recording["aiActivityGlowIsVisible"] is False
 assert hidden_recording["escapeCancellationIsActive"] is True
 
 hidden_copied = load("06-hidden-copied")
 assert hidden_copied["refinedHUDIsVisible"] is False
-assert hidden_copied["blueSignalFrameIsVisible"] is False
+assert hidden_copied["aiActivityGlowIsVisible"] is False
 assert hidden_copied["escapeCancellationIsActive"] is False
 
 for image_name in (
@@ -247,8 +249,8 @@ for image_name in (
     assert image_path.stat().st_size > 1000, image_name
 
 (root / "verification.txt").write_text(
-    "Refined HUD, Blue Signal Frame, Hidden, Retry/cancel semantics, "
-    "and Blue Signal Reduce Motion acceptance passed.\n"
+    "Refined HUD, AI Activity Glow, Hidden, Retry/cancel semantics, "
+    "and AI Activity Glow Reduce Motion acceptance passed.\n"
 )
 PY
 
@@ -264,7 +266,7 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 # OpenWhisper Feedback Mode Acceptance
 
 - Installed app: \`$APP_DIR\`
-- Modes: Refined HUD, Blue Signal Frame, Hidden
+- Modes: Refined HUD, AI Activity Glow, Hidden
 - States: Processing, Copied, Recording
 - Accessibility: explicit Reduce Motion on/off evidence
 - Verification: \`verification.txt\`

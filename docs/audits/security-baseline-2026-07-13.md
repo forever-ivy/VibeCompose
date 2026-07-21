@@ -4,7 +4,7 @@
 > 产品版本：`0.1.0 Alpha`
 > 基线对象：本报告所在提交对应的 OpenWhisper 产品化工作树
 > 原始输入：[逻辑与安全审计报告](security-audit-2026-07-13.md)
-> 报告性质：修复后基线；不改写原始审计快照，也不代表已经满足商业发布门禁
+> 报告性质：修复后基线；不改写原始审计快照，也不代表已经满足签名公开分发门禁
 
 ## 1. 结论
 
@@ -43,7 +43,7 @@ Managed ASR、Recovery ASR 与 AI Polish 分 route 熔断；half-open 探测取�
 音频 fixture 现在全部通过 `defer` 删除，完整 `scripts/check.sh` 前后不会新增
 大体积临时 WAV；打包脚本在签名前使用 `plutil -lint` 校验 entitlement plist。
 
-**仍不能公开声明为可商业发布。** 真实 Developer ID/公证证据、完整原生首次体验、生产 Updater 与 Capability Policy 托管/密钥及更新回滚/事故演练实证、永久商业运营/联系方式以及若干残余可靠性问题尚未关闭。
+**仍不能公开声明为已完成签名公开分发。** 真实 Developer ID/公证证据、完整原生首次体验、生产 Updater 与 Capability Policy 托管/密钥及更新回滚/事故演练实证、明确支持联系人以及若干残余可靠性问题尚未关闭。
 
 ## 2. 基线状态
 
@@ -70,7 +70,7 @@ Managed ASR、Recovery ASR 与 AI Polish 分 route 熔断；half-open 探测取�
 | OW-AUD-013 配置 URL 崩溃 | 关闭 | 可配置 endpoint 经 `validatedUserOwnedURL` 返回可理解错误；Managed URL 为编译时常量 | 对全部高风险文本字段统一失焦/提交校验 |
 | OW-AUD-014 Settings stale index | 关闭 | Terminology 条目持久化稳定 UUID；独立 Manager 的选择、编辑、启停和删除均按 ID 定位；旧配置迁移补齐稳定 ID；导入和 Quick Add 在写入前执行重复与语义冲突检测 | 继续保留 ID 迁移、删除后编辑和冲突分类回归测试 |
 | OW-AUD-015 失败清理不完整 | 关闭 | Recorder 初始化写入失败和启动失败会删除 partial WAV；上传成功、失败或取消均删除 multipart；`shutdown()` 同步删除处理中自有音频；下次启动只清理严格 UUID 命名的 `openwhisper-*.wav` 与 `openwhisper-upload-*.multipart`，跳过目录和 lookalike，删除 symlink 本身而不触碰目标 | 继续做真实磁盘满、SIGKILL 后重启和长时间压力测试 |
-| OW-AUD-016 死配置/预检偏差 | 部分关闭 | Advanced Recovery 的 endpoint、model、Keychain API Key、连接测试、付费确认、切回 ChatGPT 与 Runtime Preflight 已接入同一运行链路；旧 `openAIAuthTokenEnv` 可解码但不会重新编码 | 继续审计其余公开配置，为每个设置建立行为契约和安装版交互证据 |
+| OW-AUD-016 死配置/预检偏差 | 部分关闭 | Advanced Recovery 的 endpoint、model、Keychain API Key、连接测试、第三方费用提示、切回 ChatGPT 与 Runtime Preflight 已接入同一运行链路；旧 `openAIAuthTokenEnv` 可解码但不会重新编码 | 继续审计其余公开配置，为每个设置建立行为契约和安装版交互证据 |
 | OW-AUD-017 测试可能假绿 | 部分关闭 | 高风险边界已有纯单元测试，仓库提供安装版 smoke 与 visual acceptance | TCC、焦点、热键、多应用真实操作仍必须使用 `/Applications/OpenWhisper.app` 验收，不能只引用单元测试 |
 
 ## 3. 当前隐私默认值
@@ -140,8 +140,9 @@ excludeSensitiveApps = true
 | 产品表面固定 2x 截图、可见屏幕定位与局部边缘对比度门禁 | `ProductSurfaceSnapshotTests.swift`, `VisualAcceptanceScriptTests.swift`, `scripts/verify_accessibility_visual_acceptance.swift` |
 | 麦克风请求后状态收敛、刷新修复与安装版权限表面 | `PermissionStatusMonitorTests.swift`, `AudioRecorderTests.swift`, `LocalizationTests.swift`, `VisualAcceptanceScriptTests.swift`, `scripts/verify_permission_surface.swift` |
 | 脱敏支持诊断 ZIP、崩溃白名单摘要和校验和 | `SupportDiagnosticsTests.swift`, `SettingsProductizationTests.swift` |
-| 双语隐私/条款/退款/支持文档契约 | `PolicyDocumentationTests.swift` |
+| 双语隐私/条款/支持文档契约 | `PolicyDocumentationTests.swift` |
 | Release manifest、Cask fail-closed 与 updater gate | `ReleaseIntegrityScriptTests.swift` |
+| 候选配置、精确候选 installed-app 证据、品牌与 Pilot/Beta 公开发布门禁 | `scripts/verify_release_readiness.py`, `ReleaseIntegrityScriptTests.swift` |
 | 签名 Provider Capability Policy、反重放、build/expiry 与发送前阻断 | `ProviderCapabilityPolicyTests.swift`, `ReleaseIntegrityScriptTests.swift` |
 | Provider 错误分类、Retry-After、有限退避、route 熔断与 half-open 取消恢复 | `ProviderResilienceTests.swift`, `ChatGPTTranscriberTests.swift`, `TextPolishTests.swift`, `AppCoordinatorCancellationTests.swift` |
 | 数据留存、权限、敏感 App、Delete All 路径和 Recovery Key 删除 | `StoragePrivacyTests.swift`, `AppCoordinatorCancellationTests.swift` |
@@ -192,9 +193,9 @@ ad-hoc 本地构建，不构成 Developer ID、notarization/staple 或 clean TCC
 7. Retry 完成后只复制，不自动发送 `Cmd+V`；
 8. 关闭窗口后正常菜单栏实例仍保持运行。
 
-## 7. 商业发布 No-Go
+## 7. 签名公开分发 No-Go
 
-以下任一项未关闭时，不能发布收费稳定版：
+以下任一项未关闭时，不能发布公开签名版：
 
 - OW-AUD-008 发布完整性；
 - Developer ID、Team ID、notarization/staple；
@@ -202,15 +203,24 @@ ad-hoc 本地构建，不构成 Developer ID、notarization/staple 或 clean TCC
 - 签名 updater 和 rollback；
 - 四步 Onboarding；
 - Settings/History/Terminology 原生产品表面；
-- 永久商业运营主体、法律/隐私/支持联系方式与结账条款；
+- 法律/隐私/支持联系方式与公开分发说明；
 - 生产上游故障 kill switch URL/密钥、首份签名策略和安装版事故演练；
 - 完整 installed-app 用户流验收；
 - 所有 P0/P1 release blocker 的复核证据。
+
+`scripts/verify_release_readiness.py --phase public` 现在把品牌清查、精确候选
+installed-app 验收、四周 Community Pilot 汇总、产品所有者人工复核、版本 tag 和
+发布 manifest 绑定为同一 fail-closed 报告。当前品牌记录仍为 `blocked`，真实 Pilot
+尚未开始，因此该门禁按设计保持关闭；候选脚本、模板或 ad-hoc 证据不能让它通过。
+签名候选还必须保存 App/DMG 两份 `notarytool --output-format json` 回执；两者都要
+为 `Accepted`、submission ID 合法且互不相同，并同时通过 stapler 与 Gatekeeper。
+公开联系面同样 fail-closed：support/security/privacy/legal URL、责任角色与复核状态
+必须进入受保护证据，并与中英文政策逐字一致；仍写“私有 Alpha”的政策不能发布。
 
 ## 8. 下一安全工作序列
 
 1. 继续关闭 OW-AUD-008：取得有效 Developer ID/Team ID、生产 Sparkle 与 Capability Policy 独立密钥/托管地址，完成真实签名、公证、签名 appcast、首份能力策略、更新回滚与事故演练；
 2. 在已通过 TextEdit/隔离 Terminal 自动预检的基础上，完成不读取或修改个人笔记的 Notes 手动矩阵及第三方编辑器矩阵，验证 `inserted_verified`、`paste_dispatched`、`clipboard` 与剪贴板恢复行为均符合实现；
 3. 完成 clean TCC Onboarding、键盘和 VoiceOver 安装版验收；
-4. 把私有 Alpha 双语政策定稿为带永久运营主体、联系方式和结账条款的公开版本；
+4. 把私有 Alpha 双语政策定稿为带明确支持联系人和公开分发说明的版本；
 5. 对磁盘满、SIGKILL 后重启、慢网络和大文件取消做持续压力测试。

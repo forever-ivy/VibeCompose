@@ -21,3 +21,10 @@ __pycache__/
 /release/*.p8
 /release/*.p12
 /release/*.pem
+/release/installed-acceptance.json
+/release/community-pilot-summary.json
+/release/beta-metrics.json
+/release/public-contact.json
+
+# Local Community Pilot evidence must never be committed.
+/.pilot-data/

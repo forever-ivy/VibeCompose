@@ -346,7 +346,6 @@ struct VoiceModeConfig: Codable, Sendable, Equatable {
 extension TranscriptionConfig {
     func resolvingVoiceMode(
         for launchAppContext: LaunchAppContext?,
-        voiceModesAllowed: Bool = true,
         registry:
             SkillRegistry = .builtIn
     ) -> TranscriptionConfig {
@@ -356,9 +355,7 @@ extension TranscriptionConfig {
         ).resolve(
             config: skills,
             launchAppContext:
-                launchAppContext,
-            skillsAllowed:
-                voiceModesAllowed
+                launchAppContext
         )
         resolved.skills =
             skills.runtimeConfiguration(

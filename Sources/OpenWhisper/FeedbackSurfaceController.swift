@@ -9,8 +9,11 @@ struct FeedbackSurfaceDebugSnapshot:
 {
     let mode: VisualFeedbackMode
     let refinedHUDIsVisible: Bool
+    let aiActivityGlowIsVisible: Bool
     let blueSignalFrameIsVisible: Bool
+    let aiActivityGlowState: BlueSignalFrameState?
     let escapeCancellationIsActive: Bool
+    let aiActivityGlowAnimationIsActive: Bool
     let blueSignalAnimationIsActive: Bool
 }
 
@@ -56,6 +59,8 @@ final class FeedbackSurfaceController:
         EscapeMonitorFactory
     private var escapeHotkeyMonitor: AnyObject?
     private var hotkeyBinding = HotkeyBinding.f5
+    private var skillPresentation:
+        SkillRuntimePresentation?
 
     var onCancel:
         (@MainActor (OverlayCancelSource) -> Void)?
@@ -104,6 +109,15 @@ final class FeedbackSurfaceController:
     ) {
         hotkeyBinding = binding
         refinedHUD.updateHotkeyBinding(binding)
+    }
+
+    func updateSkillPresentation(
+        _ presentation: SkillRuntimePresentation?
+    ) {
+        skillPresentation = presentation
+        refinedHUD.updateSkillPresentation(
+            presentation
+        )
     }
 
     func updateVisualFeedbackConfiguration(
@@ -156,7 +170,7 @@ final class FeedbackSurfaceController:
                 level: scaledLevel,
                 elapsedText: elapsedText
             )
-        case .blueSignalFrame:
+        case .aiActivityGlow:
             blueSignalFrame.updateRecordingLevel(
                 scaledLevel
             )
@@ -209,7 +223,7 @@ final class FeedbackSurfaceController:
         switch config.mode {
         case .refinedHUD:
             try refinedHUD.writeSnapshot(to: url)
-        case .blueSignalFrame:
+        case .aiActivityGlow:
             try blueSignalFrame.writeSnapshot(to: url)
         case .hidden:
             throw OverlaySnapshotError.bitmapUnavailable
@@ -223,13 +237,25 @@ final class FeedbackSurfaceController:
             mode: config.mode,
             refinedHUDIsVisible:
                 refinedHUD.debugSnapshot.panelIsVisible,
+            aiActivityGlowIsVisible:
+                blueSignalFrame.debugSnapshot
+                    .isVisible,
             blueSignalFrameIsVisible:
                 blueSignalFrame.debugSnapshot
                     .isVisible,
+            aiActivityGlowState:
+                blueSignalFrame.debugSnapshot
+                    .isVisible
+                    ? blueSignalFrame.debugSnapshot
+                        .state
+                    : nil,
             escapeCancellationIsActive:
                 escapeHotkeyMonitor != nil
                     || refinedHUD.debugSnapshot
                         .isCancelControlVisible,
+            aiActivityGlowAnimationIsActive:
+                blueSignalFrame.debugSnapshot
+                    .animationIsActive,
             blueSignalAnimationIsActive:
                 blueSignalFrame.debugSnapshot
                     .animationIsActive
@@ -272,7 +298,7 @@ final class FeedbackSurfaceController:
             blueSignalFrame.hide()
             deactivateEscapeCancellation()
             renderRefinedHUD(presentation)
-        case .blueSignalFrame:
+        case .aiActivityGlow:
             renderBlueSignalFrame(
                 presentation,
                 previousPresentation:
@@ -331,23 +357,25 @@ final class FeedbackSurfaceController:
             let level,
             _
         ):
-            blueSignalFrame.hide()
             blueSignalFrame.show(
                 state: .recording,
                 level: level,
-                config: config
+                config: config,
+                retarget:
+                    previousPresentation?
+                        .permitsCancellation
+                        != true
             )
             announce(presentation)
         case .processing:
-            if previousPresentation?
-                .permitsCancellation != true
-            {
-                blueSignalFrame.hide()
-            }
             blueSignalFrame.show(
                 state: .processing,
                 level: 0,
-                config: config
+                config: config,
+                retarget:
+                    previousPresentation?
+                        .permitsCancellation
+                        != true
             )
             announce(presentation)
         case .result(let text, let outcome):
@@ -460,12 +488,16 @@ final class FeedbackSurfaceController:
         let announcement: String
         switch presentation {
         case .recording:
-            announcement = L10n.format(
+            announcement = skillPrefixed(
+                L10n.format(
                 "Listening. Press %@ to transcribe.",
                 hotkeyBinding.displayName
+                )
             )
         case .processing:
-            announcement = L10n.text("Processing")
+            announcement = skillPrefixed(
+                L10n.text("Processing")
+            )
         case .result(_, let outcome):
             switch outcome {
             case .insertedAndVerified:
@@ -494,6 +526,20 @@ final class FeedbackSurfaceController:
                     NSAccessibilityPriorityLevel
                         .high.rawValue,
             ]
+        )
+    }
+
+    private func skillPrefixed(
+        _ value: String
+    ) -> String {
+        guard let skillPresentation else {
+            return value
+        }
+        return L10n.format(
+            "%@ · %@ · %@",
+            skillPresentation.displayName,
+            skillPresentation.source.localizedLabel,
+            value
         )
     }
 }

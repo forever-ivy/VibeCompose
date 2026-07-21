@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "status": "template",
+  "reviewedAt": "2026-07-18T00:00:00Z",
+  "reviewer": "REPLACE WITH PRODUCT OWNER",
+  "supportURL": "https://support.example.invalid/openwhisper",
+  "securityURL": "https://security.example.invalid/openwhisper",
+  "privacyContactURL": "https://privacy.example.invalid/openwhisper",
+  "legalContactURL": "https://legal.example.invalid/openwhisper",
+  "supportOwner": "REPLACE WITH RESPONSIBLE ROLE",
+  "securityOwner": "REPLACE WITH RESPONSIBLE ROLE",
+  "privacyOwner": "REPLACE WITH RESPONSIBLE ROLE",
+  "decision": "blocked"
+}

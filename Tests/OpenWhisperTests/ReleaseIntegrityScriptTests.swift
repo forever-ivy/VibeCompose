@@ -66,7 +66,19 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(!packageScript.contains("source \"$PRODUCT_ENV\""))
     #expect(!packageScript.contains("source \"$VERSION_ENV\""))
     #expect(packageScript.contains("OPENWHISPER_REQUIRE_DEVELOPER_ID"))
+    #expect(packageScript.contains("OPENWHISPER_BUILD_CONFIGURATION"))
+    #expect(packageScript.contains("--configuration \"$BUILD_CONFIGURATION\""))
+    #expect(
+        packageScript.contains(
+            "Developer ID release packaging requires OPENWHISPER_BUILD_CONFIGURATION=release."
+        )
+    )
     #expect(packageScript.contains("notarytool submit"))
+    #expect(packageScript.contains("--output-format json"))
+    #expect(packageScript.contains("notarization-app.json"))
+    #expect(packageScript.contains("notarization-dmg.json"))
+    #expect(packageScript.contains("submit_for_notarization"))
+    #expect(packageScript.contains("python3 -m json.tool"))
     #expect(packageScript.contains("OPENWHISPER_NOTARY_KEYCHAIN"))
     #expect(packageScript.contains("NOTARY_AUTH_ARGUMENTS"))
     #expect(packageScript.contains("stapler validate"))
@@ -80,12 +92,12 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("OPENWHISPER_SPARKLE_PUBLIC_ED_KEY"))
     #expect(packageScript.contains("OPENWHISPER_CAPABILITY_POLICY_URL"))
     #expect(packageScript.contains("OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY"))
-    #expect(packageScript.contains("OPENWHISPER_LICENSE_PUBLIC_ED_KEY"))
-    #expect(packageScript.contains("OPENWHISPER_PRO_PREVIEW_ENABLED"))
+    #expect(!packageScript.contains("OPENWHISPER_LICENSE_PUBLIC_ED_KEY"))
+    #expect(!packageScript.contains("OPENWHISPER_PRO_PREVIEW_ENABLED"))
     #expect(packageScript.contains("OWCapabilityPolicyURL"))
     #expect(packageScript.contains("OWCapabilityPublicEDKey"))
-    #expect(packageScript.contains("OWLicensePublicEDKey"))
-    #expect(packageScript.contains("OWProPreviewEnabled"))
+    #expect(!packageScript.contains("OWLicensePublicEDKey"))
+    #expect(!packageScript.contains("OWProPreviewEnabled"))
     #expect(packageScript.contains("sign_sparkle_components"))
     #expect(packageScript.contains("enable_adhoc_library_validation_exception"))
     #expect(packageScript.contains("plutil -lint \"$ENTITLEMENTS_FILE\""))
@@ -359,9 +371,15 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
         ),
         encoding: .utf8
     )
-    let commercialRelease = try String(
+    let signedRelease = try String(
         contentsOf: root.appendingPathComponent(
-            "scripts/release_commercial.sh"
+            "scripts/release_signed.sh"
+        ),
+        encoding: .utf8
+    )
+    let releaseReadiness = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_release_readiness.py"
         ),
         encoding: .utf8
     )
@@ -439,15 +457,13 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     )
     #expect(releaseGate.contains("Developer ID Application:"))
     #expect(releaseGate.contains("verify_repository_hygiene.py"))
-    #expect(releaseGate.contains("OWLicensePublicEDKey"))
-    #expect(releaseGate.contains("OWProPreviewEnabled"))
-    #expect(
-        releaseGate.contains(
-            "Commercial release must disable the private Pro preview."
-        )
-    )
+    #expect(!releaseGate.contains("OWLicensePublicEDKey"))
+    #expect(!releaseGate.contains("OWProPreviewEnabled"))
     #expect(releaseGate.contains("TeamIdentifier=$EXPECTED_TEAM_ID"))
     #expect(releaseGate.contains("stapler validate"))
+    #expect(releaseGate.contains("validate_notarization_result"))
+    #expect(releaseGate.contains("python3 -m json.tool"))
+    #expect(releaseGate.contains("App and DMG notarization evidence must use distinct submissions."))
     #expect(releaseGate.contains("spctl --assess"))
     #expect(releaseGate.contains("SUFeedURL"))
     #expect(releaseGate.contains("SUPublicEDKey"))
@@ -460,9 +476,12 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(releaseGate.contains("verify_provider_capability_policy.swift"))
     #expect(
         releaseGate.contains(
-            "Commercial release must not disable hardened-runtime library validation."
+            "Signed release must not disable hardened-runtime library validation."
         )
     )
+    #expect(releaseGate.contains("verify_developer_id_runtime_signature"))
+    #expect(releaseGate.contains("missing the Hardened Runtime code-signing flag"))
+    #expect(releaseGate.contains("missing a trusted signing timestamp"))
     #expect(appcastScript.contains("generate_appcast"))
     #expect(appcastScript.contains("--ed-key-file"))
     #expect(appcastScript.contains("PRIVATE_KEY_MODE"))
@@ -492,8 +511,20 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     )
     #expect(remoteReleaseVerifier.contains("/usr/bin/cmp -s"))
     #expect(remoteReleaseVerifier.contains("Published appcast does not exactly match"))
-    #expect(commercialRelease.contains("prepare|finalize"))
-    #expect(commercialRelease.contains("verify_remote_release_assets.sh"))
+    #expect(signedRelease.contains("prepare|finalize"))
+    #expect(signedRelease.contains("OPENWHISPER_BUILD_CONFIGURATION=release"))
+    #expect(signedRelease.contains("verify_release_readiness.py"))
+    #expect(signedRelease.contains("--phase candidate"))
+    #expect(signedRelease.contains("--phase public"))
+    #expect(signedRelease.contains("community-pilot-summary.json"))
+    #expect(signedRelease.contains("public-contact.json"))
+    #expect(signedRelease.contains("verify_remote_release_assets.sh"))
+    #expect(releaseReadiness.contains("REQUIRED_INSTALLED_CHECKS"))
+    #expect(releaseReadiness.contains("REQUIRED_PILOT_GATES"))
+    #expect(releaseReadiness.contains("approved-for-public-release-review"))
+    #expect(releaseReadiness.contains("approved-for-public-release"))
+    #expect(releaseReadiness.contains("source.public-contact-policy"))
+    #expect(!releaseReadiness.contains("commercial.operator"))
     #expect(releaseWorkflow.contains("runs-on: macos-26"))
     #expect(
         releaseWorkflow.contains(
@@ -515,19 +546,87 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(releaseWorkflow.contains("load_version_env"))
     #expect(!releaseWorkflow.contains("source version.env"))
     #expect(!releaseWorkflow.contains("base64 --decode"))
-    #expect(releaseWorkflow.contains("scripts/release_commercial.sh prepare"))
-    #expect(releaseWorkflow.contains("scripts/release_commercial.sh finalize"))
+    #expect(releaseWorkflow.contains("scripts/release_signed.sh prepare"))
+    #expect(releaseWorkflow.contains("scripts/release_signed.sh finalize"))
+    #expect(releaseWorkflow.contains("INSTALLED_ACCEPTANCE_JSON_BASE64"))
+    #expect(releaseWorkflow.contains("COMMUNITY_PILOT_SUMMARY_JSON_BASE64"))
+    #expect(releaseWorkflow.contains("BETA_METRICS_JSON_BASE64"))
+    #expect(releaseWorkflow.contains("PUBLIC_CONTACT_JSON_BASE64"))
     #expect(releaseWorkflow.contains("scripts/archive_release_candidate.sh"))
     #expect(releaseWorkflow.contains("scripts/restore_release_candidate.sh"))
     #expect(candidateArchiver.contains("candidate-metadata.json"))
     #expect(candidateArchiver.contains("sourceCommit"))
+    #expect(candidateArchiver.contains("release-candidate-readiness.json"))
+    #expect(candidateArchiver.contains("notarization-app.json"))
+    #expect(candidateArchiver.contains("notarization-dmg.json"))
     #expect(candidateArchiver.contains("/usr/bin/shasum -a 256"))
+    #expect(!candidateArchiver.contains("productization-readiness"))
     #expect(candidateRestorer.contains("Candidate source commit does not match"))
     #expect(candidateRestorer.contains("maximum_uncompressed_bytes"))
     #expect(candidateRestorer.contains("release-manifest.json"))
+    #expect(candidateRestorer.contains("Candidate readiness report is invalid"))
+    #expect(candidateRestorer.contains("Candidate notarization result is invalid"))
+    #expect(!candidateRestorer.contains("productization-readiness"))
     #expect(gitignore.contains("/release/production.env"))
     #expect(gitignore.contains("/release/*.p12"))
     #expect(gitignore.contains("/release/*.key"))
+    #expect(gitignore.contains("/release/installed-acceptance.json"))
+    #expect(gitignore.contains("/release/community-pilot-summary.json"))
+    #expect(gitignore.contains("/release/beta-metrics.json"))
+    #expect(gitignore.contains("/release/public-contact.json"))
+}
+
+@Test
+func releaseReadinessVerifierExercisesFailClosedEvidenceContracts() throws {
+    let root = repositoryRoot()
+    let verifierURL = root.appendingPathComponent(
+        "scripts/verify_release_readiness.py"
+    )
+    let result = try runBash(
+        "python3 \"$1\" --self-test",
+        arguments: [verifierURL.path]
+    )
+    #expect(result.status == 0)
+    #expect(result.stdout.contains("self-test passed"))
+
+    let installedTemplate = try #require(
+        try JSONSerialization.jsonObject(
+            with: Data(
+                contentsOf: root.appendingPathComponent(
+                    "release/installed-acceptance.example.json"
+                )
+            )
+        ) as? [String: Any]
+    )
+    #expect(installedTemplate["schemaVersion"] as? Int == 2)
+    #expect(installedTemplate["status"] as? String == "template")
+    #expect(installedTemplate["release"] is [String: Any])
+
+    let betaTemplate = try #require(
+        try JSONSerialization.jsonObject(
+            with: Data(
+                contentsOf: root.appendingPathComponent(
+                    "release/beta-metrics.example.json"
+                )
+            )
+        ) as? [String: Any]
+    )
+    #expect(betaTemplate["schemaVersion"] as? Int == 2)
+    #expect(betaTemplate["status"] as? String == "template")
+    #expect(betaTemplate["fourCompleteWeeks"] as? Bool == false)
+
+    let publicContactTemplate = try #require(
+        try JSONSerialization.jsonObject(
+            with: Data(
+                contentsOf: root.appendingPathComponent(
+                    "release/public-contact.example.json"
+                )
+            )
+        ) as? [String: Any]
+    )
+    #expect(publicContactTemplate["schemaVersion"] as? Int == 1)
+    #expect(publicContactTemplate["status"] as? String == "template")
+    #expect(publicContactTemplate["decision"] as? String == "blocked")
 }
 
 @Test
@@ -604,118 +703,21 @@ func homebrewCaskUpdaterWritesManifestURLAndChecksumTogether() throws {
 }
 
 @Test
-func productizationReadinessPassesSourceAndFailsClosedForCommercialTemplates() throws {
+func removedCommercialReadinessArtifactsStayDeleted() throws {
     let root = repositoryRoot()
-    let verifierURL = root.appendingPathComponent(
-        "scripts/verify_productization_readiness.py"
-    )
-
-    let sourceResult = try runBash(
-        "python3 \"$1\" --root \"$2\" --stage source",
-        arguments: [verifierURL.path, root.path]
-    )
-    #expect(sourceResult.status == 0)
-    let sourceReport = try #require(
-        try JSONSerialization.jsonObject(
-            with: Data(sourceResult.stdout.utf8)
-        ) as? [String: Any]
-    )
-    #expect(sourceReport["passed"] as? Bool == true)
-
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent(
-            "OpenWhisperReadinessTests-\(UUID().uuidString)",
-            isDirectory: true
-        )
-    let releaseDirectory = temporaryDirectory.appendingPathComponent(
-        "release",
-        isDirectory: true
-    )
-    try FileManager.default.createDirectory(
-        at: releaseDirectory,
-        withIntermediateDirectories: true
-    )
-    defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
-
-    for name in [
-        "commercial-operator",
-        "beta-metrics",
-        "installed-acceptance",
-    ] {
-        let source = root.appendingPathComponent(
-            "release/\(name).example.json"
-        )
-        let destination = releaseDirectory.appendingPathComponent(
-            "\(name).json"
-        )
-        var value = try #require(
-            try JSONSerialization.jsonObject(
-                with: Data(contentsOf: source)
-            ) as? [String: Any]
-        )
-        value["status"] = "approved"
-        try JSONSerialization.data(
-            withJSONObject: value,
-            options: [.prettyPrinted, .sortedKeys]
-        ).write(to: destination)
-    }
-
-    let templateResult = try runBash(
-        """
-        python3 - "$1" "$2" <<'PY'
-        import importlib.util
-        import pathlib
-        import sys
-
-        spec = importlib.util.spec_from_file_location("readiness", sys.argv[1])
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        root = pathlib.Path(sys.argv[2])
-
-        audits = []
-        for function in (
-            module.audit_operator,
-            module.audit_metrics,
-            module.audit_acceptance,
-        ):
-            audit = module.Audit()
-            function(root, audit)
-            audits.append(audit.passed)
-
-        if any(audits):
-            raise SystemExit("An approved template unexpectedly passed.")
-        PY
-        """,
-        arguments: [verifierURL.path, temporaryDirectory.path]
-    )
-    #expect(templateResult.status == 0)
-
-    let missingCask = temporaryDirectory.appendingPathComponent("missing.rb")
-    let finalResult = try runBash(
-        """
-        OPENWHISPER_CASK_PATH="$3" \
-        python3 "$1" --root "$2" --stage commercial --phase final
-        """,
-        arguments: [verifierURL.path, root.path, missingCask.path]
-    )
-    #expect(finalResult.status != 0)
-    #expect(!finalResult.stderr.contains("Traceback"))
-    let finalReport = try #require(
-        try JSONSerialization.jsonObject(
-            with: Data(finalResult.stdout.utf8)
-        ) as? [String: Any]
-    )
-    #expect(finalReport["passed"] as? Bool == false)
-    let gates = try #require(finalReport["gates"] as? [[String: Any]])
-    let caskGate = gates.first {
-        $0["identifier"] as? String == "commercial.cask-published-values"
-    }
-    #expect(caskGate?["passed"] as? Bool == false)
     #expect(
-        gates.contains {
-            $0["identifier"] as? String == "commercial.private-key-files"
-        } == false
+        !FileManager.default.fileExists(
+            atPath: root.appendingPathComponent(
+                "scripts/verify_productization_readiness.py"
+            ).path
+        )
+    )
+    #expect(
+        !FileManager.default.fileExists(
+            atPath: root.appendingPathComponent(
+                "release/commercial-operator.example.json"
+            ).path
+        )
     )
 }
 

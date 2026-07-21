@@ -7,10 +7,6 @@ enum ProductIdentity {
     static let keychainService = "\(defaultBundleIdentifier).ChatGPTSession"
     static let recoveryAPIKeychainService =
         "\(defaultBundleIdentifier).OpenAICompatibleAPIKey"
-    static let licenseReceiptKeychainService =
-        "\(defaultBundleIdentifier).LicenseReceipt"
-    static let licenseDeviceKeychainService =
-        "\(defaultBundleIdentifier).LicenseDevice"
     static let oauthCallbackQueueLabel = "\(defaultBundleIdentifier).oauth-callback"
 
     static let installedAppURL = URL(fileURLWithPath: "/Applications/\(name).app")

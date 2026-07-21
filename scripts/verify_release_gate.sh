@@ -14,9 +14,59 @@ CASK="${OPENWHISPER_CASK_PATH:-$ROOT/packaging/homebrew/Casks/openwhisper.rb}"
 EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
 APPCAST="${OPENWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
 CAPABILITY_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
+APP_NOTARIZATION_RESULT="${OPENWHISPER_APP_NOTARIZATION_RESULT_PATH:-$ROOT/dist/notarization-app.json}"
+DMG_NOTARIZATION_RESULT="${OPENWHISPER_DMG_NOTARIZATION_RESULT_PATH:-$ROOT/dist/notarization-dmg.json}"
+
+verify_developer_id_runtime_signature() {
+  local code_path="$1"
+  local label="$2"
+  local details
+
+  /usr/bin/codesign --verify --strict --verbose=2 "$code_path"
+  details="$(/usr/bin/codesign -d --verbose=4 "$code_path" 2>&1)"
+  [[ "$details" == *"Authority=Developer ID Application:"* ]] || {
+    echo "$label is not signed with Developer ID Application." >&2
+    exit 1
+  }
+  [[ "$details" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
+    echo "$label Team ID does not match OPENWHISPER_TEAM_ID." >&2
+    exit 1
+  }
+  [[ "$details" == *"Timestamp="* ]] || {
+    echo "$label is missing a trusted signing timestamp." >&2
+    exit 1
+  }
+  grep -Eq '^CodeDirectory .*flags=.*\(runtime\)' <<<"$details" || {
+    echo "$label is missing the Hardened Runtime code-signing flag." >&2
+    exit 1
+  }
+}
+
+validate_notarization_result() {
+  local result_path="$1"
+  local label="$2"
+  local status=""
+  local submission_id=""
+
+  [[ -f "$result_path" && ! -L "$result_path" ]] || {
+    echo "Missing regular $label notarization result: $result_path" >&2
+    exit 1
+  }
+  python3 -m json.tool "$result_path" >/dev/null
+  status="$(/usr/bin/plutil -extract status raw -o - "$result_path")"
+  submission_id="$(/usr/bin/plutil -extract id raw -o - "$result_path")"
+  [[ "$status" == "Accepted" ]] || {
+    echo "$label notarization result is not Accepted." >&2
+    exit 1
+  }
+  [[ "$submission_id" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || {
+    echo "$label notarization result has an invalid submission ID." >&2
+    exit 1
+  }
+}
 
 [[ -n "$EXPECTED_TEAM_ID" ]] || {
-  echo "OPENWHISPER_TEAM_ID is required for the commercial release gate." >&2
+  echo "OPENWHISPER_TEAM_ID is required for the signed release gate." >&2
   exit 1
 }
 [[ -d "$APP" && -f "$DMG" && -f "$MANIFEST" ]] || {
@@ -34,23 +84,23 @@ swift "$ROOT/scripts/verify_dependency_licenses.swift" \
 python3 "$ROOT/scripts/verify_repository_hygiene.py"
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
-SIGNATURE_DETAILS="$(/usr/bin/codesign -dvvv "$APP" 2>&1)"
-[[ "$SIGNATURE_DETAILS" == *"Authority=Developer ID Application:"* ]] || {
-  echo "Commercial release requires Developer ID Application signing." >&2
-  exit 1
-}
-[[ "$SIGNATURE_DETAILS" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
-  echo "Commercial release Team ID mismatch." >&2
-  exit 1
-}
+verify_developer_id_runtime_signature "$APP" "OpenWhisper.app"
 ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 [[ "$ENTITLEMENTS" != *"com.apple.security.cs.disable-library-validation"* ]] || {
-  echo "Commercial release must not disable hardened-runtime library validation." >&2
+  echo "Signed release must not disable hardened-runtime library validation." >&2
   exit 1
 }
 
 /usr/bin/xcrun stapler validate "$APP"
 /usr/bin/xcrun stapler validate "$DMG"
+validate_notarization_result "$APP_NOTARIZATION_RESULT" "App"
+validate_notarization_result "$DMG_NOTARIZATION_RESULT" "DMG"
+APP_NOTARIZATION_ID="$(/usr/bin/plutil -extract id raw -o - "$APP_NOTARIZATION_RESULT")"
+DMG_NOTARIZATION_ID="$(/usr/bin/plutil -extract id raw -o - "$DMG_NOTARIZATION_RESULT")"
+[[ "$APP_NOTARIZATION_ID" != "$DMG_NOTARIZATION_ID" ]] || {
+  echo "App and DMG notarization evidence must use distinct submissions." >&2
+  exit 1
+}
 /usr/sbin/spctl --assess --type execute --verbose=4 "$APP"
 /usr/sbin/spctl --assess \
   --type open \
@@ -98,9 +148,24 @@ EXECUTABLE="$APP/Contents/MacOS/$OPENWHISPER_APP_NAME"
 }
 SPARKLE_VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$SPARKLE_FRAMEWORK/Resources/Info.plist")"
 [[ "$SPARKLE_VERSION" == "2.9.4" ]] || {
-  echo "Commercial release requires the pinned Sparkle 2.9.4 framework." >&2
+  echo "Signed release requires the pinned Sparkle 2.9.4 framework." >&2
   exit 1
 }
+SPARKLE_VERSION_DIRECTORY="$SPARKLE_FRAMEWORK/Versions/B"
+for component in \
+  "$SPARKLE_VERSION_DIRECTORY/XPCServices/Downloader.xpc" \
+  "$SPARKLE_VERSION_DIRECTORY/XPCServices/Installer.xpc" \
+  "$SPARKLE_VERSION_DIRECTORY/Updater.app" \
+  "$SPARKLE_VERSION_DIRECTORY/Autoupdate" \
+  "$SPARKLE_FRAMEWORK"; do
+  [[ -e "$component" ]] || {
+    echo "Signed Sparkle component is missing: $component" >&2
+    exit 1
+  }
+  verify_developer_id_runtime_signature \
+    "$component" \
+    "Sparkle component $(basename "$component")"
+done
 /usr/bin/otool -L "$EXECUTABLE" \
   | grep -q '@rpath/Sparkle.framework/Versions/B/Sparkle' || {
     echo "The signed app is not linked against Sparkle.framework." >&2
@@ -178,25 +243,6 @@ if [[ -n "${OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}" \
   exit 1
 fi
 
-PRO_PREVIEW_ENABLED="$(/usr/bin/plutil -extract OWProPreviewEnabled raw -o - "$PLIST" 2>/dev/null || true)"
-[[ "$PRO_PREVIEW_ENABLED" == "false" ]] || {
-  echo "Commercial release must disable the private Pro preview." >&2
-  exit 1
-}
-if ! LICENSE_PUBLIC_KEY="$(/usr/bin/plutil -extract OWLicensePublicEDKey raw -o - "$PLIST" 2>/dev/null)"; then
-  echo "Commercial release is missing OWLicensePublicEDKey." >&2
-  exit 1
-fi
-[[ "$LICENSE_PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || {
-  echo "Commercial license verification key is not a 32-byte base64 Ed25519 key." >&2
-  exit 1
-}
-if [[ -n "${OPENWHISPER_LICENSE_PUBLIC_ED_KEY:-}" \
-  && "$LICENSE_PUBLIC_KEY" != "$OPENWHISPER_LICENSE_PUBLIC_ED_KEY" ]]; then
-  echo "Commercial license public key does not match the production configuration." >&2
-  exit 1
-fi
-
 [[ -f "$CAPABILITY_POLICY" && ! -L "$CAPABILITY_POLICY" ]] || {
   echo "Missing regular signed provider capability policy: $CAPABILITY_POLICY" >&2
   exit 1
@@ -231,4 +277,4 @@ grep -Fq "$ZIP_DOWNLOAD_URL" "$APPCAST" || {
   --manifest "$MANIFEST" \
   --public-key "$PUBLIC_KEY"
 
-echo "OpenWhisper commercial release gate passed."
+echo "OpenWhisper signed release gate passed."

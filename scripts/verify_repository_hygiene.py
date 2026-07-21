@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-EXCLUDED_DIRECTORIES = {".git", ".build", "dist"}
+EXCLUDED_DIRECTORIES = {".git", ".build", "dist", ".agents"}
 TEXT_SUFFIXES = {
     ".entitlements",
     ".html",
@@ -71,6 +71,46 @@ PRIVATE_KEY_FILENAME_PATTERN = re.compile(
     r"(?:^|[-_.])(?:license|signing)[-_.]?private(?:[-_.]|$)",
     re.IGNORECASE,
 )
+
+REMOVED_COMMERCIAL_ARTIFACTS = (
+    "Sources/OpenWhisper/CommercialLicensing.swift",
+    "Sources/OpenWhisperLicensing",
+    "Sources/OpenWhisperLicenseTool",
+    "Tests/OpenWhisperLicensingTests",
+    "docs/engineering/licensing.md",
+    "docs/legal/refund-policy.md",
+    "docs/legal/refund-policy.zh-CN.md",
+    "docs/marketing",
+    "docs/product/commercial-module-boundary.md",
+    "docs/product/product-and-commercialization-plan-2026-07-13.md",
+    "docs/product/macos-productization-plan-2026-07-13.md",
+    "release/commercial-operator.example.json",
+    "scripts/release_commercial.sh",
+    "scripts/verify_productization_readiness.py",
+)
+
+COMMERCIALIZATION_MARKERS = (
+    "commercial release",
+    "commercial-release",
+    "commercialization",
+    "openwhisper pro",
+    "pro preview",
+    "license activation",
+    "license receipt",
+    "licensereceiptkeychainservice",
+    "license signing",
+    "commercial operator",
+    "商业发布",
+    "商业运营",
+    "商业化设计",
+    "付费许可证",
+    "许可证激活",
+    "转化漏斗",
+)
+
+COMMERCIALIZATION_MARKER_ALLOWLIST = {
+    "docs/product/community-skills-core-next-step-plan-2026-07-15.md",
+}
 
 
 def relative(path: Path) -> str:
@@ -140,6 +180,49 @@ def verify_no_private_key_artifacts() -> list[str]:
         if PRIVATE_KEY_FILENAME_PATTERN.search(path.name):
             failures.append(
                 f"{relative(path)} looks like a private signing-key artifact"
+            )
+    return failures
+
+
+def verify_commercialization_removal(paths: list[Path]) -> list[str]:
+    failures: list[str] = []
+    for artifact in REMOVED_COMMERCIAL_ARTIFACTS:
+        artifact_path = ROOT / artifact
+        contains_files = artifact_path.is_file() or (
+            artifact_path.is_dir()
+            and any(item.is_file() for item in artifact_path.rglob("*"))
+        )
+        if contains_files:
+            failures.append(f"removed commercialization artifact still exists: {artifact}")
+
+    for path in paths:
+        relative_path = relative(path)
+        if (
+            relative_path in COMMERCIALIZATION_MARKER_ALLOWLIST
+            or relative_path.startswith("Tests/")
+            or relative_path == "scripts/verify_repository_hygiene.py"
+            or relative_path.startswith(
+                "Sources/OpenWhisper/Resources/Legal/ThirdPartyLicenses/"
+            )
+            or relative_path == "LICENSE"
+        ):
+            continue
+        contents = read_text(path).casefold()
+        for marker in COMMERCIALIZATION_MARKERS:
+            normalized_marker = marker.casefold()
+            if normalized_marker.isascii():
+                match = re.search(
+                    rf"(?<![a-z]){re.escape(normalized_marker)}(?![a-z])",
+                    contents,
+                )
+                index = -1 if match is None else match.start()
+            else:
+                index = contents.find(normalized_marker)
+            if index < 0:
+                continue
+            line = contents.count("\n", 0, index) + 1
+            failures.append(
+                f"{relative_path}:{line} contains removed commercialization marker {marker!r}"
             )
     return failures
 
@@ -218,6 +301,7 @@ def main() -> int:
         *verify_canonical_identity(paths),
         *verify_no_committed_secrets(paths),
         *verify_no_private_key_artifacts(),
+        *verify_commercialization_removal(paths),
         *verify_localization(),
         *verify_markdown_links(),
     ]
@@ -230,8 +314,8 @@ def main() -> int:
 
     print(
         "Repository hygiene verification passed "
-        "(canonical identity, secret/private-key patterns, localization "
-        "literals, local Markdown links)."
+        "(canonical identity, secret/private-key patterns, removed "
+        "commercialization artifacts, localization literals, local Markdown links)."
     )
     return 0
 

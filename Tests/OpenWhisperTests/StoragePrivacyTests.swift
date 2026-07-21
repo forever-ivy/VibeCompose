@@ -100,6 +100,81 @@ func legacyTranscriptionHistoryUsesStableIdentifiersAndCanBeDeleted() throws {
 }
 
 @Test
+func transcriptionHistoryPersistsSafeUndoStateTransitions() throws {
+    let root = temporaryOpenWhisperDirectory()
+    let recorder = TranscriptionHistoryRecorder(directoryURL: root)
+    let record = TranscriptionHistoryRecord(
+        timestamp: Date(),
+        finalText: "inserted",
+        appName: "TextEdit",
+        appBundleIdentifier: "com.apple.TextEdit",
+        outcome: TextDeliveryStatus.insertedAndVerified,
+        undoState: .available
+    )
+    try recorder.record(record)
+    try recorder.updateUndoState(
+        id: record.id,
+        state: .restored
+    )
+
+    let loaded = try #require(
+        recorder.loadRecent(limit: 1).first
+    )
+    #expect(loaded.id == record.id)
+    #expect(loaded.undoState == .restored)
+}
+
+@Test
+func transcriptionHistoryPersistsRedactedSkillRunReceipt() throws {
+    let root = temporaryOpenWhisperDirectory()
+    let recorder = TranscriptionHistoryRecorder(directoryURL: root)
+    let installationID = UUID()
+    let receipt = SkillRunReceipt(
+        runID: UUID(),
+        skillInstallationID: installationID,
+        skillID: "com.openwhisper.direct",
+        displayName: "Direct",
+        source: "builtin",
+        version: "1.0.0",
+        revision: "1.0.0",
+        contentDigest: String(repeating: "a", count: 64),
+        resolutionReason: "globalDefault",
+        targetApplicationBundleIdentifier: "com.apple.TextEdit",
+        contextDecisions: [
+            ContextDecision(
+                source: .voice,
+                requestedAs: "required",
+                availability: "available",
+                permission: "allowed",
+                captureResult: "captured",
+                characterCount: 0,
+                decisionCode: "granted"
+            ),
+        ],
+        resourceIDs: ["SKILL.md"],
+        requestedOutputRoute: "automaticPasteWhenVerified",
+        actualOutputRoute: "pasteToTarget",
+        targetVerification: TextDeliveryStatus.insertedAndVerified,
+        finalUserAction: "pasteToTarget"
+    )
+    let record = TranscriptionHistoryRecord(
+        timestamp: Date(),
+        finalText: "safe",
+        appName: "TextEdit",
+        appBundleIdentifier: "com.apple.TextEdit",
+        outcome: TextDeliveryStatus.insertedAndVerified,
+        skillRunReceipt: receipt
+    )
+    try recorder.record(record)
+
+    let loaded = try #require(recorder.loadRecent(limit: 1).first)
+    #expect(loaded.skillRunReceipt?.runID == receipt.runID)
+    #expect(loaded.skillRunReceipt?.skillInstallationID == installationID)
+    #expect(loaded.skillRunReceipt?.contextDecisions == receipt.contextDecisions)
+    #expect(loaded.skillRunReceipt?.resourceIDs == ["SKILL.md"])
+}
+
+@Test
 func latencyRecorderRotatesByAgeAndCount() throws {
     let root = temporaryOpenWhisperDirectory()
     let recorder = LatencyRecorder(directoryURL: root)

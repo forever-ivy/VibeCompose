@@ -22,7 +22,15 @@ python3 "$ROOT/scripts/verify_repository_hygiene.py"
 : "${OPENWHISPER_BUILD:?OPENWHISPER_BUILD is required}"
 
 APP_NAME="$OPENWHISPER_APP_NAME"
-BUILD_DIR="$ROOT/.build/debug"
+BUILD_CONFIGURATION="${OPENWHISPER_BUILD_CONFIGURATION:-debug}"
+case "$BUILD_CONFIGURATION" in
+  debug|release) ;;
+  *)
+    echo "OPENWHISPER_BUILD_CONFIGURATION must be debug or release." >&2
+    exit 1
+    ;;
+esac
+BUILD_DIR="$ROOT/.build/$BUILD_CONFIGURATION"
 APP_DIR="$ROOT/dist/$APP_NAME.app"
 EXECUTABLE="$APP_DIR/Contents/MacOS/$APP_NAME"
 RESOURCES_DIR="$APP_DIR/Contents/Resources"
@@ -32,6 +40,8 @@ SPARKLE_FRAMEWORK_SOURCE="$BUILD_DIR/Sparkle.framework"
 SPARKLE_FRAMEWORK="$FRAMEWORKS_DIR/Sparkle.framework"
 ICONSET_DIR="$ROOT/dist/AppIcon.iconset"
 ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
+ICON_SOURCE="$ROOT/packaging/assets/OpenWhisperLogoSource.png"
+STATUS_ICON_FILE="$RESOURCES_DIR/StatusBarLogoTemplate.png"
 ENTITLEMENTS_FILE="$ROOT/dist/OpenWhisper.entitlements"
 SIGNING_IDENTITY="${OPENWHISPER_CODESIGN_IDENTITY:-}"
 ALLOW_ADHOC_SIGNING="${OPENWHISPER_ALLOW_ADHOC_SIGNING:-0}"
@@ -44,8 +54,6 @@ SPARKLE_FEED_URL="${OPENWHISPER_SPARKLE_FEED_URL:-}"
 SPARKLE_PUBLIC_ED_KEY="${OPENWHISPER_SPARKLE_PUBLIC_ED_KEY:-}"
 CAPABILITY_POLICY_URL="${OPENWHISPER_CAPABILITY_POLICY_URL:-}"
 CAPABILITY_PUBLIC_ED_KEY="${OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}"
-LICENSE_PUBLIC_ED_KEY="${OPENWHISPER_LICENSE_PUBLIC_ED_KEY:-}"
-PRO_PREVIEW_ENABLED="${OPENWHISPER_PRO_PREVIEW_ENABLED:-1}"
 ADHOC_DESIGNATED_REQUIREMENT="=designated => identifier \"$OPENWHISPER_BUNDLE_ID\""
 
 resolve_signing_identity() {
@@ -56,13 +64,20 @@ resolve_signing_identity() {
 
   local resolved
   # Use the fingerprint so duplicate certificate names cannot select a revoked cert.
-  resolved="$(security find-identity -v -p codesigning 2>/dev/null | awk '$0 !~ /CSSMERR_/ && ($0 ~ /Developer ID Application:/ || $0 ~ /Apple Development:/) { print $2; exit }')"
-  if [[ -n "$resolved" ]]; then
+  # A release must never select Apple Development merely because it sorts first.
+  if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
+    resolved="$(security find-identity -v -p codesigning 2>/dev/null | awk '$0 !~ /CSSMERR_/ && /Developer ID Application:/ { print $2; exit }')"
     printf '%s\n' "$resolved"
     return
   fi
 
   resolved="$(security find-identity -v -p codesigning 2>/dev/null | awk '$0 !~ /CSSMERR_/ && /Apple Development:/ { print $2; exit }')"
+  if [[ -n "$resolved" ]]; then
+    printf '%s\n' "$resolved"
+    return
+  fi
+
+  resolved="$(security find-identity -v -p codesigning 2>/dev/null | awk '$0 !~ /CSSMERR_/ && /Developer ID Application:/ { print $2; exit }')"
   printf '%s\n' "$resolved"
 }
 
@@ -73,6 +88,13 @@ SHA256_PATH="$ROOT/dist/SHA256SUMS"
 DMG_STAGING_DIR="$ROOT/dist/.dmg-staging"
 DMG_RAW_PATH="$ROOT/dist/.${APP_NAME}-${OPENWHISPER_VERSION}-macos-${ARCH}.raw.dmg"
 NOTARY_ZIP_PATH="$ROOT/dist/.${APP_NAME}-${OPENWHISPER_VERSION}-notary.zip"
+APP_NOTARIZATION_RESULT="$ROOT/dist/notarization-app.json"
+DMG_NOTARIZATION_RESULT="$ROOT/dist/notarization-dmg.json"
+
+if [[ "$REQUIRE_DEVELOPER_ID" == "1" && "$BUILD_CONFIGURATION" != "release" ]]; then
+  echo "Developer ID release packaging requires OPENWHISPER_BUILD_CONFIGURATION=release." >&2
+  exit 1
+fi
 
 mkdir -p "$ROOT/dist"
 rm -rf "$APP_DIR"
@@ -80,12 +102,19 @@ rm -f "$ZIP_PATH"
 rm -f "$DMG_PATH"
 rm -f "$DMG_RAW_PATH"
 rm -f "$NOTARY_ZIP_PATH"
+rm -f \
+  "$APP_NOTARIZATION_RESULT" \
+  "$APP_NOTARIZATION_RESULT.tmp" \
+  "$DMG_NOTARIZATION_RESULT" \
+  "$DMG_NOTARIZATION_RESULT.tmp"
 rm -f "$ENTITLEMENTS_FILE"
 rm -rf "$DMG_STAGING_DIR"
 rm -rf "$ICONSET_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$RESOURCES_DIR" "$FRAMEWORKS_DIR"
 
-swift build --package-path "$ROOT"
+swift build \
+  --package-path "$ROOT" \
+  --configuration "$BUILD_CONFIGURATION"
 cp "$BUILD_DIR/$APP_NAME" "$EXECUTABLE"
 chmod +x "$EXECUTABLE"
 if [[ ! -d "$SPARKLE_FRAMEWORK_SOURCE" ]]; then
@@ -114,7 +143,10 @@ fi
 swift "$ROOT/scripts/verify_dependency_licenses.swift" \
   --root "$ROOT" \
   --app-resources "$RESOURCES_DIR"
-swift "$ROOT/scripts/render_app_icon.swift" "$ICONSET_DIR"
+swift "$ROOT/scripts/render_app_icon.swift" \
+  "$ICON_SOURCE" \
+  "$ICONSET_DIR" \
+  "$STATUS_ICON_FILE"
 /usr/bin/iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 
 {
@@ -211,38 +243,6 @@ if [[ "$REQUIRE_DEVELOPER_ID" == "1" \
   exit 1
 fi
 
-if [[ "$PRO_PREVIEW_ENABLED" != "0" \
-  && "$PRO_PREVIEW_ENABLED" != "1" ]]; then
-  echo "OPENWHISPER_PRO_PREVIEW_ENABLED must be 0 or 1." >&2
-  exit 1
-fi
-if [[ -n "$LICENSE_PUBLIC_ED_KEY" \
-  && ! "$LICENSE_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
-  echo "OPENWHISPER_LICENSE_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
-  exit 1
-fi
-if [[ "$PRO_PREVIEW_ENABLED" == "1" ]]; then
-  /usr/bin/plutil -insert OWProPreviewEnabled -bool true "$PLIST"
-else
-  /usr/bin/plutil -insert OWProPreviewEnabled -bool false "$PLIST"
-fi
-if [[ -n "$LICENSE_PUBLIC_ED_KEY" ]]; then
-  /usr/bin/plutil -insert OWLicensePublicEDKey \
-    -string "$LICENSE_PUBLIC_ED_KEY" \
-    "$PLIST"
-fi
-
-if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
-  if [[ "$PRO_PREVIEW_ENABLED" != "0" ]]; then
-    echo "Developer ID commercial packaging must disable the private Pro preview." >&2
-    exit 1
-  fi
-  if [[ -z "$LICENSE_PUBLIC_ED_KEY" ]]; then
-    echo "Developer ID commercial packaging requires the signed-license Ed25519 public key." >&2
-    exit 1
-  fi
-fi
-
 /usr/bin/plutil -insert SUEnableAutomaticChecks -bool false "$PLIST"
 /usr/bin/plutil -insert SUAutomaticallyUpdate -bool false "$PLIST"
 /usr/bin/plutil -insert SUAllowsAutomaticUpdates -bool false "$PLIST"
@@ -302,6 +302,45 @@ sign_sparkle_components() {
     }
     /usr/bin/codesign "${common_args[@]}" "$component" >/dev/null
   done
+}
+
+submit_for_notarization() {
+  local artifact="$1"
+  local result_path="$2"
+  local label="$3"
+  local temporary_result="$result_path.tmp"
+  local status=""
+  local submission_id=""
+
+  rm -f "$temporary_result"
+  if ! /usr/bin/xcrun notarytool submit \
+    "$artifact" \
+    "${NOTARY_AUTH_ARGUMENTS[@]}" \
+    --wait \
+    --output-format json >"$temporary_result"; then
+    rm -f "$temporary_result"
+    echo "$label notarization submission failed." >&2
+    return 1
+  fi
+  chmod 0600 "$temporary_result"
+  if ! python3 -m json.tool "$temporary_result" >/dev/null \
+    || ! status="$(/usr/bin/plutil -extract status raw -o - "$temporary_result")" \
+    || ! submission_id="$(/usr/bin/plutil -extract id raw -o - "$temporary_result")"; then
+    rm -f "$temporary_result"
+    echo "$label notarization returned malformed JSON evidence." >&2
+    return 1
+  fi
+  [[ "$status" == "Accepted" ]] || {
+    rm -f "$temporary_result"
+    echo "$label notarization was not accepted." >&2
+    return 1
+  }
+  [[ "$submission_id" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || {
+    rm -f "$temporary_result"
+    echo "$label notarization returned an invalid submission ID." >&2
+    return 1
+  }
+  mv "$temporary_result" "$result_path"
 }
 
 if [[ -n "$SIGNING_IDENTITY" ]]; then
@@ -410,10 +449,10 @@ if [[ "$NOTARIZE" == "1" ]]; then
   fi
 
   /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$NOTARY_ZIP_PATH"
-  /usr/bin/xcrun notarytool submit \
+  submit_for_notarization \
     "$NOTARY_ZIP_PATH" \
-    "${NOTARY_AUTH_ARGUMENTS[@]}" \
-    --wait
+    "$APP_NOTARIZATION_RESULT" \
+    "OpenWhisper.app"
   /usr/bin/xcrun stapler staple "$APP_DIR"
   /usr/bin/xcrun stapler validate "$APP_DIR"
   rm -f "$NOTARY_ZIP_PATH"
@@ -430,10 +469,10 @@ cp -R "$APP_DIR" "$DMG_STAGING_DIR/"
 /usr/bin/hdiutil convert "$DMG_RAW_PATH" -format UDZO -o "$DMG_PATH" >/dev/null
 
 if [[ "$NOTARIZE" == "1" ]]; then
-  /usr/bin/xcrun notarytool submit \
+  submit_for_notarization \
     "$DMG_PATH" \
-    "${NOTARY_AUTH_ARGUMENTS[@]}" \
-    --wait
+    "$DMG_NOTARIZATION_RESULT" \
+    "OpenWhisper DMG"
   /usr/bin/xcrun stapler staple "$DMG_PATH"
   /usr/bin/xcrun stapler validate "$DMG_PATH"
   /usr/sbin/spctl --assess --type execute --verbose=4 "$APP_DIR"
@@ -456,8 +495,13 @@ rm -f "$DMG_RAW_PATH"
 rm -f "$NOTARY_ZIP_PATH"
 
 echo "Packaged $APP_DIR"
+echo "Build configuration: $BUILD_CONFIGURATION"
 echo "Signed with $SIGNING_SUMMARY"
 echo "Created $ZIP_PATH"
 echo "Created $DMG_PATH"
 echo "Created $SHA256_PATH"
 echo "Created $ROOT/dist/release-manifest.json"
+if [[ "$NOTARIZE" == "1" ]]; then
+  echo "Created $APP_NOTARIZATION_RESULT"
+  echo "Created $DMG_NOTARIZATION_RESULT"
+fi

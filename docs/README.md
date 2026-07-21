@@ -2,13 +2,15 @@
 
 ## Product
 
-- [macOS productization plan](product/macos-productization-plan-2026-07-13.md) — canonical implementation and launch plan
-- [AI-native input layer plan](product/ai-native-input-layer-plan-2026-07-14.md) — Skills, context permissions, personal style, Blue Signal feedback, and customizable global hotkeys
-- [Product and commercialization analysis](product/product-and-commercialization-plan-2026-07-13.md) — positioning, packaging, pricing, and growth inputs
+- [Community Skills core next-step plan](product/community-skills-core-next-step-plan-2026-07-15.md) — makes Community Skills the primary product loop, adds switching/editable preview/Creator V2, and records the completed removal of old access tiers and activation design
+- [Community Skills Pilot runbook](product/community-pilot-runbook-2026-07-17.md) — privacy-preserving 30–50 participant, four-week Phase 4 protocol and evidence gates
+- [Community Skills Pilot launch kit](product/community-pilot-launch-kit-2026-07-18.md) — recruitment/consent copy, 15 launch tasks, enum-only evidence templates, and privacy-bounded aggregation commands
+- [Community Skill contribution guide](engineering/community-skill-contribution-guide.md) — author and reviewer quality gate for curated local Pilot content
+- [AI-native input layer plan](product/ai-native-input-layer-plan-2026-07-14.md) — standard Agent Skills, Context Fabric, personal style, AI Activity Glow, and customizable global hotkeys
+- [macOS native UI refactor plan](product/macos-native-ui-refactor-plan-2026-07-14.md) — native Settings architecture, responsive bilingual layout, AI Activity Glow, and unified logo assets
 - [V1 PRD](product/v1-prd.md) — current product scope
 - [Brand identity](product/brand-identity.md) — canonical product names and identifiers
-- [Brand clearance](product/brand-clearance-2026-07-14.md) — current same-category name conflict and commercial launch block
-- [Commercial module boundary](product/commercial-module-boundary.md) — MIT core, licensing adapter, Pro package, and contribution rules
+- [Brand clearance](product/brand-clearance-2026-07-14.md) — current same-category name review and naming risk
 
 ## Risk and Research
 
@@ -22,7 +24,6 @@
 - [Release process](engineering/release.md)
 - [Release evidence and readiness schemas](../release/README.md)
 - [Updater decision](engineering/updater.md)
-- [License operations](engineering/licensing.md)
 - [Visual acceptance](engineering/visual-acceptance.md)
 - [Hotkey and feedback architecture](engineering/hotkey-and-feedback.md)
 - [Skill Runtime](engineering/skill-runtime.md)
@@ -36,12 +37,10 @@
 
 - [Privacy Policy](legal/privacy-policy.md) / [隐私政策](legal/privacy-policy.zh-CN.md)
 - [Terms of Use](legal/terms-of-use.md) / [使用条款](legal/terms-of-use.zh-CN.md)
-- [Refund Policy](legal/refund-policy.md) / [退款政策](legal/refund-policy.zh-CN.md)
 - [Support Policy](support/support-policy.md) / [支持政策](support/support-policy.zh-CN.md)
 - [Upstream incident playbook](support/upstream-incident-playbook.md) / [上游事故预案](support/upstream-incident-playbook.zh-CN.md)
 - [Security reporting](../SECURITY.md)
 
-## Releases and Marketing
+## Releases
 
 - [Release status](releases/README.md)
-- [Marketing workspace](marketing/README.md)

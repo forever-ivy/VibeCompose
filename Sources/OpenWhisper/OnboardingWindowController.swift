@@ -53,12 +53,13 @@ final class OnboardingWindowController: NSWindowController {
             onStepCompleted: onStepCompleted,
             onComplete: {}
         )
+        .applyingOpenWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             accessibilityDisplayOptionsOverride
         )
         let hostingController = NSHostingController(rootView: placeholder)
         let window = OnboardingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 540),
+            contentRect: NSRect(x: 0, y: 0, width: 860, height: 600),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -68,10 +69,15 @@ final class OnboardingWindowController: NSWindowController {
         window.isRestorable = false
         window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.OnboardingWindow")
         window.tabbingMode = .disallowed
-        window.contentMinSize = NSSize(width: 760, height: 540)
-        window.contentMaxSize = NSSize(width: 760, height: 540)
+        window.contentMinSize = NSSize(width: 860, height: 600)
+        window.contentMaxSize = NSSize(width: 860, height: 600)
         window.center()
         window.contentViewController = hostingController
+        if #available(macOS 26, *) {
+            window.titlebarAppearsTransparent = true
+            window.isOpaque = false
+            window.backgroundColor = .clear
+        }
         accessibilityDisplayOptionsOverride.applyAppearance(to: window)
 
         super.init(window: window)
@@ -92,6 +98,7 @@ final class OnboardingWindowController: NSWindowController {
                     onCompleted()
                 }
             )
+            .applyingOpenWhisperBrandTint()
             .applyingAccessibilityDisplayOptionsOverride(
                 accessibilityDisplayOptionsOverride
             )
@@ -103,9 +110,14 @@ final class OnboardingWindowController: NSWindowController {
     }
 
     func show() {
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+        window.center()
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     func writeSnapshot(to url: URL) throws {
@@ -205,6 +217,8 @@ private struct OnboardingView: View {
     @State private var message: String?
     @State private var messageIsError = false
     @State private var practiceText = ""
+    @State private var stepForward = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let authManager: ChatGPTAuthManager
     let hotkeyBinding: HotkeyBinding
@@ -233,26 +247,51 @@ private struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Divider().opacity(0.45)
+            OpenWhisperStepProgressBar(
+                steps: OnboardingStep.allCases.map(\.title),
+                currentStep: step.rawValue
+            )
+            Divider().opacity(0.45)
 
-            HStack(spacing: 0) {
-                stepList
-                Divider()
+            ScrollView {
+                stepContent
+                    .id(step)
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : stepForward
+                                ? .asymmetric(
+                                    insertion: .opacity.combined(with: .offset(x: 28, y: 0)),
+                                    removal:   .opacity.combined(with: .offset(x: -16, y: 0))
+                                )
+                                : .asymmetric(
+                                    insertion: .opacity.combined(with: .offset(x: -28, y: 0)),
+                                    removal:   .opacity.combined(with: .offset(x: 16, y: 0))
+                                )
+                    )
+                    .padding(.horizontal, 48)
+                    .padding(.vertical, 40)
+                    .frame(maxWidth: 580, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .animation(
+                reduceMotion
+                    ? .easeOut(duration: 0.15)
+                    : OpenWhisperMotion.stepSpring,
+                value: step
+            )
 
-                VStack(spacing: 0) {
-                    ScrollView {
-                        stepContent
-                            .padding(28)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-
-                    Divider()
-                    navigationBar
-                }
+            navigationBar
+        }
+        .frame(width: 860, height: 600)
+        .background {
+            if #available(macOS 26, *) {
+                Color.clear
+            } else {
+                Color(nsColor: .windowBackgroundColor)
             }
         }
-        .frame(width: 760, height: 540)
-        .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             authSnapshot = authManager.authSnapshot()
             permissionMonitor.refresh()
@@ -261,62 +300,39 @@ private struct OnboardingView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 30))
-                .foregroundStyle(.tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L10n.text("Set Up OpenWhisper"))
-                    .font(.system(size: 19, weight: .semibold))
-                Text(
-                    L10n.format(
-                        "Four short steps to your first %@ dictation.",
-                        hotkeyBinding.displayName
-                    )
-                )
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(L10n.format("Step %ld of 4", step.rawValue + 1))
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
-    }
-
-    private var stepList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(OnboardingStep.allCases) { candidate in
-                HStack(spacing: 9) {
-                    Image(systemName: candidate.rawValue < step.rawValue ? "checkmark.circle.fill" : candidate.symbol)
-                        .frame(width: 18)
-                        .foregroundStyle(
-                            candidate.rawValue <= step.rawValue ? Color.accentColor : Color.secondary
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(nsColor: OpenWhisperPalette.brandBlue)
+                                    .opacity(0.72),
+                                Color(nsColor: OpenWhisperPalette.brandBlue),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                    Text(candidate.title)
-                        .font(.system(size: 12, weight: candidate == step ? .semibold : .regular))
-                    Spacer()
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .background(candidate == step ? Color.accentColor.opacity(0.12) : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .accessibilityAddTraits(candidate == step ? [.isSelected] : [])
+                    )
+                    .frame(width: 34, height: 34)
+                    .shadow(
+                        color: Color(nsColor: OpenWhisperPalette.brandBlue).opacity(0.32),
+                        radius: 8,
+                        x: 0,
+                        y: 3
+                    )
+                Image(systemName: "waveform")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.text("Set Up OpenWhisper"))
+                    .font(OpenWhisperTypography.title())
             }
             Spacer()
-            Text(
-                L10n.text(
-                    "Microphone is required. Accessibility is optional and only enables automatic paste."
-                )
-            )
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
-        .frame(width: 190)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 
     @ViewBuilder
@@ -334,43 +350,47 @@ private struct OnboardingView: View {
     }
 
     private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 28) {
             stepTitle(
                 title: "Speak anywhere on your Mac",
                 subtitle: L10n.format(
-                    "Focus a text field, press %@ to start, then press %@ again to transcribe.",
+                    "Press %@ to start, %@ again to finish.",
                     hotkeyBinding.displayName,
                     hotkeyBinding.displayName
                 )
             )
 
-            onboardingFeature(
-                symbol: "keyboard",
-                title: "One global shortcut",
-                detail: L10n.format(
-                    "%@ starts and stops every dictation—no mode switch or floating editor.",
-                    hotkeyBinding.displayName
+            VStack(alignment: .leading, spacing: 0) {
+                onboardingFeature(
+                    symbol: "keyboard",
+                    title: "One global shortcut",
+                    detail: L10n.format(
+                        "%@ starts and stops every session.",
+                        hotkeyBinding.displayName
+                    )
                 )
-            )
-            onboardingFeature(
-                symbol: "text.badge.checkmark",
-                title: "Technical language stays intact",
-                detail: "Terminology and deterministic corrections protect product names, commands, and paths."
-            )
-            onboardingFeature(
-                symbol: "doc.on.clipboard",
-                title: "Safe paste or clipboard",
-                detail: "OpenWhisper sends paste only to a verified editable target. If insertion cannot be confirmed, your result stays in the clipboard."
-            )
-
-            Text(
-                L10n.text(
-                    "The default route uses your ChatGPT account through a private, undocumented backend. OpenWhisper is independent from OpenAI, and upstream availability or limits may change."
+                Divider()
+                    .padding(.leading, 50)
+                    .opacity(0.5)
+                onboardingFeature(
+                    symbol: "text.badge.checkmark",
+                    title: "Technical language stays intact",
+                    detail: "Terminology protects product names, commands, and paths."
                 )
+                Divider()
+                    .padding(.leading, 50)
+                    .opacity(0.5)
+                onboardingFeature(
+                    symbol: "doc.on.clipboard",
+                    title: "Safe paste or clipboard",
+                    detail: "Result goes to the focused field or stays in your clipboard."
+                )
+            }
+            .openWhisperCard(
+                padding: OpenWhisperMetrics.space20,
+                cornerRadius: OpenWhisperMetrics.radiusXL,
+                elevated: true
             )
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -391,16 +411,8 @@ private struct OnboardingView: View {
             Button(L10n.text(isConnecting ? "Waiting for Browser" : "Connect in Browser")) {
                 connect()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(OpenWhisperPrimaryButtonStyle())
             .disabled(isConnecting)
-
-            Text(
-                L10n.text(
-                    "A browser window opens for sign-in. OpenWhisper never asks for your ChatGPT password."
-                )
-            )
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
 
             statusMessage
         }
@@ -426,7 +438,7 @@ private struct OnboardingView: View {
                 Button(L10n.text("Enable Microphone")) {
                     requestMicrophone()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(OpenWhisperPrimaryButtonStyle())
                 .disabled(
                     isRequestingMicrophone
                         || permissionMonitor.snapshot.microphone == .granted
@@ -436,17 +448,9 @@ private struct OnboardingView: View {
                     Button(L10n.text("Open Microphone Settings")) {
                         _ = PermissionSettingsDestination.microphone.open()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(OpenWhisperSecondaryButtonStyle())
                 }
             }
-
-            Text(
-                L10n.text(
-                    "OpenWhisper requests permission only after you click Enable Microphone. Successful recordings are deleted after processing."
-                )
-            )
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
 
             statusMessage
         }
@@ -471,8 +475,8 @@ private struct OnboardingView: View {
                     ? "Automatic paste is ready"
                     : "Clipboard Mode is ready",
                 detail: permissionMonitor.snapshot.accessibilityTrusted
-                    ? "OpenWhisper can send paste to the focused editable field and verify insertion when the app exposes text through Accessibility."
-                    : "Accessibility is optional. Without it, the transcript remains in your clipboard for Command-V.",
+                    ? "Text lands directly in the focused field."
+                    : "Transcript is copied to clipboard — press ⌘V to paste.",
                 ready: true
             )
 
@@ -480,30 +484,34 @@ private struct OnboardingView: View {
                 Button(L10n.text("Enable Automatic Paste")) {
                     AccessibilityPermission.guideAccess()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(OpenWhisperSecondaryButtonStyle())
             }
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $practiceText)
-                    .font(.system(size: 13))
-                    .padding(6)
+                    .font(OpenWhisperTypography.body())
+                    .padding(8)
                     .accessibilityLabel(L10n.text("Dictation practice field"))
-                if practiceText.isEmpty {
-                    Text(L10n.text("Your first transcript will appear here—or remain in the clipboard."))
-                        .font(.system(size: 13))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 14)
-                        .allowsHitTesting(false)
-                }
             }
-            .frame(minHeight: 125)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            .frame(minHeight: 132)
+            .background(
+                Color(nsColor: .textBackgroundColor),
+                in: RoundedRectangle(
+                    cornerRadius: OpenWhisperMetrics.radiusL,
+                    style: .continuous
+                )
             )
+            .overlay(
+                RoundedRectangle(
+                    cornerRadius: OpenWhisperMetrics.radiusL,
+                    style: .continuous
+                )
+                .stroke(
+                    Color(nsColor: OpenWhisperPalette.hairline),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
         }
     }
 
@@ -512,8 +520,16 @@ private struct OnboardingView: View {
             if step != .welcome {
                 Button(L10n.text("Back")) {
                     message = nil
-                    step = OnboardingStep(rawValue: step.rawValue - 1) ?? .welcome
+                    stepForward = false
+                    withAnimation(
+                        reduceMotion
+                            ? .easeOut(duration: 0.15)
+                            : OpenWhisperMotion.stepSpring
+                    ) {
+                        step = OnboardingStep(rawValue: step.rawValue - 1) ?? .welcome
+                    }
                 }
+                .buttonStyle(OpenWhisperQuietButtonStyle())
             }
             Spacer()
             if step == .practice {
@@ -521,21 +537,42 @@ private struct OnboardingView: View {
                     onStepCompleted(.practice)
                     onComplete()
                 }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(OpenWhisperPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             } else {
                 Button(L10n.text("Continue")) {
                     message = nil
                     onStepCompleted(step)
-                    step = OnboardingStep(rawValue: step.rawValue + 1) ?? .practice
+                    stepForward = true
+                    withAnimation(
+                        reduceMotion
+                            ? .easeOut(duration: 0.15)
+                            : OpenWhisperMotion.stepSpring
+                    ) {
+                        step = OnboardingStep(rawValue: step.rawValue + 1) ?? .practice
+                    }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(OpenWhisperPrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canContinue)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .modifier(OnboardingNavBarGlassContainer())
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .background {
+            if #available(macOS 26, *) {
+                Rectangle()
+                    .fill(.separator.opacity(0.4))
+                    .frame(height: 0.5)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Color.clear
+                    .overlay(alignment: .top) {
+                        Divider().opacity(0.55)
+                    }
+            }
+        }
     }
 
     private var canContinue: Bool {
@@ -587,14 +624,10 @@ private struct OnboardingView: View {
     }
 
     private func stepTitle(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.text(title))
-                .font(.system(size: 25, weight: .semibold))
-            Text(L10n.text(subtitle))
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(L10n.text(title))
+            .font(OpenWhisperTypography.display())
+            .tracking(-0.4)
+            .accessibilityHint(L10n.text(subtitle))
     }
 
     private func onboardingFeature(
@@ -602,20 +635,23 @@ private struct OnboardingView: View {
         title: String,
         detail: String
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 18))
-                .foregroundStyle(.tint)
-                .frame(width: 24)
+        HStack(alignment: .top, spacing: 14) {
+            OpenWhisperIconWell(
+                systemName: symbol,
+                size: 24,
+                symbolSize: 12.5,
+                tint: Color(nsColor: OpenWhisperPalette.brandBlue),
+                fillOpacity: 0.12
+            )
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(L10n.text(title))
-                    .font(.system(size: 13, weight: .semibold))
-                Text(L10n.text(detail))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(OpenWhisperTypography.headline())
+                    .accessibilityHint(L10n.text(detail))
             }
         }
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func statusPanel(
@@ -624,24 +660,29 @@ private struct OnboardingView: View {
         detail: String,
         ready: Bool
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 20))
-                .foregroundStyle(ready ? .green : .orange)
-                .frame(width: 24)
+        HStack(alignment: .top, spacing: 14) {
+            OpenWhisperIconWell(
+                systemName: symbol,
+                size: 36,
+                symbolSize: 15,
+                tint: ready
+                    ? Color(nsColor: OpenWhisperPalette.success)
+                    : Color(nsColor: OpenWhisperPalette.amber),
+                fillOpacity: 0.14
+            )
             VStack(alignment: .leading, spacing: 4) {
                 Text(L10n.text(title))
-                    .font(.system(size: 13, weight: .semibold))
-                Text(L10n.text(detail))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .font(OpenWhisperTypography.headline())
+                    .accessibilityHint(L10n.text(detail))
             }
             Spacer()
         }
-        .padding(14)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(OpenWhisperMetrics.space16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: OpenWhisperMetrics.radiusL, style: .continuous)
+                .fill(Color(nsColor: OpenWhisperPalette.elevatedSurface))
+        )
     }
 
     private func connect() {
@@ -694,6 +735,19 @@ private struct OnboardingView: View {
                 message = error.localizedDescription
                 messageIsError = true
             }
+        }
+    }
+}
+
+/// Wraps navigation bar buttons in GlassEffectContainer on macOS 26 so that
+/// the Back and Continue glass buttons share one rendering context and can
+/// correctly sample each other. No-op on older systems.
+private struct OnboardingNavBarGlassContainer: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            GlassEffectContainer { content }
+        } else {
+            content
         }
     }
 }

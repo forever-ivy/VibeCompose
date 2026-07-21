@@ -1,13 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "template",
-  "measuredAt": "2026-07-14T00:00:00Z",
-  "participants": 30,
-  "firstSuccessRate": 0.95,
-  "retrySuccessRate": 0.99,
-  "crashFreeSessionRate": 0.995,
-  "wrongTargetPasteCount": 0,
+  "reviewedAt": "2026-07-18T00:00:00Z",
+  "reviewer": "REPLACE WITH PRODUCT OWNER",
+  "productVersion": "0.1.0",
+  "communityPilotSummarySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "fourCompleteWeeks": false,
+  "manualReview": {
+    "coreScenarioSampleSufficiency": false,
+    "w4SkillConcentrationReviewed": false,
+    "uninstallAndDisableReasonsReviewed": false,
+    "interviewInterpretationReviewed": false,
+    "noUnresolvedCriticalIncidents": false
+  },
   "openP0Blockers": 0,
   "openP1Blockers": 0,
-  "evidenceLocation": "REPLACE WITH REVIEWABLE AGGREGATE BETA REPORT"
+  "decision": "blocked",
+  "evidenceReference": "REPLACE WITH RESTRICTED STUDY REVIEW REFERENCE"
 }

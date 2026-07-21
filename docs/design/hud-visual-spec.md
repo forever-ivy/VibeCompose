@@ -1,31 +1,38 @@
 # OpenWhisper HUD Visual Spec
 
-This spec mirrors the HUD implementation currently shipped in `dist/OpenWhisper.app` and is intended to be copied into the Figma `HUD` board once the Starter-plan MCP limit resets.
+This spec mirrors the HUD implementation built from source. Installed-product
+acceptance remains authoritative.
 
 ## Core Shell
 
-- Container: one integrated graphite dictation indicator
-- Position: top center of the active display, `16pt` below its visible top edge
-- Recording / processing / success size: `284 x 44`
-- Error / retryable error size: `320 x 56`
-- Corner radius: `16`
-- Border: `1px`, mist at `8%` opacity
-- Shadow: short, low-contrast black shadow
+- Container: one integrated, restrained AppKit dictation HUD
+- Position: top center of the active display; the visible surface begins
+  `16pt` below its visible top edge
+- Visible surface in every state: `388 x 56`
+- Transparent panel capture bounds, including the shadow margin: `408 x 76`
+- Corner radius: `18`, using a continuous rounded rectangle rather than a pill
+- Material: adaptive AppKit `NSVisualEffectView.Material.popover`
+- Window composition: a transparent `NSPanel` hosts one inset material view;
+  a separate rounded shadow layer follows exactly the material silhouette
+- No `NSGlassEffectView`, painted gradient, neon outline, forced dark appearance,
+  or rectangular `NSPanel` shadow
+- Appearance: native light/dark adaptation through semantic AppKit colors
 - Layout:
-- horizontal padding: `10`
-- vertical padding: `8`
-- leading visual width: `54`
-- leading visual height: `20`
-- text gap: `7`
-- trailing timer reserve: `34`
-- inline cancel control: `14 x 14`
-- cancel control spacing from timer: `5`
+- horizontal padding: `16`
+- vertical padding: `10`
+- leading visual width: `44`
+- leading visual height: `22`
+- text gap: `12`
+- trailing timer reserve: `38`
+- inline cancel control: `22 x 22`
+- cancel control spacing from timer: `8`
 
 ## Color Tokens
 
-- Graphite: `#171C26` at `96%` opacity
-- Mist: `#F0F5FB`
-- Mist Muted: `#C7D1E0`
+- Primary HUD text: semantic `NSColor.labelColor`
+- Secondary HUD text: semantic `NSColor.secondaryLabelColor`
+- Surface: system popover material with a subtle adaptive control-background wash
+- Edge: semantic label color at low opacity; strengthened by Increase Contrast
 - Ice Blue: `#7AC7FF`
 - Success: `#59D69E`
 - Amber: `#FFBF52`
@@ -36,15 +43,11 @@ This spec mirrors the HUD implementation currently shipped in `dist/OpenWhisper.
 - Title:
   - size: `13`
   - weight: semibold
-  - color: Mist
-- Detail:
-  - size: `11`
-  - weight: medium
-  - color: Mist Muted
+- color: semantic primary label
 - Timer:
   - size: `11`
   - weight: medium
-  - color: Mist Muted at roughly `76%` opacity
+- color: semantic secondary label at roughly `68%` opacity
   - uses monospaced digits
 
 ## Recording
@@ -95,11 +98,11 @@ Reference frames:
 
 ## Success
 
-- Title: `Pasted`
+- Title: `Inserted` or `Paste sent`, matching the verified delivery outcome
 - No cancel affordance in this state
-- Leading visual: rounded badge inside the same unified indicator shell
-- Badge size: `54 x 30`
-- Badge radius: `18`
+- Leading visual: rounded-square status tile inside the same unified shell
+- Badge size: `30 x 30`
+- Badge radius: `9`
 - Fill: Success at low opacity
 - Border: Success at medium opacity
 - Icon: checkmark
@@ -116,8 +119,9 @@ Reference frames:
 ## Error
 
 - Title: `Error`
+- Visible copy remains one line; the diagnostic detail is not rendered as a
+  subtitle (it remains available to the VoiceOver announcement)
 - No cancel affordance in this state
-- Detail text is visible
 - Ordinary errors remain visible for at least `5 seconds`
 - Retryable errors remain visible until Retry or a new dictation
 - Leading visual: same badge container as success/copy, inside the same integrated shell
@@ -131,16 +135,16 @@ When the MCP quota resets, the `HUD` board in Figma should contain:
 
 1. Heading block
    - eyebrow: `HUD STATES`
-   - title: `Nine-bar rhythm inside the same graphite pill`
+   - title: `Nine-bar rhythm inside one native AppKit HUD`
    - subtitle explaining shared skeleton + traveling processing ridge
 
 2. Top row
-   - `Recording` card with one HUD pill
+   - `Recording` card with one HUD surface
    - `Processing` card with three stacked reference frames
 
 3. Bottom row
    - `Completion States` card with `Pasted` and `Copied`
-   - `Error` card with one error pill
+   - `Error` card with one error surface
 
 4. Rules block
   - 9 bars, never return to the older dense 12/16-bar block

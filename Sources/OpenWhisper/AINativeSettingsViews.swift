@@ -43,13 +43,6 @@ struct StyleCapsuleSettingsView:
                             weight: .semibold
                         )
                     )
-                    Text(
-                        L10n.text(
-                            "A Capsule is an editable writing-style description, never a fact source. OpenWhisper does not scan mail, messages, or documents to create one."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Toggle(
@@ -783,13 +776,6 @@ struct TerminologyPackSettingsView:
                         weight: .semibold
                     )
                 )
-                Text(
-                    L10n.text(
-                        "Domain Packs add deterministic spelling guidance. Personal corrections win over Skill terms, personal terms, and Domain Packs."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
             }
 
             ForEach(
@@ -831,13 +817,7 @@ struct TerminologyPackSettingsView:
                             )
                         )
                         Spacer()
-                        Text(
-                            L10n.text(
-                                pack.risk
-                                    .rawValue
-                                    .capitalized
-                            )
-                        )
+                        Text(pack.risk.localizedLabel)
                         .font(
                             .system(
                                 size: 9,
@@ -935,11 +915,27 @@ struct TerminologyPackSettingsView:
 struct CommunitySkillSettingsView:
     View
 {
+    private struct ImportTestInput {
+        let transcript: String
+        let selection: String
+        let style: String
+        let terminology: String
+    }
+
+    private enum ImportReviewDecision {
+        case test(ImportTestInput)
+        case install
+        case cancel
+    }
+
     @Binding var config: AppConfig
     @Binding var inventory:
         CommunitySkillInventory
     let store: SkillPackageStore
     let localAssetAccessEnabled: Bool
+    let onRunTest:
+        (SkillTestRunRequest) async
+            -> Result<SkillTestRunResult, any Error>
 
     @State private var selectedPackageID:
         String?
@@ -948,6 +944,9 @@ struct CommunitySkillSettingsView:
         false
     @State private var goldenTestMessage:
         String?
+    @State private var searchText = ""
+    @State private var inspectorExpanded = false
+    @State private var isRunningImportTest = false
 
     var body: some View {
         VStack(
@@ -961,7 +960,7 @@ struct CommunitySkillSettingsView:
                 ) {
                     Text(
                         L10n.text(
-                            "Local Community Skills"
+                            "Skills Library"
                         )
                     )
                     .font(
@@ -970,13 +969,6 @@ struct CommunitySkillSettingsView:
                             weight: .semibold
                         )
                     )
-                    Text(
-                        L10n.text(
-                            "Community Skill v1 is declarative only: no Swift, JavaScript, Python, Shell, dynamic libraries, processes, custom network requests, Keychain access, or external actions."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button(
@@ -991,22 +983,38 @@ struct CommunitySkillSettingsView:
                 )
                 .disabled(
                     !localAssetAccessEnabled
+                        || isRunningImportTest
                 )
             }
 
-            if activePackages.isEmpty {
-                Text(
-                    L10n.text(
-                        "No community Skills installed. Built-in Skills remain available."
-                    )
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField(
+                    L10n.text("Search installed Skills"),
+                    text: $searchText
                 )
-                .font(.system(size: 11))
+                .textFieldStyle(.plain)
+                Spacer()
+                Text(L10n.format(
+                    "%ld installed · %ld favorites",
+                    displayPackages.count,
+                    config.skillEcosystem.favoriteInstallationIDs.count
+                ))
+                .font(.system(size: 10))
                 .foregroundStyle(.secondary)
-                .padding(.vertical, 4)
-            } else {
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(
+                Color(nsColor: .textBackgroundColor),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+
+            if !displayPackages.isEmpty {
                 VStack(spacing: 6) {
                     ForEach(
-                        activePackages
+                        displayPackages
                     ) { package in
                         communitySkillRow(
                             package
@@ -1016,11 +1024,12 @@ struct CommunitySkillSettingsView:
             }
 
             if let selectedPackage {
+                installedSkillSummary(selectedPackage)
                 DisclosureGroup(
                     L10n.text(
-                        "Skill Inspector"
+                        "Advanced Inspector"
                     ),
-                    isExpanded: .constant(true)
+                    isExpanded: $inspectorExpanded
                 ) {
                     inspector(
                         selectedPackage
@@ -1095,17 +1104,55 @@ struct CommunitySkillSettingsView:
             .filter(\.isActive)
     }
 
+    private var displayPackages:
+        [CommunitySkillPackage]
+    {
+        let grouped = Dictionary(
+            grouping: inventory.packages,
+            by: { $0.definition.id }
+        )
+        let packages = grouped.values.compactMap { versions in
+            versions.first(where: \.isActive)
+                ?? versions.first
+        }
+        let query = searchText.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: .current
+        )
+        return packages.filter { package in
+            guard !query.isEmpty else { return true }
+            return [
+                package.definition.name,
+                package.definition.id,
+                package.definition.author,
+                package.format.rawValue,
+            ].joined(separator: " ")
+                .folding(
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    locale: .current
+                )
+                .contains(query)
+        }.sorted {
+            $0.definition.localizedName
+                .localizedStandardCompare(
+                    $1.definition.localizedName
+                ) == .orderedAscending
+        }
+    }
+
     private var selectedPackage:
         CommunitySkillPackage?
     {
         if let selectedPackageID {
-            return inventory.packages
+            return displayPackages
                 .first {
                     $0.id
                         == selectedPackageID
                 }
         }
-        return activePackages.first
+        return displayPackages.first
     }
 
     private func versions(
@@ -1122,7 +1169,32 @@ struct CommunitySkillSettingsView:
         _ package:
             CommunitySkillPackage
     ) -> some View {
-        HStack(spacing: 9) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 9) {
+                communitySkillControls(package)
+            }
+            VStack(alignment: .leading, spacing: 9) {
+                communitySkillControls(package)
+            }
+        }
+        .padding(9)
+        .background(
+            Color(
+                nsColor:
+                    .textBackgroundColor
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 8
+            )
+        )
+    }
+
+    @ViewBuilder
+    private func communitySkillControls(
+        _ package: CommunitySkillPackage
+    ) -> some View {
             Toggle(
                 package.definition
                     .localizedName,
@@ -1156,6 +1228,11 @@ struct CommunitySkillSettingsView:
             .frame(
                 maxWidth: .infinity,
                 alignment: .leading
+            )
+            .disabled(
+                package.compatibility
+                    .runtimeStatus
+                    != .compatible
             )
 
             Picker(
@@ -1197,15 +1274,35 @@ struct CommunitySkillSettingsView:
                 }
             }
             .labelsHidden()
-            .frame(width: 105)
+            .pickerStyle(.menu)
+            .frame(
+                minWidth: 90,
+                idealWidth: 115,
+                maxWidth: 150
+            )
 
             Button(
                 L10n.text("Inspect")
             ) {
                 selectedPackageID =
                     package.id
+                inspectorExpanded = true
             }
             .buttonStyle(.bordered)
+
+            Button {
+                toggleFavorite(package)
+            } label: {
+                Image(systemName:
+                    config.skillEcosystem
+                        .favoriteInstallationIDs
+                        .contains(package.installation.id)
+                    ? "star.fill"
+                    : "star"
+                )
+            }
+            .buttonStyle(.bordered)
+            .help(L10n.text("Favorite"))
 
             Button(
                 L10n.text("Uninstall"),
@@ -1223,18 +1320,48 @@ struct CommunitySkillSettingsView:
             .disabled(
                 !localAssetAccessEnabled
             )
+    }
+
+    @ViewBuilder
+    private func installedSkillSummary(
+        _ package: CommunitySkillPackage
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(
+                package.agentPackage?.metadata.description
+                    ?? package.definition.localizedSummary
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 14) {
+                Label(
+                    L10n.format(
+                        "Required: %@",
+                        package.profile.contextRequest.required.isEmpty
+                            ? L10n.text("None")
+                            : package.profile.contextRequest.required
+                                .map(\.title)
+                                .joined(separator: ", ")
+                    ),
+                    systemImage: "checkmark.shield"
+                )
+                Label(
+                    L10n.format(
+                        "%@ · %@ · %@ risk",
+                        package.profile.output.format.localizedLabel,
+                        package.profile.output.delivery.localizedLabel,
+                        package.profile.risk.localizedLabel
+                    ),
+                    systemImage: "arrow.right.doc.on.clipboard"
+                )
+            }
+            .font(.system(size: 10, weight: .medium))
         }
-        .padding(9)
+        .padding(10)
         .background(
-            Color(
-                nsColor:
-                    .textBackgroundColor
-            )
-        )
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 8
-            )
+            Color(nsColor: .controlBackgroundColor).opacity(0.5),
+            in: RoundedRectangle(cornerRadius: 8)
         )
     }
 
@@ -1247,6 +1374,18 @@ struct CommunitySkillSettingsView:
             alignment: .leading,
             spacing: 6
         ) {
+            inspectorLine(
+                "Format",
+                package.format.rawValue
+            )
+            inspectorLine(
+                "Compatibility",
+                "\(package.compatibility.level.rawValue) · \(package.compatibility.runtimeStatus.rawValue)"
+            )
+            inspectorLine(
+                "Installation ID",
+                package.installation.id.uuidString
+            )
             inspectorLine(
                 "ID",
                 package.definition.id
@@ -1294,14 +1433,21 @@ struct CommunitySkillSettingsView:
                 "SHA-256",
                 package.contentSHA256
             )
-            Text(
-                L10n.text(
-                    "Runtime order: fixed OpenWhisper safety shell → output contract → untrusted Skill prompt → optional Style Capsule → terminology → authorized context → transcript. The package cannot move ahead of the safety shell."
+            if !package.compatibility.issues.isEmpty {
+                InlineStatus(
+                    text: package.compatibility.issues.joined(separator: " · "),
+                    kind: .error
                 )
-            )
-            .font(.system(size: 10))
-            .foregroundStyle(.secondary)
-
+            }
+            if !package.compatibility.quarantinedResources.isEmpty {
+                InlineStatus(
+                    text: L10n.format(
+                        "%ld resources quarantined and hidden from runtime.",
+                        package.compatibility.quarantinedResources.count
+                    ),
+                    kind: .warning
+                )
+            }
             HStack {
                 Button(
                     L10n.text(
@@ -1313,6 +1459,11 @@ struct CommunitySkillSettingsView:
                     )
                 }
                 .buttonStyle(.bordered)
+                Button(L10n.text("Fork as Standard Skill…")) {
+                    forkPackage(package)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!localAssetAccessEnabled)
                 if let goldenTestMessage {
                     Text(
                         goldenTestMessage
@@ -1446,7 +1597,7 @@ struct CommunitySkillSettingsView:
             "Import OpenWhisper Skill"
         )
         panel.message = L10n.text(
-            "Choose a local .openwhisperskill directory. OpenWhisper validates every file before copying it into its private Skills directory."
+            "Choose a standard Agent Skills directory containing SKILL.md, or a legacy .openwhisperskill v1 directory. Every file is scanned before it is copied into OpenWhisper's private Skills directory."
         )
         panel.prompt = L10n.text("Review")
         guard
@@ -1460,15 +1611,40 @@ struct CommunitySkillSettingsView:
                 try store.inspect(
                     packageURL: url
                 )
-            guard
-                review(inspected)
-            else {
-                return
-            }
-            let installed =
-                try store.install(
-                    from: url
+            switch review(inspected) {
+            case .test(let input):
+                runImportTest(
+                    package: inspected,
+                    sourceURL: url,
+                    input: input
                 )
+            case .install:
+                installReviewedSkill(
+                    from: url,
+                    inspected: inspected
+                )
+            case .cancel:
+                break
+            }
+        } catch {
+            message = error.localizedDescription
+            messageIsError = true
+            NSSound.beep()
+        }
+    }
+
+    private func installReviewedSkill(
+        from sourceURL: URL,
+        inspected: CommunitySkillPackage
+    ) {
+        do {
+            let previous = activePackages.first {
+                $0.definition.id
+                    == inspected.definition.id
+            }
+            let installed = try store.install(
+                from: sourceURL
+            )
             config.communitySkills
                 .setActiveVersion(
                     installed.definition
@@ -1479,11 +1655,17 @@ struct CommunitySkillSettingsView:
                 )
             config.transcription.skills
                 .setEnabled(
-                    true,
+                    installed.compatibility
+                        .runtimeStatus
+                        == .compatible,
                     skillID:
                         installed.definition
                             .id
                 )
+            resetExpandedContextPermissions(
+                previous: previous,
+                installed: installed
+            )
             refresh()
             selectedPackageID =
                 installed.id
@@ -1495,10 +1677,114 @@ struct CommunitySkillSettingsView:
             )
             messageIsError = false
         } catch {
-            message =
-                error.localizedDescription
+            message = error.localizedDescription
             messageIsError = true
             NSSound.beep()
+        }
+    }
+
+    private func runImportTest(
+        package: CommunitySkillPackage,
+        sourceURL: URL,
+        input: ImportTestInput
+    ) {
+        let transcript = input.transcript
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+        guard !transcript.isEmpty else {
+            message = SkillTestRunError.emptyInput.localizedDescription
+            messageIsError = true
+            NSSound.beep()
+            return
+        }
+        let selection = input.selection
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+        let style = input.style.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        let terminology = input.terminology
+            .components(
+                separatedBy: CharacterSet(
+                    charactersIn: ",;\n"
+                )
+            )
+            .map {
+                $0.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+            }
+            .filter { !$0.isEmpty }
+            .prefix(80)
+            .map {
+                TerminologyEntry(
+                    canonical: $0,
+                    aliases: [],
+                    source: "install-test-run"
+                )
+            }
+        let plan = ResolvedSkillExecutionPlan(
+            skill: package.definition,
+            source: .manual,
+            matchedApplicationRuleID: nil,
+            installation: package.installation,
+            package: package.agentPackage,
+            profile: package.profile,
+            resources: package.resolvedResources
+        )
+        isRunningImportTest = true
+        message = L10n.text(
+            "Running a real installation test…"
+        )
+        messageIsError = false
+        Task { @MainActor in
+            let result = await onRunTest(
+                SkillTestRunRequest(
+                    plan: plan,
+                    inputText: transcript,
+                    context: SkillPromptContext(
+                        styleCapsule:
+                            style.isEmpty ? nil : style,
+                        selection:
+                            selection.isEmpty ? nil : selection
+                    ),
+                    terminologyEntries: terminology
+                )
+            )
+            isRunningImportTest = false
+            switch result {
+            case .success(let result):
+                guard !result.wasCancelled else {
+                    message = L10n.text(
+                        "Installation test cancelled; the Skill was not installed."
+                    )
+                    messageIsError = false
+                    return
+                }
+                message = result.validation.isValid
+                    ? L10n.text(
+                        "Installation test passed. Review the result before installing."
+                    )
+                    : L10n.text(
+                        "Installation test finished with Validator issues."
+                    )
+                messageIsError = !result.validation.isValid
+                if confirmInstallAfterTest(
+                    package: package,
+                    result: result
+                ) {
+                    installReviewedSkill(
+                        from: sourceURL,
+                        inspected: package
+                    )
+                }
+            case .failure(let error):
+                message = error.localizedDescription
+                messageIsError = true
+                NSSound.beep()
+            }
         }
     }
 
@@ -1547,7 +1833,7 @@ struct CommunitySkillSettingsView:
     private func review(
         _ package:
             CommunitySkillPackage
-    ) -> Bool {
+    ) -> ImportReviewDecision {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = L10n.format(
@@ -1555,28 +1841,83 @@ struct CommunitySkillSettingsView:
             package.definition.name,
             package.definition.version
         )
-        let capabilities =
-            (
-                package.definition
-                    .requiredCapabilities
-                + package.definition
-                    .optionalCapabilities
-            )
-            .map(\.rawValue)
+        let required = package.profile.contextRequest.required
+            .map(\.title)
             .joined(separator: ", ")
+        let optional = package.profile.contextRequest.optional
+            .map(\.title)
+            .joined(separator: ", ")
+        let purpose = package.agentPackage?.metadata.description
+            ?? package.definition.localizedSummary
+        let upgradeLines = upgradeReviewLines(for: package)
         alert.informativeText =
             """
+            \(L10n.text("Purpose")): \(purpose)
             \(L10n.text("Author")): \(package.definition.author)
-            \(L10n.text("Permissions")): \(capabilities)
-            \(L10n.text("Output")): \(package.definition.output.format.rawValue) / \(package.definition.output.delivery.rawValue) / \(package.definition.output.risk.rawValue)
-            \(L10n.text("Files")): \(package.relativeFiles.count)
-            SHA-256: \(package.contentSHA256)
+            \(L10n.text("Required")): \(required.isEmpty ? L10n.text("None") : required)
+            \(L10n.text("Optional")): \(optional.isEmpty ? L10n.text("None") : optional)
+            \(L10n.text("Output")): \(package.definition.output.format.localizedLabel) / \(package.definition.output.delivery.localizedLabel) / \(package.definition.output.risk.localizedLabel)
+            \(L10n.text("Compatibility")): \(package.compatibility.level.rawValue) / \(package.compatibility.runtimeStatus.rawValue)
+            \(upgradeLines)
 
-            \(L10n.text("This package is declarative and cannot execute code, start processes, read arbitrary files or Keychain, make custom network requests, change providers, bypass sensitive-app policy, or perform external actions."))
+            \(L10n.text("Scripts and vendor extensions are preserved in quarantine but never exposed to the model or executed. Tool-dependent Skills can be installed for inspection but cannot be enabled."))
             """
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 5
+        stack.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: 480,
+            height: 190
+        )
+        let transcriptField = NSTextField()
+        let selectionField = NSTextField()
+        let styleField = NSTextField()
+        let terminologyField = NSTextField()
+        func addInput(
+            title: String,
+            placeholder: String,
+            field: NSTextField
+        ) {
+            let label = NSTextField(labelWithString: L10n.text(title))
+            label.font = .systemFont(ofSize: 10, weight: .semibold)
+            field.placeholderString = L10n.text(placeholder)
+            field.frame.size.width = 480
+            field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            stack.addArrangedSubview(label)
+            stack.addArrangedSubview(field)
+        }
+        addInput(
+            title: "Test input",
+            placeholder: "Type a temporary sample to transform",
+            field: transcriptField
+        )
+        addInput(
+            title: "Simulated selection (optional)",
+            placeholder: "Text this Skill may rewrite or answer",
+            field: selectionField
+        )
+        addInput(
+            title: "Simulated style (optional)",
+            placeholder: "For example: concise and friendly",
+            field: styleField
+        )
+        addInput(
+            title: "Simulated terminology (optional)",
+            placeholder: "Comma-separated terms",
+            field: terminologyField
+        )
+        alert.accessoryView = stack
         alert.addButton(
             withTitle:
-                L10n.text("Install")
+                L10n.text("Test Run")
+        )
+        alert.addButton(
+            withTitle:
+                L10n.text("Install without Test")
         )
         alert.addButton(
             withTitle:
@@ -1585,8 +1926,150 @@ struct CommunitySkillSettingsView:
         NSApplication.shared.activate(
             ignoringOtherApps: true
         )
-        return alert.runModal()
-            == .alertFirstButtonReturn
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return .test(
+                ImportTestInput(
+                    transcript: transcriptField.stringValue,
+                    selection: selectionField.stringValue,
+                    style: styleField.stringValue,
+                    terminology: terminologyField.stringValue
+                )
+            )
+        case .alertSecondButtonReturn:
+            return .install
+        default:
+            return .cancel
+        }
+    }
+
+    private func confirmInstallAfterTest(
+        package: CommunitySkillPackage,
+        result: SkillTestRunResult
+    ) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = result.validation.isValid
+            ? .informational
+            : .warning
+        alert.messageText = result.validation.isValid
+            ? L10n.text("Test passed. Install this Skill?")
+            : L10n.text(
+                "The test has Validator issues. Install for inspection anyway?"
+            )
+        let issues = result.validation.issues
+            .map { $0.code.rawValue }
+            .joined(separator: ", ")
+        alert.informativeText = [
+            L10n.format(
+                "Skill: %@ %@",
+                package.definition.localizedName,
+                package.definition.version
+            ),
+            result.wasEdited
+                ? L10n.text("You edited the Provider result in Preview.")
+                : L10n.text("You reviewed the Provider result in Preview."),
+            issues.isEmpty
+                ? L10n.text("Validator passed")
+                : L10n.format("Validator failed: %@", issues),
+        ].joined(separator: "\n")
+        alert.addButton(withTitle: L10n.text("Install"))
+        alert.addButton(withTitle: L10n.text("Cancel"))
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func upgradeReviewLines(
+        for package: CommunitySkillPackage
+    ) -> String {
+        guard let previous = activePackages.first(where: {
+            $0.definition.id == package.definition.id
+        }) else {
+            return L10n.text(
+                "New installation. No existing version will be replaced."
+            )
+        }
+        let previousRequested = Set(
+            previous.profile.contextRequest.required
+                + previous.profile.contextRequest.optional
+        )
+        let newRequired = package.profile.contextRequest.required
+            .filter { !previousRequested.contains($0) }
+            .map(\.title)
+        var lines = [
+            L10n.format(
+                "Update review: %@ → %@. The current version remains available for rollback.",
+                previous.definition.version,
+                package.definition.version
+            ),
+        ]
+        if !newRequired.isEmpty {
+            lines.append(
+                L10n.format(
+                    "New required Context: %@. OpenWhisper will ask again before use.",
+                    newRequired.joined(separator: ", ")
+                )
+            )
+        }
+        if previous.profile.output != package.profile.output {
+            lines.append(
+                L10n.text(
+                    "Output format, delivery, or risk changed; review the new policy above."
+                )
+            )
+        }
+        if previous.contentSHA256 != package.contentSHA256 {
+            lines.append(
+                L10n.text(
+                    "Instructions or packaged resources changed. Technical details remain available in Advanced Inspector."
+                )
+            )
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func resetExpandedContextPermissions(
+        previous: CommunitySkillPackage?,
+        installed: CommunitySkillPackage
+    ) {
+        let previousRequested = Set(
+            (previous?.profile.contextRequest.required ?? [])
+                + (previous?.profile.contextRequest.optional ?? [])
+        )
+        let expanded = Set(
+            installed.profile.contextRequest.required
+                + installed.profile.contextRequest.optional
+        ).subtracting(previousRequested)
+        for source in expanded {
+            guard let capability = permissionCapability(for: source) else {
+                continue
+            }
+            config.context.setScope(
+                .askEveryTime,
+                skillID: installed.definition.id,
+                capability: capability
+            )
+        }
+    }
+
+    private func permissionCapability(
+        for source: ContextSourceKind
+    ) -> SkillCapability? {
+        switch source {
+        case .voice, .activeApp, .terminology,
+             .openFile, .workspace, .editorDiagnostics,
+             .terminalSession, .browserPage:
+            return nil
+        case .selection:
+            return .selection
+        case .styleCapsule:
+            return .styleCapsule
+        case .focusedParagraph:
+            return .focusedParagraph
+        case .conversationWindow:
+            return .conversationWindow
+        case .clipboard:
+            return .clipboard
+        }
     }
 
     private func uninstall(
@@ -1625,6 +2108,52 @@ struct CommunitySkillSettingsView:
         }
     }
 
+    private func forkPackage(
+        _ package: CommunitySkillPackage
+    ) {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.title = L10n.text("Fork as Standard Skill")
+        panel.prompt = L10n.text("Export")
+        panel.nameFieldStringValue = "\(package.definition.id.split(separator: ".").last ?? "skill")-fork"
+        guard panel.runModal() == .OK, let destination = panel.url else {
+            return
+        }
+        let creator = SkillCreator(fileManager: .default)
+        let draft: SkillCreatorDraft
+        if let agentPackage = package.agentPackage {
+            draft = creator.fork(
+                package: agentPackage,
+                name: destination.lastPathComponent
+            )
+        } else {
+            draft = SkillCreatorDraft(
+                name: destination.lastPathComponent,
+                description: "Fork of \(package.definition.name)",
+                instructions: package.definition.promptInstruction,
+                license: nil,
+                version: "1.0.0",
+                author: "Local Creator",
+                profile: package.profile,
+                references: [:],
+                assets: [:],
+                goldenCasesJSONL: nil
+            )
+        }
+        do {
+            _ = try creator.export(draft, to: destination)
+            message = L10n.format(
+                "Exported standard Skill to %@.",
+                destination.lastPathComponent
+            )
+            messageIsError = false
+            NSWorkspace.shared.activateFileViewerSelecting([destination])
+        } catch {
+            message = error.localizedDescription
+            messageIsError = true
+        }
+    }
+
     private func refresh() {
         guard localAssetAccessEnabled
         else {
@@ -1645,4 +2174,18 @@ struct CommunitySkillSettingsView:
                 activePackages.first?.id
         }
     }
+
+    private func toggleFavorite(
+        _ package: CommunitySkillPackage
+    ) {
+        let id = package.installation.id
+        let wasFavorite = config.skillEcosystem
+            .favoriteInstallationIDs
+            .contains(id)
+        config.skillEcosystem.favoriteInstallationIDs.removeAll { $0 == id }
+        if !wasFavorite {
+            config.skillEcosystem.favoriteInstallationIDs.append(id)
+        }
+    }
+
 }

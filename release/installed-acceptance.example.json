@@ -1,7 +1,13 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "template",
   "installedApp": "/Applications/OpenWhisper.app",
+  "release": {
+    "version": "0.1.0",
+    "build": "1",
+    "sourceCommit": "0000000000000000000000000000000000000000",
+    "artifactSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
   "checks": {
     "installedApplicationsPath": true,
     "developerIDSignature": true,

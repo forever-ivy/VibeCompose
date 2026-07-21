@@ -14,7 +14,7 @@ Intel builds, virtual machines, modified bundles, unsigned redistributions, beta
 
 ## Support Channel
 
-Authorized private-alpha testers should use the repository issue tracker. Public commercial support must move to a permanent support address and published service scope before payment is accepted.
+Authorized private-alpha testers should use the repository issue tracker.
 
 Security vulnerabilities should follow the repository `SECURITY.md` process rather than a public bug report.
 
@@ -31,7 +31,7 @@ Never attach access tokens, refresh tokens, cookies, API keys, raw crash reports
 
 ## Priority Targets
 
-These are private-alpha response targets, not a paid SLA:
+These are private-alpha response targets, not a service-level guarantee:
 
 | Priority | Example | Initial response target |
 | --- | --- | --- |
@@ -46,10 +46,10 @@ OpenWhisper support covers the OpenWhisper app, its documented installation flow
 
 - ChatGPT or third-party account access;
 - recovery of deleted third-party data;
-- third-party endpoint uptime, pricing, rate limits, or policy decisions;
+- third-party endpoint uptime, rate limits, or policy decisions;
 - troubleshooting of unrelated macOS, network, MDM, or account-security issues;
 - transcription accuracy for every language, accent, microphone, or domain.
 
 ## Lifecycle
 
-Private alpha builds may require upgrading to the latest build before support continues. Commercial release support, minimum supported versions, security-update windows, and end-of-life periods must be published before 1.0.
+Private alpha builds may require upgrading to the latest build before support continues. Minimum supported versions, security-update windows, and end-of-life periods must be published before 1.0.

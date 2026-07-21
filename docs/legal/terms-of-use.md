@@ -45,28 +45,24 @@ Bundled third-party components remain subject to their own licenses. Their
 exact pinned versions and full notices are available in **Settings → Advanced
 → View Third-Party Licenses** and in the repository's bundled legal resources.
 
-The OpenWhisper name, logo, release signing identity, hosted services, paid modules, and commercial support are separate product assets and are not licensed merely because source code is MIT-licensed.
+The OpenWhisper name, logo, and release signing identity are separate project assets and are not licensed merely because source code is MIT-licensed.
 
 ## 6. Privacy
 
 The [Privacy Policy](privacy-policy.md) describes current local storage, third-party processing, support diagnostics, and deletion controls.
 
-## 7. Fees and Paid Features
-
-The private alpha is not a paid production service. Any future paid license, subscription, tax, renewal, device limit, or service entitlement must be shown at checkout and in the applicable order terms. Basic security fixes and data-deletion controls will not be conditioned on payment.
-
-## 8. No Warranty
+## 7. No Warranty
 
 To the maximum extent permitted by law, OpenWhisper is provided "as is" and "as available," without warranties of uninterrupted operation, transcription accuracy, fitness for a particular purpose, non-infringement, or compatibility with every app or third-party service.
 
-## 9. Limitation of Liability
+## 8. Limitation of Liability
 
 To the maximum extent permitted by law, the OpenWhisper project and its contributors will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost data, lost profits, account restrictions, failed transcription, or incorrect insertion. Rights that cannot legally be excluded remain unaffected.
 
-## 10. Suspension and Changes
+## 9. Suspension and Changes
 
-Access to an official hosted, update, support, or paid component may be limited to protect users, respond to abuse, comply with law, or mitigate a security or upstream incident. Material changes will be dated and summarized in release notes.
+Access to an official hosted, update, or support component may be limited to protect users, respond to abuse, comply with law, or mitigate a security or upstream incident. Material changes will be dated and summarized in release notes.
 
-## 11. Contact and Commercial Readiness
+## 10. Contact
 
-Private-alpha questions should use the authorized repository issue tracker. A public paid release must identify the commercial operator, permanent legal/support contacts, governing-law terms, and checkout terms before sale.
+Private-alpha questions should use the authorized repository issue tracker.

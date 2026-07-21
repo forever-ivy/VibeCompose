@@ -3,7 +3,7 @@
   "status": "blocked",
   "productName": "OpenWhisper",
   "reviewedAt": "2026-07-14T00:00:00Z",
-  "reviewer": "OpenWhisper repository productization audit",
+  "reviewer": "OpenWhisper repository naming audit",
   "checks": {
     "trademark": false,
     "domains": false,
@@ -19,5 +19,5 @@
       "detail": "An independently maintained macOS speech-to-text application already uses the same OpenWhisper name and publishes release artifacts."
     }
   ],
-  "decision": "Do not issue paid licenses, notarized stable updates, public domains, or marketplace listings under this name until the owner chooses a distinct name or obtains documented legal clearance."
+  "decision": "Do not publish notarized stable updates, public domains, or marketplace listings under this name until the owner chooses a distinct name or obtains documented legal clearance."
 }

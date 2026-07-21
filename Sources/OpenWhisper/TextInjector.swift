@@ -137,6 +137,65 @@ enum PasteVerificationResult: Sendable, Equatable {
     case targetChanged
 }
 
+enum SafeUndoFailureReason: String, Sendable, Equatable {
+    case unavailable
+    case targetChanged
+    case textChanged
+    case restoreFailed
+}
+
+enum SafeUndoOutcome: Sendable, Equatable {
+    case restored
+    case copiedOriginal(reason: SafeUndoFailureReason)
+    case unavailable
+
+    var statusDetail: String {
+        switch self {
+        case .restored:
+            return L10n.text("Last verified insertion was undone.")
+        case .copiedOriginal(let reason):
+            return L10n.format(
+                "OpenWhisper could not safely undo because %@. The original selected text was copied instead.",
+                reason.localizedLabel
+            )
+        case .unavailable:
+            return L10n.text(
+                "Safe Undo is unavailable because OpenWhisper cannot verify the last inserted result."
+            )
+        }
+    }
+}
+
+private extension SafeUndoFailureReason {
+    var localizedLabel: String {
+        switch self {
+        case .unavailable:
+            return L10n.text("the target cannot be inspected")
+        case .targetChanged:
+            return L10n.text("the focused target changed")
+        case .textChanged:
+            return L10n.text("the target text changed")
+        case .restoreFailed:
+            return L10n.text("the target rejected the exact restore")
+        }
+    }
+}
+
+enum SafeUndoVerifier {
+    static func canRestore(
+        expectedAfter: EditableTextSnapshot,
+        current: EditableTextSnapshot?,
+        targetStillMatches: Bool
+    ) -> Bool {
+        guard targetStillMatches, let current else {
+            return false
+        }
+        // Cursor movement alone is harmless. Any text change makes automatic
+        // reversal unsafe, even when the inserted substring still appears.
+        return current.value == expectedAfter.value
+    }
+}
+
 enum PasteTransitionVerifier {
     nonisolated static func result(
         before: EditableTextSnapshot?,
@@ -178,7 +237,7 @@ enum PasteTransitionVerifier {
             : .notObserved
     }
 
-    private nonisolated static func expectedSnapshot(
+    nonisolated static func expectedSnapshot(
         before: EditableTextSnapshot,
         insertedText: String
     ) -> EditableTextSnapshot? {
@@ -276,6 +335,18 @@ protocol TextInjecting: AnyObject {
         expectedSelectionContext:
             SelectionContextSnapshot?
     ) async throws -> InjectionOutcome
+
+    var hasUndoableVerifiedInsertion: Bool { get }
+
+    func undoLastVerifiedInsertion() async -> SafeUndoOutcome
+}
+
+extension TextInjecting {
+    var hasUndoableVerifiedInsertion: Bool { false }
+
+    func undoLastVerifiedInsertion() async -> SafeUndoOutcome {
+        .unavailable
+    }
 }
 
 @MainActor
@@ -287,6 +358,19 @@ final class TextInjector: TextInjecting {
     private var clipboardRestoreTask: Task<Void, Never>?
     private let pasteTargetWaiter: AsyncPasteTargetWaiter
     private let pasteVerificationWaiter: AsyncPasteVerificationWaiter
+    private var undoTransaction: VerifiedInsertionUndoTransaction?
+
+    private struct VerifiedInsertionUndoTransaction {
+        let target: FocusedAXElementReference
+        let before: EditableTextSnapshot
+        let expectedAfter: EditableTextSnapshot
+        let originalSelectedText: String
+        let launchAppContext: LaunchAppContext?
+    }
+
+    var hasUndoableVerifiedInsertion: Bool {
+        undoTransaction != nil
+    }
 
     init(
         pasteTargetWaiter: AsyncPasteTargetWaiter = .init(),
@@ -361,6 +445,7 @@ final class TextInjector: TextInjecting {
     ) async throws -> InjectionOutcome {
         clipboardRestoreTask?.cancel()
         clipboardRestoreTask = nil
+        undoTransaction = nil
 
         let accessibilityTrusted = AccessibilityPermission.isTrusted()
         if !accessibilityTrusted {
@@ -519,6 +604,41 @@ final class TextInjector: TextInjecting {
             return .pasteDispatchedClipboardRetained
         }
 
+        guard let expectedAfter = PasteTransitionVerifier
+            .expectedSnapshot(
+                before: beforeSnapshot,
+                insertedText: text
+            )
+        else {
+            return .pasteDispatchedClipboardRetained
+        }
+
+        let beforeValue = beforeSnapshot.value as NSString
+        let selectedRange = beforeSnapshot.selectedRange
+        let originalSelectedText: String
+        if selectedRange.location >= 0,
+           selectedRange.length > 0,
+           selectedRange.location <= beforeValue.length,
+           selectedRange.length
+                <= beforeValue.length - selectedRange.location
+        {
+            originalSelectedText = beforeValue.substring(
+                with: NSRange(
+                    location: selectedRange.location,
+                    length: selectedRange.length
+                )
+            )
+        } else {
+            originalSelectedText = ""
+        }
+        undoTransaction = VerifiedInsertionUndoTransaction(
+            target: targetCapture.target,
+            before: beforeSnapshot,
+            expectedAfter: expectedAfter,
+            originalSelectedText: originalSelectedText,
+            launchAppContext: launchAppContext
+        )
+
         scheduleClipboardRestore(
             snapshot: snapshot,
             pasteboard: pasteboard,
@@ -526,6 +646,76 @@ final class TextInjector: TextInjecting {
             restoreDelayMilliseconds: restoreDelayMilliseconds
         )
         return .insertedAndVerified
+    }
+
+    func undoLastVerifiedInsertion() async -> SafeUndoOutcome {
+        guard let transaction = undoTransaction else {
+            return .unavailable
+        }
+        // Undo is deliberately one-shot. A failed verification must not become
+        // an invitation to retry against a later, potentially different target.
+        undoTransaction = nil
+        clipboardRestoreTask?.cancel()
+        clipboardRestoreTask = nil
+
+        restoreLaunchAppIfNeeded(transaction.launchAppContext)
+        do {
+            guard try await waitForPasteTarget(
+                launchAppContext: transaction.launchAppContext
+            ) else {
+                return copyOriginalIfAvailable(
+                    transaction.originalSelectedText,
+                    reason: .targetChanged
+                )
+            }
+        } catch {
+            return copyOriginalIfAvailable(
+                transaction.originalSelectedText,
+                reason: .targetChanged
+            )
+        }
+
+        let result = FocusedElementInspector
+            .restoreEditableTextSnapshot(
+                transaction.before,
+                ifCurrentMatches: transaction.expectedAfter,
+                matching: transaction.target
+            )
+        switch result {
+        case .restored:
+            return .restored
+        case .targetChanged:
+            return copyOriginalIfAvailable(
+                transaction.originalSelectedText,
+                reason: .targetChanged
+            )
+        case .textChanged:
+            return copyOriginalIfAvailable(
+                transaction.originalSelectedText,
+                reason: .textChanged
+            )
+        case .unavailable:
+            return copyOriginalIfAvailable(
+                transaction.originalSelectedText,
+                reason: .unavailable
+            )
+        case .restoreFailed:
+            return copyOriginalIfAvailable(
+                transaction.originalSelectedText,
+                reason: .restoreFailed
+            )
+        }
+    }
+
+    private func copyOriginalIfAvailable(
+        _ original: String,
+        reason: SafeUndoFailureReason
+    ) -> SafeUndoOutcome {
+        guard !original.isEmpty else {
+            return .unavailable
+        }
+        copyToPasteboard(original)
+        return .copiedOriginal(reason: reason)
     }
 
     private func waitForPasteTarget(

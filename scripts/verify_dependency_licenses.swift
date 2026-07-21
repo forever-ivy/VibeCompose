@@ -24,6 +24,7 @@ struct LicenseManifest: Decodable {
 }
 
 struct LicenseEntry: Decodable {
+    let sourceKind: String?
     let identity: String
     let name: String
     let sourceURL: String
@@ -170,6 +171,10 @@ do {
     )
 
     let manifestIdentities = manifest.dependencies.map(\.identity)
+    let packageEntries = manifest.dependencies.filter {
+        $0.sourceKind != "vendored"
+    }
+    let packageIdentities = packageEntries.map(\.identity)
     let resolvedIdentities = resolved.pins.map(\.identity)
     guard Set(manifestIdentities).count == manifestIdentities.count else {
         throw VerificationError.invalidManifest(
@@ -181,11 +186,11 @@ do {
             "Package.resolved identities must be unique."
         )
     }
-    guard Set(manifestIdentities) == Set(resolvedIdentities) else {
+    guard Set(packageIdentities) == Set(resolvedIdentities) else {
         let missing = Set(resolvedIdentities)
-            .subtracting(manifestIdentities)
+            .subtracting(packageIdentities)
             .sorted()
-        let stale = Set(manifestIdentities)
+        let stale = Set(packageIdentities)
             .subtracting(resolvedIdentities)
             .sorted()
         throw VerificationError.mismatch(
@@ -223,26 +228,31 @@ do {
                 of: #"^[0-9a-f]{64}$"#,
                 options: .regularExpression
             ) != nil,
-            !entry.licenseName.isEmpty
+            !entry.licenseName.isEmpty,
+            entry.sourceKind == nil
+                || entry.sourceKind == "package"
+                || entry.sourceKind == "vendored"
         else {
             throw VerificationError.invalidManifest(
                 "Invalid dependency license entry: \(entry.identity)"
             )
         }
-        guard let pin = resolvedByIdentity[entry.identity] else {
-            throw VerificationError.mismatch(
-                "Missing resolved dependency: \(entry.identity)"
-            )
-        }
-        guard
-            entry.sourceURL == pin.location,
-            entry.revision == pin.state.revision,
-            entry.version == pin.state.version
-        else {
-            throw VerificationError.mismatch(
-                "Pinned dependency metadata does not match for "
-                    + "\(entry.identity)."
-            )
+        if entry.sourceKind != "vendored" {
+            guard let pin = resolvedByIdentity[entry.identity] else {
+                throw VerificationError.mismatch(
+                    "Missing resolved dependency: \(entry.identity)"
+                )
+            }
+            guard
+                entry.sourceURL == pin.location,
+                entry.revision == pin.state.revision,
+                entry.version == pin.state.version
+            else {
+                throw VerificationError.mismatch(
+                    "Pinned dependency metadata does not match for "
+                        + "\(entry.identity)."
+                )
+            }
         }
         guard
             entry.licenseFile.hasPrefix(
@@ -338,7 +348,9 @@ do {
 
     print(
         "Dependency license verification passed for "
-            + "\(manifest.dependencies.count) pinned packages."
+            + "\(packageEntries.count) pinned packages and "
+            + "\(manifest.dependencies.count - packageEntries.count) "
+            + "vendored sources."
     )
 } catch {
     fputs("Dependency license verification failed: \(error)\n", stderr)

@@ -1,7 +1,6 @@
 import AppKit
 import AVFoundation
 import Foundation
-import OpenWhisperLicensing
 import OSLog
 
 struct TranscriptionAttemptPolicy: Sendable, Equatable {
@@ -57,8 +56,9 @@ final class AppCoordinator {
     let softwareUpdater: any SoftwareUpdating
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
-    let licenseManager: any CommercialLicenseManaging
     let hotkeyRegistrationService: HotkeyRegistrationService
+    let skillSwitcherHotkeyRegistrationService:
+        HotkeyRegistrationService
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -86,6 +86,8 @@ final class AppCoordinator {
     var statusMenu: (any StatusMenuUpdating)?
     private var preferencesWindowController: PreferencesWindowController?
     private var historyWindowController: HistoryWindowController?
+    private var skillSwitcherWindowController:
+        SkillSwitcherWindowController?
     private var terminologyWindowController: TerminologyWindowController?
     private var terminologyQuickAddWindowController: TerminologyQuickAddWindowController?
     private var onboardingWindowController: OnboardingWindowController?
@@ -99,6 +101,11 @@ final class AppCoordinator {
     private var activeSessionID: UUID?
     private var recordingStartedAt: DispatchTime?
     private var recordingTranscriptionConfig: TranscriptionConfig?
+    private var activeSkillRun: ResolvedSkillRun?
+    private var nextRunSkillSelection =
+        NextRunSkillSelection()
+    private var latestSkillMenuSnapshot: SkillMenuSnapshot?
+    private var lastUndoHistoryRecordID: UUID?
     private var recordingPreparedContext =
         PreparedSkillContext()
     private var pendingRetry: PendingRetry?
@@ -111,6 +118,8 @@ final class AppCoordinator {
         Task<Void, Never>?
     private var previewDemoTask:
         Task<Void, Never>?
+    private var skillTestSampleRecorder:
+        (any RecordingControlling)?
 
     private struct PendingRetry {
         let id: UUID
@@ -148,6 +157,9 @@ final class AppCoordinator {
             KeychainOpenAICompatibleCredentialStore(),
         hotkeyRegistrationService: HotkeyRegistrationService =
             HotkeyRegistrationService(),
+        skillSwitcherHotkeyRegistrationService:
+            HotkeyRegistrationService =
+                HotkeyRegistrationService(),
         recorderFactory: @escaping RecorderFactory = { AudioRecorder(sampleRateHz: $0) },
         statusMenuFactory: @escaping StatusMenuFactory = {
             openHistory,
@@ -167,8 +179,6 @@ final class AppCoordinator {
         },
         softwareUpdater: (any SoftwareUpdating)? = nil,
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
-        licenseManager: any CommercialLicenseManaging =
-            StaticLicenseManager.preview,
         pipelineFactory: @escaping PipelineFactory = {
             transcriptionConfig,
             authManager,
@@ -252,6 +262,7 @@ final class AppCoordinator {
     ) {
         self.configStore = configStore
         self.config = config
+        L10n.setLanguage(config.appLanguage)
         self.notifier = notifier
         self.injector = injector
         let resolvedOverlay =
@@ -271,9 +282,10 @@ final class AppCoordinator {
         self.softwareUpdater = softwareUpdater ?? SparkleSoftwareUpdater()
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
-        self.licenseManager = licenseManager
         self.hotkeyRegistrationService =
             hotkeyRegistrationService
+        self.skillSwitcherHotkeyRegistrationService =
+            skillSwitcherHotkeyRegistrationService
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -340,8 +352,32 @@ final class AppCoordinator {
                 [weak self] in
                 self?.retryPendingTranscription()
             }
+            statusMenu?.setUndoLastInsertionHandler {
+                [weak self] in
+                self?.requestUndoLastInsertion()
+            }
+            statusMenu?.setSkillMenuActionHandler {
+                [weak self] action in
+                self?.handleSkillMenuAction(action)
+            }
+            statusMenu?.setRefreshSkillMenuHandler {
+                [weak self] in
+                self?.refreshSkillMenu()
+            }
+            statusMenu?.setOpenSkillLibraryHandler {
+                [weak self] in
+                self?.openSkillLibrary()
+            }
+            statusMenu?.setOpenSkillSwitcherHandler {
+                [weak self] in
+                self?.openSkillSwitcher()
+            }
+            statusMenu?.setSoftwareUpdateAvailable(
+                softwareUpdater.snapshot().isConfigured
+            )
             statusMenu?.setManualDictationAvailable(false)
             statusMenu?.setRetryDictationAvailable(false)
+            statusMenu?.setUndoLastInsertionAvailable(false)
 
             switch launchMode {
             case .normal,
@@ -352,11 +388,27 @@ final class AppCoordinator {
                  .onboarding,
                  .history,
                  .terminology,
-                 .quickAdd:
+                 .quickAdd,
+                 .skillLibrary,
+                 .skillSwitcher:
                 if snapshotPrivacyMode.isEnabled {
                     config = AppConfig()
+                    if let snapshotLanguage = AppLaunchMode
+                        .settingsSnapshotLanguage(
+                            environment: ProcessInfo.processInfo.environment,
+                            arguments: ProcessInfo.processInfo.arguments
+                        )
+                    {
+                        config.appLanguage = snapshotLanguage
+                    }
+                    L10n.setLanguage(config.appLanguage)
+                    statusMenu?.reloadLocalization()
                 } else {
                     config = try configStore.load()
+                    L10n.setLanguage(
+                        config.appLanguage
+                    )
+                    statusMenu?.reloadLocalization()
                     enforceStoragePolicies()
                     if launchMode == .normal {
                         recordProductMetric(event: .appLaunch)
@@ -370,6 +422,7 @@ final class AppCoordinator {
                         config.visualFeedback
                     )
                     configureDictationHotkeyAtStartup()
+                    configureSkillSwitcherHotkeyAtStartup()
                     refreshReadyState()
                     checkLaunchLoginState()
                     prewarmAuthIfNeeded()
@@ -432,7 +485,7 @@ final class AppCoordinator {
                     openHistory()
                     scheduleProductSurfaceSnapshotIfRequested(mode: .history)
                     scheduleAccessibilityAuditIfRequested(
-                        window: historyWindowController?.window,
+                        window: preferencesWindowController?.window,
                         surface: "history"
                     )
                 }
@@ -440,7 +493,7 @@ final class AppCoordinator {
                     openTerminology()
                     scheduleProductSurfaceSnapshotIfRequested(mode: .terminology)
                     scheduleAccessibilityAuditIfRequested(
-                        window: terminologyWindowController?.window,
+                        window: preferencesWindowController?.window,
                         surface: "terminology"
                     )
                 }
@@ -450,6 +503,30 @@ final class AppCoordinator {
                     scheduleAccessibilityAuditIfRequested(
                         window: terminologyQuickAddWindowController?.window,
                         surface: "quick-add"
+                    )
+                }
+                if launchMode == .skillLibrary {
+                    openSkillLibrary(
+                        section: AppLaunchMode.skillLibrarySection(
+                            arguments: ProcessInfo.processInfo.arguments
+                        )
+                    )
+                    scheduleProductSurfaceSnapshotIfRequested(
+                        mode: .skillLibrary
+                    )
+                    scheduleAccessibilityAuditIfRequested(
+                        window: preferencesWindowController?.window,
+                        surface: "skill-library-\(AppLaunchMode.skillLibrarySection(arguments: ProcessInfo.processInfo.arguments).rawValue)"
+                    )
+                }
+                if launchMode == .skillSwitcher {
+                    openSkillSwitcher()
+                    scheduleProductSurfaceSnapshotIfRequested(
+                        mode: .skillSwitcher
+                    )
+                    scheduleAccessibilityAuditIfRequested(
+                        window: skillSwitcherWindowController?.window,
+                        surface: "skill-switcher"
                     )
                 }
                 if launchMode == .normal, OnboardingStateStore().shouldPresent() {
@@ -464,6 +541,7 @@ final class AppCoordinator {
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
                     : ((try? configStore.load()) ?? config)
+                L10n.setLanguage(config.appLanguage)
                 applyVisualFeedbackLaunchOverride()
                 applyActiveDictationHotkey(
                     config.transcription.dictationHotkey
@@ -477,6 +555,7 @@ final class AppCoordinator {
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
                     : ((try? configStore.load()) ?? config)
+                L10n.setLanguage(config.appLanguage)
                 applyVisualFeedbackLaunchOverride()
                 applyActiveDictationHotkey(
                     config.transcription.dictationHotkey
@@ -563,13 +642,37 @@ final class AppCoordinator {
         )
     }
 
-    private func currentSkillRegistry()
-        -> SkillRegistry
-    {
-        skillPackageStore.registry(
-            config:
-                config.communitySkills
+    private func resolvedTranscriptionConfig(
+        for launchAppContext: LaunchAppContext?
+    ) -> TranscriptionConfig {
+        let inventory = skillPackageStore.loadInventory(
+            config: config.communitySkills
         )
+        if
+            let nextRunSkillInstallationID =
+                nextRunSkillSelection.installationID,
+            let override = inventory.executionPlan(
+                installationID:
+                    nextRunSkillInstallationID,
+                source: .nextRun
+            )
+        {
+            var resolved = config.transcription
+            resolved.skills = resolved.skills
+                .runtimeConfiguration(for: override)
+            resolved.resolvedSkillPlan = override
+            return resolved
+        }
+        var resolved = config.transcription
+            .resolvingVoiceMode(
+                for: launchAppContext,
+                registry: inventory.registry
+            )
+        if let plan = resolved.resolvedSkillPlan {
+            resolved.resolvedSkillPlan =
+                inventory.enriching(plan)
+        }
+        return resolved
     }
 
     private func applyVisualFeedbackLaunchOverride() {
@@ -595,6 +698,16 @@ final class AppCoordinator {
         { [weak self] in
             Task { @MainActor [weak self] in
                 self?.handleHotkeyPress()
+            }
+        }
+    }
+
+    private func skillSwitcherHotkeyPressHandler()
+        -> @Sendable () -> Void
+    {
+        { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.openSkillSwitcher()
             }
         }
     }
@@ -657,6 +770,43 @@ final class AppCoordinator {
         )
     }
 
+    private func configureSkillSwitcherHotkeyAtStartup() {
+        skillSwitcherHotkeyRegistrationService.stop()
+        guard let requested = config.skillSwitcherHotkey else {
+            statusMenu?.updateSkillSwitcherHotkey(nil)
+            return
+        }
+
+        do {
+            try OpenWhisperShortcutSetValidator.validate(
+                dictation: config.transcription.dictationHotkey,
+                skillSwitcher: requested
+            )
+            try skillSwitcherHotkeyRegistrationService.replace(
+                with: requested,
+                onPress: skillSwitcherHotkeyPressHandler()
+            ) {}
+            statusMenu?.updateSkillSwitcherHotkey(requested)
+        } catch {
+            logger.error(
+                "Skill Switcher shortcut registration failed: \(error.localizedDescription, privacy: .public)"
+            )
+            config.skillSwitcherHotkey = nil
+            try? configStore.save(config)
+            statusMenu?.updateSkillSwitcherHotkey(nil)
+            notifier.notify(
+                title: L10n.text(
+                    "OpenWhisper Skill Switcher shortcut unavailable"
+                ),
+                body: L10n.format(
+                    "%@ could not be registered and was disabled. %@",
+                    requested.displayName,
+                    error.localizedDescription
+                )
+            )
+        }
+    }
+
     private func applyActiveDictationHotkey(
         _ binding: HotkeyBinding
     ) {
@@ -672,11 +822,13 @@ final class AppCoordinator {
                 cancelCurrentSession()
             }
             hotkeyRegistrationService.suspend()
+            skillSwitcherHotkeyRegistrationService.suspend()
             return
         }
 
         do {
             try hotkeyRegistrationService.resume()
+            try skillSwitcherHotkeyRegistrationService.resume()
             if let activeBinding =
                 hotkeyRegistrationService
                     .activeBinding
@@ -690,6 +842,7 @@ final class AppCoordinator {
                 "Restoring the dictation shortcut after recorder capture failed: \(error.localizedDescription, privacy: .public)"
             )
             configureDictationHotkeyAtStartup()
+            configureSkillSwitcherHotkeyAtStartup()
             refreshReadyState()
         }
     }
@@ -820,11 +973,13 @@ final class AppCoordinator {
 
         state = .idle
         activeSessionID = nil
+        activeSkillRun = nil
         recordingStartedAt = nil
         recordingTranscriptionConfig = nil
         recordingPreparedContext =
             PreparedSkillContext()
         launchAppContext = nil
+        overlay.updateSkillPresentation(nil)
         overlay.hide()
         refreshReadyState()
         logger.info("Cancellation completed; state returned to idle")
@@ -832,6 +987,10 @@ final class AppCoordinator {
 
     func shutdown() {
         hotkeyRegistrationService.stop()
+        skillSwitcherHotkeyRegistrationService.stop()
+        expireUndoAvailability()
+        try? skillTestSampleRecorder?.cancelRecording()
+        skillTestSampleRecorder = nil
         visualFeedbackPreviewTask?.cancel()
         visualFeedbackPreviewTask = nil
         startRecordingTask?.cancel()
@@ -854,17 +1013,85 @@ final class AppCoordinator {
         _ = TemporaryArtifactCleanupService().cleanupOrphans()
         state = .idle
         activeSessionID = nil
+        activeSkillRun = nil
         recordingStartedAt = nil
         recordingTranscriptionConfig = nil
         recordingPreparedContext =
             PreparedSkillContext()
         launchAppContext = nil
+        overlay.updateSkillPresentation(nil)
         overlay.hide()
+    }
+
+    private func requestUndoLastInsertion() {
+        guard let recordID = lastUndoHistoryRecordID else {
+            statusMenu?.setUndoLastInsertionAvailable(false)
+            return
+        }
+        Task { @MainActor [weak self] in
+            _ = await self?.undoLastVerifiedInsertion(
+                recordID: recordID
+            )
+        }
+    }
+
+    private func undoLastVerifiedInsertion(
+        recordID: UUID
+    ) async -> SafeUndoOutcome {
+        guard state == .idle,
+              lastUndoHistoryRecordID == recordID,
+              injector.hasUndoableVerifiedInsertion
+        else {
+            try? historyRecorder.updateUndoState(
+                id: recordID,
+                state: .unavailable
+            )
+            return .unavailable
+        }
+        let outcome = await injector
+            .undoLastVerifiedInsertion()
+        let historyState: HistoryUndoState = switch outcome {
+        case .restored:
+            .restored
+        case .copiedOriginal:
+            .originalCopied
+        case .unavailable:
+            .unavailable
+        }
+        try? historyRecorder.updateUndoState(
+            id: recordID,
+            state: historyState
+        )
+        lastUndoHistoryRecordID = nil
+        statusMenu?.setUndoLastInsertionAvailable(false)
+        statusMenu?.update(
+            state: outcome == .restored ? .ready : .error,
+            detail: outcome.statusDetail
+        )
+        if outcome != .restored {
+            notifier.notify(
+                title: L10n.text("OpenWhisper Safe Undo"),
+                body: outcome.statusDetail
+            )
+        }
+        return outcome
+    }
+
+    private func expireUndoAvailability() {
+        if let recordID = lastUndoHistoryRecordID {
+            try? historyRecorder.updateUndoState(
+                id: recordID,
+                state: .unavailable
+            )
+        }
+        lastUndoHistoryRecordID = nil
+        statusMenu?.setUndoLastInsertionAvailable(false)
     }
 
     private func startRecording() {
         guard let recorder else { return }
 
+        expireUndoAvailability()
         clearPendingRetry()
         logger.info("Start recording requested from hotkey")
         let sessionID = UUID()
@@ -873,15 +1100,29 @@ final class AppCoordinator {
         launchAppContext = launchAppContextProvider()
         recordingPreparedContext =
             PreparedSkillContext()
-        recordingTranscriptionConfig = config.transcription
-            .resolvingVoiceMode(
-                for: launchAppContext,
-                voiceModesAllowed: licenseManager
-                    .snapshot()
-                    .allows(.voiceModes),
-                registry:
-                    currentSkillRegistry()
+        recordingTranscriptionConfig =
+            resolvedTranscriptionConfig(
+                for: launchAppContext
             )
+        if let plan = recordingTranscriptionConfig?
+            .resolvedSkillPlan
+        {
+            let run = ResolvedSkillRun(
+                sessionID: sessionID,
+                plan: plan,
+                launchAppContext:
+                    launchAppContext
+            )
+            activeSkillRun = run
+            overlay.updateSkillPresentation(
+                run.presentation
+            )
+            refreshSkillMenu(
+                launchAppContext:
+                    launchAppContext,
+                plan: plan
+            )
+        }
         state = .processing
         statusMenu?.update(state: .processing, detail: L10n.text("Requesting microphone"))
         overlay.showProcessing()
@@ -1024,6 +1265,13 @@ final class AppCoordinator {
                         frozenConfig
                             .resolvedStyleCapsuleID =
                             capsule.id
+                        preparedContext
+                            .appendSnapshotItem(
+                                source:
+                                    .styleCapsule,
+                                content:
+                                    capsule.promptText
+                            )
                     }
                     frozenConfig
                         .resolvedTerminologyEntries =
@@ -1040,15 +1288,128 @@ final class AppCoordinator {
                         personalization
                             .terminology
                             .maximumRisk
+                    let terminologyContext =
+                        personalization
+                            .terminology
+                            .entries
+                            .prefix(1_000)
+                            .map(\.canonical)
+                            .joined(
+                                separator: "\n"
+                            )
+                    preparedContext
+                        .appendSnapshotItem(
+                            source: .terminology,
+                            content:
+                                String(
+                                    terminologyContext
+                                        .prefix(8_000)
+                                )
+                        )
+                    preparedContext.refreshReceipt(
+                        request:
+                            resolvedPlan
+                                .profile
+                                .contextRequest
+                    )
+                    preparedContext
+                        .blockMissingRequiredSources(
+                            for:
+                                resolvedPlan
+                                    .profile
+                                    .contextRequest
+                        )
+                    preparedContext.refreshReceipt(
+                        request:
+                            resolvedPlan
+                                .profile
+                                .contextRequest
+                    )
+                    if
+                        let contextSnapshot =
+                            preparedContext
+                                .contextSnapshot
+                    {
+                        frozenConfig
+                            .resolvedSkillPlan =
+                            resolvedPlan
+                                .freezing(
+                                    contextSnapshot:
+                                        contextSnapshot
+                                )
+                    }
                     frozenConfig
                         .skillPromptContext =
                         preparedContext
                             .promptContext
                     self.recordingTranscriptionConfig =
                         frozenConfig
+                    if
+                        var run = self.activeSkillRun,
+                        let frozenPlan = frozenConfig
+                            .resolvedSkillPlan
+                    {
+                        run.plan = frozenPlan
+                        self.activeSkillRun = run
+                    }
+                }
+                if
+                    let receipt =
+                        preparedContext
+                            .contextReceipt,
+                    self.config.context
+                        .retentionPolicy
+                        == .redactedReceipts
+                {
+                    self.config.context.record(
+                        receipt: receipt
+                    )
+                    if !self.snapshotPrivacyMode.isEnabled {
+                        try? self.configStore.save(
+                            self.config
+                        )
+                    }
                 }
                 self.recordingPreparedContext =
                     preparedContext
+
+                if preparedContext.blocksExecution {
+                    let message = preparedContext.blockedMessage
+                        ?? L10n.text(
+                            "This Skill cannot run because required context is missing. Provide the context or choose another Skill."
+                        )
+                    self.logger.info(
+                        "Required Skill context blocked recording before the provider pipeline: \(message, privacy: .public)"
+                    )
+                    self.stopRecordingLevelUpdates()
+                    self.state = .idle
+                    self.activeSessionID = nil
+                    self.recordingStartedAt = nil
+                    self.recordingTranscriptionConfig = nil
+                    self.activeSkillRun = nil
+                    self.recordingPreparedContext =
+                        PreparedSkillContext()
+                    self.overlay.updateSkillPresentation(nil)
+                    self.statusMenu?.update(
+                        state: .error,
+                        detail: message
+                    )
+                    self.overlay.showError(message)
+                    self.notifier.notify(
+                        title: L10n.text("Skill needs context"),
+                        body: message
+                    )
+                    self.launchAppContext = nil
+                    self.recordProductMetric(
+                        event: .dictationFailed,
+                        provider:
+                            self.config
+                                .transcription
+                                .provider,
+                        failureCategory: .setup
+                    )
+                    return
+                }
 
                 logger.info("Runtime preflight passed; starting recording session")
                 if let audioRecorder = recorder as? AudioRecorder {
@@ -1069,6 +1430,28 @@ final class AppCoordinator {
                 logger.info("Recording session \(sessionID.uuidString, privacy: .public) started successfully")
                 self.recordingStartedAt = .now()
                 self.state = .recording
+                if let run = self.activeSkillRun {
+                    if run.plan.source == .nextRun {
+                        self.nextRunSkillSelection
+                            .consumeAfterSuccessfulRecordingStart(
+                                using: run.plan
+                            )
+                    }
+                    self.config.skillEcosystem.recordRecent(
+                        installationID:
+                            run.plan.installation.id
+                    )
+                    if !self.snapshotPrivacyMode.isEnabled {
+                        try? self.configStore.save(
+                            self.config
+                        )
+                    }
+                    self.refreshSkillMenu(
+                        launchAppContext:
+                            self.launchAppContext,
+                        plan: run.plan
+                    )
+                }
                 self.statusMenu?.update(
                     state: .recording,
                     detail: L10n.format(
@@ -1094,8 +1477,10 @@ final class AppCoordinator {
                 self.activeSessionID = nil
                 self.recordingStartedAt = nil
                 self.recordingTranscriptionConfig = nil
+                self.activeSkillRun = nil
                 self.recordingPreparedContext =
                     PreparedSkillContext()
+                self.overlay.updateSkillPresentation(nil)
                 self.refreshReadyState(detailOverride: error.localizedDescription, state: .error)
                 self.overlay.showError(error.localizedDescription)
                 self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
@@ -1140,13 +1525,8 @@ final class AppCoordinator {
             let launchAppContext = self.launchAppContext
             let transcriptionConfig =
                 recordingTranscriptionConfig
-                ?? config.transcription.resolvingVoiceMode(
-                    for: launchAppContext,
-                    voiceModesAllowed: licenseManager
-                        .snapshot()
-                        .allows(.voiceModes),
-                    registry:
-                        currentSkillRegistry()
+                ?? resolvedTranscriptionConfig(
+                    for: launchAppContext
                 )
             recordingTranscriptionConfig = nil
             let preparedContext =
@@ -1173,8 +1553,10 @@ final class AppCoordinator {
             activeSessionID = nil
             recordingStartedAt = nil
             recordingTranscriptionConfig = nil
+            activeSkillRun = nil
             recordingPreparedContext =
                 PreparedSkillContext()
+            overlay.updateSkillPresentation(nil)
             statusMenu?.update(state: .error, detail: error.localizedDescription)
             overlay.showError(error.localizedDescription)
             notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
@@ -1294,7 +1676,7 @@ final class AppCoordinator {
                                 .skills,
                         launchAppContext: nil
                     )
-                let route =
+                let baseRoute =
                     await MainActor.run {
                         self.outputRouter.route(
                             plan:
@@ -1310,6 +1692,24 @@ final class AppCoordinator {
                                     .resolvedTerminologyRisk
                         )
                     }
+                let hasSkillFallback =
+                    !prepared.metrics
+                        .skillValidationIssueCodes
+                        .isEmpty
+                    || (
+                        executionPlan.skill.id
+                            != SkillRegistry
+                                .directSkillID
+                        && prepared.metrics
+                            .textPolishAttempted
+                        && prepared.metrics
+                            .textPolishErrorMessage?
+                            .isEmpty == false
+                    )
+                let route: OutputRoute =
+                    hasSkillFallback
+                    ? .preview
+                    : baseRoute
                 var deliveryAllowsAutomaticPaste =
                     route == .automatic
                 var automaticFallbackReason:
@@ -1320,6 +1720,16 @@ final class AppCoordinator {
                             : .deliveryRequiresManualPaste
                 var expectedSelectionContext:
                     SelectionContextSnapshot?
+                var deliveredText =
+                    prepared.finalText
+                var deliveryAction =
+                    route == .automatic
+                    ? PreviewAction
+                        .pasteToTarget
+                        .rawValue
+                    : PreviewAction.copy
+                        .rawValue
+                var resultWasEdited = false
 
                 if route == .preview {
                     await MainActor.run {
@@ -1356,30 +1766,61 @@ final class AppCoordinator {
                                     contextCapabilities:
                                         preparedSkillContext
                                             .grantedCapabilities,
-                                    validationPassed:
+                                    initialValidationIssueCodes:
                                         prepared.metrics
-                                            .skillValidationIssueCodes
-                                            .isEmpty,
+                                            .skillValidationIssueCodes,
+                                    fallbackMessage:
+                                        hasSkillFallback
+                                        ? prepared.metrics
+                                            .textPolishErrorMessage
+                                        : nil,
                                     allowsSelectionReplacement:
                                         preparedSkillContext
                                             .selectionSnapshot
                                             != nil
+                                            && automaticPasteAllowed,
+                                    allowsPasteToTarget:
+                                        automaticPasteAllowed,
+                                    executionPlan:
+                                        executionPlan
                                 )
                             )
                     guard !Task.isCancelled else {
                         return
                     }
                     switch decision {
-                    case .replaceSelection:
+                    case let .replaceSelection(text):
+                        deliveredText = text
+                        deliveryAction =
+                            PreviewAction
+                                .replaceSelection
+                                .rawValue
+                        resultWasEdited =
+                            text != prepared.finalText
                         deliveryAllowsAutomaticPaste =
-                            true
+                            automaticPasteAllowed
                         expectedSelectionContext =
-                            preparedSkillContext
+                            automaticPasteAllowed
+                            ? preparedSkillContext
                                 .selectionSnapshot
-                    case .pasteToTarget:
+                            : nil
+                    case let .pasteToTarget(text):
+                        deliveredText = text
+                        deliveryAction =
+                            PreviewAction
+                                .pasteToTarget
+                                .rawValue
+                        resultWasEdited =
+                            text != prepared.finalText
                         deliveryAllowsAutomaticPaste =
-                            true
-                    case .copy:
+                            automaticPasteAllowed
+                    case let .copy(text):
+                        deliveredText = text
+                        deliveryAction =
+                            PreviewAction.copy
+                                .rawValue
+                        resultWasEdited =
+                            text != prepared.finalText
                         deliveryAllowsAutomaticPaste =
                             false
                         automaticFallbackReason =
@@ -1426,6 +1867,7 @@ final class AppCoordinator {
                             self.state = .idle
                             self.activeSessionID =
                                 nil
+                            self.activeSkillRun = nil
                             self.statusMenu?.update(
                                 state: .ready,
                                 detail: L10n.text(
@@ -1433,6 +1875,7 @@ final class AppCoordinator {
                                 )
                             )
                             self.overlay.hide()
+                            self.overlay.updateSkillPresentation(nil)
                             self.launchAppContext =
                                 nil
                         }
@@ -1447,7 +1890,7 @@ final class AppCoordinator {
                 let outcome: InjectionOutcome
                 do {
                     outcome = try await self.injector.inject(
-                        text: prepared.finalText,
+                        text: deliveredText,
                         preserveClipboard: injectionConfig.preserveClipboard,
                         restoreDelayMilliseconds: injectionConfig.restoreDelayMilliseconds,
                         launchAppContext: launchAppContext,
@@ -1507,11 +1950,39 @@ final class AppCoordinator {
                         totalProcessingMs: totalProcessingMs,
                         errorCategory: nil
                     )
+                    let historyRecordID = UUID()
                     self.recordHistory(
+                        id: historyRecordID,
+                        runID: sessionID,
                         prepared: prepared,
+                        preparedSkillContext:
+                            preparedSkillContext,
                         outcome: outcome,
-                        launchAppContext: launchAppContext
+                        launchAppContext: launchAppContext,
+                        executionPlan: executionPlan,
+                        finalText: deliveredText,
+                        deliveryAction:
+                            deliveryAction,
+                        resultWasEdited:
+                            resultWasEdited
                     )
+                    if outcome == .insertedAndVerified,
+                       self.injector
+                        .hasUndoableVerifiedInsertion
+                    {
+                        self.lastUndoHistoryRecordID =
+                            historyRecordID
+                        self.statusMenu?
+                            .setUndoLastInsertionAvailable(
+                                true
+                            )
+                    } else {
+                        self.lastUndoHistoryRecordID = nil
+                        self.statusMenu?
+                            .setUndoLastInsertionAvailable(
+                                false
+                            )
+                    }
                     self.recordProductMetric(
                         event: attemptPolicy == .manualRetry
                             ? .retrySucceeded
@@ -1527,11 +1998,14 @@ final class AppCoordinator {
                     self.clearPendingRetry()
                     self.state = .idle
                     self.activeSessionID = nil
+                    self.activeSkillRun = nil
                     self.statusMenu?.update(
                         state: .ready,
                         detail: self.statusDetail(for: outcome)
                     )
-                    self.overlay.showResult(text: prepared.finalText, outcome: outcome)
+                    self.overlay.showResult(text: deliveredText, outcome: outcome)
+                    self.overlay.updateSkillPresentation(nil)
+                    self.refreshSkillMenu()
                     if self.config.visualFeedback
                         .completionNotificationEnabled
                     {
@@ -1622,7 +2096,9 @@ final class AppCoordinator {
     }
 
     private func openSettings(
-        focusPane: SettingsPane? = nil
+        focusPane: SettingsPane? = nil,
+        skillLibraryInitialSection:
+            SkillLibrarySection = .discover
     ) {
         if focusPane != nil {
             preferencesWindowController = nil
@@ -1638,6 +2114,9 @@ final class AppCoordinator {
             let credentialStore = snapshotPrivacyMode.presentationCredentialStore(
                 liveCredentialStore: recoveryCredentialStore
             )
+            let historyRecorder = self.historyRecorder
+            let recoveryRecorder = self.recoveryRecorder
+            let historySnapshotPrivacyMode = self.snapshotPrivacyMode
             preferencesWindowController = PreferencesWindowController(
                 config: presentationConfig,
                 authManager: authManager,
@@ -1704,21 +2183,21 @@ final class AppCoordinator {
                         return .failure(error)
                     }
                 },
-                onLoadRecentHistory: { [weak self] in
-                    guard let self else {
+                onLoadRecentHistory: { @Sendable in
+                    guard !historySnapshotPrivacyMode.isEnabled else {
                         return []
                     }
-                    return self.snapshotPrivacyMode.loadPresentationRecords {
-                        (try? self.historyRecorder.loadRecent(limit: 200)) ?? []
-                    }
+                    return await Task.detached(priority: .utility) {
+                        (try? historyRecorder.loadRecent(limit: 200)) ?? []
+                    }.value
                 },
-                onLoadRecoveryHistory: { [weak self] in
-                    guard let self else {
+                onLoadRecoveryHistory: { @Sendable in
+                    guard !historySnapshotPrivacyMode.isEnabled else {
                         return []
                     }
-                    return self.snapshotPrivacyMode.loadPresentationRecords {
-                        (try? self.recoveryRecorder.loadRecent(limit: 10)) ?? []
-                    }
+                    return await Task.detached(priority: .utility) {
+                        (try? recoveryRecorder.loadRecent(limit: 10)) ?? []
+                    }.value
                 },
                 onResolveRecoveryAudioURL: { [weak self] record in
                     guard let self else {
@@ -1853,7 +2332,6 @@ final class AppCoordinator {
                 },
                 providerCapabilityPolicy: providerCapabilityPolicy,
                 recoveryCredentialStore: credentialStore,
-                licenseManager: licenseManager,
                 textPolishUsageDirectoryURL:
                     snapshotPrivacyMode.presentationDiagnosticsDirectoryURL(
                         liveDirectoryURL: configStore.directoryURL
@@ -1916,70 +2394,40 @@ final class AppCoordinator {
                 onOpenOnboarding: { [weak self] in
                     self?.openOnboarding()
                 },
-                onHotkeyCaptureChanged: {
-                    [weak self] isCapturing in
-                    self?.setHotkeyCaptureActive(
-                        isCapturing
-                    )
+                onOpenSkillLibrary: { [weak self] in
+                    self?.openSettings(focusPane: .skills)
                 },
-                onPreviewVisualFeedback: {
-                    [weak self] preview,
-                    visualConfig in
-                    self?.previewVisualFeedback(
-                        preview,
-                        config: visualConfig
-                    )
+                onOpenTerminology: { [weak self] in
+                    self?.openSettings(focusPane: .terminology)
                 },
-                skillPackageStore:
-                    skillPackageStore,
-                styleCapsuleStore:
-                    styleCapsuleStore,
-                localAssetAccessEnabled:
-                    !snapshotPrivacyMode
-                        .isEnabled,
-                focusPane: focusPane
-            )
-        }
-
-        preferencesWindowController?.show()
-    }
-
-    private func openHistory() {
-        if historyWindowController == nil {
-            historyWindowController = HistoryWindowController(
-                hotkeyBinding: activeDictationHotkey,
-                onLoadTranscriptionHistory: { [weak self] in
-                    guard let self else {
+                onLoadFullTranscriptionHistory: { @Sendable in
+                    guard !historySnapshotPrivacyMode.isEnabled else {
                         return []
                     }
-                    return self.snapshotPrivacyMode.loadPresentationRecords {
-                        (try? self.historyRecorder.loadRecent(limit: 500)) ?? []
-                    }
+                    return await Task.detached(priority: .utility) {
+                        (try? historyRecorder.loadRecent(limit: 500)) ?? []
+                    }.value
                 },
-                onLoadRecoveryHistory: { [weak self] in
-                    guard let self else {
+                onLoadFullRecoveryHistory: { @Sendable in
+                    guard !historySnapshotPrivacyMode.isEnabled else {
                         return []
                     }
-                    return self.snapshotPrivacyMode.loadPresentationRecords {
-                        (try? self.recoveryRecorder.loadRecent(limit: 100)) ?? []
-                    }
+                    return await Task.detached(priority: .utility) {
+                        (try? recoveryRecorder.loadRecent(limit: 100)) ?? []
+                    }.value
                 },
-                onResolveRecoveryAudioURL: { [weak self] record in
-                    guard let self else {
-                        return .failure(RecoveryAudioError.missing)
-                    }
-                    if self.snapshotPrivacyMode.isEnabled {
-                        return .failure(RecoveryAudioError.missing)
-                    }
-                    return Result {
-                        try self.recoveryRecorder.resolveAudioURL(for: record)
-                    }
+                onCanUndoTranscriptionRecord: { [weak self] id in
+                    guard let self else { return false }
+                    return !self.snapshotPrivacyMode.isEnabled
+                        && self.state == .idle
+                        && self.lastUndoHistoryRecordID == id
+                        && self.injector.hasUndoableVerifiedInsertion
                 },
-                onRetryRecoveryRecord: { [weak self] record in
-                    guard self?.snapshotPrivacyMode.isEnabled == false else {
-                        return
+                onUndoTranscriptionRecord: { [weak self] id in
+                    guard let self, !self.snapshotPrivacyMode.isEnabled else {
+                        return .unavailable
                     }
-                    self?.retryRecoveryRecord(record)
+                    return await self.undoLastVerifiedInsertion(recordID: id)
                 },
                 onDeleteTranscriptionRecord: { [weak self] id in
                     guard let self else {
@@ -2022,25 +2470,302 @@ final class AppCoordinator {
                     return Result {
                         try self.recoveryRecorder.delete(id: id)
                     }
-                }
+                },
+                onUseNextSkill: { [weak self] id in
+                    self?.handleSkillMenuAction(.useNext(id))
+                },
+                onRunSkillTest: { [weak self] request in
+                    guard let self else {
+                        return .failure(SkillTestRunError.appBusy)
+                    }
+                    return await self.runSkillTest(request)
+                },
+                onVoiceSampleAction: { [weak self] action in
+                    guard let self else {
+                        return .failure(SkillTestRunError.appBusy)
+                    }
+                    return await self.handleSkillVoiceSampleAction(action)
+                },
+                onHotkeyCaptureChanged: {
+                    [weak self] isCapturing in
+                    self?.setHotkeyCaptureActive(
+                        isCapturing
+                    )
+                },
+                onPreviewVisualFeedback: {
+                    [weak self] preview,
+                    visualConfig in
+                    self?.previewVisualFeedback(
+                        preview,
+                        config: visualConfig
+                    )
+                },
+                skillPackageStore:
+                    skillPackageStore,
+                styleCapsuleStore:
+                    styleCapsuleStore,
+                localAssetAccessEnabled:
+                    !snapshotPrivacyMode
+                        .isEnabled,
+                focusPane: focusPane,
+                skillLibraryInitialSection:
+                    skillLibraryInitialSection
             )
-        }
-        historyWindowController?.show()
-    }
-
-    private func openQuickAdd() {
-        guard licenseManager.snapshot().allows(.quickAdd) else {
-            NSSound.beep()
-            notifier.notify(
-                title: L10n.text("OpenWhisper Pro required"),
-                body: L10n.text(
-                    "Quick Add is a Pro workflow. Core terminology management remains available in Community."
-                )
-            )
-            openSettings(focusPane: .account)
+        } else if let focusPane {
+            preferencesWindowController?.navigate(to: focusPane)
             return
         }
 
+        preferencesWindowController?.show()
+    }
+
+    private func openSkillLibrary(
+        section: SkillLibrarySection = .discover
+    ) {
+        openSettings(
+            focusPane: .skills,
+            skillLibraryInitialSection: section
+        )
+    }
+
+    private func runSkillTest(
+        _ request: SkillTestRunRequest
+    ) async -> Result<SkillTestRunResult, any Error> {
+        do {
+            guard state == .idle,
+                  activeSessionID == nil,
+                  processingTask == nil
+            else {
+                throw SkillTestRunError.appBusy
+            }
+            guard authManager.authSnapshot().state == .ready else {
+                throw SkillTestRunError
+                    .chatGPTConnectionRequired
+            }
+
+            var polishConfig = config.transcription.textPolish
+            polishConfig.mode = .always
+            polishConfig.chatGPTAuthEnabled = true
+            let polisher = OpenAICompatibleTextPolisher(
+                config: polishConfig,
+                dictationMode: request.plan.legacyMode,
+                skillPlan: request.plan,
+                skillPromptContext: request.context,
+                chatGPTAuthProvider: authManager,
+                chatGPTAuthAvailable: true,
+                providerCapabilityPolicy:
+                    providerCapabilityPolicy,
+                providerHealthMonitor:
+                    ProviderHealthMonitor.shared
+            )
+            let execution = try await SkillTestEngine().execute(
+                request,
+                using: polisher
+            )
+
+            var capabilities: [SkillCapability] = [.voice]
+            if request.context.selection?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty == false
+            {
+                capabilities.append(.selection)
+            }
+            if request.context.styleCapsule?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                ).isEmpty == false
+            {
+                capabilities.append(.styleCapsule)
+            }
+            let decision = await previewPresenter.present(
+                PreviewRequest(
+                    skillID: request.plan.skill.id,
+                    skillVersion:
+                        request.plan.skill.version,
+                    skillName:
+                        request.plan.skill.localizedName,
+                    originalTranscript: execution.inputText,
+                    resultText: execution.generatedText,
+                    selectedText:
+                        request.context.selection,
+                    contextCapabilities: capabilities,
+                    allowsSelectionReplacement: false,
+                    allowsPasteToTarget: false,
+                    executionPlan: request.plan
+                )
+            )
+
+            if case let .copy(text) = decision {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(
+                    text,
+                    forType: .string
+                )
+            }
+            guard let finalText = decision.finalText else {
+                return .success(
+                    SkillTestRunResult(
+                        generatedText: execution.generatedText,
+                        finalText: execution.generatedText,
+                        validation: execution.validation,
+                        provider: execution.provider,
+                        wasEdited: false,
+                        wasCancelled: true
+                    )
+                )
+            }
+            let validation = SkillValidatorEngine().validate(
+                output: finalText,
+                originalText: [
+                    execution.inputText,
+                    request.context.selection,
+                ].compactMap { $0 }
+                    .joined(separator: "\n"),
+                plan: request.plan
+            )
+            return .success(
+                SkillTestRunResult(
+                    generatedText: execution.generatedText,
+                    finalText: finalText,
+                    validation: validation,
+                    provider: execution.provider,
+                    wasEdited:
+                        finalText != execution.generatedText,
+                    wasCancelled: false
+                )
+            )
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func handleSkillVoiceSampleAction(
+        _ action: SkillVoiceSampleAction
+    ) async -> Result<SkillVoiceSampleResult, any Error> {
+        do {
+            switch action {
+            case .start:
+                guard state == .idle,
+                      activeSessionID == nil,
+                      processingTask == nil,
+                      skillTestSampleRecorder == nil
+                else {
+                    throw SkillTestRunError.appBusy
+                }
+                let sampleRecorder = recorderFactory(
+                    config.transcription.sampleRateHz
+                )
+                sampleRecorder.configure(maxDurationSeconds: 30)
+                hotkeyRegistrationService.suspend()
+                skillSwitcherHotkeyRegistrationService.suspend()
+                do {
+                    try await sampleRecorder.ensureRecordingPermission()
+                    try await sampleRecorder.startRecording()
+                    skillTestSampleRecorder = sampleRecorder
+                    return .success(.recording)
+                } catch {
+                    resumeGlobalHotkeysAfterSkillSample()
+                    throw error
+                }
+
+            case .stopAndTranscribe:
+                guard let sampleRecorder = skillTestSampleRecorder else {
+                    throw RecorderError.noActiveRecording
+                }
+                skillTestSampleRecorder = nil
+                let audio: RecordedAudio
+                do {
+                    audio = try sampleRecorder.stopRecording()
+                } catch {
+                    resumeGlobalHotkeysAfterSkillSample()
+                    throw error
+                }
+                defer {
+                    try? FileManager.default.removeItem(
+                        at: audio.fileURL
+                    )
+                    resumeGlobalHotkeysAfterSkillSample()
+                }
+                let transcription = try await ChatGPTTranscriber(
+                    authManager: authManager,
+                    config: config.transcription,
+                    providerCapabilityPolicy:
+                        providerCapabilityPolicy,
+                    providerHealthMonitor:
+                        ProviderHealthMonitor.shared,
+                    recoveryCredentialStore:
+                        recoveryCredentialStore,
+                    cloudflareChallengeMaxAttempts: 1,
+                    transientFailureMaxAttempts: 1
+                ).transcribe(audio)
+                return .success(
+                    .transcribed(
+                        transcription.text.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        )
+                    )
+                )
+
+            case .cancel:
+                if let sampleRecorder = skillTestSampleRecorder {
+                    try? sampleRecorder.cancelRecording()
+                }
+                skillTestSampleRecorder = nil
+                resumeGlobalHotkeysAfterSkillSample()
+                return .success(.cancelled)
+            }
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func resumeGlobalHotkeysAfterSkillSample() {
+        do {
+            try hotkeyRegistrationService.resume()
+            try skillSwitcherHotkeyRegistrationService.resume()
+        } catch {
+            logger.error(
+                "Restoring global shortcuts after a Skill voice sample failed: \(error.localizedDescription, privacy: .public)"
+            )
+            configureDictationHotkeyAtStartup()
+            configureSkillSwitcherHotkeyAtStartup()
+        }
+    }
+
+    private func openSkillSwitcher() {
+        refreshSkillMenu()
+        guard let snapshot = latestSkillMenuSnapshot else {
+            NSSound.beep()
+            return
+        }
+        if skillSwitcherWindowController == nil
+            || skillSwitcherWindowController?.window?.isVisible == false
+        {
+            skillSwitcherWindowController =
+                SkillSwitcherWindowController(
+                    snapshot: snapshot,
+                    onAction: { [weak self] action in
+                        guard let self else { return }
+                        self.handleSkillMenuAction(action)
+                        self.skillSwitcherWindowController?.close()
+                        self.skillSwitcherWindowController = nil
+                    },
+                    onOpenLibrary: { [weak self] in
+                        self?.skillSwitcherWindowController?.close()
+                        self?.skillSwitcherWindowController = nil
+                        self?.openSettings(focusPane: .skills)
+                    }
+                )
+        }
+        skillSwitcherWindowController?.show()
+    }
+
+    private func openHistory() {
+        openSettings(focusPane: .history)
+    }
+
+    private func openQuickAdd() {
         terminologyQuickAddWindowController?.close()
         terminologyQuickAddWindowController = TerminologyQuickAddWindowController(
             existingEntries: snapshotPrivacyMode.isEnabled
@@ -2089,38 +2814,7 @@ final class AppCoordinator {
     }
 
     private func openTerminology() {
-        if terminologyWindowController == nil
-            || terminologyWindowController?.window?.isVisible == false
-        {
-            terminologyWindowController = TerminologyWindowController(
-                config: snapshotPrivacyMode.presentationConfig(
-                    liveConfig: config
-                ),
-                onSave: { [weak self] newConfig in
-                    guard let self else {
-                        return .failure(
-                            NSError(
-                                domain: "OpenWhisper.Terminology",
-                                code: 1,
-                                userInfo: [
-                                    NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper terminology is no longer available."
-                                    ),
-                                ]
-                            )
-                        )
-                    }
-                    if self.snapshotPrivacyMode.isEnabled {
-                        return .success(())
-                    }
-                    return self.saveConfig(
-                        newConfig,
-                        successMessage: L10n.text("Terminology updated")
-                    )
-                }
-            )
-        }
-        terminologyWindowController?.show()
+        openSettings(focusPane: .terminology)
     }
 
     private func saveConfig(
@@ -2129,22 +2823,58 @@ final class AppCoordinator {
     ) -> Result<Void, any Error> {
         do {
             let previousConfig = config
-            if previousConfig.transcription.dictationHotkey
-                != newConfig.transcription.dictationHotkey
-            {
-                try hotkeyRegistrationService.replace(
-                    with:
-                        newConfig.transcription
-                            .dictationHotkey,
-                    onPress: dictationHotkeyPressHandler()
-                ) {
+            try OpenWhisperShortcutSetValidator.validate(
+                dictation: newConfig.transcription.dictationHotkey,
+                skillSwitcher: newConfig.skillSwitcherHotkey
+            )
+            let skillSwitcherChanged =
+                previousConfig.skillSwitcherHotkey
+                    != newConfig.skillSwitcherHotkey
+            var didReplaceSkillSwitcher = false
+            do {
+                if skillSwitcherChanged {
+                    try replaceSkillSwitcherHotkey(
+                        with: newConfig.skillSwitcherHotkey
+                    )
+                    didReplaceSkillSwitcher = true
+                }
+                if previousConfig.transcription.dictationHotkey
+                    != newConfig.transcription.dictationHotkey
+                {
+                    try hotkeyRegistrationService.replace(
+                        with:
+                            newConfig.transcription
+                                .dictationHotkey,
+                        onPress: dictationHotkeyPressHandler()
+                    ) {
+                        try configStore.save(newConfig)
+                    }
+                    hotkeyRegistrationIssue = nil
+                } else {
                     try configStore.save(newConfig)
                 }
-                hotkeyRegistrationIssue = nil
-            } else {
-                try configStore.save(newConfig)
+            } catch {
+                if didReplaceSkillSwitcher {
+                    try? replaceSkillSwitcherHotkey(
+                        with: previousConfig.skillSwitcherHotkey
+                    )
+                }
+                throw error
             }
             config = newConfig
+            if previousConfig.appLanguage
+                != newConfig.appLanguage
+            {
+                L10n.setLanguage(
+                    newConfig.appLanguage
+                )
+                statusMenu?.reloadLocalization()
+                historyWindowController = nil
+                skillSwitcherWindowController = nil
+                terminologyWindowController = nil
+                terminologyQuickAddWindowController = nil
+                onboardingWindowController = nil
+            }
             overlay.updateVisualFeedbackConfiguration(
                 newConfig.visualFeedback
             )
@@ -2171,6 +2901,21 @@ final class AppCoordinator {
             notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
             return .failure(error)
         }
+    }
+
+    private func replaceSkillSwitcherHotkey(
+        with binding: HotkeyBinding?
+    ) throws {
+        guard let binding else {
+            skillSwitcherHotkeyRegistrationService.stop()
+            statusMenu?.updateSkillSwitcherHotkey(nil)
+            return
+        }
+        try skillSwitcherHotkeyRegistrationService.replace(
+            with: binding,
+            onPress: skillSwitcherHotkeyPressHandler()
+        ) {}
+        statusMenu?.updateSkillSwitcherHotkey(binding)
     }
 
     private func openOnboarding(
@@ -2297,7 +3042,7 @@ final class AppCoordinator {
                 return
             }
             writer = { [weak self] in
-                guard let controller = self?.historyWindowController else {
+                guard let controller = self?.preferencesWindowController else {
                     throw ProductSurfaceSnapshotError.missingContentView
                 }
                 try controller.writeSnapshot(to: outputURL)
@@ -2310,7 +3055,7 @@ final class AppCoordinator {
                 return
             }
             writer = { [weak self] in
-                guard let controller = self?.terminologyWindowController else {
+                guard let controller = self?.preferencesWindowController else {
                     throw ProductSurfaceSnapshotError.missingContentView
                 }
                 try controller.writeSnapshot(to: outputURL)
@@ -2325,6 +3070,42 @@ final class AppCoordinator {
             writer = { [weak self] in
                 guard let controller = self?.terminologyQuickAddWindowController else {
                     throw ProductSurfaceSnapshotError.missingContentView
+                }
+                try controller.writeSnapshot(to: outputURL)
+            }
+        case .skillLibrary:
+            guard let outputURL = AppLaunchMode
+                .skillLibrarySnapshotOutputURL(
+                    environment: environment,
+                    arguments: arguments
+                )
+            else {
+                return
+            }
+            writer = { [weak self] in
+                guard let controller = self?
+                    .preferencesWindowController
+                else {
+                    throw ProductSurfaceSnapshotError
+                        .missingContentView
+                }
+                try controller.writeSnapshot(to: outputURL)
+            }
+        case .skillSwitcher:
+            guard let outputURL = AppLaunchMode
+                .skillSwitcherSnapshotOutputURL(
+                    environment: environment,
+                    arguments: arguments
+                )
+            else {
+                return
+            }
+            writer = { [weak self] in
+                guard let controller = self?
+                    .skillSwitcherWindowController
+                else {
+                    throw ProductSurfaceSnapshotError
+                        .missingContentView
                 }
                 try controller.writeSnapshot(to: outputURL)
             }
@@ -2399,14 +3180,10 @@ final class AppCoordinator {
         startProcessing(
             audio: audio,
             sessionID: sessionID,
-            transcriptionConfig: config.transcription.resolvingVoiceMode(
-                for: launchAppContext,
-                voiceModesAllowed: licenseManager
-                    .snapshot()
-                    .allows(.voiceModes),
-                registry:
-                    currentSkillRegistry()
-            ),
+            transcriptionConfig:
+                resolvedTranscriptionConfig(
+                    for: launchAppContext
+                ),
             injectionConfig: config.injection,
             launchAppContext: launchAppContext,
             attemptPolicy: .manualRetry,
@@ -2514,6 +3291,61 @@ final class AppCoordinator {
     }
 
     private func runPreviewDemo() {
+        let arguments = ProcessInfo.processInfo.arguments
+        let environment = ProcessInfo.processInfo.environment
+        let scenario = AppLaunchMode.previewDemoScenario(
+            arguments: arguments
+        )
+        let selectedText: String?
+        let resultText: String
+        let initialValidationIssueCodes: [String]
+        let fallbackMessage: String?
+        let allowsSelectionReplacement: Bool
+        let contextCapabilities: [SkillCapability]
+
+        switch scenario {
+        case .replace:
+            selectedText =
+                """
+                We are planning to ship the macOS release on July 14, 2026. Please make sure API v2 remains compatible, and do not remove the existing security review gate.
+                """
+            resultText =
+                """
+                Ship the macOS release on July 14, 2026.
+
+                Preserve API v2 compatibility and keep the existing security review gate.
+                """
+            initialValidationIssueCodes = []
+            fallbackMessage = nil
+            allowsSelectionReplacement = true
+            contextCapabilities = [.selection]
+        case .paste:
+            selectedText = nil
+            resultText =
+                """
+                Ship the macOS release on July 14, 2026.
+
+                Preserve API v2 compatibility and keep the existing security review gate.
+                """
+            initialValidationIssueCodes = []
+            fallbackMessage = nil
+            allowsSelectionReplacement = false
+            contextCapabilities = []
+        case .fallback:
+            selectedText = nil
+            resultText = L10n.text(
+                "Keep the same tone, shorten it, and preserve the release date and API version."
+            )
+            initialValidationIssueCodes = [
+                "required-section-missing",
+            ]
+            fallbackMessage = L10n.text(
+                "The generated Skill result did not pass validation."
+            )
+            allowsSelectionReplacement = false
+            contextCapabilities = []
+        }
+
         let request = PreviewRequest(
             skillID:
                 SkillRegistry
@@ -2526,22 +3358,15 @@ final class AppCoordinator {
                 L10n.text(
                     "Keep the same tone, shorten it, and preserve the release date and API version."
                 ),
-            resultText:
-                """
-                Ship the macOS release on July 14, 2026.
-
-                Preserve API v2 compatibility and keep the existing security review gate.
-                """,
-            selectedText:
-                """
-                We are planning to ship the macOS release on July 14, 2026. Please make sure API v2 remains compatible, and do not remove the existing security review gate.
-                """,
-            contextCapabilities: [
-                .selection,
-            ],
-            validationPassed: true,
+            resultText: resultText,
+            selectedText: selectedText,
+            contextCapabilities:
+                contextCapabilities,
+            initialValidationIssueCodes:
+                initialValidationIssueCodes,
+            fallbackMessage: fallbackMessage,
             allowsSelectionReplacement:
-                true
+                allowsSelectionReplacement
         )
         previewDemoTask?.cancel()
         previewDemoTask =
@@ -2553,53 +3378,60 @@ final class AppCoordinator {
                     .present(request)
             }
 
-        guard
-            let outputURL =
-                AppLaunchMode
-                    .previewSnapshotOutputURL(
-                        environment:
-                            ProcessInfo
-                                .processInfo
-                                .environment,
-                        arguments:
-                            ProcessInfo
-                                .processInfo
-                                .arguments
-                    )
-        else {
-            return
-        }
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1
-        ) { [weak self] in
-            do {
-                guard
-                    let snapshotter =
-                        self?
-                            .previewPresenter
-                            as? any PreviewSnapshotCapturing
-                else {
-                    throw ProductSurfaceSnapshotError
-                        .missingContentView
-                }
-                try snapshotter
-                    .writePreviewSnapshot(
-                        to: outputURL
-                    )
-                NSApplication.shared
-                    .terminate(nil)
-            } catch {
-                print(
-                    "OpenWhisper Preview self-capture failed: "
-                        + error.localizedDescription
-                )
-            }
-        }
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 10
+        if let outputURL = AppLaunchMode.previewSnapshotOutputURL(
+            environment: environment,
+            arguments: arguments
         ) {
-            NSApplication.shared
-                .terminate(nil)
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + 1
+            ) { [weak self] in
+                do {
+                    guard
+                        let snapshotter = self?.previewPresenter
+                            as? any PreviewSnapshotCapturing
+                    else {
+                        throw ProductSurfaceSnapshotError.missingContentView
+                    }
+                    try snapshotter.writePreviewSnapshot(to: outputURL)
+                    NSApplication.shared.terminate(nil)
+                } catch {
+                    print(
+                        "OpenWhisper Preview self-capture failed: "
+                            + error.localizedDescription
+                    )
+                }
+            }
+            schedulePreviewDemoTerminationFallback()
+        } else if let outputURL = AppLaunchMode.accessibilityAuditOutputURL(
+            environment: environment,
+            arguments: arguments
+        ) {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + 1.2
+            ) { [weak self] in
+                do {
+                    guard
+                        let auditor = self?.previewPresenter
+                            as? any PreviewAccessibilityAuditing
+                    else {
+                        throw ProductSurfaceSnapshotError.missingContentView
+                    }
+                    try auditor.writePreviewAccessibilityAudit(to: outputURL)
+                    NSApplication.shared.terminate(nil)
+                } catch {
+                    print(
+                        "OpenWhisper Preview accessibility audit failed: "
+                            + error.localizedDescription
+                    )
+                }
+            }
+            schedulePreviewDemoTerminationFallback()
+        }
+    }
+
+    private func schedulePreviewDemoTerminationFallback() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+            NSApplication.shared.terminate(nil)
         }
     }
 
@@ -3146,9 +3978,16 @@ final class AppCoordinator {
     }
 
     private func recordHistory(
+        id: UUID,
+        runID: UUID,
         prepared: PreparedDictation,
+        preparedSkillContext: PreparedSkillContext,
         outcome: InjectionOutcome,
-        launchAppContext: LaunchAppContext?
+        launchAppContext: LaunchAppContext?,
+        executionPlan: ResolvedSkillExecutionPlan,
+        finalText: String,
+        deliveryAction: String,
+        resultWasEdited: Bool
     ) {
         guard config.privacy.historyEnabled else {
             return
@@ -3163,9 +4002,10 @@ final class AppCoordinator {
 
         try? historyRecorder.record(
             TranscriptionHistoryRecord(
+                id: id,
                 timestamp: Date(),
                 rawText: config.privacy.storeRawTranscripts ? prepared.rawText : nil,
-                finalText: prepared.finalText,
+                finalText: finalText,
                 appName: launchAppContext?.localizedName,
                 appBundleIdentifier: launchAppContext?.bundleIdentifier,
                 outcome: latencyResultStatus(for: outcome),
@@ -3174,7 +4014,43 @@ final class AppCoordinator {
                     prepared.metrics.skillID,
                 skillVersion:
                     prepared.metrics
-                        .skillVersion
+                        .skillVersion,
+                skillInstallationID:
+                    executionPlan.installation.id,
+                skillName:
+                    executionPlan.skill.localizedName,
+                skillSource:
+                    executionPlan.source.rawValue,
+                skillRevision:
+                    executionPlan.installation.revision,
+                skillValidationIssueCodes:
+                    prepared.metrics
+                        .skillValidationIssueCodes,
+                skillFallbackMessage:
+                    prepared.metrics
+                        .textPolishErrorMessage,
+                skillDeliveryAction:
+                    deliveryAction,
+                skillResultEdited:
+                    resultWasEdited,
+                undoState:
+                    outcome == .insertedAndVerified
+                        && injector
+                            .hasUndoableVerifiedInsertion
+                    ? .available
+                    : nil,
+                skillRunReceipt:
+                    SkillRunReceipt.make(
+                        runID: runID,
+                        preparedContext:
+                            preparedSkillContext,
+                        prepared: prepared,
+                        executionPlan: executionPlan,
+                        launchAppContext: launchAppContext,
+                        outcome: outcome,
+                        deliveryAction: deliveryAction,
+                        resultWasEdited: resultWasEdited
+                    )
             ),
             retention: config.privacy.historyRetentionPolicy()
         )
@@ -3257,14 +4133,6 @@ final class AppCoordinator {
         }
 
         do {
-            try licenseManager.reset()
-        } catch {
-            if firstError == nil {
-                firstError = error
-            }
-        }
-
-        do {
             try StorageCleanupService(applicationSupportURL: configStore.directoryURL).deleteAllData()
         } catch {
             if firstError == nil {
@@ -3274,6 +4142,8 @@ final class AppCoordinator {
 
         let freshConfig = AppConfig()
         do {
+            skillSwitcherHotkeyRegistrationService.stop()
+            statusMenu?.updateSkillSwitcherHotkey(nil)
             try hotkeyRegistrationService.replace(
                 with:
                     freshConfig.transcription
@@ -3283,6 +4153,8 @@ final class AppCoordinator {
                 try configStore.save(freshConfig)
             }
             config = freshConfig
+            L10n.setLanguage(freshConfig.appLanguage)
+            statusMenu?.reloadLocalization()
             hotkeyRegistrationIssue = nil
             overlay.updateVisualFeedbackConfiguration(
                 freshConfig.visualFeedback
@@ -3354,5 +4226,128 @@ final class AppCoordinator {
                 )
             )
         }
+        refreshSkillMenu()
+    }
+
+    private func refreshSkillMenu(
+        launchAppContext: LaunchAppContext? = nil,
+        plan explicitPlan: ResolvedSkillExecutionPlan? = nil
+    ) {
+        let targetContext = launchAppContext
+            ?? (state == .idle
+                ? launchAppContextProvider()
+                : self.launchAppContext)
+        let inventory = skillPackageStore.loadInventory(
+            config: config.communitySkills
+        )
+        let plan: ResolvedSkillExecutionPlan
+        if let explicitPlan {
+            plan = explicitPlan
+        } else if
+            let nextRunSkillInstallationID =
+                nextRunSkillSelection.installationID,
+            let override = inventory.executionPlan(
+                installationID:
+                    nextRunSkillInstallationID,
+                source: .nextRun
+            )
+        {
+            plan = override
+        } else {
+            plan = inventory.enriching(
+                SkillResolver(
+                    registry: inventory.registry
+                ).resolve(
+                    config:
+                        config.transcription.skills,
+                    launchAppContext:
+                        targetContext
+                )
+            )
+        }
+        let snapshot = SkillMenuCatalog.snapshot(
+                plan: plan,
+                inventory: inventory,
+                ecosystem: config.skillEcosystem,
+                nextRunInstallationID:
+                    nextRunSkillSelection.installationID,
+                currentApplicationName:
+                    targetContext?.localizedName,
+                currentApplicationBundleIdentifier:
+                    targetContext?.bundleIdentifier
+            )
+        latestSkillMenuSnapshot = snapshot
+        statusMenu?.updateSkillMenu(snapshot)
+    }
+
+    private func handleSkillMenuAction(
+        _ action: SkillMenuAction
+    ) {
+        guard state == .idle else {
+            NSSound.beep()
+            return
+        }
+        let inventory = skillPackageStore.loadInventory(
+            config: config.communitySkills
+        )
+        switch action {
+        case .clearNextRun:
+            nextRunSkillSelection.clear()
+        case .useNext(let installationID):
+            guard inventory.executionPlan(
+                installationID: installationID,
+                source: .nextRun
+            ) != nil else { return }
+            nextRunSkillSelection.select(
+                installationID
+            )
+        case .toggleFavorite(let installationID):
+            let wasFavorite = config.skillEcosystem
+                .favoriteInstallationIDs
+                .contains(installationID)
+            config.skillEcosystem.favoriteInstallationIDs
+                .removeAll { $0 == installationID }
+            if !wasFavorite {
+                config.skillEcosystem.favoriteInstallationIDs
+                    .append(installationID)
+            }
+        case .setGlobalDefault(let installationID):
+            guard let plan = inventory.executionPlan(
+                installationID: installationID,
+                source: .globalDefault
+            ) else { return }
+            config.transcription.skills.setDefault(
+                skillID: plan.skill.id,
+                installationID: plan.installation.id,
+                registry: inventory.registry
+            )
+        case let .setApplicationDefault(
+            installationID,
+            appName,
+            bundleIdentifier
+        ):
+            guard
+                let plan = inventory.executionPlan(
+                    installationID: installationID,
+                    source: .applicationRule
+                ),
+                let rule = try? AppSkillRule.validated(
+                    appName: appName,
+                    bundleIdentifier: bundleIdentifier,
+                    skillID: plan.skill.id,
+                    skillInstallationID:
+                        plan.installation.id,
+                    registry: inventory.registry
+                )
+            else { return }
+            config.transcription.skills.upsert(
+                rule,
+                registry: inventory.registry
+            )
+        }
+        if !snapshotPrivacyMode.isEnabled {
+            try? configStore.save(config)
+        }
+        refreshSkillMenu()
     }
 }

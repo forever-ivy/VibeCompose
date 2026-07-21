@@ -16,7 +16,6 @@ fi
 
 ARCH="$(uname -m)"
 CASK_PATH="${OPENWHISPER_CASK_PATH:-$ROOT/dist/openwhisper.rb}"
-READINESS_PATH="$ROOT/dist/productization-readiness/prebuild.json"
 SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
 
 declare -a REQUIRED_PATHS=(
@@ -26,9 +25,11 @@ declare -a REQUIRED_PATHS=(
   "$ROOT/dist/release-manifest.json"
   "$ROOT/dist/appcast.xml"
   "$ROOT/dist/provider-capabilities.json"
+  "$ROOT/dist/notarization-app.json"
+  "$ROOT/dist/notarization-dmg.json"
+  "$ROOT/dist/release-candidate-readiness.json"
   "$ROOT/dist/SHA256SUMS"
   "$CASK_PATH"
-  "$READINESS_PATH"
 )
 
 for path in "${REQUIRED_PATHS[@]}"; do
@@ -53,8 +54,6 @@ TEMPORARY_CHECKSUM="$TEMPORARY_DIRECTORY/candidate.sha256"
 trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
 
 umask 077
-mkdir -p "$STAGE_ROOT/dist/productization-readiness"
-
 /usr/bin/ditto \
   "$ROOT/dist/$OPENWHISPER_APP_NAME.app" \
   "$STAGE_ROOT/dist/$OPENWHISPER_APP_NAME.app"
@@ -65,11 +64,13 @@ for file in \
   "$ROOT/dist/release-manifest.json" \
   "$ROOT/dist/appcast.xml" \
   "$ROOT/dist/provider-capabilities.json" \
+  "$ROOT/dist/notarization-app.json" \
+  "$ROOT/dist/notarization-dmg.json" \
+  "$ROOT/dist/release-candidate-readiness.json" \
   "$ROOT/dist/SHA256SUMS"; do
   /usr/bin/ditto "$file" "$STAGE_ROOT/dist/$(basename "$file")"
 done
 /usr/bin/ditto "$CASK_PATH" "$STAGE_ROOT/dist/openwhisper.rb"
-/usr/bin/ditto "$READINESS_PATH" "$STAGE_ROOT/dist/productization-readiness/prebuild.json"
 
 python3 - \
   "$STAGE_ROOT/candidate-metadata.json" \
@@ -146,5 +147,5 @@ chmod 0600 "$TEMPORARY_ARCHIVE" "$TEMPORARY_CHECKSUM"
 mv -f "$TEMPORARY_ARCHIVE" "$ARCHIVE_PATH"
 mv -f "$TEMPORARY_CHECKSUM" "$CHECKSUM_PATH"
 
-echo "Archived commercial release candidate: $ARCHIVE_PATH"
+echo "Archived signed release candidate: $ARCHIVE_PATH"
 echo "Candidate SHA-256: $ARCHIVE_SHA256"

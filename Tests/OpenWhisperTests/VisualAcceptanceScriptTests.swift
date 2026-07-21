@@ -2,6 +2,34 @@ import Foundation
 import Testing
 
 @Test
+func windowActivationAcceptanceUsesTheInstalledAppAndNativeMinimize()
+    throws
+{
+    let root = repositoryRoot()
+    let script = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/window_activation_acceptance.sh"
+        ),
+        encoding: .utf8
+    )
+    let verifier = try String(
+        contentsOf: root.appendingPathComponent(
+            "scripts/verify_window_activation.swift"
+        ),
+        encoding: .utf8
+    )
+
+    #expect(script.contains("/Applications/$APP_NAME.app"))
+    #expect(script.contains("--open-settings"))
+    #expect(script.contains("verify_window_activation.swift"))
+    #expect(verifier.contains("kAXMinimizeButtonAttribute"))
+    #expect(verifier.contains("kAXMinimizedAttribute"))
+    #expect(verifier.contains("activationPolicy == .regular"))
+    #expect(verifier.contains("initialPolicy == .regular"))
+    #expect(verifier.contains("runningApplication.icon != nil"))
+}
+
+@Test
 func feedbackModeAcceptanceCoversAllThreeInstalledSurfaces()
     throws
 {
@@ -29,11 +57,11 @@ func feedbackModeAcceptanceCoversAllThreeInstalledSurfaces()
         )
     )
     #expect(source.contains("refined-hud"))
-    #expect(source.contains("blue-signal-frame"))
+    #expect(source.contains("ai-activity-glow"))
     #expect(source.contains("\"hidden\""))
     #expect(
         source.contains(
-            "blueSignalAnimationIsActive"
+            "aiActivityGlowAnimationIsActive"
         )
     )
 }
@@ -114,7 +142,7 @@ func visualAcceptanceVerifierDocumentsRequiredStates() throws {
     #expect(verifier.contains("changed HUD-window pixels"))
     #expect(verifier.contains("distinct window size"))
     #expect(verifier.contains("unstablePrimaryGeometry"))
-    #expect(verifier.contains("invalidErrorGeometry"))
+    #expect(!verifier.contains("invalidErrorGeometry"))
     #expect(verifier.contains("unstableReducedMotion"))
     #expect(verifier.contains("insufficientAccessibilityDifference"))
     #expect(verifier.contains("reduced-motion-static"))
@@ -138,10 +166,16 @@ func productSurfaceAcceptanceCoversInstalledManagementWindows() throws {
     #expect(script.contains(#"capture_surface "history" "history-snapshot-output""#))
     #expect(script.contains(#"capture_surface "terminology" "terminology-snapshot-output""#))
     #expect(script.contains(#"capture_surface "quick-add" "quick-add-snapshot-output""#))
+    #expect(script.contains(#"capture_surface "skill-library" "skill-library-snapshot-output""#))
+    #expect(script.contains(#"capture_surface "skill-switcher" "skill-switcher-snapshot-output""#))
+    #expect(script.contains("skill-library-section"))
+    #expect(script.contains("04-skill-library-installed.png"))
     #expect(script.contains(#""--open-$launch_mode""#))
     #expect(script.contains("verify_product_surfaces.swift"))
     #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
     #expect(verifier.contains("managerGeometryMismatch"))
+    #expect(verifier.contains("skill-library-discover"))
+    #expect(verifier.contains("skill-library-installed"))
     #expect(verifier.contains("sampledColorBucketCount"))
 }
 
@@ -169,13 +203,12 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
     #expect(script.contains("verify_accessibility_visual_acceptance.swift"))
     #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
     for surface in [
+        "settings-general",
         "settings-account",
         "settings-dictation",
         "settings-appearance",
         "settings-ai-polish",
         "settings-context",
-        "settings-terminology",
-        "settings-paste",
         "settings-privacy",
         "settings-advanced",
         "onboarding-welcome",
@@ -195,6 +228,7 @@ func accessibilityVisualAcceptanceCoversEveryPrimaryProductSurface() throws {
     #expect(verifier.contains("normalizedBackingScale"))
     #expect(verifier.contains("geometryMismatch"))
     #expect(verifier.contains("weakerEdgeContrast"))
+    #expect(verifier.contains("compositedForVisualAcceptance"))
     #expect(!verifier.contains("non-decreasing luminance spread"))
 }
 
@@ -230,6 +264,23 @@ func permissionSurfaceAcceptanceChecksInstalledLivePermissionCards() throws {
 }
 
 @Test
+func bilingualSettingsAcceptanceUsesInstalledMinimumSizeSnapshots() throws {
+    let script = try String(
+        contentsOf: repositoryRoot().appendingPathComponent(
+            "scripts/settings_bilingual_acceptance.sh"
+        ),
+        encoding: .utf8
+    )
+    #expect(script.contains("/Applications/$APP_NAME.app"))
+    #expect(script.contains("sizes=(900x620 980x680 1180x760)"))
+    #expect(script.contains("\"--settings-snapshot-size=$size\""))
+    #expect(script.contains("--settings-snapshot-language=$language"))
+    #expect(script.contains("panes=(general dictation context appearance advanced)"))
+    #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
+    #expect(!script.contains("dist/OpenWhisper.app/Contents/MacOS"))
+}
+
+@Test
 func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
     let root = repositoryRoot()
     for source in [
@@ -239,6 +290,9 @@ func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
         "TerminologyWindowController.swift",
         "TerminologyQuickAddWindowController.swift",
         "MicrophonePermissionWindowController.swift",
+        "SkillLibraryWindowController.swift",
+        "SkillSwitcherWindowController.swift",
+        "PreviewRuntime.swift",
     ] {
         let content = try String(
             contentsOf: root
@@ -251,6 +305,19 @@ func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
                 "applyingAccessibilityDisplayOptionsOverride"
             )
         )
+        if source == "PreferencesWindowController.swift" {
+            #expect(
+                !content.contains(
+                    "applyingOpenWhisperBrandTint"
+                )
+            )
+        } else {
+            #expect(
+                content.contains(
+                    "applyingOpenWhisperBrandTint"
+                )
+            )
+        }
         #expect(content.contains("applyAppearance(to: window)"))
     }
 }

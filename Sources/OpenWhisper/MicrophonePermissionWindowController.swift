@@ -12,13 +12,14 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
         )
         let hostingController = NSHostingController(
             rootView:
-                view.applyingAccessibilityDisplayOptionsOverride(
+                view.applyingOpenWhisperBrandTint()
+                .applyingAccessibilityDisplayOptionsOverride(
                     .currentVisualAcceptance
                 )
         )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 250),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 180),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -26,8 +27,8 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
         window.title = L10n.text("Enable Microphone Access")
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        window.contentMinSize = NSSize(width: 520, height: 250)
-        window.contentMaxSize = NSSize(width: 520, height: 250)
+        window.contentMinSize = NSSize(width: 520, height: 180)
+        window.contentMaxSize = NSSize(width: 520, height: 180)
         window.center()
         window.level = .normal
         window.contentViewController = hostingController
@@ -45,6 +46,7 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
                     self?.finish(with: false)
                 }
             )
+            .applyingOpenWhisperBrandTint()
             .applyingAccessibilityDisplayOptionsOverride(
                 .currentVisualAcceptance
             )
@@ -97,33 +99,36 @@ private struct MicrophonePermissionView: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.text("Allow microphone access"))
-                .font(.system(size: 24, weight: .semibold))
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                OpenWhisperIconWell(
+                    systemName: "mic.fill",
+                    size: 44,
+                    symbolSize: 18
+                )
+                Text(L10n.text("Allow microphone access"))
+                    .font(.system(size: 24, weight: .semibold))
+                    .tracking(-0.3)
+                    .accessibilityHint(
+                        L10n.text(
+                            "OpenWhisper needs microphone access before it can record your first dictation."
+                        )
+                    )
+            }
 
-            Text(L10n.text("OpenWhisper needs microphone access before it can record your first dictation. Click Continue and macOS should show the microphone permission prompt next."))
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Label(
-                L10n.text("Microphone is required for dictation. You can change this later in System Settings."),
-                systemImage: "mic.circle"
-            )
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
-
-            Spacer()
+            Spacer(minLength: 8)
 
             HStack {
                 Spacer()
                 Button(L10n.text("Cancel"), action: onCancel)
+                    .buttonStyle(OpenWhisperSecondaryButtonStyle())
                 Button(L10n.text("Continue"), action: onContinue)
+                    .buttonStyle(OpenWhisperPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(24)
-        .frame(width: 520, height: 250, alignment: .topLeading)
+        .padding(26)
+        .frame(width: 520, height: 180, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }

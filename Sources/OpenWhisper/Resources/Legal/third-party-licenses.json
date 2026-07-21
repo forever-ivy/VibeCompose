@@ -19,6 +19,16 @@
       "licenseName": "MIT License with bundled third-party notices",
       "licenseFile": "Legal/ThirdPartyLicenses/Sparkle-LICENSE.txt",
       "licenseSHA256": "389a4e4e9a32f059775b13a06e25a591445ba229d2838d26dd3e7c0c45127cfe"
+    },
+    {
+      "sourceKind": "vendored",
+      "identity": "edgeglow",
+      "name": "EdgeGlow",
+      "sourceURL": "https://github.com/vector4wang/EdgeGlow.git",
+      "revision": "d39d0471a25af97d8de077591f69f938efa8bea8",
+      "licenseName": "MIT License",
+      "licenseFile": "Legal/ThirdPartyLicenses/EdgeGlow-LICENSE.txt",
+      "licenseSHA256": "afd6d3eb1330b4641842adc7e13fcfad2b44cd38d31f001b399d25aa7f32407b"
     }
   ]
 }

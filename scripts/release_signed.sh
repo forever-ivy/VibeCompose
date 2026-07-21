@@ -18,16 +18,23 @@ esac
 
 export OPENWHISPER_REQUIRE_DEVELOPER_ID=1
 export OPENWHISPER_NOTARIZE=1
-export OPENWHISPER_PRO_PREVIEW_ENABLED=0
 export OPENWHISPER_INSTALL_REQUIRE_GATEKEEPER=1
+export OPENWHISPER_BUILD_CONFIGURATION=release
 
 CASK_PATH="${OPENWHISPER_CASK_PATH:-$ROOT/dist/openwhisper.rb}"
 export OPENWHISPER_CASK_PATH="$CASK_PATH"
+BRAND_CLEARANCE_PATH="${OPENWHISPER_BRAND_CLEARANCE_PATH:-$ROOT/release/brand-clearance.json}"
+INSTALLED_ACCEPTANCE_PATH="${OPENWHISPER_INSTALLED_ACCEPTANCE_PATH:-$ROOT/release/installed-acceptance.json}"
+COMMUNITY_PILOT_SUMMARY_PATH="${OPENWHISPER_COMMUNITY_PILOT_SUMMARY_PATH:-$ROOT/release/community-pilot-summary.json}"
+BETA_METRICS_PATH="${OPENWHISPER_BETA_METRICS_PATH:-$ROOT/release/beta-metrics.json}"
+PUBLIC_CONTACT_PATH="${OPENWHISPER_PUBLIC_CONTACT_PATH:-$ROOT/release/public-contact.json}"
+CANDIDATE_READINESS_REPORT="$ROOT/dist/release-candidate-readiness.json"
+PUBLIC_READINESS_REPORT="$ROOT/dist/public-release-readiness.json"
 
 require_environment() {
   local name="$1"
   if [[ -z "${!name:-}" ]]; then
-    echo "$name is required for a commercial release." >&2
+    echo "$name is required for a signed release." >&2
     exit 1
   fi
 }
@@ -38,13 +45,9 @@ for name in \
   OPENWHISPER_SPARKLE_FEED_URL \
   OPENWHISPER_SPARKLE_PUBLIC_ED_KEY \
   OPENWHISPER_CAPABILITY_POLICY_URL \
-  OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY \
-  OPENWHISPER_LICENSE_PUBLIC_ED_KEY; do
+  OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY; do
   require_environment "$name"
 done
-
-READINESS_DIRECTORY="$ROOT/dist/productization-readiness"
-mkdir -p "$READINESS_DIRECTORY"
 
 if [[ "$PHASE" == "prepare" ]]; then
   for name in \
@@ -57,11 +60,10 @@ if [[ "$PHASE" == "prepare" ]]; then
     require_environment "$name"
   done
 
-  python3 "$ROOT/scripts/verify_productization_readiness.py" \
-    --stage commercial \
-    --phase prebuild \
-    --output "$READINESS_DIRECTORY/prebuild.json"
-
+  mkdir -p "$ROOT/dist"
+  python3 "$ROOT/scripts/verify_release_readiness.py" \
+    --phase candidate \
+    --output "$CANDIDATE_READINESS_REPORT"
   "$ROOT/scripts/check.sh"
   "$ROOT/scripts/package_app.sh"
   "$ROOT/scripts/generate_sparkle_appcast.sh"
@@ -81,32 +83,29 @@ if [[ "$PHASE" == "prepare" ]]; then
   "$ROOT/scripts/install_app.sh"
 
   if [[ "${OPENWHISPER_RUN_SCRIPTED_ACCEPTANCE:-0}" == "1" ]]; then
-    "$ROOT/scripts/visual_acceptance.sh"
-    "$ROOT/scripts/product_surface_acceptance.sh"
-    "$ROOT/scripts/accessibility_acceptance.sh"
-    "$ROOT/scripts/accessibility_visual_acceptance.sh"
-    "$ROOT/scripts/paste_acceptance.sh"
-    "$ROOT/scripts/permission_surface_acceptance.sh"
+    "$ROOT/scripts/visual_acceptance.sh" --install
+    "$ROOT/scripts/paste_acceptance.sh" --install
+    "$ROOT/scripts/check_packaged_app.sh"
   fi
 
   cat <<EOF
-Commercial candidate prepared and installed at /Applications/$OPENWHISPER_APP_NAME.app.
+Signed candidate prepared and installed at /Applications/$OPENWHISPER_APP_NAME.app.
 
-Before finalize:
-1. Publish the ZIP, DMG, appcast, and provider policy to their configured public HTTPS URLs.
-2. Complete release/installed-acceptance.json with real Developer ID, notarization,
-   clean-TCC, keyboard, VoiceOver, compatibility, update, rollback, and uninstall evidence.
-3. Complete approved operator, brand-clearance, and beta-metrics files.
-4. Create tag v$OPENWHISPER_VERSION on the exact release commit.
-5. Run: $0 finalize
+Before any public upload:
+1. Record real installed-app, accessibility, update, rollback, and uninstall evidence for this exact candidate.
+2. Complete the four-week Community Pilot aggregate and product-owner Beta review.
+3. Resolve brand clearance and create tag v$OPENWHISPER_VERSION on this exact release commit.
+4. Run the public phase of scripts/verify_release_readiness.py; do not publish while it is blocked.
+
+After that gate passes, publish the ZIP, DMG, appcast, and provider policy to
+the configured HTTPS URLs, then run: $0 finalize
 EOF
   exit 0
 fi
 
-python3 "$ROOT/scripts/verify_productization_readiness.py" \
-  --stage commercial \
-  --phase final \
-  --output "$READINESS_DIRECTORY/final.json"
+python3 "$ROOT/scripts/verify_release_readiness.py" \
+  --phase public \
+  --output "$PUBLIC_READINESS_REPORT"
 "$ROOT/scripts/verify_release_gate.sh"
 "$ROOT/scripts/verify_remote_release_assets.sh"
 
@@ -118,20 +117,35 @@ for path in \
   "$ROOT/dist/SHA256SUMS" \
   "$ROOT/dist/appcast.xml" \
   "$ROOT/dist/provider-capabilities.json" \
+  "$ROOT/dist/notarization-app.json" \
+  "$ROOT/dist/notarization-dmg.json" \
+  "$CANDIDATE_READINESS_REPORT" \
+  "$PUBLIC_READINESS_REPORT" \
   "$CASK_PATH" \
-  "$READINESS_DIRECTORY/final.json" \
   "$ROOT/docs/releases/v${OPENWHISPER_VERSION}.md" \
-  "$ROOT/docs/releases/v${OPENWHISPER_VERSION}.zh-CN.md" \
-  "$ROOT/release/commercial-operator.json" \
-  "$ROOT/release/brand-clearance.json" \
-  "$ROOT/release/beta-metrics.json" \
-  "$ROOT/release/installed-acceptance.json"; do
+  "$ROOT/docs/releases/v${OPENWHISPER_VERSION}.zh-CN.md"; do
   [[ -f "$path" && ! -L "$path" ]] || {
     echo "Missing final release evidence: $path" >&2
     exit 1
   }
   /usr/bin/ditto "$path" "$EVIDENCE_DIRECTORY/$(basename "$path")"
 done
+
+copy_release_evidence() {
+  local source="$1"
+  local destination_name="$2"
+  [[ -f "$source" && ! -L "$source" ]] || {
+    echo "Missing or unsafe public-release evidence: $source" >&2
+    exit 1
+  }
+  /usr/bin/ditto "$source" "$EVIDENCE_DIRECTORY/$destination_name"
+}
+
+copy_release_evidence "$BRAND_CLEARANCE_PATH" brand-clearance.json
+copy_release_evidence "$INSTALLED_ACCEPTANCE_PATH" installed-acceptance.json
+copy_release_evidence "$COMMUNITY_PILOT_SUMMARY_PATH" community-pilot-summary.json
+copy_release_evidence "$BETA_METRICS_PATH" beta-metrics.json
+copy_release_evidence "$PUBLIC_CONTACT_PATH" public-contact.json
 
 (
   cd "$EVIDENCE_DIRECTORY"
@@ -144,5 +158,5 @@ done
   "$EVIDENCE_DIRECTORY" \
   "$ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-release-evidence.zip"
 
-echo "OpenWhisper commercial release finalization passed."
+echo "OpenWhisper signed release finalization passed."
 echo "Evidence: $ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-release-evidence.zip"

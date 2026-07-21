@@ -53,6 +53,25 @@ func hotkeyBindingRejectsUnsafeAndInternalConflicts() {
     }
 }
 
+@Test
+func skillSwitcherShortcutMustRemainDistinctFromDictation() throws {
+    try OpenWhisperShortcutSetValidator.validate(
+        dictation: .f5,
+        skillSwitcher: .skillSwitcher
+    )
+
+    #expect(
+        throws:
+            OpenWhisperShortcutConflictError
+                .dictationAndSkillSwitcherMatch
+    ) {
+        try OpenWhisperShortcutSetValidator.validate(
+            dictation: .skillSwitcher,
+            skillSwitcher: .skillSwitcher
+        )
+    }
+}
+
 @MainActor
 private final class FakeHotkeyToken {
     let binding: HotkeyBinding

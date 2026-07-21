@@ -45,14 +45,48 @@ struct OutputRouter:
     }
 }
 
-enum PreviewDecision:
+enum PreviewAction:
+    String,
     Sendable,
     Equatable
 {
     case replaceSelection
     case pasteToTarget
     case copy
+}
+
+enum PreviewDecision:
+    Sendable,
+    Equatable
+{
+    case replaceSelection(text: String)
+    case pasteToTarget(text: String)
+    case copy(text: String)
     case cancel
+
+    var action: PreviewAction? {
+        switch self {
+        case .replaceSelection:
+            return .replaceSelection
+        case .pasteToTarget:
+            return .pasteToTarget
+        case .copy:
+            return .copy
+        case .cancel:
+            return nil
+        }
+    }
+
+    var finalText: String? {
+        switch self {
+        case let .replaceSelection(text),
+             let .pasteToTarget(text),
+             let .copy(text):
+            return text
+        case .cancel:
+            return nil
+        }
+    }
 }
 
 struct PreviewRequest:
@@ -69,9 +103,14 @@ struct PreviewRequest:
     let selectedText: String?
     let contextCapabilities:
         [SkillCapability]
-    let validationPassed: Bool
+    let initialValidationIssueCodes:
+        [String]
+    let fallbackMessage: String?
     let allowsSelectionReplacement:
         Bool
+    let allowsPasteToTarget: Bool
+    let executionPlan:
+        ResolvedSkillExecutionPlan
 
     init(
         id: UUID = UUID(),
@@ -83,9 +122,14 @@ struct PreviewRequest:
         selectedText: String?,
         contextCapabilities:
             [SkillCapability],
-        validationPassed: Bool,
+        initialValidationIssueCodes:
+            [String] = [],
+        fallbackMessage: String? = nil,
         allowsSelectionReplacement:
-            Bool
+            Bool,
+        allowsPasteToTarget: Bool = true,
+        executionPlan:
+            ResolvedSkillExecutionPlan? = nil
     ) {
         self.id = id
         self.skillID = skillID
@@ -96,16 +140,84 @@ struct PreviewRequest:
         self.resultText = resultText
         self.selectedText = selectedText
         self.contextCapabilities =
-            contextCapabilities
-        self.validationPassed =
-            validationPassed
+            Self.normalizedCapabilities(
+                [.voice] + contextCapabilities
+            )
+        self.initialValidationIssueCodes =
+            Array(
+                initialValidationIssueCodes
+                    .prefix(20)
+            )
+        self.fallbackMessage =
+            fallbackMessage?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
         self.allowsSelectionReplacement =
             allowsSelectionReplacement
+                && allowsPasteToTarget
+        self.allowsPasteToTarget =
+            allowsPasteToTarget
+        self.executionPlan =
+            executionPlan
+            ?? SkillResolver().resolve(
+                manualSkillID: skillID,
+                config: SkillsConfig(),
+                launchAppContext: nil
+            )
     }
 
     var comparisonSource: String {
         selectedText
             ?? originalTranscript
+    }
+
+    var validationSourceText: String {
+        guard
+            let selectedText,
+            !selectedText.isEmpty
+        else {
+            return originalTranscript
+        }
+        return originalTranscript
+            + "\n"
+            + selectedText
+    }
+
+    var sourceLabel: String {
+        let sourceID =
+            executionPlan.installation.sourceID
+        if sourceID == "builtin" {
+            return L10n.text("Built-in")
+        }
+        if sourceID.hasPrefix("registry:") {
+            return L10n.text("Community")
+        }
+        if sourceID == "local.agent-skills" {
+            return L10n.text("Local Agent Skill")
+        }
+        if sourceID == "local.legacy-v1" {
+            return L10n.text("Legacy import")
+        }
+        return L10n.text("Imported")
+    }
+
+    var resolutionLabel: String {
+        executionPlan.source.localizedLabel
+    }
+
+    var hasValidatorFallback: Bool {
+        !initialValidationIssueCodes.isEmpty
+            || fallbackMessage?.isEmpty == false
+    }
+
+    private static func normalizedCapabilities(
+        _ values: [SkillCapability]
+    ) -> [SkillCapability] {
+        var seen: Set<String> = []
+        return values.filter {
+            seen.insert($0.rawValue).inserted
+        }
     }
 }
 
@@ -125,6 +237,15 @@ protocol PreviewSnapshotCapturing:
     AnyObject
 {
     func writePreviewSnapshot(
+        to url: URL
+    ) throws
+}
+
+@MainActor
+protocol PreviewAccessibilityAuditing:
+    AnyObject
+{
+    func writePreviewAccessibilityAudit(
         to url: URL
     ) throws
 }
@@ -168,15 +289,24 @@ enum TextDiffEngine {
         let usesLines =
             original.contains("\n")
                 || revised.contains("\n")
-        let separator =
-            usesLines ? "\n" : " "
+        let usesCharacterTokens =
+            !usesLines
+                && (containsCJK(original)
+                    || containsCJK(revised))
+        let separator = usesLines
+            ? "\n"
+            : (usesCharacterTokens ? "" : " ")
         let originalTokens = tokens(
             original,
-            usesLines: usesLines
+            usesLines: usesLines,
+            usesCharacterTokens:
+                usesCharacterTokens
         )
         let revisedTokens = tokens(
             revised,
-            usesLines: usesLines
+            usesLines: usesLines,
+            usesCharacterTokens:
+                usesCharacterTokens
         )
 
         guard
@@ -323,17 +453,43 @@ enum TextDiffEngine {
 
     private static func tokens(
         _ value: String,
-        usesLines: Bool
+        usesLines: Bool,
+        usesCharacterTokens: Bool
     ) -> [String] {
         if usesLines {
             return value.components(
                 separatedBy: .newlines
             )
         }
+        if usesCharacterTokens {
+            return value.map(String.init)
+        }
         return value.split(
             whereSeparator:
                 \.isWhitespace
         ).map(String.init)
+    }
+
+    private static func containsCJK(
+        _ value: String
+    ) -> Bool {
+        value.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x2E80...0x2FDF,
+                 0x3000...0x303F,
+                 0x3040...0x30FF,
+                 0x3100...0x312F,
+                 0x31A0...0x31BF,
+                 0x3400...0x4DBF,
+                 0x4E00...0x9FFF,
+                 0xAC00...0xD7AF,
+                 0xF900...0xFAFF,
+                 0x20000...0x2FA1F:
+                return true
+            default:
+                return false
+            }
+        }
     }
 }
 
@@ -342,6 +498,7 @@ final class PreviewWindowController:
     NSObject,
     PreviewPresenting,
     PreviewSnapshotCapturing,
+    PreviewAccessibilityAuditing,
     NSWindowDelegate
 {
     private var window: NSWindow?
@@ -365,6 +522,10 @@ final class PreviewWindowController:
             ) { [weak self] decision in
                 self?.finish(decision)
             }
+            .applyingOpenWhisperBrandTint()
+            .applyingAccessibilityDisplayOptionsOverride(
+                .currentVisualAcceptance
+            )
             let controller =
                 NSHostingController(
                     rootView: view
@@ -389,6 +550,13 @@ final class PreviewWindowController:
                 L10n.text(
                     "OpenWhisper Preview"
                 )
+            window.isReleasedWhenClosed = false
+            window.isRestorable = false
+            window.identifier = NSUserInterfaceItemIdentifier(
+                "OpenWhisper.PreviewWindow"
+            )
+            window.collectionBehavior.remove(.fullScreenPrimary)
+            window.standardWindowButton(.zoomButton)?.isEnabled = false
             window.contentViewController =
                 controller
             window.delegate = self
@@ -400,6 +568,9 @@ final class PreviewWindowController:
                 height: 440
             )
             window.center()
+            AccessibilityDisplayOptionsOverride
+                .currentVisualAcceptance
+                .applyAppearance(to: window)
             self.window = window
             NSApplication.shared.activate(
                 ignoringOtherApps: true
@@ -417,6 +588,16 @@ final class PreviewWindowController:
     ) throws {
         try ProductSurfaceSnapshot.write(
             window: window,
+            to: url
+        )
+    }
+
+    func writePreviewAccessibilityAudit(
+        to url: URL
+    ) throws {
+        try AccessibilityAudit.write(
+            window: window,
+            surface: "preview",
             to: url
         )
     }
@@ -462,13 +643,12 @@ final class PreviewWindowController:
 }
 
 private struct PreviewView: View {
-    enum ContentMode:
+    enum ComparisonMode:
         String,
         CaseIterable,
         Identifiable
     {
         case diff = "Diff"
-        case result = "Result"
         case source = "Source"
 
         var id: String { rawValue }
@@ -479,222 +659,365 @@ private struct PreviewView: View {
         (PreviewDecision) -> Void
 
     @State private var mode:
-        ContentMode = .diff
+        ComparisonMode = .diff
+    @State private var editedText: String
+
+    init(
+        request: PreviewRequest,
+        onDecision:
+            @escaping (PreviewDecision) -> Void
+    ) {
+        self.request = request
+        self.onDecision = onDecision
+        _editedText = State(
+            initialValue: request.resultText
+        )
+    }
 
     private var diff: TextDiff {
         TextDiffEngine.diff(
-            original:
-                request
-                    .comparisonSource,
-            revised:
-                request.resultText
+            original: request.comparisonSource,
+            revised: editedText
         )
+    }
+
+    private var validation:
+        SkillValidationReport
+    {
+        SkillValidatorEngine().validate(
+            output: editedText,
+            originalText:
+                request.validationSourceText,
+            plan: request.executionPlan
+        )
+    }
+
+    private var isEdited: Bool {
+        editedText != request.resultText
+    }
+
+    private var isUnreviewedFallback: Bool {
+        request.hasValidatorFallback
+            && !isEdited
+    }
+
+    private var hasText: Bool {
+        !editedText.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty
+    }
+
+    private var canApply: Bool {
+        hasText
+            && validation.isValid
+            && !isUnreviewedFallback
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            VStack(alignment: .leading, spacing: 14) {
-                Picker(
-                    L10n.text(
-                        "Preview content"
-                    ),
-                    selection: $mode
+            ScrollView {
+                VStack(
+                    alignment: .leading,
+                    spacing: 16
                 ) {
-                    ForEach(
-                        ContentMode.allCases
-                    ) { mode in
-                        Text(
-                            L10n.text(
-                                mode.rawValue
-                            )
-                        ).tag(mode)
+                    if request.hasValidatorFallback {
+                        fallbackNotice
                     }
+                    runSummary
+                    comparison
+                    editableResult
+                    validationStatus
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 420)
-
-                content
-                    .frame(
-                        maxWidth: .infinity,
-                        maxHeight: .infinity
-                    )
+                .padding(20)
             }
-            .padding(20)
-
             Divider()
             actions
         }
         .frame(
-            minWidth: 640,
-            minHeight: 440
+            minWidth: 680,
+            minHeight: 560
         )
         .background(
-            Color(
-                nsColor:
-                    .windowBackgroundColor
-            )
+            Color(nsColor: .windowBackgroundColor)
         )
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(
-                systemName:
-                    "text.badge.checkmark"
-            )
-            .font(.system(size: 26))
-            .foregroundStyle(.blue)
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "text.badge.checkmark")
+                .font(.system(size: 26))
+                .foregroundStyle(.blue)
             VStack(alignment: .leading, spacing: 4) {
                 Text(request.skillName)
-                    .font(
-                        .system(
-                            size: 20,
-                            weight:
-                                .semibold
-                        )
-                    )
+                    .font(.system(size: 20, weight: .semibold))
                 Text(
                     L10n.format(
-                        "Skill %@ · version %@",
-                        request.skillID,
+                        "%@ · %@ · %@",
+                        request.sourceLabel,
+                        request.resolutionLabel,
                         request.skillVersion
                     )
                 )
-                .font(
-                    .system(
-                        size: 10,
-                        design:
-                            .monospaced
-                    )
-                )
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             }
             Spacer()
             Label(
-                request.validationPassed
-                    ? L10n.text(
-                        "Validated"
-                    )
-                    : L10n.text(
-                        "Validation failed"
-                    ),
-                systemImage:
-                    request
-                        .validationPassed
-                        ? "checkmark.shield.fill"
-                        : "exclamationmark.shield.fill"
+                editStateLabel,
+                systemImage: isEdited
+                    ? "pencil.line"
+                    : (request.hasValidatorFallback
+                        ? "arrow.uturn.backward.circle"
+                        : "sparkles")
             )
-            .font(
-                .system(
-                    size: 11,
-                    weight: .medium
-                )
-            )
+            .font(.system(size: 11, weight: .medium))
             .foregroundStyle(
-                request.validationPassed
-                    ? .green
-                    : .orange
+                request.hasValidatorFallback && !isEdited
+                    ? .orange
+                    : .secondary
             )
         }
         .padding(20)
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch mode {
-        case .diff:
-            ScrollView {
-                VStack(
-                    alignment: .leading,
-                    spacing: 8
-                ) {
-                    Text(
-                        L10n.format(
-                            "%ld additions · %ld removals",
-                            diff.addedCount,
-                            diff.removedCount
-                        )
+    private var editStateLabel: String {
+        if isEdited {
+            return L10n.text("Edited by you")
+        }
+        if request.hasValidatorFallback {
+            return L10n.text("Fallback transcript")
+        }
+        return L10n.text("AI generated")
+    }
+
+    private var fallbackNotice: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(
+                L10n.text(
+                    "Skill output did not pass its checks."
+                ),
+                systemImage:
+                    "exclamationmark.triangle.fill"
+            )
+            .font(.system(size: 12, weight: .semibold))
+            Text(
+                L10n.text(
+                    "Showing the original normalized transcript instead. Review and edit it, or copy it without changing the target."
+                )
+            )
+            .font(.system(size: 11))
+            if !request.initialValidationIssueCodes.isEmpty {
+                Text(
+                    L10n.format(
+                        "Reason: %@",
+                        request.initialValidationIssueCodes
+                            .joined(separator: ", ")
                     )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    ForEach(diff.segments) {
-                        segment in
-                        Text(segment.text)
-                            .font(
-                                .system(
-                                    size: 13,
-                                    design:
-                                        .monospaced
-                                )
-                            )
-                            .foregroundStyle(
-                                foreground(
-                                    for:
-                                        segment
-                                            .kind
-                                )
-                            )
-                            .strikethrough(
-                                segment.kind
-                                    == .removed
-                            )
-                            .padding(
-                                .horizontal,
-                                8
-                            )
-                            .padding(
-                                .vertical,
-                                4
-                            )
-                            .frame(
-                                maxWidth:
-                                    .infinity,
-                                alignment:
-                                    .leading
-                            )
-                            .background(
-                                background(
-                                    for:
-                                        segment
-                                            .kind
-                                )
-                            )
-                            .clipShape(
-                                RoundedRectangle(
-                                    cornerRadius:
-                                        6
-                                )
-                            )
+                )
+                .font(.system(size: 10, design: .monospaced))
+            }
+            if let fallbackMessage = request.fallbackMessage,
+               !fallbackMessage.isEmpty
+            {
+                Text(fallbackMessage)
+                    .font(.system(size: 10))
+            }
+        }
+        .foregroundStyle(.orange)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var runSummary: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 18) {
+            Label(
+                contextSummary,
+                systemImage: "checkmark.shield"
+            )
+            Label(
+                validationSummary,
+                systemImage: validation.isValid
+                    && !isUnreviewedFallback
+                    ? "checkmark.circle.fill"
+                    : "exclamationmark.circle.fill"
+            )
+            .foregroundStyle(
+                validation.isValid
+                    && !isUnreviewedFallback
+                    ? .green
+                    : .orange
+            )
+            Spacer()
+        }
+        .font(.system(size: 11, weight: .medium))
+    }
+
+    private var contextSummary: String {
+        let labels = request.contextCapabilities
+            .map(capabilityLabel)
+            .joined(separator: " + ")
+        return L10n.format(
+            "Used: %@",
+            labels
+        )
+    }
+
+    private var validationSummary: String {
+        if isUnreviewedFallback {
+            return L10n.text(
+                "Validator: fallback needs review"
+            )
+        }
+        if validation.isValid {
+            return L10n.text("Validator: passed")
+        }
+        return L10n.format(
+            "Validator: %@",
+            validation.issues
+                .map { $0.code.rawValue }
+                .joined(separator: ", ")
+        )
+    }
+
+    private var comparison: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.text("Changes"))
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Picker(
+                    L10n.text("Preview content"),
+                    selection: $mode
+                ) {
+                    ForEach(ComparisonMode.allCases) { mode in
+                        Text(L10n.text(mode.rawValue))
+                            .tag(mode)
                     }
                 }
-                .textSelection(.enabled)
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 180)
             }
-        case .result:
-            textEditor(
-                request.resultText
-            )
-        case .source:
-            textEditor(
-                request
-                    .comparisonSource
-            )
+            Group {
+                switch mode {
+                case .diff:
+                    diffView
+                case .source:
+                    readOnlyText(request.comparisonSource)
+                }
+            }
+            .frame(minHeight: 120, maxHeight: 200)
         }
     }
 
-    private func textEditor(
+    private var diffView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(
+                    L10n.format(
+                        "%ld additions · %ld removals",
+                        diff.addedCount,
+                        diff.removedCount
+                    )
+                )
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                ForEach(diff.segments) { segment in
+                    Text(segment.text)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(foreground(for: segment.kind))
+                        .strikethrough(segment.kind == .removed)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(
+                            maxWidth: .infinity,
+                            alignment: .leading
+                        )
+                        .background(background(for: segment.kind))
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: 6)
+                        )
+                        .accessibilityLabel(
+                            diffAccessibilityLabel(segment)
+                        )
+                }
+            }
+            .padding(10)
+            .textSelection(.enabled)
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var editableResult: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(L10n.text("Editable result"))
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Text(
+                    L10n.format(
+                        "%ld characters",
+                        editedText.count
+                    )
+                )
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            }
+            TextEditor(text: $editedText)
+                .font(.system(size: 13, design: .monospaced))
+                .frame(minHeight: 130, idealHeight: 170)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            Color(nsColor: .separatorColor)
+                                .opacity(0.6),
+                            lineWidth: 0.5
+                        )
+                }
+                .accessibilityLabel(
+                    L10n.text("Editable result")
+                )
+        }
+    }
+
+    @ViewBuilder
+    private var validationStatus: some View {
+        if !validation.isValid {
+            Label(
+                L10n.format(
+                    "Fix these checks before replacing or pasting: %@",
+                    validation.issues
+                        .map { $0.code.rawValue }
+                        .joined(separator: ", ")
+                ),
+                systemImage: "exclamationmark.shield.fill"
+            )
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.orange)
+        } else if isUnreviewedFallback {
+            Text(
+                L10n.text(
+                    "This is a fallback transcript. Copy it, or edit it into a valid Skill result before applying."
+                )
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(.orange)
+        }
+    }
+
+    private func readOnlyText(
         _ value: String
     ) -> some View {
         ScrollView {
             Text(value)
-                .font(
-                    .system(
-                        size: 13,
-                        design:
-                            .monospaced
-                    )
-                )
+                .font(.system(size: 13, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(
                     maxWidth: .infinity,
@@ -702,86 +1025,86 @@ private struct PreviewView: View {
                 )
                 .padding(12)
         }
-        .background(
-            Color(
-                nsColor:
-                    .textBackgroundColor
-            )
-        )
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 8
-            )
-        )
+        .background(Color(nsColor: .textBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var actions: some View {
         HStack(spacing: 10) {
-            if !request
-                .contextCapabilities
-                .isEmpty
-            {
-                Label(
-                    L10n.text(
-                        "Selected text only"
-                    ),
-                    systemImage:
-                        "selection.pin.in.out"
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+            Button(L10n.text("Reset to generated result")) {
+                editedText = request.resultText
             }
+            .disabled(!isEdited)
             Spacer()
-            Button(
-                L10n.text("Cancel")
-            ) {
+            Button(L10n.text("Cancel")) {
                 onDecision(.cancel)
             }
-            .keyboardShortcut(
-                .cancelAction
-            )
-            Button(
-                L10n.text("Copy")
-            ) {
-                onDecision(.copy)
+            .keyboardShortcut(.cancelAction)
+            Button(L10n.text("Copy")) {
+                onDecision(.copy(text: editedText))
             }
-            if request
-                .allowsSelectionReplacement
-            {
-                Button(
-                    L10n.text(
-                        "Replace Selection"
-                    )
-                ) {
+            .disabled(!hasText)
+            if request.allowsSelectionReplacement {
+                Button(L10n.text("Replace Selection")) {
                     onDecision(
-                        .replaceSelection
+                        .replaceSelection(
+                            text: editedText
+                        )
                     )
                 }
-                .buttonStyle(
-                    .borderedProminent
-                )
-                .keyboardShortcut(
-                    .defaultAction
-                )
-            } else {
-                Button(
-                    L10n.text(
-                        "Paste to Target"
-                    )
-                ) {
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canApply)
+            } else if request.allowsPasteToTarget {
+                Button(L10n.text("Paste to Target")) {
                     onDecision(
-                        .pasteToTarget
+                        .pasteToTarget(
+                            text: editedText
+                        )
                     )
                 }
-                .buttonStyle(
-                    .borderedProminent
-                )
-                .keyboardShortcut(
-                    .defaultAction
-                )
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canApply)
             }
         }
         .padding(16)
+    }
+
+    private func capabilityLabel(
+        _ capability: SkillCapability
+    ) -> String {
+        switch capability {
+        case .voice:
+            return L10n.text("Voice")
+        case .selection:
+            return L10n.text("Selected text")
+        case .focusedParagraph:
+            return L10n.text("Focused paragraph")
+        case .conversationWindow:
+            return L10n.text("Conversation window")
+        case .clipboard:
+            return L10n.text("Clipboard")
+        case .styleCapsule:
+            return L10n.text("Style Capsule")
+        case .externalAction:
+            return L10n.text("Unsupported action")
+        }
+    }
+
+    private func diffAccessibilityLabel(
+        _ segment: TextDiffSegment
+    ) -> String {
+        let status: String
+        switch segment.kind {
+        case .unchanged:
+            status = L10n.text("Unchanged")
+        case .added:
+            status = L10n.text("Added")
+        case .removed:
+            status = L10n.text("Removed")
+        }
+        return "\(status): \(segment.text)"
     }
 
     private func foreground(

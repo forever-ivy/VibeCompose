@@ -4,20 +4,43 @@ import Testing
 @testable import OpenWhisper
 
 @Test
-func minimalOverlayPresetUsesNineBarVoiceGlyph() {
+func nativeAppKitOverlayPresetUsesNineBarVoiceGlyph() {
     let preset = OverlayStylePreset.dictationHUD
 
-    #expect(preset.primaryPillWidth == 284)
-    #expect(preset.primaryPillHeight == 44)
-    #expect(preset.errorPillWidth == 320)
-    #expect(preset.errorPillHeight == 56)
-    #expect(preset.cornerRadius == 16)
-    #expect(preset.topInset == 16)
+    #expect(preset.primaryPillWidth == 408)
+    #expect(preset.primaryPillHeight == 76)
+    #expect(preset.errorPillWidth == 408)
+    #expect(preset.errorPillHeight == 76)
+    #expect(preset.chromeInset == 10)
+    #expect(preset.primaryPillWidth - (preset.chromeInset * 2) == 388)
+    #expect(preset.primaryPillHeight - (preset.chromeInset * 2) == 56)
+    #expect(preset.cornerRadius == 18)
+    #expect(preset.topInset == 6)
     #expect(preset.waveformBarCount == 9)
     #expect(preset.showsTranscriptPreview == false)
-    #expect(preset.inlineCancelControlSize == 14)
-    #expect(preset.timerFontSize == 10)
+    #expect(preset.inlineCancelControlSize == 22)
+    #expect(preset.timerFontSize == 11)
     #expect(preset.errorAutoHideDelay == 5)
+}
+
+@Test
+func nativeAppKitHudLeavesRoomForChineseSkillAndShortcutCopy() {
+    let preset = OverlayStylePreset.dictationHUD
+    let sample = "代码提示词 · 再次按 ^M 开始转写"
+    let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    let titleWidth = (sample as NSString).size(
+        withAttributes: [.font: font]
+    ).width
+    let availableTitleWidth = preset.primaryPillWidth
+        - (preset.chromeInset * 2)
+        - (preset.contentPaddingH * 2)
+        - preset.leadingVisualWidth
+        - preset.textGap
+        - preset.timerWidth
+        - preset.inlineControlGap
+        - preset.inlineCancelControlSize
+
+    #expect(titleWidth <= availableTitleWidth)
 }
 
 @Test
@@ -31,11 +54,16 @@ func overlayStatesStillDifferentiateLeadingVisualFamilies() {
 }
 
 @Test
-func overlayStatesStayCompactExceptErrors() {
-    #expect(OverlayVisualState.recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:03").allowsSupplementaryText == false)
-    #expect(OverlayVisualState.processing.allowsSupplementaryText == false)
-    #expect(OverlayVisualState.success(.inserted).allowsSupplementaryText == false)
-    #expect(OverlayVisualState.error("Microphone permission is missing").allowsSupplementaryText == true)
+func overlayStatesUseOneLineOfVisibleCopy() {
+    let states: [OverlayVisualState] = [
+        .recording(levels: Array(repeating: 0.2, count: 9), elapsedText: "00:03"),
+        .processing,
+        .success(.inserted),
+        .error("Microphone permission is missing"),
+        .retryableError("Cloudflare 403"),
+    ]
+
+    #expect(states.allSatisfy { !$0.label.isEmpty })
 }
 
 @Test
@@ -72,7 +100,7 @@ func retryableErrorStateShowsRetryControlWithoutCancelControl() {
 }
 
 @Test
-func overlayErrorMessageIsCollapsedToSingleShortLine() {
+func overlayErrorMessageIsCollapsedForVoiceOverAnnouncement() {
     let state = OverlayVisualState.error("Microphone permission is missing.\nGrant access in Settings and try again after restarting OpenWhisper.")
 
     #expect(state.supplementaryText == "Microphone permission is missing. Grant access in Settings and try…")
@@ -125,7 +153,7 @@ func waveformNormalizerPadsMissingSamplesToTheRequestedWaveCount() {
 }
 
 @Test
-func overlayPrimaryStatesUseStableGeometryAndErrorsHaveRoomForRecoveryCopy() {
+func everyOverlayStateUsesStableCompactGeometry() {
     let preset = OverlayStylePreset.dictationHUD
     let recordingSize = preset.size(
         for: .recording(
@@ -138,6 +166,8 @@ func overlayPrimaryStatesUseStableGeometryAndErrorsHaveRoomForRecoveryCopy() {
     #expect(recordingSize == preset.size(for: .success(.inserted)))
     #expect(preset.size(for: .error("boom")).width == preset.errorPillWidth)
     #expect(preset.size(for: .error("boom")).height == preset.errorPillHeight)
+    #expect(preset.size(for: .error("boom")) == recordingSize)
+    #expect(preset.size(for: .retryableError("boom")) == recordingSize)
     #expect(recordingSize.width >= preset.inlineControlReservedWidth)
 }
 
@@ -188,8 +218,6 @@ func overlayControllerIncreaseContrastStrengthensShellTextAndControls() {
         increasedAppearance.backgroundBorderAlpha
             > standardAppearance.backgroundBorderAlpha
     )
-    #expect(standardAppearance.detailUsesPrimaryText == false)
-    #expect(increasedAppearance.detailUsesPrimaryText == true)
     #expect(increasedAppearance.timerOpacity > standardAppearance.timerOpacity)
     #expect(
         increasedAppearance.cancelControlOpacity
@@ -271,6 +299,16 @@ func overlayControllerUsesIntegratedSessionControlInsideMainPanel() {
     #expect(snapshot.usesIntegratedSessionControl == true)
     #expect(snapshot.hasDetachedClosePanel == false)
     #expect(snapshot.panelIgnoresMouseEvents == false)
+}
+
+@MainActor
+@Test
+func overlayControllerUsesClassicNativeAppKitMaterial() {
+    let overlay = OverlayController()
+    defer { overlay.hide() }
+
+    #expect(overlay.debugSnapshot.usesLiquidGlassMaterial == false)
+    #expect(overlay.debugSnapshot.usesNativeAppKitHUDMaterial)
 }
 
 @MainActor

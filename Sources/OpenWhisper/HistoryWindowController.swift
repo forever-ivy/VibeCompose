@@ -28,36 +28,64 @@ private final class HistoryAudioPlayer: ObservableObject {
 final class HistoryWindowController: NSWindowController {
     init(
         hotkeyBinding: HotkeyBinding = .f5,
-        onLoadTranscriptionHistory: @escaping () -> [TranscriptionHistoryRecord],
-        onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
+        onLoadTranscriptionHistory: @escaping @Sendable () async -> [TranscriptionHistoryRecord],
+        onLoadRecoveryHistory: @escaping @Sendable () async -> [RecoveryRecord],
         onResolveRecoveryAudioURL: @escaping (RecoveryRecord) -> Result<URL, any Error>,
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
+        onCanUndoTranscriptionRecord: @escaping (UUID) -> Bool,
+        onUndoTranscriptionRecord:
+            @escaping (UUID) async -> SafeUndoOutcome,
         onDeleteTranscriptionRecord: @escaping (UUID) -> Result<Void, any Error>,
         onDeleteRecoveryRecord: @escaping (UUID) -> Result<Void, any Error>
     ) {
         let view = HistoryWindowView(
+            isEmbedded: false,
             hotkeyBinding: hotkeyBinding,
             onLoadTranscriptionHistory: onLoadTranscriptionHistory,
             onLoadRecoveryHistory: onLoadRecoveryHistory,
             onResolveRecoveryAudioURL: onResolveRecoveryAudioURL,
             onRetryRecoveryRecord: onRetryRecoveryRecord,
+            onCanUndoTranscriptionRecord:
+                onCanUndoTranscriptionRecord,
+            onUndoTranscriptionRecord:
+                onUndoTranscriptionRecord,
             onDeleteTranscriptionRecord: onDeleteTranscriptionRecord,
             onDeleteRecoveryRecord: onDeleteRecoveryRecord
         )
+        .applyingOpenWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
         )
         let hostingController = NSHostingController(rootView: view)
         let window = HistoryCommandClosingWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 640),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [
+                .titled,
+                .closable,
+                .miniaturizable,
+                .resizable,
+                .fullSizeContentView,
+            ],
             backing: .buffered,
             defer: false
         )
         window.title = L10n.text("OpenWhisper History")
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.toolbarStyle = .unified
+        let historyToolbar = NSToolbar(
+            identifier: "OpenWhisper.HistoryToolbar"
+        )
+        historyToolbar.displayMode = .iconOnly
+        historyToolbar.allowsUserCustomization = false
+        historyToolbar.autosavesConfiguration = false
+        window.toolbar = historyToolbar
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.HistoryWindow")
+        window.collectionBehavior.remove(.fullScreenPrimary)
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.minSize = NSSize(width: 760, height: 500)
         window.tabbingMode = .disallowed
         let restored = window.setFrameUsingName("OpenWhisper.HistoryWindow")
@@ -78,8 +106,13 @@ final class HistoryWindowController: NSWindowController {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     func writeSnapshot(to url: URL) throws {
@@ -101,7 +134,7 @@ private final class HistoryCommandClosingWindow: NSWindow {
     }
 }
 
-private struct HistoryWindowView: View {
+struct HistoryWindowView: View {
     @State private var transcriptionRecords: [TranscriptionHistoryRecord] = []
     @State private var recoveryRecords: [RecoveryRecord] = []
     @State private var query = ""
@@ -112,37 +145,41 @@ private struct HistoryWindowView: View {
     @State private var pendingDeletion: HistoryEntry?
     @State private var message: String?
     @State private var messageIsError = false
+    @State private var isRefreshing = false
     @StateObject private var audioPlayer = HistoryAudioPlayer()
 
+    let isEmbedded: Bool
     let hotkeyBinding: HotkeyBinding
-    let onLoadTranscriptionHistory: () -> [TranscriptionHistoryRecord]
-    let onLoadRecoveryHistory: () -> [RecoveryRecord]
+    let onLoadTranscriptionHistory: @Sendable () async -> [TranscriptionHistoryRecord]
+    let onLoadRecoveryHistory: @Sendable () async -> [RecoveryRecord]
     let onResolveRecoveryAudioURL: (RecoveryRecord) -> Result<URL, any Error>
     let onRetryRecoveryRecord: (RecoveryRecord) -> Void
+    let onCanUndoTranscriptionRecord: (UUID) -> Bool
+    let onUndoTranscriptionRecord:
+        (UUID) async -> SafeUndoOutcome
     let onDeleteTranscriptionRecord: (UUID) -> Result<Void, any Error>
     let onDeleteRecoveryRecord: (UUID) -> Result<Void, any Error>
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
-
-            NavigationSplitView {
-                historyList
-                    .navigationSplitViewColumnWidth(min: 300, ideal: 350, max: 430)
-            } detail: {
-                detail
-            }
+        ViewThatFits(in: .horizontal) {
+            regularLayout
+            compactLayout
         }
-        .frame(minWidth: 760, minHeight: 500)
-        .onAppear(perform: refresh)
+        .frame(minHeight: 500)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .modifier(HistoryChromeModifier(
+            isEmbedded: isEmbedded,
+            query: $query,
+            kindFilter: $kindFilter,
+            statusFilter: $statusFilter,
+            dateFilter: $dateFilter,
+            isRefreshing: isRefreshing,
+            onRefresh: { Task { await refresh() } }
+        ))
         .task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled else {
-                    return
-                }
-                refresh()
+                await refresh()
+                try? await Task.sleep(for: .seconds(5))
             }
         }
         .alert(
@@ -163,42 +200,27 @@ private struct HistoryWindowView: View {
         }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "clock.arrow.circlepath")
-                .foregroundStyle(.secondary)
-            TextField(L10n.text("Search history"), text: $query)
-                .textFieldStyle(.roundedBorder)
-                .frame(minWidth: 150, maxWidth: .infinity)
-            Picker(L10n.text("Type"), selection: $kindFilter) {
-                ForEach(HistoryKindFilter.allCases) { filter in
-                    Text(L10n.text(filter.rawValue)).tag(filter)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 105)
-            Picker(L10n.text("Status"), selection: $statusFilter) {
-                ForEach(HistoryStatusFilter.allCases) { filter in
-                    Text(L10n.text(filter.rawValue)).tag(filter)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 110)
-            Picker(L10n.text("Date"), selection: $dateFilter) {
-                ForEach(HistoryDateFilter.allCases) { filter in
-                    Text(L10n.text(filter.rawValue)).tag(filter)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 120)
-            Button {
-                refresh()
-            } label: {
-                Label(L10n.text("Refresh"), systemImage: "arrow.clockwise")
-            }
+    private var regularLayout: some View {
+        HStack(spacing: 0) {
+            historyList
+                .frame(width: 320)
+            Divider()
+            detail
+                .frame(minWidth: 420)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .frame(minWidth: 760)
+    }
+
+    private var compactLayout: some View {
+        HStack(spacing: 0) {
+            historyList
+                .frame(minWidth: 220, idealWidth: 260, maxWidth: 280)
+            Divider()
+            detail
+                .frame(minWidth: 260)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     private var historyList: some View {
@@ -206,7 +228,8 @@ private struct HistoryWindowView: View {
             historyRow(entry)
                 .tag(entry.id)
         }
-        .listStyle(.sidebar)
+        .listStyle(.inset)
+        .listRowSeparator(.hidden)
         .overlay {
             if filteredEntries.isEmpty {
                 emptyState
@@ -215,40 +238,55 @@ private struct HistoryWindowView: View {
     }
 
     private func historyRow(_ entry: HistoryEntry) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(
-                systemName: entry.kind == .recovery
-                    ? "waveform.badge.exclamationmark"
-                    : outcomeSymbol(entry.outcome)
-            )
-            .foregroundStyle(entry.kind == .recovery ? .orange : outcomeColor(entry.outcome))
-            .frame(width: 18)
+        HStack(alignment: .top, spacing: 12) {
+            historyIconWell(for: entry)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(alignment: .firstTextBaseline) {
                     Text(entry.target)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(OpenWhisperTypography.callout(.semibold))
                         .lineLimit(1)
                     Spacer()
                     Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
-                        .font(.system(size: 10))
+                        .font(OpenWhisperTypography.micro())
                         .foregroundStyle(.secondary)
                 }
                 Text(entry.summary)
-                    .font(.system(size: 11))
+                    .font(OpenWhisperTypography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                Text(
-                    entry.kind == .recovery
-                        ? L10n.text("Recovery")
-                        : TextDeliveryStatus.localizedLabel(for: entry.outcome)
-                )
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(entry.kind == .recovery ? .orange : outcomeColor(entry.outcome))
+                metadataRow(for: entry)
             }
         }
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
+    }
+
+    private func historyIconWell(for entry: HistoryEntry) -> some View {
+        let symbol: String = entry.kind == .recovery
+            ? "waveform.badge.exclamationmark"
+            : outcomeSymbol(entry.outcome)
+        return Image(systemName: symbol)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color(nsColor: OpenWhisperPalette.brandBlue))
+            .frame(width: 32, height: 32)
+            .background(
+                Color(nsColor: OpenWhisperPalette.brandBlue).opacity(0.09),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .accessibilityHidden(true)
+    }
+
+    private func metadataRow(for entry: HistoryEntry) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: entry.kind == .recovery ? "waveform" : "text.bubble.fill")
+                .font(.system(size: 8, weight: .semibold))
+            Text(entry.kind == .recovery
+                ? L10n.text("Recovery")
+                : TextDeliveryStatus.localizedLabel(for: entry.outcome))
+                .font(OpenWhisperTypography.micro(.medium))
+        }
+        .foregroundStyle(.tertiary)
     }
 
     @ViewBuilder
@@ -257,7 +295,7 @@ private struct HistoryWindowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     detailHeader(entry)
-                    Divider()
+                    Divider().opacity(0.5)
                     if let record = entry.transcriptionRecord {
                         transcriptionDetail(record)
                     } else if let record = entry.recoveryRecord {
@@ -265,52 +303,156 @@ private struct HistoryWindowView: View {
                     }
                     if let message {
                         Text(message)
-                            .font(.system(size: 11))
-                            .foregroundStyle(messageIsError ? .red : .secondary)
+                            .font(OpenWhisperTypography.caption())
+                            .foregroundStyle(
+                                messageIsError
+                                    ? Color(nsColor: OpenWhisperPalette.error)
+                                    : Color.secondary
+                            )
                     }
                 }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(28)
+                .frame(maxWidth: 620, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         } else {
-            VStack(spacing: 10) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 30))
-                    .foregroundStyle(.secondary)
-                Text(L10n.text("Select a record"))
-                    .font(.system(size: 17, weight: .semibold))
-                Text(L10n.text("Inspect, copy, retry, reveal, play, or delete local dictation records."))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(30)
+            OpenWhisperEmptyState(
+                systemImage: "clock.arrow.circlepath",
+                title: L10n.text("Select a record"),
+                detail: L10n.text("Inspect, copy, retry, reveal, play, or delete local dictation records.")
+            )
         }
     }
 
     private func detailHeader(_ entry: HistoryEntry) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(entry.target)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(OpenWhisperTypography.title())
+                    .tracking(-0.18)
                 Spacer()
                 Button(role: .destructive) {
                     pendingDeletion = entry
                 } label: {
                     Label(L10n.text("Delete"), systemImage: "trash")
                 }
+                .buttonStyle(OpenWhisperSecondaryButtonStyle())
             }
             Text(entry.timestamp.formatted(date: .complete, time: .standard))
-                .font(.system(size: 12))
+                .font(OpenWhisperTypography.callout())
                 .foregroundStyle(.secondary)
-            Text(TextDeliveryStatus.localizedLabel(for: entry.outcome))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(outcomeColor(entry.outcome))
+            OpenWhisperStatusChip(
+                text: TextDeliveryStatus.localizedLabel(for: entry.outcome),
+                kind: statusChipKind(for: entry.outcome)
+            )
+        }
+    }
+
+    private func statusChipKind(for outcome: String) -> OpenWhisperStatusChip.Kind {
+        switch TextDeliveryStatus.kind(for: outcome) {
+        case .insertedAndVerified:
+            return .success
+        case .pasteDispatched:
+            return .accent
+        case .clipboard:
+            return .warning
+        case .error:
+            return .error
+        case .unknown:
+            return .neutral
         }
     }
 
     private func transcriptionDetail(_ record: TranscriptionHistoryRecord) -> some View {
         VStack(alignment: .leading, spacing: 16) {
+            if let skillName = record.skillName {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.text("Skill run"))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text(skillName)
+                        .font(.system(size: 14, weight: .semibold))
+                    Text(
+                        [
+                            record.skillSource.flatMap {
+                                SkillResolutionSource(rawValue: $0)?
+                                    .localizedLabel
+                            },
+                            record.skillVersion.map { "v\($0)" },
+                            record.skillRevision,
+                        ].compactMap { $0 }.joined(separator: " · ")
+                    )
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    if !record.skillValidationIssueCodes.isEmpty {
+                        Label(
+                            L10n.format(
+                                "Validator fallback: %@",
+                                record.skillValidationIssueCodes
+                                    .joined(separator: ", ")
+                            ),
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.orange)
+                    }
+                    if let fallback = record.skillFallbackMessage {
+                        Text(fallback)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.orange)
+                    }
+                    if let action = record.skillDeliveryAction {
+                        Label(
+                            record.skillResultEdited
+                                ? L10n.format(
+                                    "Edited by you · %@",
+                                    localizedDeliveryAction(
+                                        action
+                                    )
+                                )
+                                : localizedDeliveryAction(
+                                    action
+                                ),
+                            systemImage:
+                                record.skillResultEdited
+                                ? "pencil.line"
+                                : "arrow.right.circle"
+                        )
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    }
+                    if let receipt = record.skillRunReceipt {
+                        let context = receipt.contextDecisions
+                            .filter {
+                                $0.decisionCode != "not_requested"
+                            }
+                            .map { decision in
+                                "\(decision.source.title):\(decision.decisionCode)"
+                            }
+                            .joined(separator: " · ")
+                        if !context.isEmpty {
+                            Label(
+                                L10n.format(
+                                    "Context: %@",
+                                    context
+                                ),
+                                systemImage: "checkmark.shield"
+                            )
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        }
+                        Text(
+                            L10n.format(
+                                "Receipt: %@ · %@",
+                                receipt.targetVerification,
+                                receipt.finalUserAction
+                            )
+                        )
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
             historyTextSection(title: "Final text", text: record.finalText)
 
             if let rawText = record.rawText,
@@ -330,7 +472,67 @@ private struct HistoryWindowView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }
+                if record.undoState == .available,
+                   onCanUndoTranscriptionRecord(record.id)
+                {
+                    Button {
+                        Task { @MainActor in
+                            let outcome =
+                                await onUndoTranscriptionRecord(
+                                    record.id
+                                )
+                            message = outcome.statusDetail
+                            messageIsError = outcome != .restored
+                            Task { await refresh() }
+                        }
+                    } label: {
+                        Label(
+                            L10n.text("Safe Undo"),
+                            systemImage: "arrow.uturn.backward.circle"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else if let undoState = record.undoState {
+                    Label(
+                        localizedUndoState(undoState),
+                        systemImage: undoState == .restored
+                            ? "checkmark.arrow.trianglehead.counterclockwise"
+                            : "arrow.uturn.backward.circle"
+                    )
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                }
             }
+        }
+    }
+
+    private func localizedUndoState(
+        _ state: HistoryUndoState
+    ) -> String {
+        switch state {
+        case .available:
+            return L10n.text("Safe Undo expired")
+        case .restored:
+            return L10n.text("Insertion safely undone")
+        case .originalCopied:
+            return L10n.text("Original selected text copied")
+        case .unavailable:
+            return L10n.text("Safe Undo unavailable")
+        }
+    }
+
+    private func localizedDeliveryAction(
+        _ action: String
+    ) -> String {
+        switch PreviewAction(rawValue: action) {
+        case .replaceSelection:
+            return L10n.text("Replaced selection")
+        case .pasteToTarget:
+            return L10n.text("Pasted to target")
+        case .copy:
+            return L10n.text("Copied")
+        case nil:
+            return action
         }
     }
 
@@ -389,39 +591,47 @@ private struct HistoryWindowView: View {
         text: String,
         color: Color = .primary
     ) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(L10n.text(title))
-                .font(.system(size: 12, weight: .semibold))
+                .font(OpenWhisperTypography.micro(.semibold))
                 .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.3)
             Text(text)
-                .font(.system(size: 13))
+                .font(OpenWhisperTypography.body())
                 .foregroundStyle(color)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(14)
+                .background(
+                    Color(nsColor: OpenWhisperPalette.insetSurface),
+                    in: RoundedRectangle(
+                        cornerRadius: OpenWhisperMetrics.radiusM,
+                        style: .continuous
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: OpenWhisperMetrics.radiusM,
+                        style: .continuous
+                    )
+                    .stroke(
+                        Color(nsColor: OpenWhisperPalette.hairline),
+                        lineWidth: 0.5
+                    )
+                }
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 9) {
-            Image(systemName: "text.bubble")
-                .font(.system(size: 28))
-                .foregroundStyle(.secondary)
-            Text(L10n.text("No matching history"))
-                .font(.system(size: 15, weight: .semibold))
-            Text(
-                L10n.format(
-                    "Press %@ to create your first dictation, or change the search and filters.",
-                    hotkeyBinding.displayName
-                )
+        OpenWhisperEmptyState(
+            systemImage: "text.bubble",
+            title: L10n.text("No matching history"),
+            detail: L10n.format(
+                "Press %@ to create your first dictation, or change the search and filters.",
+                hotkeyBinding.displayName
             )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 260)
-        }
+        )
     }
 
     private var entries: [HistoryEntry] {
@@ -447,9 +657,24 @@ private struct HistoryWindowView: View {
         return entries.first { $0.id == selectedEntryID }
     }
 
-    private func refresh() {
-        transcriptionRecords = onLoadTranscriptionHistory()
-        recoveryRecords = onLoadRecoveryHistory()
+    private func refresh() async {
+        guard !isRefreshing else {
+            return
+        }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        let loadedTranscriptionRecords = await onLoadTranscriptionHistory()
+        let loadedRecoveryRecords = await onLoadRecoveryHistory()
+        guard !Task.isCancelled else {
+            return
+        }
+        if loadedTranscriptionRecords != transcriptionRecords {
+            transcriptionRecords = loadedTranscriptionRecords
+        }
+        if loadedRecoveryRecords != recoveryRecords {
+            recoveryRecords = loadedRecoveryRecords
+        }
         if let selectedEntryID, !entries.contains(where: { $0.id == selectedEntryID }) {
             self.selectedEntryID = nil
         }
@@ -506,7 +731,7 @@ private struct HistoryWindowView: View {
             selectedEntryID = nil
             message = L10n.text("History record deleted.")
             messageIsError = false
-            refresh()
+            Task { await refresh() }
         case .failure(let error):
             message = error.localizedDescription
             messageIsError = true
@@ -546,5 +771,143 @@ private struct HistoryWindowView: View {
     private static func formattedDuration(_ durationMs: Int) -> String {
         let seconds = max(0, durationMs) / 1_000
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// Embedded mode renders the pane's controls in an in-content header (Apple's
+/// detail-column pattern, same as the Skill Library pane); standalone mode
+/// keeps the window toolbar chrome with a native search field.
+private struct HistoryChromeModifier: ViewModifier {
+    let isEmbedded: Bool
+    @Binding var query: String
+    @Binding var kindFilter: HistoryKindFilter
+    @Binding var statusFilter: HistoryStatusFilter
+    @Binding var dateFilter: HistoryDateFilter
+    let isRefreshing: Bool
+    let onRefresh: () -> Void
+
+    func body(content: Content) -> some View {
+        if isEmbedded {
+            VStack(spacing: 0) {
+                OpenWhisperPaneHeader(title: L10n.text("History")) {
+                    headerControls
+                }
+                Divider().opacity(0.45)
+                content
+            }
+        } else {
+            content
+                .searchable(
+                    text: $query,
+                    placement: .toolbar,
+                    prompt: Text(L10n.text("Search history"))
+                )
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        kindPicker
+                    }
+                    ToolbarItem {
+                        filterMenu
+                    }
+                    ToolbarItem {
+                        refreshButton
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var headerControls: some View {
+        searchField
+            .frame(width: 220)
+        kindMenu
+        filterMenu
+        refreshButton
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField(
+                L10n.text("Search history"),
+                text: $query
+            )
+            .textFieldStyle(.plain)
+        }
+        .openWhisperSearchField()
+    }
+
+    private var kindPicker: some View {
+        Picker(L10n.text("Type"), selection: $kindFilter) {
+            ForEach(HistoryKindFilter.allCases) { filter in
+                Text(L10n.text(filter.rawValue)).tag(filter)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .controlSize(.small)
+        .frame(width: 250)
+    }
+
+    private var kindMenu: some View {
+        Menu {
+            Picker(L10n.text("Type"), selection: $kindFilter) {
+                ForEach(HistoryKindFilter.allCases) { filter in
+                    Text(L10n.text(filter.rawValue)).tag(filter)
+                }
+            }
+        } label: {
+            Label(
+                L10n.text(kindFilter.rawValue),
+                systemImage: "tray.full"
+            )
+        }
+        .help(L10n.text("Type"))
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker(L10n.text("Status"), selection: $statusFilter) {
+                ForEach(HistoryStatusFilter.allCases) { filter in
+                    Text(L10n.text(filter.rawValue)).tag(filter)
+                }
+            }
+            Picker(L10n.text("Date"), selection: $dateFilter) {
+                ForEach(HistoryDateFilter.allCases) { filter in
+                    Text(L10n.text(filter.rawValue)).tag(filter)
+                }
+            }
+        } label: {
+            Label(
+                activeFilterSummary,
+                systemImage: "line.3.horizontal.decrease.circle"
+            )
+        }
+        .help(L10n.text("Filter"))
+    }
+
+    private var activeFilterSummary: String {
+        let parts: [String] = [
+            statusFilter == .all ? nil : L10n.text(statusFilter.rawValue),
+            dateFilter == .all ? nil : L10n.text(dateFilter.rawValue),
+        ].compactMap { $0 }
+        return parts.isEmpty
+            ? L10n.text("Filter")
+            : parts.joined(separator: " · ")
+    }
+
+    private var refreshButton: some View {
+        Button(action: onRefresh) {
+            if isRefreshing {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "arrow.clockwise")
+            }
+        }
+        .disabled(isRefreshing)
+        .help(L10n.text("Refresh"))
+        .accessibilityLabel(L10n.text("Refresh"))
     }
 }

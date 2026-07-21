@@ -1,4 +1,4 @@
-name: Commercial Release
+name: Signed Release
 
 on:
   workflow_dispatch:
@@ -125,7 +125,7 @@ jobs:
         if: inputs.phase == 'finalize'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: openwhisper-commercial-candidate
+          name: openwhisper-signed-candidate
           path: ${{ runner.temp }}/openwhisper-candidate-download
           github-token: ${{ github.token }}
           run-id: ${{ inputs.prepare_run_id }}
@@ -137,10 +137,55 @@ jobs:
           source scripts/lib/load_env.sh
           load_version_env "$GITHUB_WORKSPACE/version.env"
           scripts/restore_release_candidate.sh \
-            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.zip" \
-            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.sha256"
+            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.zip" \
+            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.sha256"
 
-      - name: Prepare notarized commercial candidate
+      - name: Configure protected public-release evidence
+        if: inputs.phase == 'finalize'
+        env:
+          INSTALLED_ACCEPTANCE_JSON_BASE64: ${{ secrets.INSTALLED_ACCEPTANCE_JSON_BASE64 }}
+          COMMUNITY_PILOT_SUMMARY_JSON_BASE64: ${{ secrets.COMMUNITY_PILOT_SUMMARY_JSON_BASE64 }}
+          BETA_METRICS_JSON_BASE64: ${{ secrets.BETA_METRICS_JSON_BASE64 }}
+          PUBLIC_CONTACT_JSON_BASE64: ${{ secrets.PUBLIC_CONTACT_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIRECTORY="$RUNNER_TEMP/openwhisper-release-evidence"
+          umask 077
+          mkdir -p "$EVIDENCE_DIRECTORY"
+
+          decode_evidence() {
+            local variable_name="$1"
+            local output_name="$2"
+            [[ -n "${!variable_name:-}" ]] || {
+              echo "Missing protected release evidence: $variable_name" >&2
+              exit 1
+            }
+            printf '%s' "${!variable_name}" \
+              | /usr/bin/base64 -D >"$EVIDENCE_DIRECTORY/$output_name"
+            [[ -s "$EVIDENCE_DIRECTORY/$output_name" ]] || {
+              echo "Decoded release evidence is empty: $output_name" >&2
+              exit 1
+            }
+            chmod 600 "$EVIDENCE_DIRECTORY/$output_name"
+          }
+
+          decode_evidence \
+            INSTALLED_ACCEPTANCE_JSON_BASE64 \
+            installed-acceptance.json
+          decode_evidence \
+            COMMUNITY_PILOT_SUMMARY_JSON_BASE64 \
+            community-pilot-summary.json
+          decode_evidence BETA_METRICS_JSON_BASE64 beta-metrics.json
+          decode_evidence PUBLIC_CONTACT_JSON_BASE64 public-contact.json
+
+          {
+            echo "OPENWHISPER_INSTALLED_ACCEPTANCE_PATH=$EVIDENCE_DIRECTORY/installed-acceptance.json"
+            echo "OPENWHISPER_COMMUNITY_PILOT_SUMMARY_PATH=$EVIDENCE_DIRECTORY/community-pilot-summary.json"
+            echo "OPENWHISPER_BETA_METRICS_PATH=$EVIDENCE_DIRECTORY/beta-metrics.json"
+            echo "OPENWHISPER_PUBLIC_CONTACT_PATH=$EVIDENCE_DIRECTORY/public-contact.json"
+          } >>"$GITHUB_ENV"
+
+      - name: Prepare notarized signed candidate
         if: inputs.phase == 'prepare'
         env:
           OPENWHISPER_CODESIGN_IDENTITY: ${{ secrets.OPENWHISPER_CODESIGN_IDENTITY }}
@@ -156,9 +201,8 @@ jobs:
           OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE: ${{ runner.temp }}/openwhisper-release/capability.key
           OPENWHISPER_CAPABILITY_POLICY_REVISION: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_REVISION }}
           OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT }}
-          OPENWHISPER_LICENSE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_LICENSE_PUBLIC_ED_KEY }}
           OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
-        run: scripts/release_commercial.sh prepare
+        run: scripts/release_signed.sh prepare
 
       - name: Archive exact prepared candidate
         if: inputs.phase == 'prepare'
@@ -169,21 +213,21 @@ jobs:
           source scripts/lib/load_env.sh
           load_version_env "$GITHUB_WORKSPACE/version.env"
           scripts/archive_release_candidate.sh \
-            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.zip" \
-            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-commercial-candidate.sha256"
+            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.zip" \
+            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.sha256"
 
       - name: Persist prepared candidate for finalize
         if: inputs.phase == 'prepare'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: openwhisper-commercial-candidate
+          name: openwhisper-signed-candidate
           path: |
-            ${{ runner.temp }}/OpenWhisper-*-commercial-candidate.zip
-            ${{ runner.temp }}/OpenWhisper-*-commercial-candidate.sha256
+            ${{ runner.temp }}/OpenWhisper-*-signed-candidate.zip
+            ${{ runner.temp }}/OpenWhisper-*-signed-candidate.sha256
           if-no-files-found: error
           retention-days: 30
 
-      - name: Finalize published commercial release
+      - name: Finalize published signed release
         if: inputs.phase == 'finalize'
         env:
           OPENWHISPER_TEAM_ID: ${{ secrets.OPENWHISPER_TEAM_ID }}
@@ -192,9 +236,8 @@ jobs:
           OPENWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_SPARKLE_PUBLIC_ED_KEY }}
           OPENWHISPER_CAPABILITY_POLICY_URL: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_URL }}
           OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
-          OPENWHISPER_LICENSE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_LICENSE_PUBLIC_ED_KEY }}
           OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
-        run: scripts/release_commercial.sh finalize
+        run: scripts/release_signed.sh finalize
 
       - name: Upload reviewable release evidence
         if: success()
@@ -208,7 +251,6 @@ jobs:
             dist/*.json
             dist/SHA256SUMS
             dist/openwhisper.rb
-            dist/productization-readiness/
           if-no-files-found: error
           retention-days: 30
 
@@ -258,7 +300,8 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/openwhisper-release.keychain-db" 2>/dev/null || true
           rm -rf \
             "$RUNNER_TEMP/openwhisper-release" \
+            "$RUNNER_TEMP/openwhisper-release-evidence" \
             "$RUNNER_TEMP/openwhisper-candidate-download"
           rm -f \
-            "$RUNNER_TEMP"/OpenWhisper-*-commercial-candidate.zip \
-            "$RUNNER_TEMP"/OpenWhisper-*-commercial-candidate.sha256
+            "$RUNNER_TEMP"/OpenWhisper-*-signed-candidate.zip \
+            "$RUNNER_TEMP"/OpenWhisper-*-signed-candidate.sha256

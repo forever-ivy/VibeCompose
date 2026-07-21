@@ -6,7 +6,7 @@
 > production feed, signing key, hosting, and installed update/rollback evidence
 > not yet configured
 >
-> Commercial release gate: blocked until the implementation and installed update/rollback proof are complete
+> Signed release gate: blocked until the implementation and installed update/rollback proof are complete
 
 ## Decision
 
@@ -46,9 +46,20 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
 - `scripts/update_homebrew_cask.sh` replaces both the fail-closed Cask URL and
   checksum only from that manifest.
 - `scripts/package_app.sh` embeds and signs the pinned Sparkle framework and rejects partial or unsafe updater configuration.
+- Local packages default to Swift's debug configuration; the signed release
+  entry point pins `OPENWHISPER_BUILD_CONFIGURATION=release`, and Developer ID
+  packaging rejects any other configuration.
 - Ad-hoc local builds add `com.apple.security.cs.disable-library-validation` because ad-hoc code has no shared Team ID; the Developer ID release gate explicitly rejects that local-only entitlement.
 - `scripts/check_packaged_app.sh` verifies the embedded framework version, runtime link/rpath, and paired HTTPS feed/public-key configuration.
-- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID, stapling, Gatekeeper success, manifest/Cask consistency, the pinned Sparkle framework, `SUFeedURL`, `SUPublicEDKey`, and a matching signed appcast.
+- `scripts/verify_release_gate.sh` requires Developer ID, the expected Team ID,
+  trusted timestamp and Hardened Runtime flag on the App and every embedded
+  Sparkle executable, stapling, Gatekeeper success, manifest/Cask consistency,
+  the pinned Sparkle framework, `SUFeedURL`, `SUPublicEDKey`, and a matching
+  signed appcast.
+- `scripts/verify_release_readiness.py` separates candidate configuration from
+  public authorization. Its public phase binds the exact source/tag and ZIP
+  hash to installed-app acceptance, brand clearance, the privacy-bounded
+  Community Pilot aggregate, and the matching product-owner review.
 - `scripts/verify_remote_release_assets.sh` downloads the published ZIP, DMG,
   appcast, and provider policy without redirects, verifies artifact hashes,
   requires the remote appcast/policy to be byte-identical to the locally gated
@@ -58,10 +69,13 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
   exact signed App across separate `prepare` and `finalize` Actions runs. The
   archive is checked against a separate SHA-256 and the exact source commit,
   version, build, architecture, manifest, and artifact hashes.
-- The commercial workflow exposes the Sparkle private key only during
+- App and DMG notarization results are retained as separate JSON receipts. The
+  signed release gate and candidate restorer require `Accepted` plus two valid,
+  distinct Apple submission IDs in addition to stapler/Gatekeeper success.
+- The signed-release workflow exposes the Sparkle private key only during
   `prepare`; `finalize` verifies published assets without receiving that
   private key.
-- Private-alpha builds intentionally omit production feed/key values. The commercial release gate therefore remains fail-closed until permanent update hosting and signing-key material are supplied.
+- Private-alpha builds intentionally omit production feed/key values. The signed release gate therefore remains fail-closed until permanent update hosting and signing-key material are supplied.
 
 ## Key Management
 
@@ -69,8 +83,8 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
 - Store the private key in a dedicated secrets manager or release keychain.
 - Restrict CI access to protected release environments.
 - Pin only the public key in the app.
-- Keep Sparkle, provider capability, and license signing keys distinct.
-- Never place private keys under the repository tree; the source-readiness
+- Keep Sparkle and provider-capability signing keys distinct.
+- Never place private keys under the repository tree; the candidate-readiness
   gate and `.gitignore` reserve common release secret paths.
 - Document key rotation before the first public build. Rotation must be authorized by an already trusted release or a separately authenticated recovery process.
 

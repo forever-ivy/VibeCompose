@@ -43,8 +43,8 @@ func privacyPoliciesMatchCurrentLocalRetentionAndDiagnosticsBoundary() throws {
                 || text.contains("\(config.productMetricsRecordLimit)")
         )
         #expect(text.contains("app.openwhisper.mac.ChatGPTSession"))
-        #expect(text.contains("app.openwhisper.mac.LicenseReceipt"))
-        #expect(text.contains("app.openwhisper.mac.LicenseDevice"))
+        #expect(!text.contains("LicenseReceipt"))
+        #expect(!text.contains("LicenseDevice"))
         #expect(text.contains("Export Diagnostics") || text.contains("导出诊断"))
         #expect(text.contains("not uploaded automatically") || text.contains("不会自动上传"))
         #expect(text.contains("Off by default") || text.contains("默认关闭"))
@@ -62,16 +62,12 @@ func privacyPoliciesMatchCurrentLocalRetentionAndDiagnosticsBoundary() throws {
 }
 
 @Test
-func commercialPolicySetIsBilingualAndKeepsPreReleaseGatesExplicit() throws {
+func policySetIsBilingualAndKeepsSafetyBoundariesExplicit() throws {
     let root = policyRepositoryRoot()
     let pairs = [
         (
             "docs/legal/terms-of-use.md",
             "docs/legal/terms-of-use.zh-CN.md"
-        ),
-        (
-            "docs/legal/refund-policy.md",
-            "docs/legal/refund-policy.zh-CN.md"
         ),
         (
             "docs/support/support-policy.md",
@@ -94,15 +90,16 @@ func commercialPolicySetIsBilingualAndKeepsPreReleaseGatesExplicit() throws {
     #expect(terms.contains("MIT License"))
     #expect(terms.contains("View Third-Party Licenses"))
     #expect(terms.contains("not affiliated with, sponsored by, or endorsed by OpenAI"))
-    #expect(terms.contains("public paid release must identify the commercial operator"))
-
-    let refund = try policyText(root, "docs/legal/refund-policy.md")
-    #expect(refund.contains("14 calendar days"))
-    #expect(refund.contains("does not currently sell a subscription"))
+    #expect(!terms.lowercased().contains("paid feature"))
+    #expect(!terms.lowercased().contains("subscription"))
 
     let support = try policyText(root, "docs/support/support-policy.md")
     #expect(support.contains("Settings → Advanced → Export Diagnostics"))
-    #expect(support.contains("not a paid SLA"))
+    #expect(
+        support.contains(
+            "not a service-level guarantee"
+        )
+    )
 
     let incident = try policyText(
         root,

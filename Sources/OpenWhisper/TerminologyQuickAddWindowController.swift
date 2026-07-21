@@ -91,6 +91,7 @@ final class TerminologyQuickAddWindowController: NSWindowController {
                 weakWindow?.close()
             }
         )
+        .applyingOpenWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
         )
@@ -124,8 +125,13 @@ final class TerminologyQuickAddWindowController: NSWindowController {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     func writeSnapshot(to url: URL) throws {
@@ -143,16 +149,16 @@ private struct TerminologyQuickAddView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(L10n.text("Quick Add Terminology"))
-                    .font(.system(size: 22, weight: .semibold))
-                Text(
-                    L10n.text(
-                        "Add a protected term or a predictable correction without opening Settings."
-                    )
+            HStack(spacing: 14) {
+                OpenWhisperIconWell(
+                    systemName: "text.book.closed",
+                    size: 40,
+                    symbolSize: 16
                 )
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.text("Quick Add Terminology"))
+                        .font(OpenWhisperTypography.title())
+                }
             }
 
             Form {
@@ -183,24 +189,23 @@ private struct TerminologyQuickAddView: View {
 
             if let message {
                 Text(message)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
+                    .font(OpenWhisperTypography.caption())
+                    .foregroundStyle(Color(nsColor: OpenWhisperPalette.error))
             }
 
             HStack {
-                Text(L10n.text("Global shortcut: Control–Option–Space"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
                 Spacer()
                 Button(L10n.text("Cancel"), action: onClose)
+                    .buttonStyle(OpenWhisperSecondaryButtonStyle())
                     .keyboardShortcut(.cancelAction)
                 Button(L10n.text("Add Entry"), action: save)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(OpenWhisperPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(22)
+        .padding(24)
         .frame(width: 520, height: 390)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private func save() {

@@ -6,12 +6,23 @@ struct ThirdPartyLicenseManifest: Decodable, Equatable, Sendable {
     let dependencies: [ThirdPartyLicenseEntry]
 }
 
+enum ThirdPartyLicenseSourceKind:
+    String,
+    Decodable,
+    Equatable,
+    Sendable
+{
+    case package
+    case vendored
+}
+
 struct ThirdPartyLicenseEntry:
     Decodable,
     Equatable,
     Identifiable,
     Sendable
 {
+    let sourceKind: ThirdPartyLicenseSourceKind
     let identity: String
     let name: String
     let sourceURL: String
@@ -20,6 +31,37 @@ struct ThirdPartyLicenseEntry:
     let licenseName: String
     let licenseFile: String
     let licenseSHA256: String
+
+    private enum CodingKeys: String, CodingKey {
+        case sourceKind
+        case identity
+        case name
+        case sourceURL
+        case revision
+        case version
+        case licenseName
+        case licenseFile
+        case licenseSHA256
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sourceKind = try container.decodeIfPresent(
+            ThirdPartyLicenseSourceKind.self,
+            forKey: .sourceKind
+        ) ?? .package
+        identity = try container.decode(String.self, forKey: .identity)
+        name = try container.decode(String.self, forKey: .name)
+        sourceURL = try container.decode(String.self, forKey: .sourceURL)
+        revision = try container.decode(String.self, forKey: .revision)
+        version = try container.decodeIfPresent(String.self, forKey: .version)
+        licenseName = try container.decode(String.self, forKey: .licenseName)
+        licenseFile = try container.decode(String.self, forKey: .licenseFile)
+        licenseSHA256 = try container.decode(
+            String.self,
+            forKey: .licenseSHA256
+        )
+    }
 
     var id: String { identity }
 

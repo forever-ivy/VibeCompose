@@ -1,9 +1,7 @@
 import AppKit
 import AVFoundation
 import ApplicationServices
-import OpenWhisperLicensing
 import SwiftUI
-import UniformTypeIdentifiers
 
 enum PreferencesSnapshotError: LocalizedError {
     case missingContentView
@@ -22,15 +20,34 @@ enum PreferencesSnapshotError: LocalizedError {
     }
 }
 
+private enum SettingsLayoutMetrics {
+    static let sidebarWidth: CGFloat = 236
+    static let sidebarTopPadding: CGFloat = 52
+    static let sidebarRowVerticalPadding: CGFloat = 5
+    static let sidebarRowOuterPadding: CGFloat = 8
+    static let sidebarRowInnerPadding: CGFloat = 8
+    static let sidebarRowSpacing: CGFloat = 2
+    static let sidebarRowCornerRadius: CGFloat = 8
+    static let sidebarSectionSpacing: CGFloat = 20
+    static let sidebarHeaderRowSpacing: CGFloat = 5
+    static let detailHorizontalPadding: CGFloat = 40
+    static let detailTopPadding: CGFloat = 32
+    /// Embedded library destinations render their own in-content header
+    /// (`OpenWhisperPaneHeader`), so the shell only clears the traffic lights.
+    static let embeddedTopPadding: CGFloat = 6
+}
+
 @MainActor
 final class PreferencesWindowController: NSWindowController {
+    private var sidebarArrowKeyMonitor: Any?
+
     init(
         config: AppConfig,
         authManager: ChatGPTAuthManager,
         onSave: @escaping (AppConfig) -> Result<Void, any Error>,
         onImportTerminologyDictionary: @escaping (AppConfig, URL) -> Result<AppConfig, any Error>,
-        onLoadRecentHistory: @escaping () -> [TranscriptionHistoryRecord],
-        onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
+        onLoadRecentHistory: @escaping @Sendable () async -> [TranscriptionHistoryRecord],
+        onLoadRecoveryHistory: @escaping @Sendable () async -> [RecoveryRecord],
         onResolveRecoveryAudioURL: @escaping (RecoveryRecord) -> Result<URL, any Error>,
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
         onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
@@ -39,7 +56,6 @@ final class PreferencesWindowController: NSWindowController {
         onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
-        licenseManager: any CommercialLicenseManaging,
         textPolishUsageDirectoryURL: URL? = ProductIdentity
             .applicationSupportURL(
                 homeDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
@@ -49,6 +65,21 @@ final class PreferencesWindowController: NSWindowController {
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
+        onOpenSkillLibrary: @escaping () -> Void,
+        onOpenTerminology: @escaping () -> Void,
+        onLoadFullTranscriptionHistory: @escaping @Sendable () async -> [TranscriptionHistoryRecord] = { [] },
+        onLoadFullRecoveryHistory: @escaping @Sendable () async -> [RecoveryRecord] = { [] },
+        onCanUndoTranscriptionRecord: @escaping (UUID) -> Bool = { _ in false },
+        onUndoTranscriptionRecord: @escaping (UUID) async -> SafeUndoOutcome = { _ in .unavailable },
+        onDeleteTranscriptionRecord: @escaping (UUID) -> Result<Void, any Error> = { _ in .success(()) },
+        onDeleteRecoveryRecord: @escaping (UUID) -> Result<Void, any Error> = { _ in .success(()) },
+        onUseNextSkill: @escaping (UUID) -> Void = { _ in },
+        onRunSkillTest: @escaping (SkillTestRunRequest) async -> Result<SkillTestRunResult, any Error> = { _ in
+            .failure(SkillTestRunError.appBusy)
+        },
+        onVoiceSampleAction: @escaping (SkillVoiceSampleAction) async -> Result<SkillVoiceSampleResult, any Error> = { _ in
+            .failure(SkillTestRunError.appBusy)
+        },
         onHotkeyCaptureChanged:
             @escaping (Bool) -> Void = { _ in },
         onPreviewVisualFeedback:
@@ -62,7 +93,9 @@ final class PreferencesWindowController: NSWindowController {
             StyleCapsuleStore = .init(),
         localAssetAccessEnabled:
             Bool = true,
-        focusPane: SettingsPane? = nil
+        focusPane: SettingsPane? = nil,
+        skillLibraryInitialSection:
+            SkillLibrarySection = .discover
     ) {
         let view = PreferencesView(
             initialConfig: config,
@@ -79,13 +112,31 @@ final class PreferencesWindowController: NSWindowController {
             onExportProductMetrics: onExportProductMetrics,
             providerCapabilityPolicy: providerCapabilityPolicy,
             recoveryCredentialStore: recoveryCredentialStore,
-            licenseManager: licenseManager,
             textPolishUsageDirectoryURL: textPolishUsageDirectoryURL,
             softwareUpdateSnapshot: softwareUpdateSnapshot,
             onCheckForUpdates: onCheckForUpdates,
             onSetAutomaticallyChecksForUpdates: onSetAutomaticallyChecksForUpdates,
             onDeleteAllData: onDeleteAllData,
             onOpenOnboarding: onOpenOnboarding,
+            onOpenSkillLibrary:
+                onOpenSkillLibrary,
+            onOpenTerminology:
+                onOpenTerminology,
+            onLoadFullTranscriptionHistory:
+                onLoadFullTranscriptionHistory,
+            onLoadFullRecoveryHistory:
+                onLoadFullRecoveryHistory,
+            onCanUndoTranscriptionRecord:
+                onCanUndoTranscriptionRecord,
+            onUndoTranscriptionRecord:
+                onUndoTranscriptionRecord,
+            onDeleteTranscriptionRecord:
+                onDeleteTranscriptionRecord,
+            onDeleteRecoveryRecord:
+                onDeleteRecoveryRecord,
+            onUseNextSkill: onUseNextSkill,
+            onRunSkillTest: onRunSkillTest,
+            onVoiceSampleAction: onVoiceSampleAction,
             onHotkeyCaptureChanged:
                 onHotkeyCaptureChanged,
             onPreviewVisualFeedback:
@@ -96,7 +147,9 @@ final class PreferencesWindowController: NSWindowController {
                 styleCapsuleStore,
             localAssetAccessEnabled:
                 localAssetAccessEnabled,
-            focusPane: focusPane
+            focusPane: focusPane,
+            skillLibraryInitialSection:
+                skillLibraryInitialSection
         )
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
@@ -104,16 +157,39 @@ final class PreferencesWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: view)
 
         let window = CommandClosingWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 625),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 980, height: 680),
+            styleMask: [
+                .titled,
+                .closable,
+                .miniaturizable,
+                .resizable,
+                .fullSizeContentView,
+            ],
             backing: .buffered,
             defer: false
         )
         window.title = ProductIdentity.name
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.toolbarStyle = .unified
+        window.hasShadow = true
+        // The Settings shell never enters full screen (its fixed sidebar
+        // layout is not designed for it), so the zoom control stays disabled.
+        window.collectionBehavior.remove(.fullScreenPrimary)
+        window.collectionBehavior.formUnion([.managed, .fullScreenDisallowsTiling])
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+        let settingsToolbar = NSToolbar(
+            identifier: "OpenWhisper.SettingsToolbar"
+        )
+        settingsToolbar.displayMode = .iconOnly
+        settingsToolbar.allowsUserCustomization = false
+        settingsToolbar.autosavesConfiguration = false
+        window.toolbar = settingsToolbar
         window.isReleasedWhenClosed = false
         window.isRestorable = false
         window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.SettingsWindow")
-        window.minSize = NSSize(width: 820, height: 560)
+        window.minSize = NSSize(width: 900, height: 620)
         window.tabbingMode = .disallowed
         let restoredFrame = window.setFrameUsingName(SettingsWindowStateStore.frameAutosaveName)
         window.setFrameAutosaveName(SettingsWindowStateStore.frameAutosaveName)
@@ -125,6 +201,21 @@ final class PreferencesWindowController: NSWindowController {
             .applyAppearance(to: window)
 
         super.init(window: window)
+
+        sidebarArrowKeyMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: .keyDown
+        ) { [weak self] event in
+            guard let self else {
+                return event
+            }
+            return handleSidebarArrowKey(event)
+        }
+    }
+
+    isolated deinit {
+        if let sidebarArrowKeyMonitor {
+            NSEvent.removeMonitor(sidebarArrowKeyMonitor)
+        }
     }
 
     @available(*, unavailable)
@@ -133,8 +224,74 @@ final class PreferencesWindowController: NSWindowController {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    func navigate(to pane: SettingsPane) {
+        NotificationCenter.default.post(
+            name: .openWhisperNavigateSettingsPane,
+            object: nil,
+            userInfo: ["pane": pane.rawValue]
+        )
+        show()
+    }
+
+    /// The custom sidebar rows (unlike the previous stock `List`) do not come
+    /// with built-in arrow-key navigation, so the window reproduces the native
+    /// source-list behavior here: Up/Down moves the sidebar selection unless a
+    /// text editor, control, or collection view owns the key event.
+    private func handleSidebarArrowKey(_ event: NSEvent) -> NSEvent? {
+        guard let window, event.window === window else {
+            return event
+        }
+        guard event.keyCode == 126 || event.keyCode == 125 else {
+            return event
+        }
+        let modifiers = event.modifierFlags.intersection(
+            .deviceIndependentFlagsMask
+        )
+        guard modifiers.isDisjoint(with: [.command, .option, .control]) else {
+            return event
+        }
+        if let responder = window.firstResponder, responder !== window {
+            let responderOwnsArrows =
+                responder is NSTextView
+                || responder is NSControl
+                || responder is NSCollectionView
+            if responderOwnsArrows {
+                return event
+            }
+        }
+
+        let orderedPanes = SettingsSidebarGroup.allCases
+            .flatMap(\.panes)
+            .filter { SettingsPane.visiblePanes.contains($0) }
+        guard !orderedPanes.isEmpty else {
+            return event
+        }
+        let currentPane = SettingsWindowStateStore()
+            .initialPane(focusedPane: nil)
+        let currentIndex =
+            orderedPanes.firstIndex(of: currentPane) ?? 0
+        let nextIndex =
+            event.keyCode == 126
+            ? max(0, currentIndex - 1)
+            : min(orderedPanes.count - 1, currentIndex + 1)
+        guard nextIndex != currentIndex else {
+            return nil
+        }
+        NotificationCenter.default.post(
+            name: .openWhisperNavigateSettingsPane,
+            object: nil,
+            userInfo: ["pane": orderedPanes[nextIndex].rawValue]
+        )
+        return nil
     }
 
     func writeSnapshot(to url: URL) throws {
@@ -166,6 +323,116 @@ private final class CommandClosingWindow: NSWindow {
     }
 }
 
+/// The macOS 26 source-list backdrop: AppKit's `.sidebar` material renders as
+/// Liquid Glass on macOS 26 and as the classic source-list material on earlier
+/// releases, sampling the desktop behind the window like System Settings.
+private struct SettingsSidebarMaterialView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        view.isEmphasized = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
+/// macOS 26 source-list row: the selection is a translucent gray glass pill
+/// (the product-owner approved `sidebarSelectionBackground`) with the symbol
+/// and label tinted in the accent color, matching the Music source list.
+private struct SettingsSidebarRowButton: View {
+    let pane: SettingsPane
+    let isSelected: Bool
+    let reduceMotion: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                OpenWhisperSidebarSymbol(systemName: pane.icon)
+                Text(pane.displayTitle)
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(
+                isSelected
+                    ? Color(nsColor: OpenWhisperPalette.sidebarSelectionForeground)
+                    : .primary
+            )
+            .padding(
+                .horizontal,
+                SettingsLayoutMetrics.sidebarRowInnerPadding
+            )
+            .padding(
+                .vertical,
+                SettingsLayoutMetrics.sidebarRowVerticalPadding
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(
+            SettingsSidebarRowButtonStyle(
+                isSelected: isSelected,
+                isHovered: isHovered,
+                reduceMotion: reduceMotion
+            )
+        )
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+private struct SettingsSidebarRowButtonStyle: ButtonStyle {
+    let isSelected: Bool
+    let isHovered: Bool
+    let reduceMotion: Bool
+
+    private var rowShape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: SettingsLayoutMetrics.sidebarRowCornerRadius,
+            style: .continuous
+        )
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.primary)
+            .background {
+                ZStack {
+                    rowShape.fill(baseFill)
+                    // Pointer-down feedback lands instantly, on both the
+                    // selected pill and unselected rows.
+                    rowShape.fill(
+                        Color.primary.opacity(
+                            configuration.isPressed ? 0.06 : 0
+                        )
+                    )
+                }
+            }
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.12),
+                value: isHovered
+            )
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.1),
+                value: configuration.isPressed
+            )
+    }
+
+    private var baseFill: Color {
+        if isSelected {
+            return Color(nsColor: OpenWhisperPalette.sidebarSelectionBackground)
+        }
+        return Color.primary.opacity(isHovered ? 0.05 : 0)
+    }
+}
+
 private enum SettingsSaveStatus: Equatable {
     case saved
     case failed(String)
@@ -174,16 +441,18 @@ private enum SettingsSaveStatus: Equatable {
 private extension SettingsPane {
     var icon: String {
         switch self {
+        case .general:
+            return "gearshape"
         case .account:
             return "person.crop.circle"
         case .dictation:
             return "mic"
         case .appearance:
-            return "sparkles"
+            return "paintbrush"
         case .polish:
             return "wand.and.stars"
         case .context:
-            return "selection.pin.in.out"
+            return "hand.raised"
         case .terminology:
             return "text.book.closed"
         case .paste:
@@ -191,7 +460,11 @@ private extension SettingsPane {
         case .privacy:
             return "hand.raised"
         case .advanced:
-            return "gearshape"
+            return "slider.horizontal.3"
+        case .skills:
+            return "wand.and.stars"
+        case .history:
+            return "clock.arrow.circlepath"
         }
     }
 }
@@ -256,19 +529,21 @@ private struct ThirdPartyLicensesView: View {
         } detail: {
             if let selectedDocument {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
                             Text(selectedDocument.entry.name)
                                 .font(.system(size: 24, weight: .semibold))
+                                .tracking(-0.3)
                             Text(selectedDocument.entry.pinnedDescription)
-                                .font(.system(size: 12))
+                                .font(OpenWhisperTypography.callout())
                                 .foregroundStyle(.secondary)
-                            Text(selectedDocument.entry.licenseName)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.secondary)
+                            OpenWhisperStatusChip(
+                                text: selectedDocument.entry.licenseName,
+                                kind: .neutral
+                            )
                         }
 
-                        Divider()
+                        Divider().opacity(0.5)
 
                         Text(selectedDocument.licenseText)
                             .font(
@@ -282,17 +557,22 @@ private struct ThirdPartyLicensesView: View {
                                 maxWidth: .infinity,
                                 alignment: .topLeading
                             )
+                            .padding(14)
+                            .background(
+                                Color(nsColor: OpenWhisperPalette.insetSurface),
+                                in: RoundedRectangle(
+                                    cornerRadius: OpenWhisperMetrics.radiusM,
+                                    style: .continuous
+                                )
+                            )
                     }
-                    .padding(22)
+                    .padding(24)
                 }
             } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.secondary)
-                    Text(L10n.text("No license selected"))
-                        .font(.system(size: 15, weight: .semibold))
-                }
+                OpenWhisperEmptyState(
+                    systemImage: "doc.text",
+                    title: L10n.text("No license selected")
+                )
             }
         }
         .frame(minWidth: 760, minHeight: 520)
@@ -367,17 +647,14 @@ private struct PreferencesView: View {
     @State private var productMetricsExportMessageIsError = false
     @State private var diagnosticsExportMessage: String?
     @State private var diagnosticsExportMessageIsError = false
+    @State private var recoveryEndpointDraft: String
+    @State private var recoveryModelDraft: String
     @State private var recoveryAPIKeyInput = ""
     @State private var recoveryAPIKeyStored: Bool
     @State private var recoveryMessage: String?
     @State private var recoveryMessageIsError = false
     @State private var isTestingRecoveryConnection = false
     @State private var providerPolicySnapshot: ProviderCapabilityPolicySnapshot
-    @State private var licenseSnapshot: LicenseSnapshot
-    @State private var licenseDeviceIdentifier: String
-    @State private var licenseMessage: String?
-    @State private var licenseMessageIsError = false
-    @State private var showsRemoveLicenseConfirmation = false
     @State private var hotkeyMessage: String?
     @State private var hotkeyMessageIsError = false
     @State private var isCapturingHotkey = false
@@ -393,11 +670,13 @@ private struct PreferencesView: View {
     @State private var communitySkillInventory:
         CommunitySkillInventory
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let authManager: ChatGPTAuthManager
     let onSave: (AppConfig) -> Result<Void, any Error>
     let onImportTerminologyDictionary: (AppConfig, URL) -> Result<AppConfig, any Error>
-    let onLoadRecentHistory: () -> [TranscriptionHistoryRecord]
-    let onLoadRecoveryHistory: () -> [RecoveryRecord]
+    let onLoadRecentHistory: @Sendable () async -> [TranscriptionHistoryRecord]
+    let onLoadRecoveryHistory: @Sendable () async -> [RecoveryRecord]
     let onResolveRecoveryAudioURL: (RecoveryRecord) -> Result<URL, any Error>
     let onRetryRecoveryRecord: (RecoveryRecord) -> Void
     let onRequestMicrophoneAccess:
@@ -407,12 +686,22 @@ private struct PreferencesView: View {
     let onExportProductMetrics: (URL) -> Result<URL, any Error>
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
-    let licenseManager: any CommercialLicenseManaging
     let textPolishUsageDirectoryURL: URL?
     let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
     let onDeleteAllData: () -> Result<AppConfig, any Error>
     let onOpenOnboarding: () -> Void
+    let onOpenSkillLibrary: () -> Void
+    let onOpenTerminology: () -> Void
+    let onLoadFullTranscriptionHistory: @Sendable () async -> [TranscriptionHistoryRecord]
+    let onLoadFullRecoveryHistory: @Sendable () async -> [RecoveryRecord]
+    let onCanUndoTranscriptionRecord: (UUID) -> Bool
+    let onUndoTranscriptionRecord: (UUID) async -> SafeUndoOutcome
+    let onDeleteTranscriptionRecord: (UUID) -> Result<Void, any Error>
+    let onDeleteRecoveryRecord: (UUID) -> Result<Void, any Error>
+    let onUseNextSkill: (UUID) -> Void
+    let onRunSkillTest: (SkillTestRunRequest) async -> Result<SkillTestRunResult, any Error>
+    let onVoiceSampleAction: (SkillVoiceSampleAction) async -> Result<SkillVoiceSampleResult, any Error>
     let onHotkeyCaptureChanged: (Bool) -> Void
     let onPreviewVisualFeedback:
         (
@@ -426,14 +715,16 @@ private struct PreferencesView: View {
         StyleCapsuleStore
     let localAssetAccessEnabled:
         Bool
+    let skillLibraryInitialSection:
+        SkillLibrarySection
 
     init(
         initialConfig: AppConfig,
         authManager: ChatGPTAuthManager,
         onSave: @escaping (AppConfig) -> Result<Void, any Error>,
         onImportTerminologyDictionary: @escaping (AppConfig, URL) -> Result<AppConfig, any Error>,
-        onLoadRecentHistory: @escaping () -> [TranscriptionHistoryRecord],
-        onLoadRecoveryHistory: @escaping () -> [RecoveryRecord],
+        onLoadRecentHistory: @escaping @Sendable () async -> [TranscriptionHistoryRecord],
+        onLoadRecoveryHistory: @escaping @Sendable () async -> [RecoveryRecord],
         onResolveRecoveryAudioURL: @escaping (RecoveryRecord) -> Result<URL, any Error>,
         onRetryRecoveryRecord: @escaping (RecoveryRecord) -> Void,
         onRequestMicrophoneAccess: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
@@ -442,13 +733,23 @@ private struct PreferencesView: View {
         onExportProductMetrics: @escaping (URL) -> Result<URL, any Error>,
         providerCapabilityPolicy: any ProviderCapabilityChecking,
         recoveryCredentialStore: any OpenAICompatibleCredentialPersisting,
-        licenseManager: any CommercialLicenseManaging,
         textPolishUsageDirectoryURL: URL?,
         softwareUpdateSnapshot: SoftwareUpdateSnapshot,
         onCheckForUpdates: @escaping () -> Result<Void, SoftwareUpdateError>,
         onSetAutomaticallyChecksForUpdates: @escaping (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>,
         onDeleteAllData: @escaping () -> Result<AppConfig, any Error>,
         onOpenOnboarding: @escaping () -> Void,
+        onOpenSkillLibrary: @escaping () -> Void,
+        onOpenTerminology: @escaping () -> Void,
+        onLoadFullTranscriptionHistory: @escaping @Sendable () async -> [TranscriptionHistoryRecord],
+        onLoadFullRecoveryHistory: @escaping @Sendable () async -> [RecoveryRecord],
+        onCanUndoTranscriptionRecord: @escaping (UUID) -> Bool,
+        onUndoTranscriptionRecord: @escaping (UUID) async -> SafeUndoOutcome,
+        onDeleteTranscriptionRecord: @escaping (UUID) -> Result<Void, any Error>,
+        onDeleteRecoveryRecord: @escaping (UUID) -> Result<Void, any Error>,
+        onUseNextSkill: @escaping (UUID) -> Void,
+        onRunSkillTest: @escaping (SkillTestRunRequest) async -> Result<SkillTestRunResult, any Error>,
+        onVoiceSampleAction: @escaping (SkillVoiceSampleAction) async -> Result<SkillVoiceSampleResult, any Error>,
         onHotkeyCaptureChanged:
             @escaping (Bool) -> Void,
         onPreviewVisualFeedback:
@@ -462,60 +763,35 @@ private struct PreferencesView: View {
             StyleCapsuleStore = .init(),
         localAssetAccessEnabled:
             Bool = true,
-        focusPane: SettingsPane? = nil
+        focusPane: SettingsPane? = nil,
+        skillLibraryInitialSection:
+            SkillLibrarySection = .discover
     ) {
         let windowStateStore = SettingsWindowStateStore()
-        let recoveryCredentialState: Result<Bool, any Error> = Result {
-            try recoveryCredentialStore.hasAPIKey()
-        }
         _config = State(initialValue: initialConfig)
         _persistedConfig = State(
             initialValue: initialConfig
         )
-        _communitySkillInventory =
-            State(
-                initialValue:
-                    localAssetAccessEnabled
-                    ? skillPackageStore
-                        .loadInventory(
-                            config:
-                                initialConfig
-                                    .communitySkills
-                        )
-                    : CommunitySkillInventory(
-                        packages: [],
-                        rejected: []
-                    )
-            )
+        _recoveryEndpointDraft = State(
+            initialValue: initialConfig.transcription.openAITranscriptionURL
+        )
+        _recoveryModelDraft = State(
+            initialValue: initialConfig.transcription.openAIModel
+        )
+        _communitySkillInventory = State(
+            initialValue: CommunitySkillInventory(packages: [], rejected: [])
+        )
         _showsAdvancedRecovery = State(initialValue: false)
         _permissionStatusMonitor = StateObject(wrappedValue: PermissionStatusMonitor())
         _terminologyImportMessage = State(initialValue: Self.terminologyStatusMessage(for: initialConfig))
         _authSnapshot = State(initialValue: authManager.authSnapshot())
         _browserBridgeSnapshot = State(initialValue: authManager.browserBridgeSnapshot())
-        _textPolishUsage = State(
-            initialValue: textPolishUsageDirectoryURL.map {
-                Self.loadTextPolishUsage(directoryURL: $0)
-            } ?? [:]
-        )
+        _textPolishUsage = State(initialValue: [:])
         _providerPolicySnapshot = State(initialValue: .loading)
-        _licenseSnapshot = State(
-            initialValue: licenseManager.snapshot()
-        )
-        _licenseDeviceIdentifier = State(
-            initialValue:
-                (try? licenseManager.deviceIdentifier()) ?? ""
-        )
         _softwareUpdateSnapshot = State(initialValue: softwareUpdateSnapshot)
-        switch recoveryCredentialState {
-        case .success(let isStored):
-            _recoveryAPIKeyStored = State(initialValue: isStored)
-            _recoveryMessage = State(initialValue: nil)
-            _recoveryMessageIsError = State(initialValue: false)
-        case .failure(let error):
-            _recoveryAPIKeyStored = State(initialValue: false)
-            _recoveryMessage = State(initialValue: error.localizedDescription)
-            _recoveryMessageIsError = State(initialValue: true)
-        }
+        _recoveryAPIKeyStored = State(initialValue: false)
+        _recoveryMessage = State(initialValue: nil)
+        _recoveryMessageIsError = State(initialValue: false)
         _selectedSection = State(
             initialValue: windowStateStore.initialPane(
                 focusedPane: focusPane
@@ -534,12 +810,30 @@ private struct PreferencesView: View {
         self.onExportProductMetrics = onExportProductMetrics
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.recoveryCredentialStore = recoveryCredentialStore
-        self.licenseManager = licenseManager
         self.textPolishUsageDirectoryURL = textPolishUsageDirectoryURL
         self.onCheckForUpdates = onCheckForUpdates
         self.onSetAutomaticallyChecksForUpdates = onSetAutomaticallyChecksForUpdates
         self.onDeleteAllData = onDeleteAllData
         self.onOpenOnboarding = onOpenOnboarding
+        self.onOpenSkillLibrary =
+            onOpenSkillLibrary
+        self.onOpenTerminology =
+            onOpenTerminology
+        self.onLoadFullTranscriptionHistory =
+            onLoadFullTranscriptionHistory
+        self.onLoadFullRecoveryHistory =
+            onLoadFullRecoveryHistory
+        self.onCanUndoTranscriptionRecord =
+            onCanUndoTranscriptionRecord
+        self.onUndoTranscriptionRecord =
+            onUndoTranscriptionRecord
+        self.onDeleteTranscriptionRecord =
+            onDeleteTranscriptionRecord
+        self.onDeleteRecoveryRecord =
+            onDeleteRecoveryRecord
+        self.onUseNextSkill = onUseNextSkill
+        self.onRunSkillTest = onRunSkillTest
+        self.onVoiceSampleAction = onVoiceSampleAction
         self.onHotkeyCaptureChanged =
             onHotkeyCaptureChanged
         self.onPreviewVisualFeedback =
@@ -550,6 +844,8 @@ private struct PreferencesView: View {
             styleCapsuleStore
         self.localAssetAccessEnabled =
             localAssetAccessEnabled
+        self.skillLibraryInitialSection =
+            skillLibraryInitialSection
         self.windowStateStore = windowStateStore
     }
 
@@ -557,9 +853,7 @@ private struct PreferencesView: View {
         RuntimePreflight.issues(
             for: config,
             authSnapshotProvider: { authSnapshot },
-            recoveryCredentialAvailable: {
-                try recoveryCredentialStore.hasAPIKey()
-            }
+            recoveryCredentialAvailable: { recoveryAPIKeyStored }
         )
     }
 
@@ -661,66 +955,19 @@ private struct PreferencesView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedSection) {
-                Section {
-                    ForEach(SettingsPane.allCases) { pane in
-                        Label(L10n.text(pane.rawValue), systemImage: pane.icon)
-                            .foregroundStyle(.primary)
-                            .tag(pane)
-                    }
-                } header: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("OpenWhisper")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        Text(
-                            L10n.format(
-                                "%@ dictation workflow",
-                                config.transcription
-                                    .dictationHotkey
-                                    .displayName
-                            )
-                        )
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
-                    .textCase(nil)
-                    .padding(.vertical, 6)
-                }
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 260)
-        } detail: {
-            VStack(spacing: 0) {
-                HStack(alignment: .top, spacing: 16) {
-                    sectionHeader
-                    Spacer(minLength: 16)
-                    saveStatusIndicator
-                }
-                .padding(.horizontal, 22)
-                .padding(.top, 18)
-                .padding(.bottom, 12)
-
-                Divider()
-
-                Form {
-                    selectedSectionView
-                }
-                .formStyle(.grouped)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .background(Color(nsColor: .windowBackgroundColor))
-        }
-        .frame(minWidth: 820, minHeight: 560)
+        settingsSplitView
+        .frame(minWidth: 900, minHeight: 620)
         .onChange(of: selectedSection) { pane in
             guard let pane else {
-                selectedSection = .account
+                selectedSection = .general
                 return
             }
-            windowStateStore.saveSelectedPane(pane)
+            let normalized = pane.normalizedVisiblePane
+            if normalized != pane {
+                selectedSection = normalized
+                return
+            }
+            windowStateStore.saveSelectedPane(normalized)
         }
         .onChange(of: config) { _ in
             if suppressNextPersist {
@@ -728,6 +975,31 @@ private struct PreferencesView: View {
                 return
             }
             persistSettings()
+        }
+        .onChange(of: config.transcription.openAITranscriptionURL) { value in
+            if recoveryEndpointDraft != value {
+                recoveryEndpointDraft = value
+            }
+        }
+        .onChange(of: config.transcription.openAIModel) { value in
+            if recoveryModelDraft != value {
+                recoveryModelDraft = value
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .openWhisperNavigateSettingsPane
+            )
+        ) { notification in
+            guard
+                let rawValue = notification.userInfo?["pane"] as? String,
+                let pane = SettingsPane(rawValue: rawValue)
+            else {
+                return
+            }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86)) {
+                selectedSection = pane.normalizedVisiblePane
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             permissionStatusMonitor.refresh()
@@ -737,7 +1009,6 @@ private struct PreferencesView: View {
             refreshRecentHistory()
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
-            refreshLicenseStatus()
             refreshCommunitySkillInventory()
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatGPTAuthStateDidChange)) { _ in
@@ -751,7 +1022,6 @@ private struct PreferencesView: View {
             refreshRecentHistory()
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
-            refreshLicenseStatus()
             refreshCommunitySkillInventory()
         }
         .task {
@@ -777,7 +1047,7 @@ private struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Style Capsules, installed Community Skills, settings, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID from this Mac. This action cannot be undone."
+                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Style Capsules, installed Community Skills, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
                 )
             )
         }
@@ -786,28 +1056,13 @@ private struct PreferencesView: View {
             isPresented: $showsAdvancedRecovery
         ) {
             Button(L10n.text("Cancel"), role: .cancel) {}
-            Button(L10n.text("Use Paid API")) {
+            Button(L10n.text("Use Recovery API")) {
                 activateAdvancedRecovery()
             }
         } message: {
             Text(
                 L10n.text(
                     "Future dictation audio will be sent to the configured endpoint with the API key stored in Keychain. Your API provider may charge for transcription. AI Polish will still use your ChatGPT account."
-                )
-            )
-        }
-        .alert(
-            L10n.text("Remove Pro license from this Mac?"),
-            isPresented: $showsRemoveLicenseConfirmation
-        ) {
-            Button(L10n.text("Cancel"), role: .cancel) {}
-            Button(L10n.text("Remove License"), role: .destructive) {
-                removeLicenseReceipt()
-            }
-        } message: {
-            Text(
-                L10n.text(
-                    "This removes only the local activation receipt. Community dictation remains available, and the license can be activated again subject to its device limit."
                 )
             )
         }
@@ -818,8 +1073,212 @@ private struct PreferencesView: View {
         }
     }
 
+    private var settingsSplitView: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                settingsSidebar
+                Divider()
+                    .ignoresSafeArea(.container, edges: .top)
+                settingsDetail
+                    .frame(
+                        width: max(
+                            0,
+                            geometry.size.width
+                                - SettingsLayoutMetrics.sidebarWidth
+                                - 1
+                        ),
+                        height: geometry.size.height
+                    )
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var settingsSidebar: some View {
+        ZStack(alignment: .top) {
+            SettingsSidebarMaterialView()
+                .ignoresSafeArea(.container, edges: .top)
+            settingsSidebarList
+                .padding(.top, SettingsLayoutMetrics.sidebarTopPadding)
+        }
+        .frame(width: SettingsLayoutMetrics.sidebarWidth)
+    }
+
+    @ViewBuilder
+    private var settingsDetail: some View {
+        ZStack {
+            switch activeSection {
+            case .skills, .history, .terminology:
+                embeddedDestination
+                    .padding(.top, SettingsLayoutMetrics.embeddedTopPadding)
+                    .id(activeSection)
+                    .transition(settingsPageTransition)
+            default:
+                ScrollView {
+                    VStack(
+                        alignment: .leading,
+                        spacing: 22
+                    ) {
+                        HStack(
+                            alignment: .top,
+                            spacing: 16
+                        ) {
+                            sectionHeader
+                            Spacer(minLength: 16)
+                            saveStatusIndicator
+                        }
+                        selectedSectionView
+                    }
+                    .padding(
+                        .horizontal,
+                        SettingsLayoutMetrics
+                            .detailHorizontalPadding
+                    )
+                    .padding(
+                        .top,
+                        SettingsLayoutMetrics
+                            .detailTopPadding
+                    )
+                    .padding(.bottom, 44)
+                    .frame(
+                        maxWidth:
+                            OpenWhisperMetrics
+                                .contentMaxWidth,
+                        alignment: .leading
+                    )
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: .top
+                    )
+                }
+                .id(activeSection)
+                .transition(settingsPageTransition)
+                .background(
+                    Color(nsColor: .windowBackgroundColor)
+                )
+            }
+        }
+        .animation(
+            reduceMotion ? .linear(duration: 0) : .easeOut(duration: OpenWhisperMotion.pageTransition),
+            value: activeSection
+        )
+        .background(
+            Color(nsColor: .windowBackgroundColor)
+        )
+    }
+
+    private var settingsPageTransition: AnyTransition {
+        .opacity.combined(with: .scale(scale: 0.995))
+    }
+
+    private var settingsSidebarList: some View {
+        ScrollView {
+            VStack(
+                alignment: .leading,
+                spacing: SettingsLayoutMetrics.sidebarSectionSpacing
+            ) {
+                // Keep the product shell destinations aligned with SettingsPane.visiblePanes.
+                ForEach(SettingsSidebarGroup.allCases) { group in
+                    VStack(
+                        alignment: .leading,
+                        spacing: SettingsLayoutMetrics.sidebarHeaderRowSpacing
+                    ) {
+                        Text(group.title)
+                            .font(OpenWhisperTypography.caption(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(
+                                .leading,
+                                SettingsLayoutMetrics.sidebarRowInnerPadding
+                            )
+                        VStack(
+                            alignment: .leading,
+                            spacing: SettingsLayoutMetrics.sidebarRowSpacing
+                        ) {
+                            settingsPaneLinks(
+                                group.panes.filter {
+                                    SettingsPane.visiblePanes.contains($0)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(
+                .horizontal,
+                SettingsLayoutMetrics.sidebarRowOuterPadding
+            )
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var embeddedDestination: some View {
+        switch activeSection {
+        case .skills:
+            SkillLibraryView(
+                initialConfig: config,
+                store: skillPackageStore,
+                localAssetAccessEnabled: localAssetAccessEnabled,
+                initialSection: skillLibraryInitialSection,
+                isEmbedded: true,
+                onSave: { updated in
+                    persistEmbeddedConfig(updated)
+                },
+                onUseNext: onUseNextSkill,
+                onRunTest: onRunSkillTest,
+                onVoiceSampleAction: onVoiceSampleAction
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
+        case .history:
+            HistoryWindowView(
+                isEmbedded: true,
+                hotkeyBinding: config.transcription.dictationHotkey,
+                onLoadTranscriptionHistory: onLoadFullTranscriptionHistory,
+                onLoadRecoveryHistory: onLoadFullRecoveryHistory,
+                onResolveRecoveryAudioURL: onResolveRecoveryAudioURL,
+                onRetryRecoveryRecord: onRetryRecoveryRecord,
+                onCanUndoTranscriptionRecord: onCanUndoTranscriptionRecord,
+                onUndoTranscriptionRecord: onUndoTranscriptionRecord,
+                onDeleteTranscriptionRecord: onDeleteTranscriptionRecord,
+                onDeleteRecoveryRecord: onDeleteRecoveryRecord
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
+        case .terminology:
+            TerminologyManagerView(
+                initialConfig: config,
+                isEmbedded: true,
+                onSave: { updated in
+                    persistEmbeddedConfig(updated)
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
+        default:
+            EmptyView()
+        }
+    }
+
     private var activeSection: SettingsPane {
-        selectedSection ?? .account
+        (selectedSection ?? .general)
+            .normalizedVisiblePane
+    }
+
+    @ViewBuilder
+    private func settingsPaneLinks(
+        _ panes: [SettingsPane]
+    ) -> some View {
+        ForEach(panes) { pane in
+            SettingsSidebarRowButton(
+                pane: pane,
+                isSelected: activeSection == pane,
+                reduceMotion: reduceMotion
+            ) {
+                selectedSection = pane
+            }
+        }
     }
 
     private var availableSkillRegistry:
@@ -829,14 +1288,9 @@ private struct PreferencesView: View {
     }
 
     private var sectionHeader: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(L10n.text(activeSection.rawValue))
-                .font(.system(size: 24, weight: .semibold))
-            Text(sectionSubtitle)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(activeSection.displayTitle)
+            .font(OpenWhisperTypography.display())
+            .tracking(-0.25)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -844,87 +1298,207 @@ private struct PreferencesView: View {
     private var saveStatusIndicator: some View {
         switch saveStatus {
         case .saved:
-            Label(L10n.text("Saved automatically"), systemImage: "checkmark.circle.fill")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .accessibilityLabel(L10n.text("Settings saved automatically"))
+            EmptyView()
         case .failed(let message):
             Label(L10n.text("Save failed"), systemImage: "exclamationmark.triangle.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.red)
+                .font(OpenWhisperTypography.caption(.semibold))
+                .foregroundStyle(Color(nsColor: OpenWhisperPalette.error))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Color(nsColor: OpenWhisperPalette.error).opacity(0.12),
+                    in: Capsule(style: .continuous)
+                )
                 .help(message)
                 .accessibilityLabel(L10n.format("Could not save settings: %@", message))
-        }
-    }
-
-    private var sectionSubtitle: String {
-        switch activeSection {
-        case .account:
-            return L10n.text("Connect ChatGPT, verify permissions, and keep the first-run flow healthy.")
-        case .dictation:
-            return L10n.format(
-                "Configure the %@ recording route and ASR behavior.",
-                config.transcription.dictationHotkey
-                    .displayName
-            )
-        case .appearance:
-            return L10n.text(
-                "Choose how OpenWhisper signals recording, processing, delivery, and recovery without taking focus."
-            )
-        case .polish:
-            return L10n.text(
-                "Choose a Skill for each app and control when AI Polish transforms a transcript."
-            )
-        case .context:
-            return L10n.text(
-                "Control which Skills may read only the text you explicitly select."
-            )
-        case .terminology:
-            return L10n.text(
-                "Manage personal terminology, deterministic corrections, Domain Packs, conflicts, and professional-review risk."
-            )
-        case .paste:
-            return L10n.text("Control paste behavior while keeping clipboard recovery conservative.")
-        case .privacy:
-            return L10n.text("Control local retention and delete all OpenWhisper data.")
-        case .advanced:
-            return L10n.text("Recovery routes and lower-level compatibility settings.")
         }
     }
 
     @ViewBuilder
     private var selectedSectionView: some View {
         switch activeSection {
-        case .account:
-            accountOverviewCard
-        case .dictation:
-            dictationCard
+        case .general, .account:
+            VStack(spacing: 18) {
+                generalCard
+                accountOverviewCard
+            }
+        case .dictation, .polish, .paste:
+            VStack(spacing: 18) {
+                dictationCard
+                pasteAndClipboardCard
+                aiPolishCard
+            }
         case .appearance:
             appearanceAndFeedbackCard
-        case .polish:
-            aiPolishCard
-        case .context:
-            contextCard
-        case .terminology:
-            terminologyCard
-        case .paste:
-            settingsCard(title: "Paste & Clipboard") {
-                Toggle(
-                    L10n.text("Restore clipboard after verified insertion"),
-                    isOn: $config.injection.preserveClipboard
-                )
-                Text(
-                    L10n.text(
-                        "OpenWhisper restores the previous clipboard only after Accessibility confirms the expected text change. If the target or insertion cannot be verified, the transcript stays in the clipboard for manual Cmd+V."
-                    )
-                )
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+        case .context, .privacy:
+            VStack(spacing: 18) {
+                contextCard
+                privacyCard
             }
-        case .privacy:
-            privacyCard
+        case .terminology, .skills, .history:
+            EmptyView()
         case .advanced:
             advancedRecoveryCard
+        }
+    }
+
+    private var generalCard: some View {
+        settingsCard(title: nil, style: .hero) {
+            SettingsRow(
+                title: L10n.text("App Language"),
+                detail: L10n.text(
+                    "Applies to Settings, the menu bar, feedback, and new windows."
+                )
+            ) {
+                Picker(
+                    L10n.text("App Language"),
+                    selection: $config.appLanguage
+                ) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(
+                    minWidth: 150,
+                    idealWidth: 190,
+                    maxWidth: 240
+                )
+            }
+
+            Divider()
+
+            SettingsRow(
+                title: L10n.text("Default Skill"),
+                detail:
+                    currentGlobalDefaultSkill?
+                        .localizedSummary
+                    ?? L10n.text(
+                        "Saved Skill unavailable. OpenWhisper will fall back to Direct."
+                    )
+            ) {
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(
+                        currentGlobalDefaultSkill?
+                            .localizedName
+                        ?? L10n.text("Direct")
+                    )
+                    .font(.system(size: 12, weight: .semibold))
+                    Button(L10n.text("Open Skill Library…")) {
+                        withAnimation(
+                            .spring(response: 0.32, dampingFraction: 0.86)
+                        ) {
+                            selectedSection = .skills
+                        }
+                        onOpenSkillLibrary()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            Divider()
+
+            SettingsRow(
+                title: L10n.text("Dictation shortcut"),
+                detail: L10n.format(
+                    "%@ starts and stops dictation everywhere on this Mac.",
+                    config.transcription.dictationHotkey.displayName
+                )
+            ) {
+                Text(config.transcription.dictationHotkey.displayName)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+            }
+
+            Divider()
+
+            SettingsRow(
+                title: L10n.text("Skill Switcher shortcut"),
+                detail: L10n.text(
+                    "Optional. Opens the Skill Switcher without starting dictation."
+                )
+            ) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        skillSwitcherShortcutControls
+                    }
+                    VStack(alignment: .trailing, spacing: 7) {
+                        skillSwitcherShortcutControls
+                    }
+                }
+            }
+
+            if let hotkeyMessage {
+                Text(hotkeyMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(
+                        hotkeyMessageIsError ? .red : .secondary
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var currentGlobalDefaultSkill:
+        SkillDefinition?
+    {
+        availableSkillRegistry.definition(
+            id: config.transcription.skills
+                .defaultSkillID
+        )
+    }
+
+    @ViewBuilder
+    private var skillSwitcherShortcutControls: some View {
+        Toggle(
+            L10n.text("Enabled"),
+            isOn: skillSwitcherHotkeyEnabledBinding
+        )
+        .toggleStyle(.switch)
+        .controlSize(.small)
+
+        if let binding = config.skillSwitcherHotkey {
+            HotkeyRecorderView(
+                binding: binding,
+                onCandidate: { candidate in
+                    applySkillSwitcherHotkeyCandidate(candidate)
+                },
+                onCaptureChanged: { capturing in
+                    isCapturingHotkey = capturing
+                    onHotkeyCaptureChanged(capturing)
+                    if capturing {
+                        hotkeyMessage = L10n.text(
+                            "Press the shortcut you want to use. Esc cancels without changing the current shortcut."
+                        )
+                        hotkeyMessageIsError = false
+                    }
+                }
+            )
+            .frame(
+                minWidth: 150,
+                idealWidth: 176,
+                maxWidth: 220,
+                minHeight: 30,
+                idealHeight: 30,
+                maxHeight: 30
+            )
+        }
+    }
+
+    private var pasteAndClipboardCard: some View {
+        settingsCard(title: "Paste & Clipboard") {
+            Toggle(
+                L10n.text("Restore clipboard after verified insertion"),
+                isOn: $config.injection.preserveClipboard
+            )
+            .accessibilityHint(
+                L10n.text(
+                    "OpenWhisper restores the previous clipboard only after Accessibility confirms the expected text change. If the target or insertion cannot be verified, the transcript stays in the clipboard for manual Cmd+V."
+                )
+            )
         }
     }
 
@@ -933,6 +1507,10 @@ private struct PreferencesView: View {
             persistedConfig.transcription.dictationHotkey
         let requestedHotkey =
             config.transcription.dictationHotkey
+        let previousSkillSwitcherHotkey =
+            persistedConfig.skillSwitcherHotkey
+        let requestedSkillSwitcherHotkey =
+            config.skillSwitcherHotkey
         switch onSave(config) {
         case .success:
             persistedConfig = config
@@ -943,17 +1521,69 @@ private struct PreferencesView: View {
                     requestedHotkey.displayName
                 )
                 hotkeyMessageIsError = false
+            } else if previousSkillSwitcherHotkey
+                != requestedSkillSwitcherHotkey
+            {
+                hotkeyMessage = requestedSkillSwitcherHotkey.map {
+                    L10n.format(
+                        "Skill Switcher shortcut changed to %@.",
+                        $0.displayName
+                    )
+                } ?? L10n.text(
+                    "Skill Switcher shortcut disabled."
+                )
+                hotkeyMessageIsError = false
             }
         case .failure(let error):
             saveStatus = .failed(error.localizedDescription)
-            if previousHotkey != requestedHotkey {
+            if previousHotkey != requestedHotkey
+                || previousSkillSwitcherHotkey
+                    != requestedSkillSwitcherHotkey
+            {
                 hotkeyMessage = error.localizedDescription
                 hotkeyMessageIsError = true
                 suppressNextPersist = true
                 config.transcription.dictationHotkey =
                     previousHotkey
+                config.skillSwitcherHotkey =
+                    previousSkillSwitcherHotkey
             }
         }
+    }
+
+    private func persistEmbeddedConfig(
+        _ updatedConfig: AppConfig
+    ) -> Result<Void, any Error> {
+        let result = onSave(updatedConfig)
+        switch result {
+        case .success:
+            persistedConfig = updatedConfig
+            saveStatus = .saved
+            if config != updatedConfig {
+                suppressNextPersist = true
+                config = updatedConfig
+            }
+        case .failure(let error):
+            saveStatus = .failed(error.localizedDescription)
+        }
+        return result
+    }
+
+    private func commitRecoveryEndpointDraft() {
+        guard config.transcription.openAITranscriptionURL
+            != recoveryEndpointDraft
+        else {
+            return
+        }
+        config.transcription.openAITranscriptionURL =
+            recoveryEndpointDraft
+    }
+
+    private func commitRecoveryModelDraft() {
+        guard config.transcription.openAIModel != recoveryModelDraft else {
+            return
+        }
+        config.transcription.openAIModel = recoveryModelDraft
     }
 
     private func applyHotkeyCandidate(
@@ -961,6 +1591,10 @@ private struct PreferencesView: View {
     ) {
         do {
             let validated = try candidate.validated()
+            try OpenWhisperShortcutSetValidator.validate(
+                dictation: validated,
+                skillSwitcher: config.skillSwitcherHotkey
+            )
             if validated
                 == config.transcription
                     .dictationHotkey
@@ -985,6 +1619,53 @@ private struct PreferencesView: View {
         }
     }
 
+    private var skillSwitcherHotkeyEnabledBinding:
+        Binding<Bool>
+    {
+        Binding(
+            get: { config.skillSwitcherHotkey != nil },
+            set: { enabled in
+                if enabled {
+                    applySkillSwitcherHotkeyCandidate(
+                        .skillSwitcher
+                    )
+                } else {
+                    config.skillSwitcherHotkey = nil
+                }
+            }
+        )
+    }
+
+    private func applySkillSwitcherHotkeyCandidate(
+        _ candidate: HotkeyBinding
+    ) {
+        do {
+            let validated = try candidate.validated()
+            try OpenWhisperShortcutSetValidator.validate(
+                dictation:
+                    config.transcription.dictationHotkey,
+                skillSwitcher: validated
+            )
+            if validated == config.skillSwitcherHotkey {
+                hotkeyMessage = L10n.format(
+                    "%@ is already the Skill Switcher shortcut.",
+                    validated.displayName
+                )
+                hotkeyMessageIsError = false
+                return
+            }
+            hotkeyMessage = L10n.format(
+                "Testing %@…",
+                validated.displayName
+            )
+            hotkeyMessageIsError = false
+            config.skillSwitcherHotkey = validated
+        } catch {
+            hotkeyMessage = error.localizedDescription
+            hotkeyMessageIsError = true
+        }
+    }
+
     private static func terminologyStatusMessage(for config: AppConfig) -> String? {
         let entries = config.transcription.terminology.entries
         guard !entries.isEmpty else {
@@ -1002,7 +1683,7 @@ private struct PreferencesView: View {
         return L10n.format("Dictionary has %ld entries.", entries.count)
     }
 
-    private static func loadTextPolishUsage(
+    nonisolated private static func loadTextPolishUsage(
         directoryURL: URL = ProductIdentity.applicationSupportURL(
             homeDirectoryURL: FileManager.default.homeDirectoryForCurrentUser
         )
@@ -1037,35 +1718,60 @@ private struct PreferencesView: View {
     }
 
     private func refreshTextPolishStatus() {
-        textPolishUsage = textPolishUsageDirectoryURL.map {
-            Self.loadTextPolishUsage(directoryURL: $0)
-        } ?? [:]
+        guard let directoryURL = textPolishUsageDirectoryURL else {
+            textPolishUsage = [:]
+            return
+        }
+        Task {
+            let usage = await Task.detached(priority: .utility) {
+                Self.loadTextPolishUsage(directoryURL: directoryURL)
+            }.value
+            guard !Task.isCancelled else {
+                return
+            }
+            textPolishUsage = usage
+        }
     }
 
     private func refreshCommunitySkillInventory() {
-        guard localAssetAccessEnabled
-        else {
-            communitySkillInventory =
-                CommunitySkillInventory(
-                    packages: [],
-                    rejected: []
-                )
+        guard localAssetAccessEnabled else {
+            communitySkillInventory = CommunitySkillInventory(
+                packages: [],
+                rejected: []
+            )
             return
         }
-        communitySkillInventory =
-            skillPackageStore
-                .loadInventory(
-                    config:
-                        config.communitySkills
-                )
+        let store = skillPackageStore
+        let communitySkills = config.communitySkills
+        Task {
+            let inventory = await Task.detached(priority: .utility) {
+                store.loadInventory(config: communitySkills)
+            }.value
+            guard !Task.isCancelled, config.communitySkills == communitySkills else {
+                return
+            }
+            communitySkillInventory = inventory
+        }
     }
 
     private func refreshRecentHistory() {
-        recentHistoryRecords = onLoadRecentHistory()
+        Task {
+            let records = await onLoadRecentHistory()
+            guard !Task.isCancelled else {
+                return
+            }
+            recentHistoryRecords = records
+        }
     }
 
     private func refreshRecoveryHistory() {
-        recentRecoveryRecords = onLoadRecoveryHistory()
+        Task {
+            let records = await onLoadRecoveryHistory()
+            guard !Task.isCancelled else {
+                return
+            }
+            recentRecoveryRecords = records
+        }
     }
 
     private var recentRecoveryItems: [RecoveryHistoryPreview] {
@@ -1129,28 +1835,24 @@ private struct PreferencesView: View {
     }
 
     private var accountOverviewCard: some View {
-        settingsCard(title: "Account & Permissions") {
+        settingsCard(title: nil, style: .hero) {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
+                HStack(spacing: 0) {
                     compactSetupTile(title: "ChatGPT", status: chatGPTAccountStatus)
+                    Divider()
+                        .frame(height: 36)
+                        .padding(.horizontal, 14)
                     compactSetupTile(title: "Microphone", status: microphoneStatus)
+                    Divider()
+                        .frame(height: 36)
+                        .padding(.horizontal, 14)
                     compactSetupTile(title: "Accessibility", status: accessibilityStatus)
                 }
 
                 HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(authSnapshot.userEmail ?? L10n.text("Connect ChatGPT to start dictation."))
+                    if let userEmail = authSnapshot.userEmail {
+                        Text(userEmail)
                             .font(.system(size: 12, weight: .medium))
-                        Text(
-                            L10n.format(
-                                "%@ starts and stops recording. Output pastes when an editable target is focused; otherwise it stays in the clipboard.",
-                                config.transcription
-                                    .dictationHotkey
-                                    .displayName
-                            )
-                        )
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
@@ -1159,16 +1861,6 @@ private struct PreferencesView: View {
                 }
 
                 HStack {
-                    Text(
-                        L10n.format(
-                            "Need to revisit the first-run flow or practice %@ again?",
-                            config.transcription
-                                .dictationHotkey
-                                .displayName
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
                     Spacer()
                     Button(L10n.text("Open Setup Guide"), action: onOpenOnboarding)
                         .buttonStyle(.bordered)
@@ -1192,13 +1884,6 @@ private struct PreferencesView: View {
                         .foregroundStyle(.secondary)
                     }
 
-                    if !permissionStatusMonitor.snapshot.accessibilityTrusted,
-                       let detail = AccessibilityPermission.repairGuidance().detail {
-                        Text(detail)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
 
                 if let permissionMessage {
@@ -1210,261 +1895,7 @@ private struct PreferencesView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Divider()
-
-                licenseSection
             }
-        }
-    }
-
-    private var licenseSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(L10n.text("License & Pro"))
-                    .font(.system(size: 13, weight: .semibold))
-                Text(licenseSnapshot.localizedStatusTitle)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(licenseStatusColor)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        licenseStatusColor.opacity(0.12)
-                    )
-                    .clipShape(Capsule())
-                Spacer()
-            }
-
-            Text(licenseSnapshot.localizedStatusDetail)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let verificationDueAt =
-                licenseSnapshot.verificationDueAt
-            {
-                LabeledContent(L10n.text("Verification due")) {
-                    Text(
-                        verificationDueAt.formatted(
-                            date: .abbreviated,
-                            time: .shortened
-                        )
-                    )
-                    .font(.system(size: 11))
-                }
-            }
-
-            if let maximumBuild = licenseSnapshot.maximumBuild {
-                LabeledContent(L10n.text("Eligible through build")) {
-                    Text(String(maximumBuild))
-                        .font(
-                            .system(
-                                size: 11,
-                                design: .monospaced
-                            )
-                        )
-                }
-            }
-
-            if !licenseDeviceIdentifier.isEmpty {
-                LabeledContent(L10n.text("Device ID")) {
-                    HStack(spacing: 8) {
-                        Text(licenseDeviceIdentifier)
-                            .font(
-                                .system(
-                                    size: 10,
-                                    design: .monospaced
-                                )
-                            )
-                            .textSelection(.enabled)
-                            .lineLimit(1)
-                        Button(L10n.text("Copy")) {
-                            copyLicenseDeviceIdentifier()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button(L10n.text("Import Signed License…")) {
-                    importLicenseReceipt()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(
-                    !licenseManager.canInstallReceipts()
-                        || licenseSnapshot.state == .preview
-                )
-
-                if storedLicenseCanBeRemoved {
-                    Button(
-                        L10n.text("Remove License"),
-                        role: .destructive
-                    ) {
-                        showsRemoveLicenseConfirmation = true
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                if !licenseManager.canInstallReceipts() {
-                    Text(
-                        L10n.text(
-                            "Signed license import is unavailable in this preview build."
-                        )
-                    )
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                }
-            }
-
-            if let licenseMessage {
-                Text(licenseMessage)
-                    .font(.system(size: 11))
-                    .foregroundStyle(
-                        licenseMessageIsError ? .red : .secondary
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var storedLicenseCanBeRemoved: Bool {
-        switch licenseSnapshot.state {
-        case .active,
-             .offlineGrace,
-             .verificationRequired,
-             .updateEntitlementExpired,
-             .deviceMismatch,
-             .invalid:
-            return true
-        case .community, .preview, .configurationError:
-            return false
-        }
-    }
-
-    private var licenseStatusColor: Color {
-        switch licenseSnapshot.state {
-        case .active, .preview:
-            return .green
-        case .offlineGrace, .updateEntitlementExpired:
-            return .orange
-        case .community:
-            return .secondary
-        case .verificationRequired,
-             .deviceMismatch,
-             .invalid,
-             .configurationError:
-            return .red
-        }
-    }
-
-    private func refreshLicenseStatus() {
-        licenseSnapshot = licenseManager.snapshot()
-        licenseDeviceIdentifier =
-            (try? licenseManager.deviceIdentifier()) ?? ""
-    }
-
-    private func copyLicenseDeviceIdentifier() {
-        guard !licenseDeviceIdentifier.isEmpty else {
-            return
-        }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(
-            licenseDeviceIdentifier,
-            forType: .string
-        )
-        licenseMessage = L10n.text("Device ID copied.")
-        licenseMessageIsError = false
-    }
-
-    private func importLicenseReceipt() {
-        let panel = NSOpenPanel()
-        let receiptType = UTType(
-            filenameExtension: "owlicense",
-            conformingTo: .json
-        )
-        panel.allowedContentTypes = [receiptType ?? .json, .json]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.title = L10n.text("Import Signed License")
-        panel.prompt = L10n.text("Import")
-
-        guard panel.runModal() == .OK, let url = panel.url else {
-            return
-        }
-
-        do {
-            let values = try url.resourceValues(
-                forKeys: [
-                    .isRegularFileKey,
-                    .isSymbolicLinkKey,
-                    .fileSizeKey,
-                ]
-            )
-            guard
-                values.isRegularFile == true,
-                values.isSymbolicLink != true,
-                let fileSize = values.fileSize,
-                fileSize > 0,
-                fileSize <= LicenseManager.maximumReceiptBytes
-            else {
-                throw LicenseValidationError.malformedReceipt
-            }
-            let data = try Data(
-                contentsOf: url,
-                options: [.mappedIfSafe]
-            )
-            licenseSnapshot = try licenseManager.installReceipt(data)
-            licenseMessage = L10n.text(
-                "The signed Pro license was installed for this Mac."
-            )
-            licenseMessageIsError = false
-        } catch {
-            licenseMessage = localizedLicenseImportError(error)
-            licenseMessageIsError = true
-        }
-    }
-
-    private func removeLicenseReceipt() {
-        do {
-            try licenseManager.removeReceipt()
-            refreshLicenseStatus()
-            licenseMessage = L10n.text(
-                "The local license receipt was removed. Community dictation remains available."
-            )
-            licenseMessageIsError = false
-        } catch {
-            licenseMessage = L10n.text(
-                "OpenWhisper could not remove the local license receipt."
-            )
-            licenseMessageIsError = true
-        }
-    }
-
-    private func localizedLicenseImportError(
-        _ error: any Error
-    ) -> String {
-        switch error as? LicenseValidationError {
-        case .deviceMismatch:
-            return L10n.text(
-                "This license was activated for a different Mac."
-            )
-        case .invalidSignature:
-            return L10n.text(
-                "The license signature could not be verified."
-            )
-        case .wrongProduct:
-            return L10n.text(
-                "This license was issued for a different product."
-            )
-        case .configurationMissing, .invalidPublicKey:
-            return L10n.text(
-                "This build cannot verify signed licenses."
-            )
-        default:
-            return L10n.text(
-                "The license could not be installed. Use the original signed receipt and verify that it was issued for this Device ID."
-            )
         }
     }
 
@@ -1503,7 +1934,14 @@ private struct PreferencesView: View {
                                     }
                                 }
                             )
-                            .frame(width: 176, height: 30)
+                            .frame(
+                                minWidth: 150,
+                                idealWidth: 176,
+                                maxWidth: 220,
+                                minHeight: 30,
+                                idealHeight: 30,
+                                maxHeight: 30
+                            )
 
                             Button(
                                 L10n.text("Restore F5")
@@ -1518,21 +1956,6 @@ private struct PreferencesView: View {
                             )
                         }
                     }
-
-                    Text(
-                        L10n.format(
-                            "%@ starts recording, and the same shortcut stops and submits the dictation. Esc and the inline close control still cancel.",
-                            config.transcription
-                                .dictationHotkey
-                                .displayName
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(
-                        horizontal: false,
-                        vertical: true
-                    )
 
                     if let hotkeyMessage {
                         Text(hotkeyMessage)
@@ -1564,7 +1987,12 @@ private struct PreferencesView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 230)
+                    .pickerStyle(.menu)
+                    .frame(
+                        minWidth: 170,
+                        idealWidth: 230,
+                        maxWidth: 280
+                    )
                 }
 
                 LabeledContent(L10n.text("Punctuation")) {
@@ -1577,16 +2005,13 @@ private struct PreferencesView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 230)
-                }
-
-                Text(
-                    L10n.text(
-                        "Technical literals such as paths, URLs, filenames, versions, commands, flags, and code spans are preserved byte-for-byte."
+                    .pickerStyle(.menu)
+                    .frame(
+                        minWidth: 170,
+                        idealWidth: 230,
+                        maxWidth: 280
                     )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                }
 
                 Divider()
 
@@ -1596,9 +2021,6 @@ private struct PreferencesView: View {
                         .foregroundStyle(.secondary)
                     Text(L10n.text("ChatGPT Account"))
                         .font(.system(size: 14, weight: .semibold))
-                    Text(L10n.text("Uses the ChatGPT backend transcribe API. This ASR response is already lightly polished by ChatGPT and is separate from the AI Polish rewrite tab."))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
                 }
                 historySection(
                     title: "Recent Dictation History",
@@ -1612,7 +2034,8 @@ private struct PreferencesView: View {
         some View
     {
         settingsCard(
-            title: "Appearance & Feedback"
+            title: nil,
+            style: .hero
         ) {
             VStack(
                 alignment: .leading,
@@ -1651,18 +2074,14 @@ private struct PreferencesView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
+                    .frame(
+                        minWidth: 190,
+                        idealWidth: 240,
+                        maxWidth: 300,
+                        alignment: .leading
+                    )
 
-                    Text(
-                        config.visualFeedback
-                            .mode.detail
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(
-                        horizontal: false,
-                        vertical: true
-                    )
                 }
 
                 Divider()
@@ -1685,11 +2104,16 @@ private struct PreferencesView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 180)
+                    .pickerStyle(.menu)
+                    .frame(
+                        minWidth: 150,
+                        idealWidth: 180,
+                        maxWidth: 240
+                    )
                 }
 
                 if config.visualFeedback.mode
-                    == .blueSignalFrame
+                    == .aiActivityGlow
                 {
                     LabeledContent(
                         L10n.text("Frame target")
@@ -1712,7 +2136,12 @@ private struct PreferencesView: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 230)
+                        .pickerStyle(.menu)
+                        .frame(
+                            minWidth: 180,
+                            idealWidth: 230,
+                            maxWidth: 290
+                        )
                     }
                 }
 
@@ -1754,18 +2183,6 @@ private struct PreferencesView: View {
                             .alwaysReduceMotion
                 )
 
-                Text(
-                    L10n.text(
-                        "OpenWhisper always follows macOS Increase Contrast and Reduce Motion. Always reduce motion keeps every OpenWhisper feedback surface static even when the system setting is off."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(
-                    horizontal: false,
-                    vertical: true
-                )
-
                 Divider()
 
                 VStack(
@@ -1799,24 +2216,13 @@ private struct PreferencesView: View {
                         }
                     }
 
-                    if config.visualFeedback.mode
-                        == .hidden
-                    {
-                        Text(
-                            L10n.text(
-                                "Hidden intentionally produces no visible preview; menu status, sounds, notifications, and accessibility announcements remain available."
-                            )
-                        )
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    }
                 }
             }
         }
     }
 
     private var privacyCard: some View {
-        settingsCard(title: "Privacy & Data") {
+        settingsCard(title: nil, style: .hero) {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle(
@@ -1856,14 +2262,6 @@ private struct PreferencesView: View {
                         L10n.text("Keep failed recordings for retry"),
                         isOn: $config.privacy.failedAudioRecoveryEnabled
                     )
-                    Text(
-                        L10n.text(
-                            "Successful recordings are deleted after processing and are never added to Recovery."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-
                     if config.privacy.failedAudioRecoveryEnabled {
                         Stepper(
                             L10n.format(
@@ -1891,14 +2289,6 @@ private struct PreferencesView: View {
                         L10n.text("Keep local performance diagnostics"),
                         isOn: $config.privacy.diagnosticsEnabled
                     )
-                    Text(
-                        L10n.text(
-                            "Diagnostics contain timing, byte counts, provider labels, and error categories—not audio, transcript text, clipboard contents, or tokens."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-
                     if config.privacy.diagnosticsEnabled {
                         Stepper(
                             L10n.format(
@@ -1927,14 +2317,6 @@ private struct PreferencesView: View {
                         L10n.text("Keep local anonymous product metrics"),
                         isOn: $config.privacy.productMetricsEnabled
                     )
-                    Text(
-                        L10n.text(
-                            "Product metrics contain only version, onboarding step, provider category, duration and latency buckets, result category, and failure category. They never include audio, transcript text, app names, paths, account details, or persistent identifiers, and are never uploaded automatically."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-
                     if config.privacy.productMetricsEnabled {
                         Stepper(
                             L10n.format(
@@ -1969,13 +2351,6 @@ private struct PreferencesView: View {
                         .buttonStyle(.bordered)
                         .disabled(!config.privacy.productMetricsEnabled)
 
-                        Text(
-                            L10n.text(
-                                "Exports an aggregate JSON report with enum and bucket counts only. It contains no event timestamps, content, app names, paths, account details, or persistent identifiers; you decide whether to share it."
-                            )
-                        )
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
                     }
 
                     if let productMetricsExportMessage {
@@ -1995,27 +2370,12 @@ private struct PreferencesView: View {
                     L10n.text("Do not save history or recovery audio for sensitive apps"),
                     isOn: $config.privacy.excludeSensitiveApps
                 )
-                Text(
-                    L10n.text(
-                        "OpenWhisper excludes known password managers and Keychain/Passwords apps by default."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
                 Divider()
 
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.text("Delete all local data"))
                             .font(.system(size: 12, weight: .semibold))
-                        Text(
-                            L10n.text(
-                                "Deletes settings, terminology, custom Style Capsules, installed Community Skills, history, failed recordings, diagnostics, product metrics, retry files, the saved ChatGPT session, the OpenAI-Compatible API key, the Pro license receipt, and the local License Device ID."
-                            )
-                        )
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button(L10n.text("Delete All Data")) {
@@ -2051,7 +2411,6 @@ private struct PreferencesView: View {
             refreshCommunitySkillInventory()
             privacyMessage = L10n.text("All OpenWhisper data was deleted from this Mac.")
             privacyMessageIsError = false
-            refreshLicenseStatus()
         case .failure(let error):
             privacyMessage = error.localizedDescription
             privacyMessageIsError = true
@@ -2061,10 +2420,6 @@ private struct PreferencesView: View {
     private var advancedRecoveryCard: some View {
         settingsCard(title: "Current Product Route") {
             VStack(alignment: .leading, spacing: 12) {
-                Text(L10n.text("OpenWhisper ships as a ChatGPT account dictation app. The normal path uses the ChatGPT backend for ASR and the ChatGPT-authenticated Responses endpoint for AI Polish."))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-
                 VStack(alignment: .leading, spacing: 8) {
                     routeRow(
                         title: "Dictation",
@@ -2084,14 +2439,6 @@ private struct PreferencesView: View {
                     )
                 }
 
-                Text(
-                    L10n.text(
-                        "OpenAI-Compatible Recovery changes dictation ASR only. AI Polish remains on the ChatGPT-authenticated route and still requires a connected ChatGPT account."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
                 Divider()
 
                 VStack(alignment: .leading, spacing: 10) {
@@ -2101,62 +2448,71 @@ private struct PreferencesView: View {
                     LabeledContent(L10n.text("Endpoint")) {
                         TextField(
                             "",
-                            text: $config.transcription.openAITranscriptionURL,
+                            text: $recoveryEndpointDraft,
                             prompt: Text(
                                 "https://api.example.com/v1/audio/transcriptions"
                             )
                         )
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
-                        .frame(minWidth: 360)
+                        .frame(
+                            minWidth: 180,
+                            idealWidth: 360,
+                            maxWidth: .infinity
+                        )
+                        .onSubmit {
+                            commitRecoveryEndpointDraft()
+                        }
+                        .onDisappear {
+                            commitRecoveryEndpointDraft()
+                        }
+                        .task(id: recoveryEndpointDraft) {
+                            try? await Task.sleep(for: .milliseconds(450))
+                            guard !Task.isCancelled else {
+                                return
+                            }
+                            commitRecoveryEndpointDraft()
+                        }
                     }
 
                     LabeledContent(L10n.text("Model")) {
                         TextField(
                             "",
-                            text: $config.transcription.openAIModel,
+                            text: $recoveryModelDraft,
                             prompt: Text("gpt-4o-mini-transcribe")
                         )
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
-                        .frame(minWidth: 260)
+                        .frame(
+                            minWidth: 180,
+                            idealWidth: 260,
+                            maxWidth: .infinity
+                        )
+                        .onSubmit {
+                            commitRecoveryModelDraft()
+                        }
+                        .onDisappear {
+                            commitRecoveryModelDraft()
+                        }
+                        .task(id: recoveryModelDraft) {
+                            try? await Task.sleep(for: .milliseconds(450))
+                            guard !Task.isCancelled else {
+                                return
+                            }
+                            commitRecoveryModelDraft()
+                        }
                     }
 
                     LabeledContent(L10n.text("API Key")) {
-                        HStack(spacing: 8) {
-                            SecureField(
-                                "",
-                                text: $recoveryAPIKeyInput,
-                                prompt: Text(
-                                    L10n.text(
-                                        "Enter a replacement API key"
-                                    )
-                                )
-                            )
-                            .textFieldStyle(.roundedBorder)
-                            .labelsHidden()
-                            .frame(minWidth: 260)
-
-                            Button(L10n.text("Save API Key")) {
-                                saveRecoveryAPIKey()
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 8) {
+                                recoveryAPIKeyField
+                                recoveryAPIKeyActions
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(
-                                recoveryAPIKeyInput
-                                    .trimmingCharacters(
-                                        in: .whitespacesAndNewlines
-                                    )
-                                    .isEmpty
-                            )
-
-                            Button(
-                                L10n.text("Remove API Key"),
-                                role: .destructive
-                            ) {
-                                removeRecoveryAPIKey()
+                            VStack(alignment: .trailing, spacing: 8) {
+                                recoveryAPIKeyField
+                                recoveryAPIKeyActions
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(!recoveryAPIKeyStored)
                         }
                     }
 
@@ -2226,14 +2582,6 @@ private struct PreferencesView: View {
                         }
                     }
 
-                    Text(
-                        L10n.text(
-                            "Connection testing sends a generated 0.1-second silent WAV—not your recordings or transcript text. The configured provider may still charge for the request."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.orange)
-
                     if let recoveryMessage {
                         Text(recoveryMessage)
                             .font(.system(size: 11))
@@ -2250,14 +2598,6 @@ private struct PreferencesView: View {
                     Button(L10n.text("Open Config Folder"), action: onOpenConfigFolder)
                         .buttonStyle(.bordered)
                 }
-                Text(
-                    L10n.text(
-                        "Open the local support folder only for advanced troubleshooting, backup, or manual inspection."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
                 Divider()
 
                 LabeledContent(L10n.text("Open Source Licenses")) {
@@ -2266,14 +2606,6 @@ private struct PreferencesView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-                Text(
-                    L10n.text(
-                        "Review the exact pinned dependency versions and license texts bundled with this copy of OpenWhisper."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
                 if let thirdPartyLicenseMessage {
                     Text(thirdPartyLicenseMessage)
                         .font(.system(size: 11))
@@ -2284,9 +2616,10 @@ private struct PreferencesView: View {
                         )
                 }
 
-                Divider()
+                if providerPolicySnapshot.isConfigured {
+                    Divider()
 
-                LabeledContent(L10n.text("Provider Safety")) {
+                    LabeledContent(L10n.text("Provider Safety")) {
                     Button(L10n.text("Refresh Safety Policy")) {
                         Task {
                             providerPolicySnapshot =
@@ -2294,25 +2627,24 @@ private struct PreferencesView: View {
                         }
                     }
                     .buttonStyle(.bordered)
-                    .disabled(!providerPolicySnapshot.isConfigured)
-                }
+                    }
 
-                Text(providerPolicySnapshot.detail)
+                    Text(providerPolicySnapshot.detail)
                     .font(.system(size: 11))
                     .foregroundStyle(providerPolicyStatusColor)
 
-                if !providerPolicySnapshot.disabledCapabilities.isEmpty {
-                    Text(
+                    if !providerPolicySnapshot.disabledCapabilities.isEmpty {
+                        Text(
                         providerPolicySnapshot.disabledCapabilities
                             .map(\.title)
                             .joined(separator: " · ")
                     )
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.red)
-                }
+                    }
 
-                if let expiresAt = providerPolicySnapshot.expiresAt {
-                    Text(
+                    if let expiresAt = providerPolicySnapshot.expiresAt {
+                        Text(
                         L10n.format(
                             "Safety policy expires: %@",
                             expiresAt.formatted(
@@ -2323,11 +2655,13 @@ private struct PreferencesView: View {
                     )
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    }
                 }
 
-                Divider()
+                if softwareUpdateSnapshot.isConfigured {
+                    Divider()
 
-                LabeledContent(L10n.text("Software Updates")) {
+                    LabeledContent(L10n.text("Software Updates")) {
                     Button(L10n.text("Check for Updates…")) {
                         checkForSoftwareUpdates()
                     }
@@ -2336,9 +2670,9 @@ private struct PreferencesView: View {
                         !softwareUpdateSnapshot.isConfigured
                             || !softwareUpdateSnapshot.canCheckForUpdates
                     )
-                }
+                    }
 
-                Toggle(
+                    Toggle(
                     L10n.text("Automatically check for updates"),
                     isOn: Binding(
                         get: {
@@ -2349,14 +2683,13 @@ private struct PreferencesView: View {
                         }
                     )
                 )
-                .disabled(!softwareUpdateSnapshot.isConfigured)
 
-                Text(softwareUpdateSnapshot.detail)
+                    Text(softwareUpdateSnapshot.detail)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
 
-                if let lastCheckDate = softwareUpdateSnapshot.lastUpdateCheckDate {
-                    Text(
+                    if let lastCheckDate = softwareUpdateSnapshot.lastUpdateCheckDate {
+                        Text(
                         L10n.format(
                             "Last checked: %@",
                             lastCheckDate.formatted(
@@ -2367,14 +2700,15 @@ private struct PreferencesView: View {
                     )
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                }
+                    }
 
-                if let softwareUpdateMessage {
-                    Text(softwareUpdateMessage)
+                    if let softwareUpdateMessage {
+                        Text(softwareUpdateMessage)
                         .font(.system(size: 11))
                         .foregroundStyle(
                             softwareUpdateMessageIsError ? .red : .secondary
                         )
+                    }
                 }
 
                 Divider()
@@ -2385,14 +2719,6 @@ private struct PreferencesView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-                Text(
-                    L10n.text(
-                        "Creates a local ZIP with redacted runtime, permission, latency, optional product-metric, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, tokens, API keys, terminology, custom endpoints, and raw crash reports."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-
                 if let diagnosticsExportMessage {
                     Text(diagnosticsExportMessage)
                         .font(.system(size: 11))
@@ -2404,17 +2730,67 @@ private struct PreferencesView: View {
         }
     }
 
-    private func refreshRecoveryCredentialState() {
-        do {
-            recoveryAPIKeyStored = try recoveryCredentialStore.hasAPIKey()
-            if recoveryMessageIsError {
-                recoveryMessage = nil
-                recoveryMessageIsError = false
+    private var recoveryAPIKeyField: some View {
+        SecureField(
+            "",
+            text: $recoveryAPIKeyInput,
+            prompt: Text(
+                L10n.text("Enter a replacement API key")
+            )
+        )
+        .textFieldStyle(.roundedBorder)
+        .labelsHidden()
+        .frame(
+            minWidth: 160,
+            idealWidth: 260,
+            maxWidth: .infinity
+        )
+    }
+
+    private var recoveryAPIKeyActions: some View {
+        HStack(spacing: 8) {
+            Button(L10n.text("Save API Key")) {
+                saveRecoveryAPIKey()
             }
-        } catch {
-            recoveryAPIKeyStored = false
-            recoveryMessage = error.localizedDescription
-            recoveryMessageIsError = true
+            .buttonStyle(.borderedProminent)
+            .disabled(
+                recoveryAPIKeyInput
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+            )
+
+            Button(
+                L10n.text("Remove API Key"),
+                role: .destructive
+            ) {
+                removeRecoveryAPIKey()
+            }
+            .buttonStyle(.bordered)
+            .disabled(!recoveryAPIKeyStored)
+        }
+    }
+
+    private func refreshRecoveryCredentialState() {
+        let store = recoveryCredentialStore
+        Task {
+            let result: Result<Bool, any Error> = await Task.detached(priority: .utility) {
+                Result { try store.hasAPIKey() }
+            }.value
+            guard !Task.isCancelled else {
+                return
+            }
+            switch result {
+            case .success(let isStored):
+                recoveryAPIKeyStored = isStored
+                if recoveryMessageIsError {
+                    recoveryMessage = nil
+                    recoveryMessageIsError = false
+                }
+            case .failure(let error):
+                recoveryAPIKeyStored = false
+                recoveryMessage = error.localizedDescription
+                recoveryMessageIsError = true
+            }
         }
     }
 
@@ -2428,10 +2804,9 @@ private struct PreferencesView: View {
             )
             recoveryMessageIsError = false
         } catch {
-            recoveryAPIKeyStored =
-                (try? recoveryCredentialStore.hasAPIKey()) ?? false
             recoveryMessage = error.localizedDescription
             recoveryMessageIsError = true
+            refreshRecoveryCredentialState()
         }
     }
 
@@ -2634,21 +3009,37 @@ private struct PreferencesView: View {
     private func routeRow(title: String, value: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(L10n.text(title))
-                .font(.system(size: 12, weight: .medium))
+                .font(OpenWhisperTypography.callout(.medium))
                 .frame(width: 90, alignment: .leading)
+                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text(value))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(OpenWhisperTypography.callout(.semibold))
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(OpenWhisperTypography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
             Spacer()
         }
-        .padding(9)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private var terminologyCard:
@@ -2665,34 +3056,62 @@ private struct PreferencesView: View {
                     config: $config
                 )
                 Divider()
-                terminologyDictionarySection
+                terminologyLibrarySummary
             }
         }
     }
 
     private var contextCard: some View {
-        settingsCard(title: "Selected Text Context") {
+        settingsCard(title: "Global Context") {
             VStack(alignment: .leading, spacing: 14) {
-                Toggle(
-                    L10n.text(
-                        "Allow selected-text context"
-                    ),
-                    isOn:
-                        $config.context
-                            .selectionEnabled
-                )
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.text("Context Sources"))
+                        .font(.system(size: 12, weight: .semibold))
+                    ForEach(
+                        ContextSourceKind
+                            .userVisibleSettingsSources
+                    ) { source in
+                        HStack(spacing: 10) {
+                            Image(systemName: source.isAvailableInCurrentRuntime ? "checkmark.circle.fill" : "clock.badge")
+                                .foregroundStyle(
+                                    source.isAvailableInCurrentRuntime
+                                        ? Color(nsColor: OpenWhisperPalette.success)
+                                        : Color.secondary
+                                )
+                            Text(source.title)
+                                .font(.system(size: 12, weight: .medium))
+                            Spacer(minLength: 16)
+                            if source.isAvailableInCurrentRuntime,
+                               source != .voice
+                            {
+                                Toggle(
+                                    L10n.text("Enabled"),
+                                    isOn: Binding(
+                                        get: {
+                                            config.context.setting(for: source).isEnabled
+                                        },
+                                        set: { enabled in
+                                            config.context.setSourceEnabled(
+                                                enabled,
+                                                source: source
+                                            )
+                                        }
+                                    )
+                                )
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                            } else {
+                                Text(
+                                    L10n.text("Required")
+                                )
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
 
-                Text(
-                    L10n.text(
-                        "OpenWhisper reads selected text only after the active Skill has permission. It never reads the rest of the window, document, clipboard, or screen through this capability."
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(
-                    horizontal: false,
-                    vertical: true
-                )
+                Divider()
 
                 LabeledContent(
                     L10n.text(
@@ -2724,7 +3143,12 @@ private struct PreferencesView: View {
                         ).tag(12_000)
                     }
                     .labelsHidden()
-                    .frame(width: 190)
+                    .pickerStyle(.menu)
+                    .frame(
+                        minWidth: 150,
+                        idealWidth: 190,
+                        maxWidth: 240
+                    )
                 }
                 .disabled(
                     !config.context
@@ -2756,30 +3180,13 @@ private struct PreferencesView: View {
                         }
                 ) { skill in
                     HStack(spacing: 12) {
-                        VStack(
-                            alignment: .leading,
-                            spacing: 3
-                        ) {
-                            Text(
-                                skill.localizedName
-                            )
+                        Text(skill.localizedName)
                             .font(
                                 .system(
                                     size: 12,
-                                    weight:
-                                        .medium
+                                    weight: .medium
                                 )
                             )
-                            Text(
-                                L10n.text(
-                                    "May use the current explicit selection only."
-                                )
-                            )
-                            .font(.system(size: 10))
-                            .foregroundStyle(
-                                .secondary
-                            )
-                        }
                         Spacer()
                         Picker(
                             skill.localizedName,
@@ -2814,7 +3221,12 @@ private struct PreferencesView: View {
                             }
                         }
                         .labelsHidden()
-                        .frame(width: 150)
+                        .pickerStyle(.menu)
+                        .frame(
+                            minWidth: 130,
+                            idealWidth: 165,
+                            maxWidth: 220
+                        )
                     }
                     .padding(
                         .vertical,
@@ -2827,15 +3239,6 @@ private struct PreferencesView: View {
                 )
 
                 HStack(spacing: 10) {
-                    Label(
-                        L10n.text(
-                            "Sensitive apps never expose selected text to Skills."
-                        ),
-                        systemImage:
-                            "hand.raised.fill"
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
                     Spacer()
                     Button(
                         L10n.text(
@@ -2855,6 +3258,47 @@ private struct PreferencesView: View {
 
                 Divider()
 
+                SettingsRow(
+                    title: L10n.text("Context Receipts"),
+                    detail: L10n.text(
+                        "Receipts contain only source names and character counts, never Context text."
+                    )
+                ) {
+                    Picker(
+                        L10n.text("Context Receipts"),
+                        selection: $config.context.retentionPolicy
+                    ) {
+                        Text(L10n.text("Session only"))
+                            .tag(ContextRetentionPolicy.sessionOnly)
+                        Text(L10n.text("Keep redacted receipts"))
+                            .tag(ContextRetentionPolicy.redactedReceipts)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(
+                        minWidth: 160,
+                        idealWidth: 210,
+                        maxWidth: 260
+                    )
+                }
+
+                if !config.context.recentReceipts.isEmpty {
+                    ForEach(config.context.recentReceipts.suffix(5).reversed()) { receipt in
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.shield")
+                                .foregroundStyle(.secondary)
+                            Text(receipt.grantedSources.map(\.title).joined(separator: ", "))
+                                .lineLimit(1)
+                            Spacer()
+                            Text(receipt.createdAt.formatted(date: .omitted, time: .shortened))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.system(size: 10))
+                    }
+                }
+
+                Divider()
+
                 StyleCapsuleSettingsView(
                     config: $config,
                     registry:
@@ -2868,44 +3312,29 @@ private struct PreferencesView: View {
     }
 
     private var aiPolishCard: some View {
-        settingsCard(title: "AI Polish") {
+        settingsCard(title: nil, style: .hero) {
             VStack(alignment: .leading, spacing: 12) {
-                if !licenseSnapshot.allows(.voiceModes) {
-                    HStack(alignment: .center, spacing: 10) {
-                        Label(
-                            L10n.text("Skills require OpenWhisper Pro"),
-                            systemImage: "lock.fill"
-                        )
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.orange)
-                        Spacer()
-                        Button(L10n.text("Manage License")) {
-                            selectedSection = .account
-                        }
-                        .buttonStyle(.bordered)
+                HStack(alignment: .center, spacing: 14) {
+                    OpenWhisperIconWell(
+                        systemName: "wand.and.stars",
+                        size: OpenWhisperMetrics.iconWellSizeLarge,
+                        symbolSize: 18
+                    )
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L10n.text("Skill Library"))
+                            .font(.system(size: 13, weight: .semibold))
                     }
+                    Spacer()
+                    Button(L10n.text("Open Skill Library…")) {
+                        withAnimation(
+                            .spring(response: 0.32, dampingFraction: 0.86)
+                        ) {
+                            selectedSection = .skills
+                        }
+                        onOpenSkillLibrary()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-
-                skillSection
-                    .disabled(
-                        !licenseSnapshot.allows(.voiceModes)
-                    )
-
-                Divider()
-
-                CommunitySkillSettingsView(
-                    config: $config,
-                    inventory:
-                        $communitySkillInventory,
-                    store: skillPackageStore,
-                    localAssetAccessEnabled:
-                        localAssetAccessEnabled
-                )
-                .disabled(
-                    !licenseSnapshot.allows(
-                        .voiceModes
-                    )
-                )
 
                 Divider()
 
@@ -2915,14 +3344,6 @@ private struct PreferencesView: View {
                     Text(L10n.text("Off")).tag(TextPolishMode.disabled)
                 }
                 .pickerStyle(.segmented)
-
-                Text(
-                    L10n.text(
-                        "Auto skips short, low-complexity dictation and rewrites only when corrections, structure, translation, email, or longer input justify the extra latency."
-                    )
-                )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
 
                 HStack(spacing: 16) {
                     Toggle(L10n.text("Show estimates"), isOn: $config.transcription.textPolish.showCostEstimates)
@@ -2953,11 +3374,7 @@ private struct PreferencesView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(L10n.text("Skills"))
                     .font(.system(size: 13, weight: .semibold))
-                Text(
-                    licenseSnapshot.state == .preview
-                        ? L10n.text("Pro Preview")
-                        : L10n.text("Pro")
-                )
+                Text(L10n.text("Community"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 7)
@@ -2968,15 +3385,6 @@ private struct PreferencesView: View {
                     .clipShape(Capsule())
                 Spacer()
             }
-
-            Text(
-                L10n.text(
-                    "Choose a default Skill and optionally override it for exact macOS bundle identifiers. OpenWhisper uses only the app name and bundle identifier—not window or document content—to resolve a Skill."
-                )
-            )
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
 
             LabeledContent(L10n.text("Default Skill")) {
                 Picker(
@@ -2994,11 +3402,6 @@ private struct PreferencesView: View {
                 .labelsHidden()
                 .frame(width: 210)
             }
-
-            Text(defaultSkillCaption)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
             if config.transcription.skills.requiresTextPolish,
                config.transcription.textPolish.mode == .disabled
@@ -3037,13 +3440,6 @@ private struct PreferencesView: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Text(
-                        L10n.text(
-                            "Choose an installed app or enter its exact bundle identifier."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
                 }
 
                 HStack(spacing: 8) {
@@ -3114,16 +3510,7 @@ private struct PreferencesView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if config.transcription.skills.applicationRules.isEmpty {
-                    Text(
-                        L10n.text(
-                            "No application rules. The default Skill applies everywhere."
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
-                } else {
+                if !config.transcription.skills.applicationRules.isEmpty {
                     VStack(spacing: 6) {
                         ForEach(
                             config.transcription.skills.applicationRules
@@ -3134,18 +3521,6 @@ private struct PreferencesView: View {
                 }
             }
         }
-    }
-
-    private var defaultSkillCaption: String {
-        guard
-            let skill = availableSkillRegistry.definition(
-                id: config.transcription.skills.defaultSkillID
-            )
-        else {
-            return DictationMode.direct.caption
-        }
-        return skill.legacyMode?.caption
-            ?? skill.promptInstruction
     }
 
     private func skillRuleRow(
@@ -3227,10 +3602,25 @@ private struct PreferencesView: View {
                 )
             )
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private func saveSkillRule() {
@@ -3245,6 +3635,14 @@ private struct PreferencesView: View {
                 appName: editingSkillAppName,
                 bundleIdentifier: editingSkillBundleIdentifier,
                 skillID: editingSkillID,
+                skillInstallationID:
+                    communitySkillInventory.packages.first {
+                        $0.isActive
+                            && $0.definition.id == editingSkillID
+                    }?.installation.id
+                    ?? (existingRule?.skillID == editingSkillID
+                        ? existingRule?.skillInstallationID
+                        : nil),
                 isEnabled: existingRule?.isEnabled ?? true,
                 registry:
                     availableSkillRegistry
@@ -3378,12 +3776,7 @@ private struct PreferencesView: View {
                     .buttonStyle(.bordered)
                 }
 
-                if recentRecoveryItems.isEmpty {
-                    Text(L10n.text("No recoverable records yet."))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 6)
-                } else {
+                if !recentRecoveryItems.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(recentRecoveryItems) { item in
                             recoveryHistoryRow(item)
@@ -3455,10 +3848,25 @@ private struct PreferencesView: View {
             }
             .frame(width: 132, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private func copyRecoveryHistoryItem(_ item: RecoveryHistoryPreview) {
@@ -3541,9 +3949,24 @@ private struct PreferencesView: View {
 
             Spacer()
         }
-        .padding(10)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private func historySection(
@@ -3563,12 +3986,7 @@ private struct PreferencesView: View {
                 .buttonStyle(.bordered)
             }
 
-            if items.isEmpty {
-                Text(L10n.text("No recent transcripts yet."))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 6)
-            } else {
+            if !items.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(items) { item in
                         recentHistoryRow(item)
@@ -3626,10 +4044,25 @@ private struct PreferencesView: View {
             }
             .frame(width: 74, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private func copyRecentHistoryItem(_ item: TranscriptionHistoryPreview) {
@@ -3694,6 +4127,34 @@ private struct PreferencesView: View {
 
             terminologyList
         }
+    }
+
+    private var terminologyLibrarySummary: some View {
+        SettingsRow(
+            title: L10n.text("Terminology Dictionary"),
+            detail: terminologyLibrarySummaryText
+        ) {
+            Button(L10n.text("Open Terminologies…")) {
+                withAnimation(
+                    .spring(response: 0.32, dampingFraction: 0.86)
+                ) {
+                    selectedSection = .terminology
+                }
+                onOpenTerminology()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private var terminologyLibrarySummaryText: String {
+        let entries = config.transcription
+            .terminology.entries
+        let enabledCount = entries.filter(\.isEnabled).count
+        return L10n.format(
+            "%ld entries · %ld enabled. Add, edit, import, export, and remove entries in the Terminologies window.",
+            entries.count,
+            enabledCount
+        )
     }
 
     private var chatGPTAccountSection: some View {
@@ -3796,12 +4257,15 @@ private struct PreferencesView: View {
         }
 
         return Text(label)
-            .font(.system(size: 11, weight: .semibold))
+            .font(OpenWhisperTypography.micro(.semibold))
             .foregroundStyle(color)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(Capsule())
+            .background(color.opacity(0.12), in: Capsule(style: .continuous))
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(color.opacity(0.18), lineWidth: 0.5)
+            }
     }
 
     private func browserBridgePill(for state: BrowserBridgeState) -> some View {
@@ -3813,22 +4277,25 @@ private struct PreferencesView: View {
             color = .secondary
         case .waiting:
             label = L10n.text("Waiting")
-            color = .orange
+            color = Color(nsColor: OpenWhisperPalette.amber)
         case .connected:
             label = L10n.text("Connected")
-            color = .green
+            color = Color(nsColor: OpenWhisperPalette.success)
         case .failed:
             label = L10n.text("Failed")
-            color = .red
+            color = Color(nsColor: OpenWhisperPalette.error)
         }
 
         return Text(label)
-            .font(.system(size: 11, weight: .semibold))
+            .font(OpenWhisperTypography.micro(.semibold))
             .foregroundStyle(color)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(Capsule())
+            .background(color.opacity(0.12), in: Capsule(style: .continuous))
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(color.opacity(0.18), lineWidth: 0.5)
+            }
     }
 
     private var terminologySummaryRow: some View {
@@ -3840,9 +4307,6 @@ private struct PreferencesView: View {
             terminologyCountBadge(title: "Terms", count: termCount, color: .accentColor)
             terminologyCountBadge(title: "Corrections", count: correctionCount, color: .orange)
             Spacer()
-            Text(L10n.text("Import a text or CSV dictionary, then add custom terms or corrections here."))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -3929,9 +4393,24 @@ private struct PreferencesView: View {
                 .disabled(!canSaveTerminologyEntry)
             }
         }
-        .padding(10)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(12)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private var terminologyList: some View {
@@ -3959,7 +4438,11 @@ private struct PreferencesView: View {
 
     private func terminologyEntryRow(entry: TerminologyEntry) -> some View {
         HStack(spacing: 8) {
-            Text(L10n.text(entry.type.rawValue.capitalized))
+            Text(
+                L10n.text(
+                    entry.type == .correction ? "Correction" : "Term"
+                )
+            )
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(entry.type == .correction ? .orange : .accentColor)
                 .frame(width: 74, alignment: .leading)
@@ -4006,10 +4489,25 @@ private struct PreferencesView: View {
             }
             .buttonStyle(.borderless)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Color(nsColor: OpenWhisperPalette.insetSurface),
+            in: RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: OpenWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: OpenWhisperPalette.hairline),
+                lineWidth: 0.5
+            )
+        }
     }
 
     private func editTerminologyEntry(id: UUID) {
@@ -4134,14 +4632,12 @@ private struct PreferencesView: View {
     }
 
     private func settingsCard<Content: View>(
-        title: String,
+        title: String?,
+        style: SettingsCardContainer<Content>.Style = .grouped,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        Section {
+        SettingsCardContainer(title: title, style: style) {
             content()
-                .font(.system(size: 12))
-        } header: {
-            Text(L10n.text(title))
         }
     }
 
@@ -4152,23 +4648,27 @@ private struct PreferencesView: View {
     }
 
     private func compactSetupTile(title: String, status: SetupStatus) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: status.isReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(status.isReady ? .green : .orange)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(
+                    status.isReady
+                        ? Color(nsColor: OpenWhisperPalette.success)
+                        : Color(nsColor: OpenWhisperPalette.amber)
+                )
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text(title))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(OpenWhisperTypography.callout(.semibold))
                 Text(status.title)
-                    .font(.system(size: 11))
+                    .font(OpenWhisperTypography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(10)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func setupRow<Actions: View>(
@@ -4186,9 +4686,7 @@ private struct PreferencesView: View {
                     .font(.system(size: 12, weight: .semibold))
                 Text(status.title)
                     .font(.system(size: 12, weight: .medium))
-                Text(status.subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .accessibilityHint(status.subtitle)
                 actions()
             }
         }
@@ -4251,13 +4749,6 @@ private struct PreferencesView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             setupRow(title: title, status: status)
-
-            if let detail, !detail.isEmpty, status.isReady == false {
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
             if !actions.isEmpty {
                 HStack(spacing: 10) {

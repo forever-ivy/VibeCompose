@@ -13,11 +13,14 @@ APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 usage() {
   cat >&2 <<USAGE
 Usage:
-  $0 [--install] settings [account|dictation|appearance|ai-polish|context|terminology|paste|privacy|advanced]
+  $0 [--install] settings [general|dictation|context|appearance|advanced]
   $0 [--install] onboarding [welcome|connect|microphone|practice]
   $0 [--install] history
   $0 [--install] terminology
   $0 [--install] quick-add
+  $0 [--install] skill-library [installed|discover|created]
+  $0 [--install] skill-switcher
+  $0 [--install] preview [replace|paste|fallback]
   $0 --restore
 USAGE
   exit 64
@@ -82,9 +85,9 @@ fi
 ARGS=("--interaction-acceptance")
 case "$SURFACE" in
   settings)
-    DETAIL="${DETAIL:-account}"
+    DETAIL="${DETAIL:-general}"
     case "$DETAIL" in
-      account|dictation|appearance|ai-polish|context|terminology|paste|privacy|advanced) ;;
+      general|account|dictation|appearance|ai-polish|context|terminology|paste|privacy|advanced) ;;
       *) usage ;;
     esac
     ARGS+=("--open-settings" "--settings-pane" "$DETAIL")
@@ -108,6 +111,34 @@ case "$SURFACE" in
   quick-add)
     [[ -z "$DETAIL" ]] || usage
     ARGS+=("--open-quick-add")
+    ;;
+  skill-library)
+    DETAIL="${DETAIL:-discover}"
+    case "$DETAIL" in
+      installed|discover|created) ;;
+      *) usage ;;
+    esac
+    ARGS+=(
+      "--open-skill-library"
+      "--skill-library-section"
+      "$DETAIL"
+    )
+    ;;
+  skill-switcher)
+    [[ -z "$DETAIL" ]] || usage
+    ARGS+=("--open-skill-switcher")
+    ;;
+  preview)
+    DETAIL="${DETAIL:-replace}"
+    case "$DETAIL" in
+      replace|paste|fallback) ;;
+      *) usage ;;
+    esac
+    ARGS+=(
+      "--preview-demo"
+      "--preview-demo-scenario"
+      "$DETAIL"
+    )
     ;;
   *)
     usage

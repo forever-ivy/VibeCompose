@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import OpenWhisper
 
@@ -16,4 +17,29 @@ func statusMenuVisualStateMarksAttentionStates() {
     #expect(StatusMenuVisualState.recording.usesTemplateAttention == true)
     #expect(StatusMenuVisualState.processing.usesTemplateAttention == true)
     #expect(StatusMenuVisualState.error.usesTemplateAttention == true)
+}
+
+@Test @MainActor
+func statusMenuRendererProducesNativeTemplateImage() {
+    let image = OpenWhisperStatusIconRenderer.image(
+        for: .ready
+    )
+
+    #expect(image.size == NSSize(width: 18, height: 18))
+    #expect(image.isTemplate)
+}
+
+@Test @MainActor
+func statusMenuCanRebuildLocalizedItemsRepeatedly() {
+    let controller = StatusMenuController(
+        openHistoryHandler: {},
+        openQuickAddHandler: {},
+        openTerminologyHandler: {},
+        openSettingsHandler: {},
+        checkForUpdatesHandler: {},
+        quitHandler: {}
+    )
+
+    controller.reloadLocalization()
+    controller.reloadLocalization()
 }

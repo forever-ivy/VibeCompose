@@ -127,6 +127,7 @@ private final class FakeSoundFeedback: SoundFeedbackPlaying {
 @MainActor
 private final class FakeCoordinatorInjector: TextInjecting {
     private(set) var injectCallCount = 0
+    private(set) var texts: [String] = []
     private(set) var launchContexts: [LaunchAppContext?] = []
     private(set) var automaticPastePermissions: [Bool] = []
 
@@ -144,6 +145,7 @@ private final class FakeCoordinatorInjector: TextInjecting {
         _ = automaticPasteFallbackReason
         _ = expectedSelectionContext
         injectCallCount += 1
+        texts.append(text)
         launchContexts.append(launchAppContext)
         automaticPastePermissions.append(automaticPasteAllowed)
         return automaticPasteAllowed
@@ -182,14 +184,13 @@ private final class FakePreviewPresenter:
     PreviewPresenting
 {
     var decision:
-        PreviewDecision
+        PreviewDecision?
     private(set) var requests:
         [PreviewRequest] = []
 
     init(
         decision:
-            PreviewDecision =
-                .pasteToTarget
+            PreviewDecision? = nil
     ) {
         self.decision = decision
     }
@@ -199,9 +200,27 @@ private final class FakePreviewPresenter:
     ) async -> PreviewDecision {
         requests.append(request)
         return decision
+            ?? .pasteToTarget(
+                text: request.resultText
+            )
     }
 
     func dismiss() {}
+}
+
+@MainActor
+private final class AllowOnceCoordinatorContextPrompter:
+    ContextPermissionPrompting
+{
+    private(set) var requestCount = 0
+
+    func requestPermission(
+        _ request: ContextPermissionRequest
+    ) async -> ContextAuthorizationChoice {
+        _ = request
+        requestCount += 1
+        return .allowOnce
+    }
 }
 
 private func minimalCoordinatorWaveData() -> Data {
@@ -307,6 +326,25 @@ private final class FakeProductMetricsRecorder:
     }
 
     func prune(retention _: DiagnosticsRetentionPolicy) throws {}
+}
+
+private final class CoordinatorCallCounter:
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var value = 0
+
+    func increment() {
+        lock.lock()
+        value += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
 }
 
 private enum ScriptedCoordinatorPipelineOutcome: Sendable {
@@ -502,6 +540,70 @@ struct AppCoordinatorCancellationTests {
         #expect(
             statusMenu.updates.last?.1.contains(
                 "OW-INC-COORDINATOR-TEST"
+            ) == true
+        )
+    }
+
+    @Test
+    func missingRequiredSelectionStopsBeforeRecordingAndProviderPipeline()
+        async
+    {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let prompter = AllowOnceCoordinatorContextPrompter()
+        var config = AppConfig()
+        config.transcription.skills = SkillsConfig(
+            defaultSkillID:
+                SkillRegistry.contextRewriteSkillID,
+            applicationRules: []
+        )
+        let pipelineCreationCount = CoordinatorCallCounter()
+        let coordinator = AppCoordinator(
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in
+                pipelineCreationCount.increment()
+                return FakeCoordinatorPipeline()
+            },
+            launchAppContextProvider: {
+                LaunchAppContext(
+                    bundleIdentifier: "com.apple.TextEdit",
+                    localizedName: "TextEdit",
+                    processIdentifier: 42
+                )
+            },
+            contextBroker: ContextBroker(
+                selectionProvider: SelectionContextProvider(
+                    capture: { _, _ in .noSelection },
+                    verify: { _ in .unchanged }
+                )
+            ),
+            contextPermissionPrompter: prompter
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCondition {
+            coordinator.state == .idle
+                && statusMenu.updates.last?.0 == .error
+        }
+
+        #expect(prompter.requestCount == 1)
+        #expect(recorder.startRecordingCallCount == 0)
+        #expect(recorder.stopRecordingCallCount == 0)
+        #expect(pipelineCreationCount.snapshot() == 0)
+        #expect(
+            statusMenu.updates.last?.1.contains(
+                "selected text"
             ) == true
         )
     }
@@ -803,6 +905,109 @@ struct AppCoordinatorCancellationTests {
         #expect(snapshot.modes == [.codePrompt])
         #expect(snapshot.ruleCounts == [0])
         #expect(injector.launchContexts == [launchContext])
+    }
+
+    @Test
+    func previewEditedTextIsInjectedAndPersistedAsFinalHistory()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default
+                .removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let audioURL = root.appendingPathComponent(
+            "editable-preview.wav"
+        )
+        try minimalCoordinatorWaveData().write(
+            to: audioURL
+        )
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(
+            fileURL: audioURL,
+            durationMs: 1_000
+        )
+        let injector = FakeCoordinatorInjector()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let preview = FakePreviewPresenter(
+            decision: .pasteToTarget(
+                text: "Edited final result"
+            )
+        )
+        var config = AppConfig()
+        config.transcription.skills = SkillsConfig(
+            defaultSkillID:
+                SkillRegistry.emailSkillID,
+            applicationRules: []
+        )
+        let store = ConfigStore(
+            homeDirectoryURL: root
+        )
+        let coordinator = AppCoordinator(
+            configStore: store,
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: {
+                _, _, _, _, _, _ in statusMenu
+            },
+            pipelineFactory: {
+                _, _, _, _, _ in
+                FakeCoordinatorPipeline()
+            },
+            launchAppContextProvider: {
+                LaunchAppContext(
+                    bundleIdentifier:
+                        "com.example.editor",
+                    localizedName: "Editor",
+                    processIdentifier: 123
+                )
+            },
+            previewPresenter: preview
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(
+            coordinator,
+            toBecome: .recording
+        )
+        coordinator.handleHotkeyPress()
+        await waitForCondition {
+            injector.injectCallCount == 1
+        }
+
+        #expect(injector.texts == [
+            "Edited final result",
+        ])
+        #expect(preview.requests.count == 1)
+        let records = try TranscriptionHistoryRecorder(
+            directoryURL: store.directoryURL
+        ).loadRecent(limit: 10)
+        #expect(records.map(\.finalText) == [
+            "Edited final result",
+        ])
+        #expect(
+            records.first?.skillDeliveryAction
+                == PreviewAction.pasteToTarget.rawValue
+        )
+        #expect(records.first?.skillResultEdited == true)
     }
 
     @Test

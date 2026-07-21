@@ -1,5 +1,4 @@
 import AppKit
-import OpenWhisperLicensing
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -30,14 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 accessibilityDisplayOptionsOverride.applying(to: .system)
             }
         )
-        let licenseManager = CommercialLicensing.manager(
-            snapshotPrivacyMode: snapshotPrivacyMode
-        )
         self.authManager = authManager
         coordinator = AppCoordinator(
             overlay: overlay,
-            authManager: authManager,
-            licenseManager: licenseManager
+            authManager: authManager
         )
         coordinator?.start(launchMode: launchMode)
     }

@@ -57,6 +57,12 @@ struct ContextConfig:
         defaultMaximumSelectionCharacters
     var permissionGrants:
         [SkillPermissionGrant] = []
+    var sourceSettings:
+        [ContextSourceSetting] = []
+    var retentionPolicy:
+        ContextRetentionPolicy = .sessionOnly
+    var recentReceipts:
+        [ContextReceipt] = []
 
     init() {}
 
@@ -65,7 +71,13 @@ struct ContextConfig:
         maximumSelectionCharacters: Int =
             defaultMaximumSelectionCharacters,
         permissionGrants:
-            [SkillPermissionGrant] = []
+            [SkillPermissionGrant] = [],
+        sourceSettings:
+            [ContextSourceSetting] = [],
+        retentionPolicy:
+            ContextRetentionPolicy = .sessionOnly,
+        recentReceipts:
+            [ContextReceipt] = []
     ) {
         self.selectionEnabled = selectionEnabled
         self.maximumSelectionCharacters =
@@ -76,6 +88,16 @@ struct ContextConfig:
             Self.normalizedGrants(
                 permissionGrants
             )
+        self.sourceSettings = Self.normalizedSettings(
+            sourceSettings,
+            selectionEnabled: selectionEnabled,
+            maximumSelectionCharacters:
+                self.maximumSelectionCharacters
+        )
+        self.retentionPolicy = retentionPolicy
+        self.recentReceipts = Array(
+            recentReceipts.suffix(50)
+        )
     }
 
     init(from decoder: any Decoder)
@@ -106,6 +128,25 @@ struct ContextConfig:
                     forKey: .permissionGrants
                 ) ?? []
             )
+        sourceSettings = Self.normalizedSettings(
+            try container.decodeIfPresent(
+                [ContextSourceSetting].self,
+                forKey: .sourceSettings
+            ) ?? [],
+            selectionEnabled: selectionEnabled,
+            maximumSelectionCharacters:
+                maximumSelectionCharacters
+        )
+        retentionPolicy = try container.decodeIfPresent(
+            ContextRetentionPolicy.self,
+            forKey: .retentionPolicy
+        ) ?? .sessionOnly
+        recentReceipts = Array(
+            (try container.decodeIfPresent(
+                [ContextReceipt].self,
+                forKey: .recentReceipts
+            ) ?? []).suffix(50)
+        )
     }
 
     func scope(
@@ -144,6 +185,51 @@ struct ContextConfig:
 
     mutating func revokeAll() {
         permissionGrants.removeAll()
+        recentReceipts.removeAll()
+    }
+
+    func setting(
+        for source: ContextSourceKind
+    ) -> ContextSourceSetting {
+        sourceSettings.first { $0.source == source }
+            ?? ContextSourceSetting(
+                source: source,
+                isEnabled: source.isAvailableInCurrentRuntime,
+                maximumCharacters:
+                    source == .selection
+                    ? maximumSelectionCharacters
+                    : 4_000
+            )
+    }
+
+    mutating func setSourceEnabled(
+        _ isEnabled: Bool,
+        source: ContextSourceKind
+    ) {
+        sourceSettings.removeAll { $0.source == source }
+        var setting = self.setting(for: source)
+        setting.isEnabled = isEnabled
+        sourceSettings.append(setting)
+        if source == .selection {
+            selectionEnabled = isEnabled
+        }
+        sourceSettings = Self.normalizedSettings(
+            sourceSettings,
+            selectionEnabled: selectionEnabled,
+            maximumSelectionCharacters:
+                maximumSelectionCharacters
+        )
+    }
+
+    mutating func record(
+        receipt: ContextReceipt
+    ) {
+        guard retentionPolicy == .redactedReceipts else {
+            return
+        }
+        recentReceipts.removeAll { $0.id == receipt.id }
+        recentReceipts.append(receipt)
+        recentReceipts = Array(recentReceipts.suffix(50))
     }
 
     private static func boundedMaximumCharacters(
@@ -175,6 +261,36 @@ struct ContextConfig:
         }
         .prefix(maximumGrantCount)
         .map { $0 }
+    }
+
+    private static func normalizedSettings(
+        _ values: [ContextSourceSetting],
+        selectionEnabled: Bool,
+        maximumSelectionCharacters: Int
+    ) -> [ContextSourceSetting] {
+        var seen = Set<ContextSourceKind>()
+        var output: [ContextSourceSetting] = values.compactMap { value -> ContextSourceSetting? in
+            guard seen.insert(value.source).inserted else {
+                return nil
+            }
+            return ContextSourceSetting(
+                source: value.source,
+                isEnabled: value.source.isAvailableInCurrentRuntime
+                    && value.isEnabled,
+                maximumCharacters: value.maximumCharacters
+            )
+        }
+        if !seen.contains(.selection) {
+            output.append(
+                ContextSourceSetting(
+                    source: .selection,
+                    isEnabled: selectionEnabled,
+                    maximumCharacters:
+                        maximumSelectionCharacters
+                )
+            )
+        }
+        return output.sorted { $0.source.rawValue < $1.source.rawValue }
     }
 }
 
@@ -407,10 +523,141 @@ struct PreparedSkillContext:
     var persistentGrant:
         SkillPermissionGrant?
     var shouldCancel = false
+    var blocksExecution = false
+    var blockedRequiredSources:
+        [ContextSourceKind] = []
+    var deniedSources:
+        [ContextSourceKind] = []
+    var unavailableSources:
+        [ContextSourceKind] = []
+    var emptySources:
+        [ContextSourceKind] = []
+    var contextSnapshot:
+        ContextSnapshot?
+    var contextReceipt:
+        ContextReceipt?
 
     var selectedCharacterCount: Int {
         promptContext.selection?.count
             ?? 0
+    }
+
+    var blockedMessage: String? {
+        guard blocksExecution else { return nil }
+        let names = blockedRequiredSources
+            .map(\.title)
+            .joined(separator: ", ")
+        if blockedRequiredSources == [.selection] {
+            switch reason {
+            case .selectionDisabled,
+                 .permissionDenied,
+                 .voiceOnly,
+                 .sensitiveApplication:
+                return L10n.text(
+                    "This Skill requires selected text, but access is not allowed. Allow selected text for this Skill or choose another Skill."
+                )
+            case .selectionTooLarge:
+                return L10n.text(
+                    "This Skill requires selected text, but the selection is too large. Select a smaller range and try again."
+                )
+            default:
+                return L10n.text(
+                    "This Skill requires selected text. Select text in the target app and press the dictation shortcut again, or choose another Skill."
+                )
+            }
+        }
+        return L10n.format(
+            "This Skill cannot run because required context is missing: %@. Provide the context or choose another Skill.",
+            names
+        )
+    }
+
+    mutating func blockMissingRequiredSources(
+        for request: ContextRequest
+    ) {
+        let captured = Set(
+            contextSnapshot?.items.map(\.source) ?? []
+        )
+        let missing = request.required.filter {
+            $0 != .voice && !captured.contains($0)
+        }
+        guard !missing.isEmpty else { return }
+        blocksExecution = true
+        blockedRequiredSources = Self.normalized(
+            blockedRequiredSources + missing
+        )
+        emptySources = Self.normalized(
+            emptySources + missing.filter {
+                !deniedSources.contains($0)
+                    && !unavailableSources.contains($0)
+            }
+        )
+    }
+
+    mutating func appendSnapshotItem(
+        source: ContextSourceKind,
+        content: String
+    ) {
+        guard let existing = contextSnapshot else {
+            return
+        }
+        let normalized = content.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !normalized.isEmpty else { return }
+        var items = existing.items.filter { $0.source != source }
+        items.append(
+            ContextSnapshotItem(
+                source: source,
+                content: normalized,
+                contentSHA256:
+                    SelectionContextSnapshot.digest(
+                        for: normalized
+                    )
+            )
+        )
+        contextSnapshot = ContextSnapshot(
+            id: existing.id,
+            sessionID: existing.sessionID,
+            installationID: existing.installationID,
+            createdAt: existing.createdAt,
+            items: items
+        )
+    }
+
+    mutating func refreshReceipt(
+        request: ContextRequest,
+        deniedSources: [ContextSourceKind]? = nil
+    ) {
+        guard let contextSnapshot else { return }
+        if let deniedSources {
+            self.deniedSources = Self.normalized(
+                deniedSources
+            )
+        }
+        contextReceipt = ContextReceipt.from(
+            request: request,
+            snapshot: contextSnapshot,
+            deniedSources:
+                Self.normalized(
+                    self.deniedSources
+                ),
+            unavailableSources:
+                Self.normalized(
+                    unavailableSources
+                ),
+            emptySources:
+                Self.normalized(
+                    emptySources
+                )
+        )
+    }
+
+    private static func normalized(
+        _ sources: [ContextSourceKind]
+    ) -> [ContextSourceKind] {
+        var seen = Set<ContextSourceKind>()
+        return sources.filter { seen.insert($0).inserted }
     }
 }
 
@@ -440,23 +687,123 @@ struct ContextBroker {
         permissionPrompter:
             any ContextPermissionPrompting
     ) async -> PreparedSkillContext {
-        let capabilities =
-            plan.skill.requiredCapabilities
-                + plan.skill
-                    .optionalCapabilities
-        guard capabilities.contains(
+        let request = plan.profile.contextRequest
+        let sensitiveApplication = !SensitiveAppPolicy
+            .permitsContext(
+                bundleIdentifier:
+                    launchAppContext?.bundleIdentifier,
+                privacy: privacyConfig
+            )
+        let policyDecision = ContextPolicy().evaluate(
+            request: request,
+            settings: contextConfig.sourceSettings,
+            sensitiveApplication: sensitiveApplication
+        )
+        var initialItems: [ContextSnapshotItem] = []
+        if request.allSources.contains(.activeApp),
+           policyDecision.allowed.contains(.activeApp),
+           let launchAppContext
+        {
+            let appDescription = [
+                launchAppContext.localizedName,
+                launchAppContext.bundleIdentifier,
+            ].compactMap { $0 }.joined(separator: " — ")
+            if !appDescription.isEmpty {
+                initialItems.append(
+                    ContextSnapshotItem(
+                        source: .activeApp,
+                        content: appDescription,
+                        contentSHA256:
+                            SelectionContextSnapshot.digest(
+                                for: appDescription
+                            )
+                    )
+                )
+            }
+        }
+        let initialSnapshot = ContextSnapshot(
+            id: plan.contextSnapshot.id,
+            sessionID: plan.contextSnapshot.sessionID,
+            installationID: plan.installation.id,
+            createdAt: plan.contextSnapshot.createdAt,
+            items: initialItems
+        )
+        let policyDenied =
+            policyDecision.denied
+        let policyUnavailable =
+            policyDecision.unavailable
+        let policyBlocked = request.required.filter {
+            policyDenied.contains($0)
+                || policyUnavailable.contains($0)
+        }
+        if policyDecision.blocksExecution {
+            var prepared = PreparedSkillContext(
+                reason: sensitiveApplication
+                    ? .sensitiveApplication
+                    : .selectionDisabled,
+                blocksExecution: true,
+                blockedRequiredSources:
+                    policyBlocked,
+                deniedSources:
+                    policyDenied,
+                unavailableSources:
+                    policyUnavailable,
+                contextSnapshot:
+                    initialSnapshot
+            )
+            prepared.refreshReceipt(
+                request: request
+            )
+            return prepared
+        }
+        guard request.allSources.contains(
             .selection
         ) else {
-            return PreparedSkillContext(
-                reason: .notRequested
+            var prepared = PreparedSkillContext(
+                reason: .notRequested,
+                deniedSources:
+                    policyDenied,
+                unavailableSources:
+                    policyUnavailable,
+                contextSnapshot: initialSnapshot
             )
+            prepared.refreshReceipt(
+                request: request
+            )
+            prepared.blockMissingRequiredSources(
+                for: request
+            )
+            prepared.refreshReceipt(request: request)
+            return prepared
+        }
+
+        guard policyDecision.allowed.contains(.selection) else {
+            var prepared = PreparedSkillContext(
+                reason: sensitiveApplication
+                    ? .sensitiveApplication
+                    : .selectionDisabled,
+                deniedSources:
+                    policyDenied,
+                unavailableSources:
+                    policyUnavailable,
+                contextSnapshot: initialSnapshot
+            )
+            prepared.refreshReceipt(
+                request: request
+            )
+            return prepared
         }
 
         guard contextConfig.selectionEnabled
         else {
-            return PreparedSkillContext(
-                reason: .selectionDisabled
+            var prepared = PreparedSkillContext(
+                reason: .selectionDisabled,
+                deniedSources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         }
 
         guard
@@ -468,10 +815,15 @@ struct ContextBroker {
                     privacy: privacyConfig
                 )
         else {
-            return PreparedSkillContext(
+            var prepared = PreparedSkillContext(
                 reason:
-                    .sensitiveApplication
+                    .sensitiveApplication,
+                deniedSources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         }
 
         let scope = contextConfig.scope(
@@ -483,9 +835,14 @@ struct ContextBroker {
 
         switch scope {
         case .denied:
-            return PreparedSkillContext(
-                reason: .permissionDenied
+            var prepared = PreparedSkillContext(
+                reason: .permissionDenied,
+                deniedSources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         case .alwaysAllow:
             break
         case .askEveryTime:
@@ -522,13 +879,19 @@ struct ContextBroker {
                             .alwaysAllow
                     )
             case .voiceOnly:
-                return PreparedSkillContext(
-                    reason: .voiceOnly
+                var prepared = PreparedSkillContext(
+                    reason: .voiceOnly,
+                    deniedSources: [.selection],
+                    contextSnapshot: initialSnapshot
                 )
+                prepared.blockMissingRequiredSources(for: request)
+                prepared.refreshReceipt(request: request)
+                return prepared
             case .cancel:
                 return PreparedSkillContext(
                     reason: .cancelled,
-                    shouldCancel: true
+                    shouldCancel: true,
+                    contextSnapshot: initialSnapshot
                 )
             }
         }
@@ -539,7 +902,23 @@ struct ContextBroker {
                 .maximumSelectionCharacters
         ) {
         case .captured(let snapshot):
-            return PreparedSkillContext(
+            var fabricSnapshot = initialSnapshot
+            var items = fabricSnapshot.items
+            items.append(
+                ContextSnapshotItem(
+                    source: .selection,
+                    content: snapshot.selectedText,
+                    contentSHA256: snapshot.textDigest
+                )
+            )
+            fabricSnapshot = ContextSnapshot(
+                id: fabricSnapshot.id,
+                sessionID: fabricSnapshot.sessionID,
+                installationID: fabricSnapshot.installationID,
+                createdAt: fabricSnapshot.createdAt,
+                items: items
+            )
+            var prepared = PreparedSkillContext(
                 promptContext:
                     SkillPromptContext(
                         selection:
@@ -553,32 +932,61 @@ struct ContextBroker {
                 ],
                 reason: .captured,
                 persistentGrant:
-                    persistentGrant
+                    persistentGrant,
+                deniedSources:
+                    policyDenied,
+                unavailableSources:
+                    policyUnavailable,
+                contextSnapshot: fabricSnapshot
             )
+            prepared.refreshReceipt(
+                request: request
+            )
+            return prepared
         case .noSelection:
-            return PreparedSkillContext(
+            var prepared = PreparedSkillContext(
                 reason: .noSelection,
                 persistentGrant:
-                    persistentGrant
+                    persistentGrant,
+                emptySources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         case .unavailable:
-            return PreparedSkillContext(
+            var prepared = PreparedSkillContext(
                 reason: .unavailable,
                 persistentGrant:
-                    persistentGrant
+                    persistentGrant,
+                unavailableSources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         case .targetChanged:
-            return PreparedSkillContext(
+            var prepared = PreparedSkillContext(
                 reason: .targetChanged,
                 persistentGrant:
-                    persistentGrant
+                    persistentGrant,
+                emptySources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         case .tooLarge:
-            return PreparedSkillContext(
+            var prepared = PreparedSkillContext(
                 reason: .selectionTooLarge,
                 persistentGrant:
-                    persistentGrant
+                    persistentGrant,
+                emptySources: [.selection],
+                contextSnapshot: initialSnapshot
             )
+            prepared.blockMissingRequiredSources(for: request)
+            prepared.refreshReceipt(request: request)
+            return prepared
         }
     }
 }

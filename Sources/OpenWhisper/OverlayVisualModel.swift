@@ -7,6 +7,7 @@ struct OverlayStylePreset: Sendable, Equatable {
     let errorPillWidth: CGFloat
     let errorPillHeight: CGFloat
     let topInset: CGFloat
+    let chromeInset: CGFloat
     let cornerRadius: CGFloat
     let contentPaddingH: CGFloat
     let contentPaddingV: CGFloat
@@ -29,31 +30,34 @@ struct OverlayStylePreset: Sendable, Equatable {
     let timerOpacity: CGFloat
 
     static let dictationHUD = OverlayStylePreset(
-        primaryPillWidth: 284,
-        primaryPillHeight: 44,
-        errorPillWidth: 320,
-        errorPillHeight: 56,
-        topInset: 16,
-        cornerRadius: 16,
-        contentPaddingH: 10,
-        contentPaddingV: 8,
-        leadingVisualWidth: 54,
-        leadingVisualHeight: 20,
-        textGap: 7,
+        // The panel includes a transparent optical margin for the soft shadow.
+        // Every state uses the same visible 388 x 56 material surface.
+        primaryPillWidth: 408,
+        primaryPillHeight: 76,
+        errorPillWidth: 408,
+        errorPillHeight: 76,
+        topInset: 6,
+        chromeInset: 10,
+        cornerRadius: 18,
+        contentPaddingH: 16,
+        contentPaddingV: 10,
+        leadingVisualWidth: 44,
+        leadingVisualHeight: 22,
+        textGap: 12,
         waveformBarCount: 9,
-        waveformBarSpacing: 3,
+        waveformBarSpacing: 2.5,
         waveformMinimumBarHeight: 6,
         showsTranscriptPreview: false,
         recordingAutoHideDelay: nil,
         processingAutoHideDelay: nil,
         successAutoHideDelay: 1.2,
         errorAutoHideDelay: 5.0,
-        inlineCancelControlSize: 14,
-        inlineControlGap: 5,
-        inlineControlReservedWidth: 20,
-        timerWidth: 34,
-        timerFontSize: 10,
-        timerOpacity: 0.72
+        inlineCancelControlSize: 22,
+        inlineControlGap: 8,
+        inlineControlReservedWidth: 68,
+        timerWidth: 38,
+        timerFontSize: 11,
+        timerOpacity: 0.68
     )
 
     func size(for state: OverlayVisualState) -> CGSize {
@@ -136,15 +140,6 @@ enum OverlayVisualState: Sendable, Equatable {
             }
         case .error, .retryableError:
             return .icon(symbolName: "exclamationmark.triangle.fill")
-        }
-    }
-
-    var allowsSupplementaryText: Bool {
-        switch self {
-        case .error, .retryableError:
-            return true
-        case .recording, .processing, .success:
-            return false
         }
     }
 

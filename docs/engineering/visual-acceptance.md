@@ -12,10 +12,10 @@ The command packages the current build, installs it to `/Applications/OpenWhispe
 
 After the Refined HUD image matrix passes, the same command runs
 `scripts/feedback_mode_acceptance.sh`. That installed-app harness verifies
-Refined HUD, Blue Signal Frame, and Hidden through explicit
+Refined HUD, AI Activity Glow, and Hidden through explicit
 `--visual-feedback-mode` launches, records machine-readable visibility and
-Escape-cancellation state, captures Blue Signal evidence, and proves that
-Reduce Motion disables the continuous Blue Signal scan.
+Escape-cancellation state, captures AI Activity Glow evidence, and proves that
+Reduce Motion disables the continuous AI Activity Glow scan.
 
 Each demo process renders its own HUD content to a local temporary PNG path supplied through `--visual-acceptance-output`; the script then copies that artifact into the repository evidence directory. Using a local temporary path avoids removable-volume privacy prompts when the repository is under `/Volumes`. This primary path does not require Screen Recording permission and works in clean CI or Codex environments. If self-rendering does not produce a file, the script falls back to CoreGraphics window discovery plus `screencapture -l`, then runs the screenshot verifier.
 
@@ -36,7 +36,19 @@ only to make installed-app acceptance deterministic.
 
 ## Product management surfaces
 
-History, Terminology, and Quick Add use a separate installed-app acceptance harness:
+The minimum-size bilingual Settings matrix is captured with:
+
+```bash
+./scripts/settings_bilingual_acceptance.sh --install
+```
+
+It records General, Appearance & Feedback, AI Polish, and Terminology &
+Context at `900 × 625` in Simplified Chinese and English. The snapshot-only
+language argument runs under privacy isolation; the user-facing language
+switch remains exclusively in Settings → General.
+
+History, Terminology, Quick Add, the searchable Skill Switcher, and the
+Community Skills Library use a separate installed-app acceptance harness:
 
 ```bash
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --install
@@ -45,8 +57,9 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --inst
 The harness opens each surface through LaunchServices, writes its snapshot to a
 local temporary path from inside the installed app, verifies image geometry and
 visual variation, copies the evidence under
-`dist/product-surface-acceptance/`, and finally relaunches the normal menu bar
-app. CoreGraphics captures that are technically valid but visually uniform
+`dist/product-surface-acceptance/`, including the Switcher plus both Discover
+and Created Library sections, and finally relaunches the normal menu bar app. CoreGraphics captures
+that are technically valid but visually uniform
 (including intermittent all-black frames) are rejected. The app then falls
 back to deterministic content-view rendering, which must also pass the
 non-uniform-image guard before evidence is accepted.
@@ -59,10 +72,10 @@ Run the installed-app SwiftUI accessibility audit with:
 OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-It covers Account, Dictation, Appearance & Feedback, AI Polish, Context,
-Terminology, Paste, Privacy, Advanced, all four
-Onboarding steps, History, Terminology, and Quick Add. Each transient process
-uses default configuration and empty in-memory user data, enables AppKit's
+It covers General, Account, Dictation, Appearance & Feedback, AI Polish,
+Terminology & Context, Privacy, Advanced, all four Onboarding steps, History,
+Terminology, Quick Add, Skill Switcher, and Skill Library Discover/Created. Each transient
+process uses default configuration and empty in-memory user data, enables AppKit's
 enhanced accessibility tree, and fails if the surface has no actionable
 controls or an actionable element has no usable accessible name.
 

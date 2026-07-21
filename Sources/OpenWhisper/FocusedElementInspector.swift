@@ -39,6 +39,14 @@ enum FocusedEditableSnapshotCapture: Sendable, Equatable {
     case targetChanged
 }
 
+enum FocusedEditableRestoreResult: Sendable, Equatable {
+    case restored
+    case unavailable
+    case targetChanged
+    case textChanged
+    case restoreFailed
+}
+
 enum FocusedElementInspector {
     private static let maximumVerificationTextLength = 1_000_000
     private static let textRoles: Set<String> = [
@@ -161,6 +169,75 @@ enum FocusedElementInspector {
             return .unavailable
         }
         return .captured(snapshot)
+    }
+
+    static func restoreEditableTextSnapshot(
+        _ before: EditableTextSnapshot,
+        ifCurrentMatches expectedAfter: EditableTextSnapshot,
+        matching expectedTarget: FocusedAXElementReference
+    ) -> FocusedEditableRestoreResult {
+        guard
+            AXIsProcessTrusted(),
+            expectedTarget.processIdentifier > 0,
+            let currentElement = focusedElement(),
+            matches(
+                currentElement: currentElement,
+                expectedTarget: expectedTarget,
+                processIdentifier:
+                    expectedTarget.processIdentifier
+            )
+        else {
+            return .targetChanged
+        }
+        guard let current = editableTextSnapshot(
+            from: currentElement
+        ) else {
+            return .unavailable
+        }
+        guard SafeUndoVerifier.canRestore(
+            expectedAfter: expectedAfter,
+            current: current,
+            targetStillMatches: true
+        ) else {
+            return .textChanged
+        }
+        guard isAttributeSettable(
+            kAXValueAttribute,
+            on: currentElement
+        ) else {
+            return .unavailable
+        }
+        guard AXUIElementSetAttributeValue(
+            currentElement,
+            kAXValueAttribute as CFString,
+            before.value as CFTypeRef
+        ) == .success else {
+            return .restoreFailed
+        }
+
+        if isAttributeSettable(
+            kAXSelectedTextRangeAttribute,
+            on: currentElement
+        ) {
+            var range = before.selectedRange
+            if let value = AXValueCreate(.cfRange, &range) {
+                _ = AXUIElementSetAttributeValue(
+                    currentElement,
+                    kAXSelectedTextRangeAttribute as CFString,
+                    value
+                )
+            }
+        }
+
+        guard
+            let restored = editableTextSnapshot(
+                from: currentElement
+            ),
+            restored.value == before.value
+        else {
+            return .restoreFailed
+        }
+        return .restored
     }
 
     static func captureSelectionContext(

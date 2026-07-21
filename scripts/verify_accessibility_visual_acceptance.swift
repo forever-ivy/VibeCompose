@@ -69,13 +69,12 @@ enum AccessibilityVisualVerificationError:
 }
 
 let expectedSurfaces = [
+    "settings-general",
     "settings-account",
     "settings-dictation",
     "settings-appearance",
     "settings-ai-polish",
     "settings-context",
-    "settings-terminology",
-    "settings-paste",
     "settings-privacy",
     "settings-advanced",
     "onboarding-welcome",
@@ -159,6 +158,20 @@ func luminance(_ color: NSColor) -> Double {
         + (0.0722 * Double(color.blueComponent))
 }
 
+/// CGWindow captures preserve the un-premultiplied RGB values of transparent
+/// SwiftUI surfaces. Measure perceived contrast after compositing those
+/// pixels over the dark visual-acceptance canvas instead of treating a low-
+/// alpha white fill as an opaque white card.
+func compositedForVisualAcceptance(_ color: NSColor) -> NSColor {
+    let alpha = color.alphaComponent
+    return NSColor(
+        srgbRed: color.redComponent * alpha,
+        green: color.greenComponent * alpha,
+        blue: color.blueComponent * alpha,
+        alpha: 1
+    )
+}
+
 func sampledColors(
     in image: AccessibilitySurfaceImage
 ) -> [NSColor] {
@@ -176,7 +189,7 @@ func sampledColors(
             else {
                 continue
             }
-            colors.append(color)
+            colors.append(compositedForVisualAcceptance(color))
         }
     }
     return colors
@@ -233,8 +246,14 @@ func localEdgeContrast(
                 continue
             }
 
-            total += abs(luminance(center) - luminance(right))
-            total += abs(luminance(center) - luminance(down))
+            total += abs(
+                luminance(compositedForVisualAcceptance(center))
+                    - luminance(compositedForVisualAcceptance(right))
+            )
+            total += abs(
+                luminance(compositedForVisualAcceptance(center))
+                    - luminance(compositedForVisualAcceptance(down))
+            )
             edgeCount += 2
         }
     }

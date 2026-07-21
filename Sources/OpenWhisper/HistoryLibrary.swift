@@ -74,6 +74,16 @@ struct HistoryEntry: Identifiable, Sendable, Equatable {
                 record.appBundleIdentifier ?? "",
                 record.outcome,
                 record.textPolishProvider ?? "",
+                record.skillID ?? "",
+                record.skillName ?? "",
+                record.skillSource ?? "",
+                record.skillRevision ?? "",
+                record.skillValidationIssueCodes
+                    .joined(separator: " "),
+                record.skillDeliveryAction ?? "",
+                record.skillResultEdited
+                    ? "edited"
+                    : "",
             ].joined(separator: " "),
             transcriptionRecord: record,
             recoveryRecord: nil

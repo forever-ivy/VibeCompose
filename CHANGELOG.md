@@ -7,7 +7,7 @@
 - Preserved the native macOS `F5 → speak → F5 → paste-or-copy` workflow.
 - Added a centralized product identity and macOS-first repository structure.
 - Reset release metadata for the first OpenWhisper alpha.
-- Added security, UI, commercialization, and macOS productization documentation as release gates.
+- Added security, UI, and macOS release documentation as engineering gates.
 - Added an Auto Polish decision engine that skips short, low-complexity
   dictation, runs for corrections/structured/translation/email/long-form
   intent, and records only a bounded decision reason in local diagnostics.
@@ -20,11 +20,6 @@
   identity markers, common committed-secret patterns, missing Simplified
   Chinese literals, duplicate localization keys, or broken local Markdown
   links.
-- Added an independent `OpenWhisperLicensing` module with Ed25519-signed,
-  device-bound Pro receipts, bounded offline grace, maximum-build entitlement,
-  Keychain receipt/device storage, a local operator CLI, runtime Voice
-  Modes/Quick Add gates, bilingual License UI, and commercial release checks
-  that reject preview-enabled or unkeyed builds.
 - Isolated automated Settings, Onboarding, History, Terminology, and Quick Add
   snapshots from live configuration, account sessions, API credentials,
   transcripts, recovery records, and terminology.
@@ -58,10 +53,14 @@
   disabled and a generated proof file, verifies the expected
   `paste_dispatched` clipboard fallback, removes every temporary artifact, and
   restores the complete pre-acceptance clipboard snapshot.
-- Replaced fixed Voice Modes with eight stable, versioned declarative Skills,
+- Replaced fixed Voice Modes with thirteen stable, versioned declarative Skills,
   a deterministic resolver, fixed-order prompt compiler, local validators,
   Direct fallback, app rules, migration compatibility, and redacted history
   and diagnostics.
+- Added a global Skill Switcher, a dedicated Installed/Discover/Created Skill
+  Library, editable Preview, structured redacted Skill Run receipts, Safe Undo,
+  Creator/Test Bench, and five Pilot-focused tasks: Bug Report, Commit Message,
+  Meeting Action Items, Product Brief, and Customer Support Reply.
 - Added explicit selected-text context grants, sensitive-app denial before
   capture, frozen AX element/range/text hashes, Context Rewrite and Context
   Reply, local Diff Preview, and copy-only fallback when the selection changes.
@@ -77,16 +76,15 @@
 - Documented and enforced the Phase 6 boundary: no remote Registry, publisher
   trust badge, arbitrary Action, Shell, file-system, custom-network, Keychain,
   or generic MCP authority is enabled by Community Skills.
-- Added source, commercial-prebuild, and commercial-final productization
-  readiness gates for real operator, brand, beta, installed-app, signing,
-  public-hosting, key-isolation, tag, artifact, and Cask evidence. Approved
-  copies of placeholder templates remain fail-closed.
-- Added a pinned two-phase commercial GitHub Actions workflow. `prepare`
+- Added source, signed-candidate, and signed-final release evidence gates for
+  installed-app, signing, public-hosting, tag, artifact, and Cask evidence.
+  Placeholder templates remain fail-closed.
+- Added a pinned two-phase signed-release GitHub Actions workflow. `prepare`
   creates one Developer ID/notarized candidate; `finalize` restores the exact
   source-commit-bound candidate with a separate SHA-256 instead of rebuilding
   on a fresh runner, verifies byte-identical published appcast/policy files,
   and withholds private signing keys from finalization.
-- Recorded a same-category OpenWhisper naming conflict as a blocking commercial
-  release gate rather than claiming trademark/domain clearance.
+- Recorded a same-category OpenWhisper naming conflict as a blocking public
+  distribution naming gate rather than claiming trademark/domain clearance.
 
-OpenWhisper `0.1.0` is an alpha baseline, not a production or commercial release.
+OpenWhisper `0.1.0` is an alpha baseline, not a stable signed release.

@@ -17,7 +17,7 @@ RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"
 
 if [[ "${OPENWHISPER_REQUIRE_DEVELOPER_ID:-0}" == "1" \
   && -z "${OPENWHISPER_RELEASE_BASE_URL:-}" ]]; then
-  echo "Commercial release metadata requires OPENWHISPER_RELEASE_BASE_URL pointing to a public HTTPS artifact host." >&2
+  echo "Signed release metadata requires OPENWHISPER_RELEASE_BASE_URL pointing to a public HTTPS artifact host." >&2
   exit 1
 fi
 [[ "$RELEASE_BASE_URL" == https://* \

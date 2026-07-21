@@ -6,7 +6,7 @@ OpenWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工�
 
 ## 当前状态
 
-OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.0`，尚未声明为可商业发布的生产版本。
+OpenWhisper 目前处于 **macOS Alpha 阶段**，工作版本为 `0.1.0`。核心能力以非商业、可审查的本地工作流为目标；签名公开分发仍需单独的工程证据。
 
 当前代码已经具备：
 
@@ -16,7 +16,8 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 简体中文和英文界面
 - 浏览器连接 ChatGPT，Keychain 保存本机会话
 - 语音转写、术语对齐和可选 AI 润色；自动模式会跳过短且低复杂度的听写，避免不必要的等待
-- 版本化声明式 Skill Runtime：支持直述、回复、邮件、后端任务提示词、代码提示词和翻译；应用规则只使用应用名称和精确 Bundle Identifier，录音开始时冻结本次技能解析，模型输出未通过本地校验时会在投递前安全回退
+- 版本化声明式 Skill Runtime：提供 13 个经审查的内置真实任务，覆盖直述、回复、邮件、开发、会议、产品、客服和选区工作流；应用规则只使用应用名称和精确 Bundle Identifier，录音开始时冻结本次技能解析，模型输出未通过本地校验时会在投递前安全回退
+- 全局 Skill 切换器、独立的已安装/发现/已创建 Skill 资料库、可编辑 Preview、脱敏 Skill Run Receipt、安全撤销，以及标准 Agent Skills 的 Creator/Test Bench 闭环
 - 可选的选中文本上下文：支持选区改写和选区回复，提供按技能“每次询问 / 始终允许 / 永不允许”权限、敏感应用阻断、本地 Diff 预览，以及替换前对同一目标、范围和原文的再次校验
 - 五个内置 Style Capsule，以及本地自定义 Capsule 的创建、编辑、按 Skill 分配、删除和导出；创建样本文本默认只在内存中分析并清空
 - 分层术语系统：用户纠正、Skill 私有术语、用户普通术语和 Backend Engineering、Medical、Kubernetes Domain Packs；冲突可见，Medical 高风险包强制 Preview
@@ -29,14 +30,14 @@ OpenWhisper 目前处于 **macOS Alpha 产品化阶段**，工作版本为 `0.1.
 - 脱敏支持诊断 ZIP 导出
 - 默认关闭、仅保存在本机的产品指标；只记录激活和听写结果的有限枚举及时间区间，不使用持久用户标识，也不会自动上传
 - 面向托管转写和 AI 润色事故的签名服务安全策略
-- 作为高级恢复路径的 OpenAI-Compatible 转写，包括原生端点/模型配置、Keychain API 密钥、付费 API 显式确认和合成静音连接测试
+- 作为高级恢复路径的 OpenAI-Compatible 转写，包括原生端点/模型配置、Keychain API 密钥、第三方费用提示和合成静音连接测试
 - 锁定的第三方依赖许可证清单、许可证 SHA-256 校验和 App 内许可证查看
 
 ## 产品边界
 
 默认 ChatGPT 账户路径依赖未公开的上游行为，不应被描述为稳定公开 API、OpenAI 官方合作或企业 SLA。
 
-当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。Sparkle 2.9.4 与签名 Provider Capability Policy 客户端已完成技术集成，但商业发布仍受 Developer ID 签名、公证、生产更新与能力策略托管/密钥、实机更新与事故演练、完整安装版 Onboarding/交互验收，以及永久商业运营主体和联系方式约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
+当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。Sparkle 2.9.4 与签名 Provider Capability Policy 客户端已完成技术集成，但签名公开分发仍受 Developer ID 签名、公证、生产更新与能力策略托管/密钥、实机更新与事故演练、完整安装版 Onboarding/交互验收，以及明确支持联系人约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
 
 ## 系统要求
 
@@ -110,7 +111,7 @@ OpenWhisper 的本地应用数据位于：
 
 诊断只包含耗时、字节数、服务类型、有限枚举的 AI 润色决策原因和错误分类，不包含音频、转写正文、剪贴板内容或 Token。在系统支持的范围内，本地数据文件使用仅当前用户可读写的权限。
 
-可选产品指标默认关闭且只保存在当前 Mac。开启后只记录产品版本/构建、已完成的 Onboarding 步骤、服务类别、时长与延迟区间、结果类别和失败类别；不记录应用名称、路径、账户信息、正文或持久标识，也不会自动上传。开启后可通过 **设置 → 隐私 → 导出产品指标** 生成不含单条事件时间戳的汇总 JSON，由你自行检查并决定是否分享。
+可选产品指标默认关闭且只保存在当前 Mac。开启后只记录产品版本/构建、已完成的 Onboarding 步骤、服务类别、时长与延迟区间、结果类别和失败类别；不记录应用名称、路径、账户信息、正文或持久标识，也不会自动上传。开启后可通过 **设置 → 上下文与隐私 → 导出产品指标** 生成不含单条事件时间戳的汇总 JSON，由你自行检查并决定是否分享。
 
 通过 **设置 → 高级 → 导出诊断**，可以创建一个由用户自行检查的本地 ZIP，其中包含脱敏运行状态、权限、延迟、可选产品指标和崩溃摘要；不包含音频、转写正文、剪贴板文本、账户邮箱、凭据、术语、自定义端点、原始崩溃报告、历史、Recovery 元数据或 `config.json`。
 
@@ -120,7 +121,7 @@ Skill Prompt、包文件或安装包名称；相关功能只允许输出有限�
 
 ChatGPT 会话保存在 Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible 恢复路径 API 密钥独立保存在 `app.openwhisper.mac.OpenAICompatibleAPIKey`，不会再从 `OPENAI_API_KEY` 读取，也不会写入 `config.json`。通过 **设置 → 高级** 可以管理端点、模型和钥匙串凭据，执行真实连接测试，在确认可能产生 API 费用后启用恢复路径，并随时切回 ChatGPT 账户。恢复路径只改变听写 ASR；AI 润色仍使用 ChatGPT 登录授权。
 
-通过 **设置 → 隐私 → 删除全部数据**，可以删除设置、术语、自定义 Style Capsule、已安装 Community Skills、转写历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话和恢复路径 API 密钥，并恢复为退出登录后的默认状态。
+通过 **设置 → 上下文与隐私 → 删除全部数据**，可以删除设置、术语、自定义 Style Capsule、已安装 Community Skills、转写历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话和恢复路径 API 密钥，并恢复为退出登录后的默认状态。
 
 ## 仓库结构
 
@@ -130,7 +131,7 @@ Tests/OpenWhisperTests/       单元与集成测试
 scripts/                      构建、打包、安装、基准和验收工具
 examples/skills/              已审查的声明式 Community Skill 模板
 packaging/homebrew/           Homebrew Cask 元数据
-docs/product/                 PRD、商业化、品牌与产品化计划
+docs/product/                 PRD、Community Skills、品牌与产品计划
 docs/audits/                  安全与逻辑审计
 docs/research/                UI 和竞品研究
 docs/engineering/             架构、发布和验收文档
@@ -140,8 +141,7 @@ docs/design/                  视觉规范
 ## 核心文档
 
 - [文档索引](docs/README.md)
-- [macOS 产品化改造计划](docs/product/macos-productization-plan-2026-07-13.md)
-- [产品与商业化分析](docs/product/product-and-commercialization-plan-2026-07-13.md)
+- [Community Skills 核心计划](docs/product/community-skills-core-next-step-plan-2026-07-15.md)
 - [安全审计](docs/audits/security-audit-2026-07-13.md)
 - [当前安全基线](docs/audits/security-baseline-2026-07-13.md)
 - [UI 对标调研](docs/research/ui-open-source-comparison-2026-07-12.md)
@@ -154,7 +154,6 @@ docs/design/                  视觉规范
 - [更新器选型](docs/engineering/updater.md)
 - [隐私政策](docs/legal/privacy-policy.zh-CN.md)
 - [使用条款](docs/legal/terms-of-use.zh-CN.md)
-- [退款政策](docs/legal/refund-policy.zh-CN.md)
 - [支持政策](docs/support/support-policy.zh-CN.md)
 - [安全问题报告](SECURITY.md)
 
@@ -164,5 +163,5 @@ MIT，详见 [LICENSE](LICENSE)。分发软件副本或其重要部分时，必�
 
 PermissionFlow、Sparkle 及 Sparkle 内置第三方组件继续适用各自许可证。精确锁定的依赖元数据和许可证全文位于
 [`Sources/OpenWhisper/Resources/Legal`](Sources/OpenWhisper/Resources/Legal)，
-也可通过 **设置 → 高级 → 查看第三方许可证** 阅读。构建、打包、安装包检查和商业发布门禁会在
+也可通过 **设置 → 高级 → 查看第三方许可证** 阅读。构建、打包、安装包检查和签名发布门禁会在
 `Package.resolved`、许可证哈希、notices 或 App 内资源不一致时直接失败。
