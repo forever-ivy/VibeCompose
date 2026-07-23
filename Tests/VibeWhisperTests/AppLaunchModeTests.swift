@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 struct AppLaunchModeTests {
     @Test
@@ -9,7 +9,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.visualFeedbackModeOverride(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--visual-feedback-mode",
                     "blue-signal-frame",
                 ]
@@ -18,10 +18,10 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.visualFeedbackModeOverride(
                 environment: [
-                    "OPENWHISPER_VISUAL_FEEDBACK_MODE":
+                    "VIBEWHISPER_VISUAL_FEEDBACK_MODE":
                         "hidden",
                 ],
-                arguments: ["OpenWhisper"]
+                arguments: ["VibeWhisper"]
             ) == .hidden
         )
         #expect(
@@ -29,7 +29,7 @@ struct AppLaunchModeTests {
                 .feedbackSurfaceDebugOutputURL(
                     environment: [:],
                     arguments: [
-                        "OpenWhisper",
+                        "VibeWhisper",
                         "--feedback-surface-debug-output",
                         "/tmp/feedback.json",
                     ]
@@ -40,8 +40,8 @@ struct AppLaunchModeTests {
     @Test
     func overlayDemoModeRequiresExplicitFlag() {
         #expect(AppLaunchMode.resolve(environment: [:]) == .normal)
-        #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "0"]) == .normal)
-        #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "false"]) == .normal)
+        #expect(AppLaunchMode.resolve(environment: ["VIBEWHISPER_OVERLAY_DEMO": "0"]) == .normal)
+        #expect(AppLaunchMode.resolve(environment: ["VIBEWHISPER_OVERLAY_DEMO": "false"]) == .normal)
     }
 
     @Test
@@ -50,7 +50,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.resolve(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--preview-demo",
                     "--preview-snapshot-output",
                     "/tmp/preview.png",
@@ -62,7 +62,7 @@ struct AppLaunchModeTests {
                 .previewSnapshotOutputURL(
                     environment: [:],
                     arguments: [
-                        "OpenWhisper",
+                        "VibeWhisper",
                         "--preview-snapshot-output=/tmp/preview.png",
                     ]
                 )
@@ -82,7 +82,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.previewDemoScenario(
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--preview-demo-scenario",
                     "paste",
                 ]
@@ -91,7 +91,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.previewDemoScenario(
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--preview-demo-scenario=fallback",
                 ]
             ) == .fallback
@@ -99,7 +99,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.previewDemoScenario(
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--preview-demo-scenario=unknown",
                 ]
             ) == .replace
@@ -108,15 +108,15 @@ struct AppLaunchModeTests {
 
     @Test
     func overlayDemoModeAcceptsCommonTruthyFlags() {
-        #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "1"]) == .overlayDemo)
-        #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "true"]) == .overlayDemo)
-        #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_OVERLAY_DEMO": "demo"]) == .overlayDemo)
+        #expect(AppLaunchMode.resolve(environment: ["VIBEWHISPER_OVERLAY_DEMO": "1"]) == .overlayDemo)
+        #expect(AppLaunchMode.resolve(environment: ["VIBEWHISPER_OVERLAY_DEMO": "true"]) == .overlayDemo)
+        #expect(AppLaunchMode.resolve(environment: ["VIBEWHISPER_OVERLAY_DEMO": "demo"]) == .overlayDemo)
     }
 
     @Test
     func overlayDemoModeAcceptsLaunchServicesArgument() {
-        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--overlay-demo"]) == .overlayDemo)
-        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--openwhisper-overlay-demo"]) == .overlayDemo)
+        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["VibeWhisper", "--overlay-demo"]) == .overlayDemo)
+        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["VibeWhisper", "--vibewhisper-overlay-demo"]) == .overlayDemo)
     }
 
     @Test
@@ -124,14 +124,14 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--paste-acceptance"]
+                arguments: ["VibeWhisper", "--paste-acceptance"]
             ) == .pasteAcceptance
         )
         #expect(
             AppLaunchMode.pasteAcceptanceOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--paste-acceptance-output=/tmp/paste.json",
                 ]
             )?.path == "/tmp/paste.json"
@@ -140,7 +140,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.pasteAcceptanceTarget(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--paste-acceptance-target=terminal",
                 ]
             ) == .terminal
@@ -149,7 +149,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.pasteAcceptanceTarget(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--paste-acceptance-target",
                     "unknown",
                 ]
@@ -162,13 +162,13 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.interactionAcceptanceRequested(
                 environment: [:],
-                arguments: ["OpenWhisper", "--open-settings"]
+                arguments: ["VibeWhisper", "--open-settings"]
             ) == false
         )
         #expect(
             AppLaunchMode.interactionAcceptanceRequested(
                 environment: [
-                    "OPENWHISPER_INTERACTION_ACCEPTANCE": "true",
+                    "VIBEWHISPER_INTERACTION_ACCEPTANCE": "true",
                 ]
             )
         )
@@ -176,7 +176,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.interactionAcceptanceRequested(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--private-acceptance",
                 ]
             )
@@ -185,8 +185,8 @@ struct AppLaunchModeTests {
 
     @Test
     func settingsModeAcceptsLaunchServicesArgument() {
-        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--settings"]) == .settings)
-        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["OpenWhisper", "--open-settings"]) == .settings)
+        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["VibeWhisper", "--settings"]) == .settings)
+        #expect(AppLaunchMode.resolve(environment: [:], arguments: ["VibeWhisper", "--open-settings"]) == .settings)
     }
 
     @Test
@@ -194,23 +194,23 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--onboarding"]
+                arguments: ["VibeWhisper", "--onboarding"]
             ) == .onboarding
         )
         #expect(
             AppLaunchMode.onboardingSnapshotOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--onboarding-snapshot-output",
-                    "/tmp/openwhisper-onboarding.png",
+                    "/tmp/vibewhisper-onboarding.png",
                 ]
-            ) == URL(fileURLWithPath: "/tmp/openwhisper-onboarding.png")
+            ) == URL(fileURLWithPath: "/tmp/vibewhisper-onboarding.png")
         )
         #expect(
             AppLaunchMode.onboardingStep(
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--onboarding-step=connect",
                 ]
             ) == .connect
@@ -218,7 +218,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.onboardingStep(
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--onboarding-step",
                     "practice",
                 ]
@@ -231,25 +231,25 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--settings-pane", "privacy"]
+                arguments: ["VibeWhisper", "--settings-pane", "privacy"]
             ) == .privacySettings
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--settings-pane=privacy"]
+                arguments: ["VibeWhisper", "--settings-pane=privacy"]
             ) == .privacySettings
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--settings-pane", "advanced"]
+                arguments: ["VibeWhisper", "--settings-pane", "advanced"]
             ) == .advancedSettings
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--settings-pane=advanced"]
+                arguments: ["VibeWhisper", "--settings-pane=advanced"]
             ) == .advancedSettings
         )
     }
@@ -259,37 +259,37 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--open-history"]
+                arguments: ["VibeWhisper", "--open-history"]
             ) == .history
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--open-terminology"]
+                arguments: ["VibeWhisper", "--open-terminology"]
             ) == .terminology
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--open-quick-add"]
+                arguments: ["VibeWhisper", "--open-quick-add"]
             ) == .quickAdd
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--open-skill-library"]
+                arguments: ["VibeWhisper", "--open-skill-library"]
             ) == .skillLibrary
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--open-skill-switcher"]
+                arguments: ["VibeWhisper", "--open-skill-switcher"]
             ) == .skillSwitcher
         )
         #expect(
             AppLaunchMode.skillLibrarySection(
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--skill-library-section=created",
                 ]
             ) == .created
@@ -302,7 +302,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.historySnapshotOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--history-snapshot-output=/tmp/history.png",
                 ]
             )?.path == "/tmp/history.png"
@@ -310,7 +310,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.terminologySnapshotOutputURL(
                 environment: [
-                    "OPENWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT": "/tmp/terminology.png",
+                    "VIBEWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT": "/tmp/terminology.png",
                 ]
             )?.path == "/tmp/terminology.png"
         )
@@ -318,7 +318,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.quickAddSnapshotOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--quick-add-snapshot-output",
                     "/tmp/quick-add.png",
                 ]
@@ -328,7 +328,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.skillLibrarySnapshotOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--skill-library-snapshot-output",
                     "/tmp/skill-library.png",
                 ]
@@ -337,7 +337,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.skillSwitcherSnapshotOutputURL(
                 environment: [
-                    "OPENWHISPER_SKILL_SWITCHER_SNAPSHOT_OUTPUT":
+                    "VIBEWHISPER_SKILL_SWITCHER_SNAPSHOT_OUTPUT":
                         "/tmp/skill-switcher.png",
                 ]
             )?.path == "/tmp/skill-switcher.png"
@@ -349,7 +349,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--guide-accessibility"]
+                arguments: ["VibeWhisper", "--guide-accessibility"]
             ) == .accessibilityGuide
         )
     }
@@ -359,31 +359,31 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--overlay-demo-state", "retryable-error"]
+                arguments: ["VibeWhisper", "--overlay-demo-state", "retryable-error"]
             ) == .overlayDemoState(.retryableError)
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--overlay-demo-state=processing"]
+                arguments: ["VibeWhisper", "--overlay-demo-state=processing"]
             ) == .overlayDemoState(.processing)
         )
         #expect(
             AppLaunchMode.resolve(
-                environment: ["OPENWHISPER_OVERLAY_DEMO_STATE": "result"],
-                arguments: ["OpenWhisper"]
+                environment: ["VIBEWHISPER_OVERLAY_DEMO_STATE": "result"],
+                arguments: ["VibeWhisper"]
             ) == .overlayDemoState(.result)
         )
         #expect(
             AppLaunchMode.resolve(
                 environment: [:],
-                arguments: ["OpenWhisper", "--overlay-demo-state=paste-sent"]
+                arguments: ["VibeWhisper", "--overlay-demo-state=paste-sent"]
             ) == .overlayDemoState(.pasteSent)
         )
         #expect(
             AppLaunchMode.resolve(
-                environment: ["OPENWHISPER_OVERLAY_DEMO_STATE": "copied"],
-                arguments: ["OpenWhisper"]
+                environment: ["VIBEWHISPER_OVERLAY_DEMO_STATE": "copied"],
+                arguments: ["VibeWhisper"]
             ) == .overlayDemoState(.copied)
         )
     }
@@ -393,7 +393,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.visualAcceptanceOutputURL(
                 environment: [
-                    "OPENWHISPER_VISUAL_ACCEPTANCE_OUTPUT": "/tmp/environment.png",
+                    "VIBEWHISPER_VISUAL_ACCEPTANCE_OUTPUT": "/tmp/environment.png",
                 ]
             )?.path == "/tmp/environment.png"
         )
@@ -401,7 +401,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.visualAcceptanceOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--visual-acceptance-output",
                     "/tmp/argument.png",
                 ]
@@ -411,7 +411,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.visualAcceptanceOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--visual-acceptance-output=/tmp/inline.png",
                 ]
             )?.path == "/tmp/inline.png"
@@ -423,14 +423,14 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
                 environment: [:],
-                arguments: ["OpenWhisper"]
+                arguments: ["VibeWhisper"]
             ) == .none
         )
         #expect(
             AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--visual-acceptance-reduce-motion=on",
                     "--visual-acceptance-increase-contrast",
                     "off",
@@ -443,8 +443,8 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
                 environment: [
-                    "OPENWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION": "0",
-                    "OPENWHISPER_VISUAL_ACCEPTANCE_INCREASE_CONTRAST": "yes",
+                    "VIBEWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION": "0",
+                    "VIBEWHISPER_VISUAL_ACCEPTANCE_INCREASE_CONTRAST": "yes",
                 ]
             ) == AccessibilityDisplayOptionsOverride(
                 reduceMotion: false,
@@ -454,10 +454,10 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.visualAcceptanceDisplayOptionsOverride(
                 environment: [
-                    "OPENWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION": "on",
+                    "VIBEWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION": "on",
                 ],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--visual-acceptance-reduce-motion=off",
                 ]
             ).reduceMotion == false
@@ -488,7 +488,7 @@ struct AppLaunchModeTests {
         #expect(
             AppLaunchMode.visualAcceptanceFollowupOutputURL(
                 environment: [
-                    "OPENWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT":
+                    "VIBEWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT":
                         "/tmp/followup-environment.png",
                 ]
             )?.path == "/tmp/followup-environment.png"
@@ -497,7 +497,7 @@ struct AppLaunchModeTests {
             AppLaunchMode.visualAcceptanceFollowupOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--visual-acceptance-followup-output=/tmp/followup-argument.png",
                 ]
             )?.path == "/tmp/followup-argument.png"
@@ -509,7 +509,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
         #expect(
             AppLaunchMode.settingsSnapshotOutputURL(
                 environment: [
-                    "OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT": "/tmp/settings-environment.png",
+                    "VIBEWHISPER_SETTINGS_SNAPSHOT_OUTPUT": "/tmp/settings-environment.png",
                 ]
             )?.path == "/tmp/settings-environment.png"
         )
@@ -517,7 +517,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
             AppLaunchMode.settingsSnapshotOutputURL(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--settings-snapshot-output",
                     "/tmp/settings-argument.png",
                 ]
@@ -530,7 +530,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
         #expect(
             AppLaunchMode.settingsSnapshotSize(
                 environment: [
-                    "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "980x720",
+                    "VIBEWHISPER_SETTINGS_SNAPSHOT_SIZE": "980x720",
                 ]
             ) == SettingsSnapshotSize(width: 980, height: 720)
         )
@@ -538,7 +538,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
             AppLaunchMode.settingsSnapshotSize(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--settings-snapshot-size",
                     "820×560",
                 ]
@@ -548,7 +548,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
             AppLaunchMode.settingsSnapshotSize(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--settings-snapshot-size=1200x800",
                 ]
             ) == SettingsSnapshotSize(width: 1_200, height: 800)
@@ -556,14 +556,14 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
         #expect(
             AppLaunchMode.settingsSnapshotSize(
                 environment: [
-                    "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "819x560",
+                    "VIBEWHISPER_SETTINGS_SNAPSHOT_SIZE": "819x560",
                 ]
             ) == nil
         )
         #expect(
             AppLaunchMode.settingsSnapshotSize(
                 environment: [
-                    "OPENWHISPER_SETTINGS_SNAPSHOT_SIZE": "not-a-size",
+                    "VIBEWHISPER_SETTINGS_SNAPSHOT_SIZE": "not-a-size",
                 ]
             ) == nil
         )
@@ -574,7 +574,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
         #expect(
             AppLaunchMode.settingsSnapshotLanguage(
                 environment: [
-                    "OPENWHISPER_SETTINGS_SNAPSHOT_LANGUAGE": "zh-Hans",
+                    "VIBEWHISPER_SETTINGS_SNAPSHOT_LANGUAGE": "zh-Hans",
                 ]
             ) == .simplifiedChinese
         )
@@ -582,7 +582,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
             AppLaunchMode.settingsSnapshotLanguage(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--settings-snapshot-language=en",
                 ]
             ) == .english
@@ -591,7 +591,7 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
             AppLaunchMode.settingsSnapshotLanguage(
                 environment: [:],
                 arguments: [
-                    "OpenWhisper",
+                    "VibeWhisper",
                     "--settings-snapshot-language",
                     "unsupported",
                 ]
@@ -601,14 +601,14 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
 
     @Test
     func benchmarkModeHasPriorityWhenExplicitlyEnabled() {
-        #expect(AppLaunchMode.resolve(environment: ["OPENWHISPER_BENCHMARK": "1"]) == .benchmark)
+        #expect(AppLaunchMode.resolve(environment: ["VIBEWHISPER_BENCHMARK": "1"]) == .benchmark)
         #expect(
             AppLaunchMode.resolve(
                 environment: [
-                    "OPENWHISPER_BENCHMARK": "true",
-                    "OPENWHISPER_OVERLAY_DEMO": "1",
+                    "VIBEWHISPER_BENCHMARK": "true",
+                    "VIBEWHISPER_OVERLAY_DEMO": "1",
                 ],
-                arguments: ["OpenWhisper", "--overlay-demo"]
+                arguments: ["VibeWhisper", "--overlay-demo"]
             ) == .benchmark
         )
     }
@@ -619,10 +619,10 @@ func settingsSnapshotOutputImplicitlyOpensSettings() {
     #expect(
         AppLaunchMode.resolve(
             environment: [
-                "OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT":
+                "VIBEWHISPER_SETTINGS_SNAPSHOT_OUTPUT":
                     "/tmp/settings.png",
             ],
-            arguments: ["OpenWhisper"]
+            arguments: ["VibeWhisper"]
         ) == .settings
     )
 }

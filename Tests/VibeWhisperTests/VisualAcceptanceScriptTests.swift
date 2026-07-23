@@ -67,7 +67,7 @@ func feedbackModeAcceptanceCoversAllThreeInstalledSurfaces()
 }
 
 @Test
-func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
+func visualAcceptanceScriptRunsInstalledVibeWhisperOverlayDemo() throws {
     let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
@@ -100,7 +100,7 @@ func visualAcceptanceScriptRunsInstalledOpenWhisperOverlayDemo() throws {
     )
     #expect(!script.contains("sleep 0.8"))
     #expect(!script.contains("00-before.png"))
-    #expect(!script.contains("dist/OpenWhisper.app/Contents/MacOS/OpenWhisper"))
+    #expect(!script.contains("dist/VibeWhisper.app/Contents/MacOS/VibeWhisper"))
 }
 
 @Test
@@ -253,7 +253,7 @@ func permissionSurfaceAcceptanceChecksInstalledLivePermissionCards() throws {
     #expect(script.contains("--settings-snapshot-output"))
     #expect(script.contains("verify_permission_surface.swift"))
     #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
-    #expect(!script.contains("dist/OpenWhisper.app/Contents/MacOS/OpenWhisper"))
+    #expect(!script.contains("dist/VibeWhisper.app/Contents/MacOS/VibeWhisper"))
 
     #expect(verifier.contains("VNRecognizeTextRequest"))
     #expect(verifier.contains("\"Microphone\", \"麦克风\""))
@@ -277,7 +277,7 @@ func bilingualSettingsAcceptanceUsesInstalledMinimumSizeSnapshots() throws {
     #expect(script.contains("--settings-snapshot-language=$language"))
     #expect(script.contains("panes=(general dictation context appearance advanced)"))
     #expect(script.contains("/usr/bin/open \"$APP_DIR\""))
-    #expect(!script.contains("dist/OpenWhisper.app/Contents/MacOS"))
+    #expect(!script.contains("dist/VibeWhisper.app/Contents/MacOS"))
 }
 
 @Test
@@ -296,7 +296,7 @@ func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
     ] {
         let content = try String(
             contentsOf: root
-                .appendingPathComponent("Sources/OpenWhisper")
+                .appendingPathComponent("Sources/VibeWhisper")
                 .appendingPathComponent(source),
             encoding: .utf8
         )
@@ -308,17 +308,20 @@ func primarySwiftUIWindowsApplyAccessibilityDisplayOptions() throws {
         if source == "PreferencesWindowController.swift" {
             #expect(
                 !content.contains(
-                    "applyingOpenWhisperBrandTint"
+                    "applyingVibeWhisperBrandTint"
                 )
             )
         } else {
             #expect(
                 content.contains(
-                    "applyingOpenWhisperBrandTint"
+                    "applyingVibeWhisperBrandTint"
                 )
             )
         }
-        #expect(content.contains("applyAppearance(to: window)"))
+        #expect(
+            content.contains("applyAppearance(to: window)")
+                || content.contains("applyAppearance(to: panel)")
+        )
     }
 }
 

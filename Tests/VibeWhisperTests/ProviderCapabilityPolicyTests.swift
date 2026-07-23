@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private struct TestCapabilityEnvelope: Codable {
     let payload: String
@@ -80,7 +80,7 @@ private func policyConfiguration(
     try ProviderCapabilityPolicyConfiguration(
         infoDictionary: [
             "OWCapabilityPolicyURL":
-                "https://updates.openwhisper.example/provider-capabilities.json",
+                "https://updates.vibewhisper.example/provider-capabilities.json",
             "OWCapabilityPublicEDKey":
                 publicKey.rawRepresentation.base64EncodedString(),
         ]
@@ -133,7 +133,7 @@ private func policyDate(_ date: Date) -> String {
 private func capabilityTestDirectory() throws -> URL {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperCapabilityPolicyTests-\(UUID().uuidString)",
+            "VibeWhisperCapabilityPolicyTests-\(UUID().uuidString)",
             isDirectory: true
         )
     try FileManager.default.createDirectory(
@@ -150,7 +150,7 @@ func capabilityPolicyConfigurationRequiresPairedHTTPSURLAndEd25519Key() throws {
 
     #expect(
         configuration.policyURL.absoluteString
-            == "https://updates.openwhisper.example/provider-capabilities.json"
+            == "https://updates.vibewhisper.example/provider-capabilities.json"
     )
     #expect(configuration.publicKeyData == key.publicKey.rawRepresentation)
 
@@ -165,7 +165,7 @@ func capabilityPolicyConfigurationRequiresPairedHTTPSURLAndEd25519Key() throws {
         _ = try ProviderCapabilityPolicyConfiguration(
             infoDictionary: [
                 "OWCapabilityPolicyURL":
-                    "https://updates.openwhisper.example/policy.json?token=secret",
+                    "https://updates.vibewhisper.example/policy.json?token=secret",
                 "OWCapabilityPublicEDKey":
                     key.publicKey.rawRepresentation.base64EncodedString(),
             ]
@@ -177,7 +177,7 @@ func capabilityPolicyConfigurationRequiresPairedHTTPSURLAndEd25519Key() throws {
         _ = try ProviderCapabilityPolicyConfiguration(
             infoDictionary: [
                 "OWCapabilityPolicyURL":
-                    "https://updates.openwhisper.example/policy.json",
+                    "https://updates.vibewhisper.example/policy.json",
                 "OWCapabilityPublicEDKey":
                     Data(repeating: 0x11, count: 31).base64EncodedString(),
             ]

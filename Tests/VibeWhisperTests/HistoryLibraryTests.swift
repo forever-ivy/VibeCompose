@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func historyLibraryFiltersByKindStatusDateAndSearch() throws {
@@ -12,14 +12,14 @@ func historyLibraryFiltersByKindStatusDateAndSearch() throws {
     let transcripts = [
         TranscriptionHistoryRecord(
             timestamp: now.addingTimeInterval(-60),
-            finalText: "OpenWhisper verified result",
+            finalText: "VibeWhisper verified result",
             appName: "Notes",
             appBundleIdentifier: "com.apple.Notes",
             outcome: TextDeliveryStatus.insertedAndVerified
         ),
         TranscriptionHistoryRecord(
             timestamp: now.addingTimeInterval(-90),
-            finalText: "OpenWhisper legacy paste result",
+            finalText: "VibeWhisper legacy paste result",
             appName: "TextEdit",
             appBundleIdentifier: "com.apple.TextEdit",
             outcome: TextDeliveryStatus.legacyPasteDispatched
@@ -49,7 +49,7 @@ func historyLibraryFiltersByKindStatusDateAndSearch() throws {
     let verified = HistoryLibrary.filteredEntries(
         transcripts: transcripts,
         recovery: recovery,
-        query: "openwhisper",
+        query: "vibewhisper",
         kindFilter: .transcripts,
         statusFilter: .verified,
         dateFilter: .today,

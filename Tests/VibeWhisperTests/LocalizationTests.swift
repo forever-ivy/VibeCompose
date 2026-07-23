@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
@@ -9,22 +9,28 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
     let stringsURL = root
-        .appendingPathComponent("Sources/OpenWhisper/Resources/zh-Hans.lproj/Localizable.strings")
+        .appendingPathComponent("Sources/VibeWhisper/Resources/zh-Hans.lproj/Localizable.strings")
     let data = try Data(contentsOf: stringsURL)
     let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
     let strings = try #require(propertyList as? [String: String])
 
-    #expect(strings["OpenWhisper Settings"] == "OpenWhisper 设置")
+    #expect(strings["VibeWhisper Settings"] == "VibeWhisper 设置")
     #expect(strings["Microphone"] == "麦克风")
     #expect(strings["Accessibility"] == "辅助功能")
     #expect(strings["Refresh Status"] == "刷新权限状态")
     #expect(
         strings[
-            "OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
-        ] == "OpenWhisper 仍无法确认麦克风权限。请点击“刷新权限状态”或重新打开应用。"
+            "VibeWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
+        ] == "VibeWhisper 仍无法确认麦克风权限。请点击“刷新权限状态”或重新打开应用。"
     )
     #expect(strings["Ready. Press F5 to dictate"] == "已就绪。按 F5 开始听写")
     #expect(strings["F5 again to transcribe"] == "再次按 F5 开始转写")
+    #expect(strings["F5 again"] == "再按 F5")
+    #expect(strings["%@ again"] == "再按 %@")
+    #expect(strings["Working…"] == "处理中…")
+    #expect(strings["Processing"] == "处理中")
+    #expect(strings["Done"] == "已完成")
+    #expect(strings["Pasted"] == "已粘贴")
     #expect(strings["Inserted"] == "已确认插入")
     #expect(strings["Paste sent"] == "已发送粘贴")
     #expect(strings["Verified insertions"] == "已确认插入")
@@ -69,18 +75,23 @@ func simplifiedChineseLocalizationCoversCorePermissionAndDictationUI() throws {
     )
     #expect(strings["Third-Party Licenses"] == "第三方许可证")
     #expect(strings["Skills"] == "技能")
+    #expect(strings["Rules"] == "规则")
+    #expect(strings["Open Rules…"] == "打开规则…")
+    #expect(strings["Skill rule saved."] == "技能规则已保存。")
     #expect(strings["Default Skill"] == "默认技能")
     #expect(strings["Backend Prompt"] == "后端任务提示词")
     #expect(strings["Code Prompt"] == "代码提示词")
     #expect(strings["Application Rules"] == "应用规则")
-    #expect(strings["Skills require OpenWhisper Pro"] == nil)
+    #expect(strings["Skills require VibeWhisper Pro"] == nil)
     #expect(strings["Context"] == "上下文")
     #expect(strings["App Language"] == "应用语言")
     #expect(strings["General"] == "通用")
     #expect(strings["Global Context"] == "全局上下文")
     #expect(strings["Basics"] == "基础")
     #expect(strings["Intelligence"] == "智能")
-    #expect(strings["AI Activity Glow"] == "AI 活动光晕")
+    #expect(strings["Status Bar"] == "状态条")
+    #expect(strings["Edge Glow"] == "边缘光晕")
+    #expect(strings["Off"] == "关闭")
     #expect(strings["Skills Library"] == "Skills 资料库")
     #expect(strings["Skill Creator"] == "Skill 创建器")
     #expect(strings["Simple"] == "简单")
@@ -109,7 +120,7 @@ func simplifiedChineseInfoPlistLocalizesMicrophoneUsageDescription() throws {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
     let stringsURL = root
-        .appendingPathComponent("Sources/OpenWhisper/Resources/zh-Hans.lproj/InfoPlist.strings")
+        .appendingPathComponent("Sources/VibeWhisper/Resources/zh-Hans.lproj/InfoPlist.strings")
     let data = try Data(contentsOf: stringsURL)
     let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
     let strings = try #require(propertyList as? [String: String])

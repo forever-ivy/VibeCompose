@@ -1,18 +1,18 @@
 import AppKit
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func brandSelectionPaletteMatchesTheApprovedReferenceArtwork()
     throws
 {
     let blue = try #require(
-        OpenWhisperPalette.brandBlue
+        VibeWhisperPalette.brandBlue
             .usingColorSpace(.sRGB)
     )
     let selection = try #require(
-        OpenWhisperPalette.sidebarSelectionLightColor
+        VibeWhisperPalette.sidebarSelectionLightColor
             .usingColorSpace(.sRGB)
     )
 
@@ -32,7 +32,7 @@ func appDelegateUsesUnifiedFeedbackSurfaceAtRuntime() throws {
         .deletingLastPathComponent()
     let source = try String(
         contentsOf: root.appendingPathComponent(
-            "Sources/OpenWhisper/AppDelegate.swift"
+            "Sources/VibeWhisper/AppDelegate.swift"
         ),
         encoding: .utf8
     )
@@ -150,6 +150,50 @@ func hiddenFeedbackCreatesNoVisibleSurfaceAndKeepsEscapeCancellation()
 
 @MainActor
 @Test
+func skillConfirmationAlwaysShowsCapsuleEvenWhenDictationHUDIsHidden()
+{
+    let feedback = FeedbackSurfaceController(
+        escapeMonitorFactory: { _ in
+            FakeEscapeMonitor()
+        }
+    )
+    defer { feedback.hide() }
+    var config = VisualFeedbackConfig()
+    config.mode = .hidden
+    feedback.updateVisualFeedbackConfiguration(config)
+
+    feedback.showConfirmation(title: "Email Reply")
+    let confirmation = feedback.debugSnapshot
+    #expect(confirmation.mode == .hidden)
+    #expect(confirmation.refinedHUDIsVisible)
+    #expect(!confirmation.aiActivityGlowIsVisible)
+    #expect(!confirmation.escapeCancellationIsActive)
+}
+
+@MainActor
+@Test
+func refinedHUDShowsCapsuleConfirmationWithSkillName()
+{
+    let feedback = FeedbackSurfaceController(
+        escapeMonitorFactory: { _ in
+            FakeEscapeMonitor()
+        }
+    )
+    defer { feedback.hide() }
+    var config = VisualFeedbackConfig()
+    config.mode = .refinedHUD
+    feedback.updateVisualFeedbackConfiguration(config)
+
+    feedback.showConfirmation(title: "Email Reply")
+    let confirmation = feedback.debugSnapshot
+    #expect(confirmation.mode == .refinedHUD)
+    #expect(confirmation.refinedHUDIsVisible)
+    #expect(!confirmation.aiActivityGlowIsVisible)
+    #expect(!confirmation.escapeCancellationIsActive)
+}
+
+@MainActor
+@Test
 func activityGlowUsesTheFrameForActiveStatesAndTextForCopiedOutcome()
 {
     let feedback = FeedbackSurfaceController(
@@ -242,28 +286,46 @@ func activityGlowAlwaysReduceMotionDisablesContinuousAnimation()
 }
 
 @Test
-func activityGlowUsesFourLayerSmoothFixedGradientRendering()
+func activityGlowUsesSoftTwoLayerSystemLightRendering()
 {
-    let profile = AIActivityGlowVisualProfile.resolve(
+    let dark = AIActivityGlowVisualProfile.resolve(
         state: .recording,
         intensity: .standard,
         target: .activeDisplay,
-        increaseContrast: false
+        increaseContrast: false,
+        isDarkAppearance: true
+    )
+    let light = AIActivityGlowVisualProfile.resolve(
+        state: .recording,
+        intensity: .standard,
+        target: .activeDisplay,
+        increaseContrast: false,
+        isDarkAppearance: false
     )
 
-    #expect(profile.segmentCount == 32)
-    #expect(profile.layerStyles.count == 4)
-    #expect(profile.layerStyles.map(\.blurRadius) == [20, 12, 4, 0])
+    #expect(dark.segmentCount == 20)
+    #expect(dark.layerStyles.count == 2)
+    #expect(dark.layerStyles.map(\.blurRadius) == [30, 10])
     #expect(
-        profile.layerStyles.map(\.lineWidthMultiplier)
-            == [1, 0.58, 0.24, 0.12]
+        dark.layerStyles.map(\.lineWidthMultiplier)
+            == [1, 0.4]
     )
-    #expect(profile.breathing?.animatedLayerCount == 2)
-    #expect(profile.breathing?.minimumOpacityMultiplier == 0.76)
-    #expect(profile.breathing?.colorShiftFraction == 0.14)
-    #expect(profile.edgeInset == 1.5)
-    #expect(profile.topCornerRadius == 18)
-    #expect(profile.bottomCornerRadius == 0)
+    // Dark: softer luminous edge.
+    #expect(dark.layerStyles[0].opacity == Float(0.18))
+    #expect(dark.layerStyles[1].opacity == Float(0.44))
+    // Light: denser so the edge still reads on pale wallpapers.
+    #expect(light.layerStyles[0].opacity > dark.layerStyles[0].opacity)
+    #expect(light.layerStyles[1].opacity > dark.layerStyles[1].opacity)
+    #expect(light.layerStyles.map(\.blurRadius) == [26, 8])
+    #expect(dark.breathing?.animatedLayerCount == 1)
+    #expect(dark.breathing?.minimumOpacityMultiplier == 0.9)
+    #expect(dark.breathing?.colorShiftFraction == 0.05)
+    #expect(dark.breathing?.halfCycleDuration == 2.4)
+    // Headless fallback: flat rectangle (no live NSScreen chrome).
+    #expect(dark.edgeInset == 2.5)
+    #expect(dark.topCornerRadius == 0)
+    #expect(dark.bottomCornerRadius == 0)
+    #expect(dark.chrome.topCutout == nil)
 }
 
 @Test
@@ -281,26 +343,125 @@ func activityGlowReservesEnoughCanvasForFocusedWindowBloom()
         + widestLayer.blurRadius
 
     #expect(profile.edgeInset >= requiredBloomRoom + 4)
-    #expect(profile.topCornerRadius == 17)
-    #expect(profile.bottomCornerRadius == 0)
+    // Default focused-window chrome is a modest continuous radius.
+    #expect(profile.topCornerRadius >= 10)
+    #expect(profile.topCornerRadius <= 16)
+    #expect(profile.bottomCornerRadius == profile.topCornerRadius)
+    #expect(profile.chrome.topCutout == nil)
+}
+
+@Test
+func focusedWindowChromeScalesWithWindowSizeAndFullscreen()
+{
+    let small = DisplayChromeGeometry.forFocusedWindow(
+        bloomReach: 40,
+        windowSize: CGSize(width: 320, height: 240),
+        isFullscreen: false
+    )
+    let large = DisplayChromeGeometry.forFocusedWindow(
+        bloomReach: 40,
+        windowSize: CGSize(width: 1600, height: 1000),
+        isFullscreen: false
+    )
+    let fullscreen = DisplayChromeGeometry.forFocusedWindow(
+        bloomReach: 40,
+        windowSize: CGSize(width: 1728, height: 1117),
+        isFullscreen: true
+    )
+
+    #expect(small.topLeadingRadius >= 10)
+    #expect(large.topLeadingRadius >= small.topLeadingRadius)
+    #expect(large.topLeadingRadius <= 16)
+    // Fullscreen windows read as display edges — no window radius, no cutout.
+    #expect(fullscreen.topLeadingRadius == 0)
+    #expect(fullscreen.bottomTrailingRadius == 0)
+    #expect(fullscreen.topCutout == nil)
+    #expect(fullscreen.edgeInset < small.edgeInset)
+}
+
+@Test
+func focusedWindowFrameTargetIsNoLongerMarkedExperimental()
+{
+    #expect(BlueSignalFrameTarget.focusedWindow.title == "Focused window")
+    #expect(
+        BlueSignalFrameTarget.focusedWindow.title.contains("Experimental")
+            == false
+    )
+    #expect(
+        BlueSignalFrameTarget.focusedWindow.detail
+            .contains("Accessibility")
+    )
+}
+
+@Test
+func activityGlowAdaptsChromeForNotchedAndFlatDisplays()
+{
+    // Flat external monitor: sharp corners, no camera housing cutout.
+    let flat = DisplayChromeGeometry(
+        edgeInset: 2.5,
+        topLeadingRadius: 0,
+        topTrailingRadius: 0,
+        bottomLeadingRadius: 0,
+        bottomTrailingRadius: 0,
+        topCutout: nil
+    )
+    let flatProfile = AIActivityGlowVisualProfile.resolve(
+        state: .recording,
+        intensity: .standard,
+        target: .activeDisplay,
+        increaseContrast: false,
+        chrome: flat
+    )
+    #expect(flatProfile.chrome.topCutout == nil)
+    #expect(flatProfile.topCornerRadius == 0)
+
+    // Notched MacBook: rounded bezel + top-center Dynamic Island / notch.
+    let notched = DisplayChromeGeometry(
+        edgeInset: 3,
+        topLeadingRadius: 22,
+        topTrailingRadius: 22,
+        bottomLeadingRadius: 22,
+        bottomTrailingRadius: 22,
+        topCutout: .init(
+            centerX: 720,
+            width: 180,
+            height: 34,
+            cornerRadius: 12
+        )
+    )
+    let notchedProfile = AIActivityGlowVisualProfile.resolve(
+        state: .recording,
+        intensity: .standard,
+        target: .activeDisplay,
+        increaseContrast: false,
+        chrome: notched
+    )
+    #expect(notchedProfile.chrome.topCutout?.width == 180)
+    #expect(notchedProfile.chrome.topCutout?.height == 34)
+    #expect(notchedProfile.topCornerRadius == 22)
+    #expect(notchedProfile.bottomCornerRadius == 22)
 }
 
 @Test
 func activityGlowUsesAsymmetricAppleStyleAppearanceTiming()
 {
     #expect(
-        AIActivityGlowTransitionProfile.paletteCrossfadeDuration == 0.35
+        AIActivityGlowTransitionProfile.paletteCrossfadeDuration == 0.38
     )
-    #expect(AIActivityGlowTransitionProfile.appearance.duration == 0.32)
-    #expect(AIActivityGlowTransitionProfile.disappearance.duration == 0.28)
+    #expect(AIActivityGlowTransitionProfile.appearance.duration == 0.48)
+    #expect(AIActivityGlowTransitionProfile.disappearance.duration == 0.36)
     #expect(
         AIActivityGlowTransitionProfile.appearance.controlPoint1
-            == CGPoint(x: 0.22, y: 1)
+            == CGPoint(x: 0.16, y: 1)
     )
     #expect(
         AIActivityGlowTransitionProfile.disappearance.controlPoint2
-            == CGPoint(x: 0.6, y: 1)
+            == CGPoint(x: 0.68, y: 1)
     )
+    #expect(AIActivityGlowTransitionProfile.revealDuration == 0.52)
+    #expect(AIActivityGlowTransitionProfile.revealScaleFrom == 0.978)
+    #expect(AIActivityGlowTransitionProfile.revealScalePeak == 1.006)
+    #expect(AIActivityGlowTransitionProfile.exitDuration == 0.34)
 }
 
 @MainActor
@@ -332,7 +493,7 @@ func activityGlowCanReverseADisappearanceWithoutBeingOrderedOut()
         level: 0,
         config: VisualFeedbackConfig()
     )
-    try await Task.sleep(for: .milliseconds(380))
+    try await Task.sleep(for: .milliseconds(500))
 
     #expect(controller.debugSnapshot.isVisible)
     #expect(controller.debugSnapshot.panelIsVisible)
@@ -363,12 +524,21 @@ func activityGlowKeepsTheCoreSteadyWhileAmbientLayersBreatheTogether()
 
     #expect(
         initial.animationKeys.contains(
-            "openwhisper.edgeGlow.ambientBreathing"
+            "vibewhisper.edgeGlow.ambientBreathing"
         )
     )
     #expect(
         initial.animationKeys.contains(
-            "openwhisper.edgeGlow.ambientColorBreathing"
+            "vibewhisper.edgeGlow.ambientColorBreathing"
+        )
+    )
+    // First show also plays the soft reveal bloom.
+    #expect(
+        initial.animationKeys.contains(
+            "vibewhisper.edgeGlow.revealScale"
+        )
+        || initial.animationKeys.contains(
+            "vibewhisper.edgeGlow.revealFade"
         )
     )
     #expect(
@@ -378,7 +548,8 @@ func activityGlowKeepsTheCoreSteadyWhileAmbientLayersBreatheTogether()
                 || $0.contains("colorFlow")
         }) == false
     )
-    #expect(initial.ambientBreathingLayerCount == 2)
+    // Recording system-light profile breathes only the outer bloom layer.
+    #expect(initial.ambientBreathingLayerCount == 1)
     #expect(initial.glowOpacity == updated.glowOpacity)
 }
 
@@ -410,7 +581,7 @@ func activityGlowCrossfadesStateColorsWithoutMovingTheGradient()
     let animationKeys = controller.debugSnapshot.animationKeys
     #expect(
         animationKeys.contains(
-            "openwhisper.edgeGlow.paletteCrossfade"
+            "vibewhisper.edgeGlow.paletteCrossfade"
         )
     )
     #expect(
@@ -443,15 +614,31 @@ func activityGlowUsesIntensityForWidthAndDistinctProcessingBreathing()
         target: .activeDisplay,
         increaseContrast: false
     )
+    let subtle = AIActivityGlowVisualProfile.resolve(
+        state: .recording,
+        intensity: .subtle,
+        target: .activeDisplay,
+        increaseContrast: false
+    )
 
-    #expect(recording.baseLineWidth == 20)
+    #expect(recording.baseLineWidth == 13)
+    #expect(subtle.baseLineWidth < recording.baseLineWidth)
     #expect(expressive.baseLineWidth > recording.baseLineWidth)
-    #expect(recording.breathing?.halfCycleDuration == 1.6)
-    #expect(processing.breathing?.animatedLayerCount == 3)
-    #expect(processing.breathing?.halfCycleDuration == 0.95)
-    #expect(processing.breathing?.minimumOpacityMultiplier == 0.58)
-    #expect(recording.breathing?.colorShiftFraction == 0.14)
-    #expect(processing.breathing?.colorShiftFraction == 0.22)
+    // Intensity scales presence (opacity), not only stroke width.
+    #expect(
+        expressive.layerStyles[0].opacity
+            > recording.layerStyles[0].opacity
+    )
+    #expect(
+        subtle.layerStyles[0].opacity
+            < recording.layerStyles[0].opacity
+    )
+    #expect(recording.breathing?.halfCycleDuration == 2.4)
+    #expect(processing.breathing?.animatedLayerCount == 2)
+    #expect(processing.breathing?.halfCycleDuration == 1.7)
+    #expect(processing.breathing?.minimumOpacityMultiplier == 0.86)
+    #expect(recording.breathing?.colorShiftFraction == 0.05)
+    #expect(processing.breathing?.colorShiftFraction == 0.07)
 }
 
 @Test
@@ -492,9 +679,9 @@ func activityGlowTerminalStatesPlayAOneShotSettlePulse()
     #expect(profile(for: .error).settle != nil)
 
     let settle = profile(for: .success).settle
-    #expect(settle?.scalePeak == 1.02)
+    #expect(settle?.scalePeak == 1.01)
     #expect(settle?.peakOpacity == 1)
-    #expect(settle?.scaleDuration == 0.46)
+    #expect(settle?.scaleDuration == 0.4)
 }
 
 @MainActor
@@ -512,7 +699,7 @@ func activityGlowSnapshotLightsTheEdgeWithoutCrossingTheContentArea()
     )
     let output = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "openwhisper-edgeglow-\(UUID().uuidString).png"
+            "vibewhisper-edgeglow-\(UUID().uuidString).png"
         )
     defer {
         controller.hide()

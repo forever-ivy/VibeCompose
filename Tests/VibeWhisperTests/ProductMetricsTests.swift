@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func productMetricsDefaultToLocalOptInOffAndBoundedRetention() throws {
@@ -105,7 +105,7 @@ func productMetricsRecorderAppliesRetentionPermissionsAndDisableDelete()
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperProductMetrics-\(UUID().uuidString)",
+            "VibeWhisperProductMetrics-\(UUID().uuidString)",
             isDirectory: true
         )
     defer { try? fileManager.removeItem(at: root) }
@@ -171,7 +171,7 @@ func productMetricsRecorderRejectsSymbolicLinkStorage() throws {
     let parent = fileManager.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let root = parent.appendingPathComponent(
-        "OpenWhisper",
+        "VibeWhisper",
         isDirectory: true
     )
     let outside = parent.appendingPathComponent("outside.jsonl")
@@ -271,11 +271,11 @@ func productMetricsExporterWritesOwnerOnlyAggregateJSON() throws {
     let fileManager = FileManager.default
     let parent = fileManager.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperProductMetricsExport-\(UUID().uuidString)",
+            "VibeWhisperProductMetricsExport-\(UUID().uuidString)",
             isDirectory: true
         )
     let applicationSupportURL = parent.appendingPathComponent(
-        "OpenWhisper",
+        "VibeWhisper",
         isDirectory: true
     )
     let outputURL = parent.appendingPathComponent("metrics")
@@ -347,7 +347,7 @@ func productMetricsExporterRefusesToReplaceDirectory() throws {
 
     let exporter = ProductMetricsExporter(
         applicationSupportURL: parent.appendingPathComponent(
-            "OpenWhisper",
+            "VibeWhisper",
             isDirectory: true
         )
     )

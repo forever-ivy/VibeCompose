@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private final class ConnectionRequestCapture: @unchecked Sendable {
     private let lock = NSLock()
@@ -67,7 +67,7 @@ func recoveryConnectionTestSendsOnlySyntheticSilenceAndModel() async throws {
     #expect(bodyText.contains("example-transcriber"))
     #expect(
         bodyText.contains(
-            "filename=\"openwhisper-connection-test.wav\""
+            "filename=\"vibewhisper-connection-test.wav\""
         )
     )
     #expect(body.range(of: Data("RIFF".utf8)) != nil)

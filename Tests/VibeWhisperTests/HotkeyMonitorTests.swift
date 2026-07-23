@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private final class CounterBox: @unchecked Sendable {
     private let lock = NSLock()

@@ -1,6 +1,6 @@
 import AVFoundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private final class FakeRecordingSession: RecordingSessionControlling, @unchecked Sendable {
     var prepareToRecordResult = true

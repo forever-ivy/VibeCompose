@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func recoveryCredentialStoreTrimsSavesLoadsAndDeletes() throws {
@@ -52,7 +52,7 @@ func recoveryCredentialAvailabilityValidatesStoredMaterial() {
 func keychainRecoveryCredentialStoreRoundTripsInIsolatedService() throws {
     let store = KeychainOpenAICompatibleCredentialStore(
         service:
-            "app.openwhisper.mac.tests.OpenAICompatibleAPIKey.\(UUID().uuidString)",
+            "app.vibewhisper.mac.tests.OpenAICompatibleAPIKey.\(UUID().uuidString)",
         account: "unit-test"
     )
     defer {

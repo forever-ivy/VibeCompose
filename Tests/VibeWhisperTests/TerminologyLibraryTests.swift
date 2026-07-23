@@ -1,23 +1,23 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func terminologyImportPreviewSeparatesNewDuplicatesAndConflicts() throws {
     let existing = [
-        terminologyEntry(type: .term, original: "OpenWhisper"),
+        terminologyEntry(type: .term, original: "VibeWhisper"),
         terminologyEntry(
             type: .correction,
             original: "open whisper",
-            replacement: "OpenWhisper"
+            replacement: "VibeWhisper"
         ),
     ]
     let incoming = [
-        terminologyEntry(type: .term, original: "openwhisper"),
+        terminologyEntry(type: .term, original: "vibewhisper"),
         terminologyEntry(
             type: .correction,
             original: "Open Whisper",
-            replacement: "OpenWhisper"
+            replacement: "VibeWhisper"
         ),
         terminologyEntry(
             type: .correction,
@@ -39,7 +39,7 @@ func terminologyImportPreviewSeparatesNewDuplicatesAndConflicts() throws {
     #expect(preview.conflictingEntries.map(\.replacement) == ["Open Whisper Pro"])
     #expect(
         TerminologyLibrary.merge(existing: existing, incoming: incoming)
-            .map(\.original) == ["OpenWhisper", "open whisper", "Shadowd"]
+            .map(\.original) == ["VibeWhisper", "open whisper", "Shadowd"]
     )
 }
 
@@ -49,7 +49,7 @@ func terminologyCSVExportRoundTripsStructuredFields() throws {
         terminologyEntry(
             type: .correction,
             original: "open, whisper",
-            replacement: "OpenWhisper",
+            replacement: "VibeWhisper",
             aliases: ["Open \"Whisper\"", "Open Whisper"],
             isEnabled: false
         ),
@@ -66,7 +66,7 @@ func terminologyCSVExportRoundTripsStructuredFields() throws {
         result.entries.first(where: { $0.type == .correction })
     )
     #expect(correction.original == "open, whisper")
-    #expect(correction.replacement == "OpenWhisper")
+    #expect(correction.replacement == "VibeWhisper")
     #expect(correction.aliases == ["Open \"Whisper\"", "Open Whisper"])
     #expect(!correction.isEnabled)
 }
@@ -77,7 +77,7 @@ func terminologyQuickAddBuildsValidatedEntriesAndRejectsIdentityConflicts() thro
     let draft = TerminologyQuickAddDraft(
         type: .correction,
         original: " open wisper ",
-        replacement: " OpenWhisper ",
+        replacement: " VibeWhisper ",
         aliases: "OW, ow, Open Whisper"
     )
 
@@ -85,7 +85,7 @@ func terminologyQuickAddBuildsValidatedEntriesAndRejectsIdentityConflicts() thro
 
     #expect(entry.type == .correction)
     #expect(entry.original == "open wisper")
-    #expect(entry.replacement == "OpenWhisper")
+    #expect(entry.replacement == "VibeWhisper")
     #expect(entry.aliases == ["OW", "Open Whisper"])
     #expect(entry.source == "user")
 

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private enum RecoveryCredentialTestError: LocalizedError {
     case unavailable
@@ -11,7 +11,7 @@ private enum RecoveryCredentialTestError: LocalizedError {
 }
 
 @Test
-func preflightRequiresChatGPTLoginForOpenWhisperDefaults() {
+func preflightRequiresChatGPTLoginForVibeWhisperDefaults() {
     let issues = RuntimePreflight.issues(
         for: AppConfig(),
         authSnapshotProvider: {

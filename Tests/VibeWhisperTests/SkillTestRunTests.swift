@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private actor CapturingSkillTestPolisher: TextPolishing {
     private(set) var inputs: [String] = []
@@ -51,7 +51,7 @@ private func skillTestPlan(
         skill: definition,
         source: .manual,
         matchedApplicationRuleID: nil,
-        profile: OpenWhisperSkillProfile(
+        profile: VibeWhisperSkillProfile(
             contextRequest: ContextRequest(
                 required: required,
                 optional: []

@@ -1,11 +1,11 @@
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func technicalLiteralTokenizerRoundTripsSupportedLiteralFamilies() throws {
     let text = """
     打开 /Users/小龍/專案/config.json，访问 https://example.com/繁體?q=a,b，\
-    运行 `open -a OpenWhisper` --output=報告.txt，版本 v1.2.3，邮箱 dev@example.com，\
+    运行 `open -a VibeWhisper` --output=報告.txt，版本 v1.2.3，邮箱 dev@example.com，\
     调用 foo.bar(傳統)。
     """
 
@@ -16,7 +16,7 @@ func technicalLiteralTokenizerRoundTripsSupportedLiteralFamilies() throws {
 
     #expect(tokenization.literals.contains("/Users/小龍/專案/config.json"))
     #expect(tokenization.literals.contains("https://example.com/繁體?q=a,b"))
-    #expect(tokenization.literals.contains("`open -a OpenWhisper`"))
+    #expect(tokenization.literals.contains("`open -a VibeWhisper`"))
     #expect(tokenization.literals.contains("--output=報告.txt"))
     #expect(tokenization.literals.contains("v1.2.3"))
     #expect(tokenization.literals.contains("dev@example.com"))
@@ -25,7 +25,7 @@ func technicalLiteralTokenizerRoundTripsSupportedLiteralFamilies() throws {
 }
 
 @Test
-func terminologyNormalizerPreservesTechnicalLiteralsAcrossScriptAndPunctuationConversion() {
+func terminologyNormalizerPreservesTechnicalLiteralsWithoutScriptConversion() {
     let result = TerminologyNormalizer().normalize(
         text: "請打開 /Users/小龍/專案/config.json, 訪問 https://example.com/繁體?q=a,b! 再執行 `echo 傳統`.",
         importedEntries: [
@@ -34,9 +34,10 @@ func terminologyNormalizerPreservesTechnicalLiteralsAcrossScriptAndPunctuationCo
         hintTerms: []
     )
 
+    // Follow-input: keep traditional script; only automatic punctuation may change.
     #expect(
         result.text
-            == "请打开 /Users/小龍/專案/config.json， 访问 https://example.com/繁體?q=a,b！ 再执行 `echo 傳統`。"
+            == "請打開 /Users/小龍/專案/config.json， 訪問 https://example.com/繁體?q=a,b！ 再執行 `echo 傳統`。"
     )
     #expect(result.text.contains("/Users/小龍/專案/config.json"))
     #expect(result.text.contains("https://example.com/繁體?q=a,b"))
@@ -45,10 +46,9 @@ func terminologyNormalizerPreservesTechnicalLiteralsAcrossScriptAndPunctuationCo
 }
 
 @Test
-func terminologyNormalizerHonorsPreserveLanguageAndPunctuationPreferences() {
+func terminologyNormalizerHonorsPreservePunctuationPreference() {
     let original = "請保留繁體, path 是 /Users/小龍/config.json!"
     let result = TerminologyNormalizer(
-        languagePreference: .preserve,
         punctuationPreference: .preserve
     ).normalize(
         text: original,
@@ -61,9 +61,8 @@ func terminologyNormalizerHonorsPreserveLanguageAndPunctuationPreferences() {
 }
 
 @Test
-func terminologyNormalizerSupportsTraditionalChineseWithHalfWidthPunctuation() {
+func terminologyNormalizerSupportsHalfWidthPunctuationWithoutScriptConversion() {
     let result = TerminologyNormalizer(
-        languagePreference: .traditionalChinese,
         punctuationPreference: .halfWidth
     ).normalize(
         text: "请打开文件，确认！路径是 /Users/小龙/项目。",
@@ -71,13 +70,13 @@ func terminologyNormalizerSupportsTraditionalChineseWithHalfWidthPunctuation() {
         hintTerms: []
     )
 
-    #expect(result.text == "請打開文件,確認!路徑是 /Users/小龙/项目.")
+    // Script is preserved (simplified stays simplified); only punctuation width changes.
+    #expect(result.text == "请打开文件,确认!路径是 /Users/小龙/项目.")
 }
 
 @Test
 func terminologyNormalizerCanForceFullWidthPunctuationForEnglishOutput() {
     let result = TerminologyNormalizer(
-        languagePreference: .preserve,
         punctuationPreference: .fullWidth
     ).normalize(
         text: "Hello, world!",

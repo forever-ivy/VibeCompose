@@ -1,18 +1,18 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
     let fileManager = FileManager.default
     let root = fileManager.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperSupportDiagnosticsTests-\(UUID().uuidString)",
+            "VibeWhisperSupportDiagnosticsTests-\(UUID().uuidString)",
             isDirectory: true
         )
     let applicationSupportURL = root
-        .appendingPathComponent("Application Support/OpenWhisper", isDirectory: true)
+        .appendingPathComponent("Application Support/VibeWhisper", isDirectory: true)
     let diagnosticReportsURL = root
         .appendingPathComponent("DiagnosticReports", isDirectory: true)
     let exporterTemporaryURL = root
@@ -114,10 +114,10 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
     )
 
     let crashHeader: [String: Any] = [
-        "app_name": "OpenWhisper",
+        "app_name": "VibeWhisper",
         "app_version": "0.1.0",
         "build_version": "1",
-        "bundleID": "app.openwhisper.mac",
+        "bundleID": "app.vibewhisper.mac",
         "bug_type": "309",
         "os_version": [
             "build": "25F90",
@@ -132,14 +132,14 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
     crashData.append(Data("PRIVATE CRASH BODY".utf8))
     try crashData.write(
         to: diagnosticReportsURL
-            .appendingPathComponent("OpenWhisper-2026-07-13.ips")
+            .appendingPathComponent("VibeWhisper-2026-07-13.ips")
     )
 
     let outsideCrashURL = root.appendingPathComponent("outside-secret.ips")
     try Data("PRIVATE SYMLINK TARGET".utf8).write(to: outsideCrashURL)
     try fileManager.createSymbolicLink(
         at: diagnosticReportsURL
-            .appendingPathComponent("OpenWhisper-symlink.ips"),
+            .appendingPathComponent("VibeWhisper-symlink.ips"),
         withDestinationURL: outsideCrashURL
     )
 
@@ -167,7 +167,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
             generatedAt: generatedAt,
             productVersion: "0.1.0",
             productBuild: "1",
-            bundleIdentifier: "app.openwhisper.mac",
+            bundleIdentifier: "app.vibewhisper.mac",
             operatingSystem: "macOS 26.5",
             architecture: "arm64",
             localeIdentifier: "zh_CN",
@@ -202,7 +202,7 @@ func supportDiagnosticsExportIsRedactedBoundedAndChecksummed() throws {
 
     try extractZip(archiveURL, to: extractionURL)
     let bundleURL = extractionURL
-        .appendingPathComponent("OpenWhisper-Support", isDirectory: true)
+        .appendingPathComponent("VibeWhisper-Support", isDirectory: true)
     let exportedNames = Set(
         try fileManager.contentsOfDirectory(atPath: bundleURL.path)
     )
@@ -308,7 +308,7 @@ func supportDiagnosticsRefusesToReplaceDirectoryDestination() throws {
             generatedAt: Date(timeIntervalSince1970: 0),
             productVersion: "0.1.0",
             productBuild: "1",
-            bundleIdentifier: "app.openwhisper.mac",
+            bundleIdentifier: "app.vibewhisper.mac",
             operatingSystem: "macOS",
             architecture: "arm64",
             localeIdentifier: "en_US",
@@ -357,7 +357,7 @@ private func extractZip(_ archiveURL: URL, to destinationURL: URL) throws {
             encoding: .utf8
         ) ?? ""
         throw NSError(
-            domain: "OpenWhisper.SupportDiagnosticsTests",
+            domain: "VibeWhisper.SupportDiagnosticsTests",
             code: Int(process.terminationStatus),
             userInfo: [NSLocalizedDescriptionKey: message]
         )

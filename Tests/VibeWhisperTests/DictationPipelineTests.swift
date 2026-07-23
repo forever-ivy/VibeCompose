@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private let acceptanceTranscript = "王老师 呃 我们这周三下午三点应该可以开会 你帮我发个邮件给大家 主题就是第二版预算 review 然后附件是 budget v2.xlsx"
 
@@ -35,40 +35,41 @@ private func alwaysTextPolishConfig() -> TextPolishConfig {
 @Test
 func terminologyNormalizerPreservesHintTermsWithoutModelRewrite() {
     let result = TerminologyNormalizer().normalize(
-        text: "请帮我把 Budget V2.XLSX 发给大家 review 一下，顺便提一下 openwhisper 已经能用了。",
+        text: "请帮我把 Budget V2.XLSX 发给大家 review 一下，顺便提一下 vibewhisper 已经能用了。",
         importedEntries: [],
-        hintTerms: ["budget v2.xlsx", "review", "OpenWhisper"]
+        hintTerms: ["budget v2.xlsx", "review", "VibeWhisper"]
     )
 
     #expect(result.text.contains("budget v2.xlsx"))
     #expect(result.text.contains("review"))
-    #expect(result.text.contains("OpenWhisper"))
+    #expect(result.text.contains("VibeWhisper"))
     #expect(result.applied == true)
     #expect(result.exactReplacementCount == 2)
     #expect(result.fuzzyReplacementCount == 0)
 }
 
 @Test
-func terminologyNormalizerConvertsTraditionalChineseToSimplifiedChinese() {
+func terminologyNormalizerPreservesTraditionalChineseScriptAndAppliesHintTerms() {
     let result = TerminologyNormalizer().normalize(
-        text: "請把這個檔案發過來，體驗一下 openwhisper。",
+        text: "請把這個檔案發過來，體驗一下 vibewhisper。",
         importedEntries: [],
-        hintTerms: ["OpenWhisper"]
+        hintTerms: ["VibeWhisper"]
     )
 
-    #expect(result.text == "请把这个档案发过来，体验一下 OpenWhisper。")
+    // Follow-input: do not force traditional → simplified conversion.
+    #expect(result.text == "請把這個檔案發過來，體驗一下 VibeWhisper。")
     #expect(result.applied == true)
 }
 
 @Test
 func terminologyNormalizerUsesFullWidthPunctuationWhenChineseIsPresent() {
     let result = TerminologyNormalizer().normalize(
-        text: "请总结 OpenWhisper, OpenClaw works well. 还有问题吗? 不要忘了: 明天 review!",
+        text: "请总结 VibeWhisper, OpenClaw works well. 还有问题吗? 不要忘了: 明天 review!",
         importedEntries: [],
         hintTerms: []
     )
 
-    #expect(result.text == "请总结 OpenWhisper， OpenClaw works well。 还有问题吗？ 不要忘了： 明天 review！")
+    #expect(result.text == "请总结 VibeWhisper， OpenClaw works well。 还有问题吗？ 不要忘了： 明天 review！")
     #expect(result.applied == true)
 }
 
@@ -133,14 +134,14 @@ func terminologyNormalizerFuzzilyAlignsAccentedLatinTechnicalTerms() {
                 aliases: ["Example SDK"]
             ),
             TerminologyEntry(
-                canonical: "OpenWhisper",
+                canonical: "VibeWhisper",
                 aliases: ["Open Whisper"]
             ),
         ],
         hintTerms: []
     )
 
-    #expect(result.text == "ExampleSDK 和 OpenWhisper 都要按术语库大小写输出。")
+    #expect(result.text == "ExampleSDK 和 VibeWhisper 都要按术语库大小写输出。")
     #expect(result.fuzzyReplacementCount == 2)
 }
 
@@ -228,7 +229,7 @@ func terminologyNormalizerIgnoresLegacyCaseSensitiveFlagForCorrections() {
 @Test
 func terminologyNormalizerIgnoresDisabledDictionaryEntries() {
     let result = TerminologyNormalizer().normalize(
-        text: "opencloud 和 openwhisper 都不要被改。",
+        text: "opencloud 和 vibewhisper 都不要被改。",
         importedEntries: [
             TerminologyEntry(
                 type: .correction,
@@ -242,7 +243,7 @@ func terminologyNormalizerIgnoresDisabledDictionaryEntries() {
             ),
             TerminologyEntry(
                 type: .term,
-                original: "OpenWhisper",
+                original: "VibeWhisper",
                 replacement: nil,
                 aliases: [],
                 isEnabled: false,
@@ -254,7 +255,7 @@ func terminologyNormalizerIgnoresDisabledDictionaryEntries() {
         hintTerms: []
     )
 
-    #expect(result.text == "opencloud 和 openwhisper 都不要被改。")
+    #expect(result.text == "opencloud 和 vibewhisper 都不要被改。")
     #expect(result.exactReplacementCount == 0)
     #expect(result.fuzzyReplacementCount == 0)
 }
@@ -391,16 +392,16 @@ func terminologyNormalizerAvoidsFuzzyRewritesInsideProtectedLiterals() {
 @Test
 func transcriptionPromptBuilderIncludesDirectUseGuidanceAndHintTerms() {
     let prompt = TranscriptionPromptBuilder().buildPrompt(
-        hintTerms: ["budget v2.xlsx", "OpenWhisper"],
+        hintTerms: ["budget v2.xlsx", "VibeWhisper"],
         locale: "zh-CN"
     )
 
-    #expect(prompt.contains("输出带自然标点"))
-    #expect(prompt.contains("直接粘贴使用"))
-    #expect(prompt.contains("清理口头填充词"))
-    #expect(prompt.contains("不要把系统界面、输入框提示、按钮文案当作语音内容输出"))
+    #expect(prompt.contains("pasted directly") || prompt.contains("can be pasted"))
+    #expect(prompt.contains("Preserve the speaker's language exactly"))
+    #expect(prompt.contains("filler words") || prompt.contains("self-corrections"))
+    #expect(prompt.contains("system UI") || prompt.contains("button labels"))
     #expect(prompt.contains("budget v2.xlsx"))
-    #expect(prompt.contains("OpenWhisper"))
+    #expect(prompt.contains("VibeWhisper"))
 }
 
 @Test
@@ -411,7 +412,8 @@ func transcriptionPromptBuilderCanDisableSpeechCleanupGuidance() {
         locale: "zh-CN"
     )
 
-    #expect(prompt.contains("清理口头填充词") == false)
+    #expect(prompt.contains("filler words") == false)
+    #expect(prompt.contains("self-corrections") == false)
 }
 
 @Test
@@ -427,37 +429,38 @@ func transcriptionPromptBuilderClipsAndDeduplicatesDictionaryHintTerms() {
 }
 
 @Test
-func transcriptionPromptBuilderRequestsSimplifiedChineseByDefault() {
+func transcriptionPromptBuilderPreservesSpeakerLanguageByDefault() {
     let prompt = TranscriptionPromptBuilder().buildPrompt(
         hintTerms: [],
         locale: "zh-CN"
     )
 
-    #expect(prompt.contains("简体中文"))
-    #expect(prompt.contains("不要输出繁体中文"))
-    #expect(prompt.contains("标点随语言自动选择"))
+    #expect(prompt.contains("Preserve the speaker's language exactly"))
+    #expect(prompt.contains("Do not translate"))
+    #expect(prompt.contains("full-width for Chinese runs") || prompt.contains("punctuation"))
 }
 
+
 @Test
-func transcriptionPromptBuilderHonorsLanguageAndPunctuationPreferences() {
+func transcriptionPromptBuilderHonorsPunctuationPreferences() {
     let prompt = TranscriptionPromptBuilder().buildPrompt(
         hintTerms: [],
-        languagePreference: .traditionalChinese,
         punctuationPreference: .halfWidth,
         locale: "zh-TW"
     )
 
-    #expect(prompt.contains("輸出繁體中文"))
-    #expect(prompt.contains("ASCII 半角标点"))
+    #expect(prompt.contains("ASCII half-width punctuation") || prompt.contains("half-width"))
     #expect(prompt.contains("Locale: zh-TW"))
+    #expect(prompt.contains("Preserve the speaker's language exactly"))
 }
+
 
 @Test
 func dictationPipelineRunsTranscribeThenNormalizeWithoutCleanupStage() async throws {
     let pipeline = DictationPipeline(
         transcriber: FakeTranscriber(
             result: TranscriptionResult(
-                text: "请把 Budget V2.XLSX 发出来，openwhisper 现在可以用了。",
+                text: "请把 Budget V2.XLSX 发出来，vibewhisper 现在可以用了。",
                 metrics: .init(
                     provider: .chatGPTManagedAuth,
                     audioDurationMs: 2_000,
@@ -475,7 +478,7 @@ func dictationPipelineRunsTranscribeThenNormalizeWithoutCleanupStage() async thr
                 aliases: ["Example SDK"]
             ),
         ],
-        hintTerms: ["budget v2.xlsx", "OpenWhisper"]
+        hintTerms: ["budget v2.xlsx", "VibeWhisper"]
     )
 
     let audio = RecordedAudio(
@@ -484,8 +487,8 @@ func dictationPipelineRunsTranscribeThenNormalizeWithoutCleanupStage() async thr
     )
 
     let result = try await pipeline.prepare(audio: audio)
-    #expect(result.rawText == "请把 Budget V2.XLSX 发出来，openwhisper 现在可以用了。")
-    #expect(result.finalText == "请把 budget v2.xlsx 发出来，OpenWhisper 现在可以用了。")
+    #expect(result.rawText == "请把 Budget V2.XLSX 发出来，vibewhisper 现在可以用了。")
+    #expect(result.finalText == "请把 budget v2.xlsx 发出来，VibeWhisper 现在可以用了。")
     #expect(result.metrics.normalizationMs >= 0)
     #expect(result.exactReplacementCount == 2)
     #expect(result.fuzzyReplacementCount == 0)
@@ -496,7 +499,7 @@ func dictationPipelineReportsExactAndFuzzyReplacementCounts() async throws {
     let pipeline = DictationPipeline(
         transcriber: FakeTranscriber(
             result: TranscriptionResult(
-                text: "ExamplSDK 和 openwhisper 都得写对。",
+                text: "ExamplSDK 和 vibewhisper 都得写对。",
                 metrics: .init(
                     provider: .chatGPTManagedAuth,
                     audioDurationMs: 2_000,
@@ -514,7 +517,7 @@ func dictationPipelineReportsExactAndFuzzyReplacementCounts() async throws {
                 aliases: ["Example SDK"]
             ),
         ],
-        hintTerms: ["OpenWhisper"]
+        hintTerms: ["VibeWhisper"]
     )
 
     let audio = RecordedAudio(
@@ -523,7 +526,7 @@ func dictationPipelineReportsExactAndFuzzyReplacementCounts() async throws {
     )
 
     let result = try await pipeline.prepare(audio: audio)
-    #expect(result.finalText == "ExampleSDK 和 OpenWhisper 都得写对。")
+    #expect(result.finalText == "ExampleSDK 和 VibeWhisper 都得写对。")
     #expect(result.exactReplacementCount == 1)
     #expect(result.fuzzyReplacementCount == 1)
 }
@@ -722,7 +725,7 @@ func dictationPipelineRunsTextPolishBetweenNormalizationPasses() async throws {
     let pipeline = DictationPipeline(
         transcriber: FakeTranscriber(
             result: TranscriptionResult(
-                text: "呃先做 openwhisper 设置页，然后不对，改成 v0.1 润色计划。",
+                text: "呃先做 vibewhisper 设置页，然后不对，改成 v0.1 润色计划。",
                 metrics: .init(
                     provider: .chatGPTManagedAuth,
                     audioDurationMs: 3_000,
@@ -735,11 +738,11 @@ func dictationPipelineRunsTextPolishBetweenNormalizationPasses() async throws {
         ),
         normalizer: TerminologyNormalizer(),
         importedEntries: [],
-        hintTerms: ["OpenWhisper"],
+        hintTerms: ["VibeWhisper"],
         textPolisher: FakeTextPolisher(
             result: .success(
                 TextPolishResult(
-                    text: "- 目标：完成 openwhisper ⟪OW_LITERAL_0000⟫ 润色计划\n- 验收：长句输出分点。",
+                    text: "- 目标：完成 vibewhisper ⟪OW_LITERAL_0000⟫ 润色计划\n- 验收：长句输出分点。",
                     provider: .chatGPTAuth,
                     applied: true,
                     estimatedInputTokens: 1_200,
@@ -757,7 +760,7 @@ func dictationPipelineRunsTextPolishBetweenNormalizationPasses() async throws {
 
     let result = try await pipeline.prepare(audio: audio)
 
-    #expect(result.finalText.contains("OpenWhisper v0.1"))
+    #expect(result.finalText.contains("VibeWhisper v0.1"))
     #expect(result.finalText.contains("- 目标"))
     #expect(result.metrics.textPolishAttempted)
     #expect(result.metrics.textPolishProvider == .chatGPTAuth)
@@ -868,7 +871,7 @@ func dictationPipelineFallsBackToNormalizedTextWhenTextPolishFails() async throw
     let pipeline = DictationPipeline(
         transcriber: FakeTranscriber(
             result: TranscriptionResult(
-                text: "请把 openwhisper 的术语写对。",
+                text: "请把 vibewhisper 的术语写对。",
                 metrics: .init(
                     provider: .chatGPTManagedAuth,
                     audioDurationMs: 2_000,
@@ -881,7 +884,7 @@ func dictationPipelineFallsBackToNormalizedTextWhenTextPolishFails() async throw
         ),
         normalizer: TerminologyNormalizer(),
         importedEntries: [],
-        hintTerms: ["OpenWhisper"],
+        hintTerms: ["VibeWhisper"],
         textPolisher: FakeTextPolisher(result: .failure(FakePolishError())),
         textPolishConfig: alwaysTextPolishConfig()
     )
@@ -893,7 +896,7 @@ func dictationPipelineFallsBackToNormalizedTextWhenTextPolishFails() async throw
 
     let result = try await pipeline.prepare(audio: audio)
 
-    #expect(result.finalText == "请把 OpenWhisper 的术语写对。")
+    #expect(result.finalText == "请把 VibeWhisper 的术语写对。")
     #expect(result.metrics.textPolishAttempted)
     #expect(result.metrics.textPolishProvider == nil)
     #expect(result.metrics.textPolishErrorMessage?.isEmpty == false)
@@ -941,7 +944,7 @@ func dictationPipelineFallsBackWhenTextPolishChangesProtectedLiteralToken() asyn
     )
     let result = try await pipeline.prepare(audio: audio)
 
-    #expect(result.finalText == "请把 \(originalPath) 发给我。")
+    #expect(result.finalText == "請把 \(originalPath) 發給我。")
     #expect(result.metrics.textPolishProvider == nil)
     #expect(result.metrics.textPolishErrorMessage?.contains("technical literal") == true)
 }

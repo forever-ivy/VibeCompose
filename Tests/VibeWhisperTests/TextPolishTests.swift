@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private final class RequestCapture: @unchecked Sendable {
     private let lock = NSLock()
@@ -112,9 +112,10 @@ func legacyTextPolishConfigIgnoresRemovedAPIKeyProviderFields() throws {
 }
 
 @Test
-func textPolishProviderSelectorUsesOnlyChatGPTAuth() throws {
+func textPolishProviderSelectorUsesChatGPTAuthOrOwnAPI() throws {
     var config = TextPolishConfig()
     config.chatGPTAuthEnabled = true
+    config.openAICompatibleEnabled = false
 
     let selected = TextPolishProviderSelector().selectProvider(
         config: config,
@@ -122,10 +123,38 @@ func textPolishProviderSelectorUsesOnlyChatGPTAuth() throws {
     )
 
     #expect(selected?.id == .chatGPTAuth)
-    #expect(TextPolishProviderSelector().selectProvider(config: config, chatGPTAuthAvailable: false) == nil)
+    #expect(
+        TextPolishProviderSelector().selectProvider(
+            config: config,
+            chatGPTAuthAvailable: false
+        ) == nil
+    )
 
     config.chatGPTAuthEnabled = false
-    #expect(TextPolishProviderSelector().selectProvider(config: config, chatGPTAuthAvailable: true) == nil)
+    #expect(
+        TextPolishProviderSelector().selectProvider(
+            config: config,
+            chatGPTAuthAvailable: true
+        ) == nil
+    )
+
+    config.openAICompatibleEnabled = true
+    config.openAICompatibleURL = "https://api.openai.com/v1/chat/completions"
+    config.openAICompatibleModel = "gpt-4o"
+    #expect(
+        TextPolishProviderSelector().selectProvider(
+            config: config,
+            chatGPTAuthAvailable: false,
+            openAICompatibleKeyAvailable: true
+        )?.id == .openAICompatible
+    )
+    #expect(
+        TextPolishProviderSelector().selectProvider(
+            config: config,
+            chatGPTAuthAvailable: true,
+            openAICompatibleKeyAvailable: false
+        ) == nil
+    )
 }
 
 @Test
@@ -133,7 +162,7 @@ func textPolishPromptRequestsAgentPlanStyleAndLaterIntentWins() {
     let prompt = TextPolishPromptBuilder().buildMessages(
         transcript: "呃先做一个登录页面，然后不对，改成先做设置页，最后发布 v0.1。",
         terminologyEntries: [
-            TerminologyEntry(canonical: "OpenWhisper", aliases: ["open whisper"]),
+            TerminologyEntry(canonical: "VibeWhisper", aliases: ["open whisper"]),
             TerminologyEntry(canonical: "ExampleSDK", aliases: ["Example SDK"]),
         ],
         config: TextPolishConfig(),
@@ -143,9 +172,10 @@ func textPolishPromptRequestsAgentPlanStyleAndLaterIntentWins() {
 
     let joined = prompt.map(\.content).joined(separator: "\n")
     #expect(joined.contains("agent"))
-    #expect(joined.contains("分点"))
+    #expect(joined.contains("Backend Prompt Composer"))
+    #expect(joined.contains("Acceptance Criteria"))
     #expect(joined.contains("后面"))
-    #expect(joined.contains("OpenWhisper"))
+    #expect(joined.contains("VibeWhisper"))
     #expect(joined.contains("ExampleSDK"))
     #expect(joined.contains("口头禅"))
     #expect(joined.contains("Do not summarize away requirements"))
@@ -183,7 +213,7 @@ func textPolishPromptAppliesModeSpecificWritingContract() {
         locale: "zh-CN"
     )
     let codePrompt = builder.buildMessages(
-        transcript: "修改 Sources/OpenWhisper/AppConfig.swift。",
+        transcript: "修改 Sources/VibeWhisper/AppConfig.swift。",
         terminologyEntries: [],
         config: TextPolishConfig(),
         mode: .codePrompt,
@@ -205,7 +235,11 @@ func textPolishPromptAppliesModeSpecificWritingContract() {
     )
     #expect(
         codePrompt.map(\.content).joined()
-            .contains("class and method names")
+            .contains("implementation-ready coding request")
+    )
+    #expect(
+        codePrompt.map(\.content).joined()
+            .contains("quoted literals")
     )
     #expect(
         translation.map(\.content).joined()
@@ -222,7 +256,7 @@ func textPolishTokenEstimatorClassifiesLongDictationCost() {
     let estimate = TextPolishTokenEstimator().estimate(
         transcript: String(repeating: "这是一个需要整理成长句计划的语音输入。", count: 80),
         terminologyEntries: [
-            TerminologyEntry(canonical: "OpenWhisper", aliases: ["open whisper"]),
+            TerminologyEntry(canonical: "VibeWhisper", aliases: ["open whisper"]),
         ],
         config: TextPolishConfig()
     )
@@ -253,7 +287,7 @@ func chatGPTAuthTextPolisherUsesResponsesEndpointWithLoginToken() async throws {
                 headerFields: nil
             )!
             return (
-                Data(#"{"output_text":"- 目标：发布 OpenWhisper v0.1"}"#.utf8),
+                Data(#"{"output_text":"- 目标：发布 VibeWhisper v0.1"}"#.utf8),
                 response
             )
         }
@@ -261,13 +295,13 @@ func chatGPTAuthTextPolisherUsesResponsesEndpointWithLoginToken() async throws {
 
     let result = try await polisher.polish(
         text: "呃发布 open whisper v0.1",
-        terminologyEntries: [TerminologyEntry(canonical: "OpenWhisper", aliases: ["open whisper"])],
+        terminologyEntries: [TerminologyEntry(canonical: "VibeWhisper", aliases: ["open whisper"])],
         hintTerms: []
     )
 
     #expect(result.provider == .chatGPTAuth)
     #expect(result.applied)
-    #expect(result.text.contains("OpenWhisper v0.1"))
+    #expect(result.text.contains("VibeWhisper v0.1"))
     #expect(capture.urls() == ["https://chatgpt.com/backend-api/codex/responses"])
     #expect(capture.authorizations() == ["Bearer chatgpt-token"])
     let body = capture.bodies().first ?? ""
@@ -277,6 +311,54 @@ func chatGPTAuthTextPolisherUsesResponsesEndpointWithLoginToken() async throws {
     #expect(body.contains("temperature") == false)
     #expect(body.contains("max_output_tokens") == false)
     #expect(body.contains("chatgpt-token") == false)
+}
+
+
+@Test
+func openAICompatibleTextPolisherUsesChatCompletionsEndpoint() async throws {
+    var config = TextPolishConfig()
+    config.chatGPTAuthEnabled = false
+    config.openAICompatibleEnabled = true
+    config.openAICompatibleURL = "https://api.example.com/v1/chat/completions"
+    config.openAICompatibleModel = "gpt-4o"
+
+    let store = InMemoryOpenAICompatibleCredentialStore()
+    try store.saveAPIKey("sk-test-polish")
+    let capture = RequestCapture()
+    let polisher = OpenAICompatibleTextPolisher(
+        config: config,
+        chatGPTAuthProvider: nil,
+        chatGPTAuthAvailable: false,
+        polishCredentialStore: store,
+        dataLoader: { request in
+            capture.append(request, body: String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "")
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (
+                Data(#"{"choices":[{"message":{"role":"assistant","content":"Polished with own API"}}]}"#.utf8),
+                response
+            )
+        }
+    )
+
+    let result = try await polisher.polish(
+        text: "hello world",
+        terminologyEntries: [],
+        hintTerms: []
+    )
+
+    #expect(result.provider == .openAICompatible)
+    #expect(result.text == "Polished with own API")
+    #expect(capture.urls() == ["https://api.example.com/v1/chat/completions"])
+    #expect(capture.authorizations() == ["Bearer sk-test-polish"])
+    let body = capture.bodies().first ?? ""
+    #expect(body.contains("gpt-4o"))
+    #expect(body.contains("messages"))
+    #expect(body.contains("sk-test-polish") == false)
 }
 
 @Test

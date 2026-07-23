@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func managedEndpointPolicyAcceptsOnlyExactBuiltInEndpoints() throws {
@@ -15,6 +15,12 @@ func managedEndpointPolicyAcceptsOnlyExactBuiltInEndpoints() throws {
             ManagedEndpointPolicy.responsesURL,
             for: .responses
         ) == ManagedEndpointPolicy.responsesURL
+    )
+    #expect(
+        try ManagedEndpointPolicy.validatedURL(
+            ManagedEndpointPolicy.modelsURL,
+            for: .models
+        ) == ManagedEndpointPolicy.modelsURL
     )
 }
 

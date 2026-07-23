@@ -1,18 +1,18 @@
 import AppKit
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @MainActor
 @Test
 func liveTextInjectorPastesIntoLaunchAppEditorAfterFocusMovesAway() async throws {
-    guard ProcessInfo.processInfo.environment["OPENWHISPER_LIVE_TEXTINJECTOR_ACCEPTANCE"] == "1" else {
+    guard ProcessInfo.processInfo.environment["VIBEWHISPER_LIVE_TEXTINJECTOR_ACCEPTANCE"] == "1" else {
         return
     }
 
     let phrase = "focus paste test \(UUID().uuidString.prefix(8))"
     let fileURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("openwhisper-live-inject-\(UUID().uuidString).txt")
+        .appendingPathComponent("vibewhisper-live-inject-\(UUID().uuidString).txt")
     _ = FileManager.default.createFile(atPath: fileURL.path, contents: Data())
 
     _ = try runAppleScript("""
@@ -44,7 +44,7 @@ func liveTextInjectorPastesIntoLaunchAppEditorAfterFocusMovesAway() async throws
 
     _ = try runAppleScript("""
     tell application "System Events"
-      tell process "OpenWhisper"
+      tell process "VibeWhisper"
         click menu bar item 1 of menu bar 1
         delay 0.1
         click menu item "Settings…" of menu 1 of menu bar item 1 of menu bar 1
@@ -79,7 +79,7 @@ func liveTextInjectorPastesIntoLaunchAppEditorAfterFocusMovesAway() async throws
 @MainActor
 @Test
 func liveTextInjectorPastesIntoCodexComposerAfterFocusMovesAway() async throws {
-    guard ProcessInfo.processInfo.environment["OPENWHISPER_LIVE_CODEX_ACCEPTANCE"] == "1" else {
+    guard ProcessInfo.processInfo.environment["VIBEWHISPER_LIVE_CODEX_ACCEPTANCE"] == "1" else {
         return
     }
 
@@ -100,7 +100,7 @@ func liveTextInjectorPastesIntoCodexComposerAfterFocusMovesAway() async throws {
 
     _ = try runAppleScript("""
     tell application "System Events"
-      tell process "OpenWhisper"
+      tell process "VibeWhisper"
         click menu bar item 1 of menu bar 1
         delay 0.1
         click menu item "Settings…" of menu 1 of menu bar item 1 of menu bar 1

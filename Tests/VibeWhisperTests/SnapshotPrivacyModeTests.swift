@@ -1,20 +1,20 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func snapshotPrivacyModeRecognizesEveryProductSurfaceCapture() {
     let cases: [([String: String], [String])] = [
-        (["OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT": "/tmp/settings.png"], []),
-        (["OPENWHISPER_ONBOARDING_SNAPSHOT_OUTPUT": "/tmp/onboarding.png"], []),
-        (["OPENWHISPER_HISTORY_SNAPSHOT_OUTPUT": "/tmp/history.png"], []),
-        (["OPENWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT": "/tmp/terminology.png"], []),
-        (["OPENWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT": "/tmp/quick-add.png"], []),
-        (["OPENWHISPER_ACCESSIBILITY_AUDIT_OUTPUT": "/tmp/audit.json"], []),
-        (["OPENWHISPER_INTERACTION_ACCEPTANCE": "true"], []),
-        (["OPENWHISPER_VISUAL_ACCEPTANCE_OUTPUT": "/tmp/hud.png"], []),
+        (["VIBEWHISPER_SETTINGS_SNAPSHOT_OUTPUT": "/tmp/settings.png"], []),
+        (["VIBEWHISPER_ONBOARDING_SNAPSHOT_OUTPUT": "/tmp/onboarding.png"], []),
+        (["VIBEWHISPER_HISTORY_SNAPSHOT_OUTPUT": "/tmp/history.png"], []),
+        (["VIBEWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT": "/tmp/terminology.png"], []),
+        (["VIBEWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT": "/tmp/quick-add.png"], []),
+        (["VIBEWHISPER_ACCESSIBILITY_AUDIT_OUTPUT": "/tmp/audit.json"], []),
+        (["VIBEWHISPER_INTERACTION_ACCEPTANCE": "true"], []),
+        (["VIBEWHISPER_VISUAL_ACCEPTANCE_OUTPUT": "/tmp/hud.png"], []),
         (
-            ["OPENWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT": "/tmp/hud-2.png"],
+            ["VIBEWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT": "/tmp/hud-2.png"],
             []
         ),
         ([:], ["--settings-snapshot-output=/tmp/settings.png"]),

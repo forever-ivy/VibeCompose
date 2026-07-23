@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func privacyPoliciesMatchCurrentLocalRetentionAndDiagnosticsBoundary() throws {
@@ -42,7 +42,7 @@ func privacyPoliciesMatchCurrentLocalRetentionAndDiagnosticsBoundary() throws {
             )
                 || text.contains("\(config.productMetricsRecordLimit)")
         )
-        #expect(text.contains("app.openwhisper.mac.ChatGPTSession"))
+        #expect(text.contains("app.vibewhisper.mac.ChatGPTSession"))
         #expect(!text.contains("LicenseReceipt"))
         #expect(!text.contains("LicenseDevice"))
         #expect(text.contains("Export Diagnostics") || text.contains("导出诊断"))
@@ -94,7 +94,7 @@ func policySetIsBilingualAndKeepsSafetyBoundariesExplicit() throws {
     #expect(!terms.lowercased().contains("subscription"))
 
     let support = try policyText(root, "docs/support/support-policy.md")
-    #expect(support.contains("Settings → Advanced → Export Diagnostics"))
+    #expect(support.contains("support diagnostics export") || support.contains("Export Diagnostics"))
     #expect(
         support.contains(
             "not a service-level guarantee"

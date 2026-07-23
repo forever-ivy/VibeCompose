@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private final class RequestCapture: @unchecked Sendable {
     private let lock = NSLock()
@@ -218,7 +218,7 @@ func rejectsAudioAboveOfficialTwentyFiveMegabyteLimit() async throws {
 func transcriptionStreamsPrivateMultipartFileAndRemovesItAfterUpload() async throws {
     var config = AppConfig().transcription
     config.provider = .chatGPTManagedAuth
-    config.hintTerms = ["OpenWhisper"]
+    config.hintTerms = ["VibeWhisper"]
 
     let observation = UploadObservation()
     let transcriber = ChatGPTTranscriber(
@@ -372,7 +372,7 @@ func rejectsSymlinkedAudioBeforeBuildingMultipartUpload() async throws {
 func openAICompatibleRouteIncludesPromptField() async throws {
     var config = AppConfig().transcription
     config.provider = .openAICompatible
-    config.hintTerms = ["budget v2.xlsx", "OpenWhisper"]
+    config.hintTerms = ["budget v2.xlsx", "VibeWhisper"]
 
     let capture = RequestCapture()
     let credentialStore = InMemoryOpenAICompatibleCredentialStore(
@@ -397,7 +397,7 @@ func openAICompatibleRouteIncludesPromptField() async throws {
                 httpVersion: nil,
                 headerFields: nil
             )!
-            return (Data(#"{"text":"OpenWhisper budget v2.xlsx"}"#.utf8), response)
+            return (Data(#"{"text":"VibeWhisper budget v2.xlsx"}"#.utf8), response)
         }
     )
 
@@ -508,7 +508,7 @@ func openAICompatibleRouteRedactsKeyFromProviderError() async throws {
 func managedAuthFallsBackWhenPromptFieldIsRejected() async throws {
     var config = AppConfig().transcription
     config.provider = .chatGPTManagedAuth
-    config.hintTerms = ["OpenWhisper"]
+    config.hintTerms = ["VibeWhisper"]
 
     let capture = RequestCapture()
     let capability = BridgePromptCapabilityStore()
@@ -538,7 +538,7 @@ func managedAuthFallsBackWhenPromptFieldIsRejected() async throws {
                 httpVersion: nil,
                 headerFields: nil
             )!
-            return (Data(#"{"text":"OpenWhisper done"}"#.utf8), response)
+            return (Data(#"{"text":"VibeWhisper done"}"#.utf8), response)
         }
     )
 
@@ -546,7 +546,7 @@ func managedAuthFallsBackWhenPromptFieldIsRejected() async throws {
     defer { try? FileManager.default.removeItem(at: audio.fileURL) }
     let result = try await transcriber.transcribe(audio)
 
-    #expect(result.text == "OpenWhisper done")
+    #expect(result.text == "VibeWhisper done")
     #expect(result.metrics.promptIncluded == false)
     #expect(capture.bodies().count == 2)
     #expect(capture.bodies()[0].contains("name=\"prompt\""))
@@ -610,7 +610,7 @@ func managedAuthRefreshesAccessTokenAfterForbidden() async throws {
 func managedAuthReportsRetryableErrorAfterThreeCloudflareChallenges() async throws {
     var config = AppConfig().transcription
     config.provider = .chatGPTManagedAuth
-    config.hintTerms = ["OpenWhisper"]
+    config.hintTerms = ["VibeWhisper"]
 
     let capture = RequestCapture()
     let authManager = FakeChatGPTAuthManager()
@@ -658,7 +658,7 @@ func managedAuthReportsRetryableErrorAfterThreeCloudflareChallenges() async thro
 func managedAuthManualRetryPolicyAttemptsCloudflareChallengeOnlyOnce() async throws {
     var config = AppConfig().transcription
     config.provider = .chatGPTManagedAuth
-    config.hintTerms = ["OpenWhisper"]
+    config.hintTerms = ["VibeWhisper"]
 
     let capture = RequestCapture()
     let transcriber = ChatGPTTranscriber(
@@ -807,4 +807,123 @@ func managedAuthRateLimitOpensCircuitAndPreservesRetryAfter() async throws {
     #expect(secondFailure?.circuitOpen == true)
     #expect((secondFailure?.retryAfterSeconds ?? 0) > 0)
     #expect(attempts.current() == 1)
+}
+
+@Test
+func managedAuthFallsBackToOpenAICompatibleWhenEnabled() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+    config.openAIFallbackEnabled = true
+    config.openAITranscriptionURL =
+        "https://api.example.com/v1/audio/transcriptions"
+    config.openAIModel = "gpt-4o-mini-transcribe"
+
+    let capture = RequestCapture()
+    let credentialStore = InMemoryOpenAICompatibleCredentialStore(
+        apiKey: "fallback-key"
+    )
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: BridgePromptCapabilityStore(),
+        recoveryCredentialStore: credentialStore,
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
+        uploadLoader: { request, bodyFileURL in
+            capture.append(
+                request,
+                body: try uploadBodyString(at: bodyFileURL),
+                authorizationHeader: request.value(
+                    forHTTPHeaderField: "Authorization"
+                )
+            )
+            let url = request.url!
+            if url.host?.contains("chatgpt.com") == true {
+                let response = HTTPURLResponse(
+                    url: url,
+                    statusCode: 503,
+                    httpVersion: nil,
+                    headerFields: nil
+                )!
+                return (
+                    Data(#"{"message":"upstream unavailable"}"#.utf8),
+                    response
+                )
+            }
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (
+                Data(#"{"text":"fallback transcript"}"#.utf8),
+                response
+            )
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
+    let result = try await transcriber.transcribe(audio)
+
+    #expect(result.text == "fallback transcript")
+    #expect(result.metrics.provider == TranscriptionProvider.openAICompatible)
+    #expect(
+        capture.authorizations().contains("Bearer fallback-key")
+    )
+    #expect(
+        capture.urls().contains {
+            $0.contains("api.example.com")
+        }
+    )
+}
+
+func managedAuthDoesNotFallbackWhenDisabled() async throws {
+    var config = AppConfig().transcription
+    config.provider = .chatGPTManagedAuth
+    config.openAIFallbackEnabled = false
+    config.openAITranscriptionURL =
+        "https://api.example.com/v1/audio/transcriptions"
+
+    let credentialStore = InMemoryOpenAICompatibleCredentialStore(
+        apiKey: "fallback-key"
+    )
+    let attempts = AttemptCounter()
+    let transcriber = ChatGPTTranscriber(
+        authManager: FakeChatGPTAuthManager(),
+        config: config,
+        bridgePromptCapability: BridgePromptCapabilityStore(),
+        recoveryCredentialStore: credentialStore,
+        retrySleeper: { _ in },
+        retryJitter: { 0.5 },
+        uploadLoader: { request, _ in
+            _ = attempts.next()
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 503,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            return (
+                Data(#"{"message":"upstream unavailable"}"#.utf8),
+                response
+            )
+        }
+    )
+
+    let audio = try makeAudioFixture()
+    defer { try? FileManager.default.removeItem(at: audio.fileURL) }
+    var caught: ProviderRequestFailure?
+    do {
+        _ = try await transcriber.transcribe(audio)
+    } catch let failure as ProviderRequestFailure {
+        caught = failure
+    }
+
+    #expect(caught?.category == .serviceUnavailable)
+    // Retries may still happen on ChatGPT path, but never switch provider.
+    #expect(
+        (try? credentialStore.loadAPIKey()) == "fallback-key"
+    )
 }

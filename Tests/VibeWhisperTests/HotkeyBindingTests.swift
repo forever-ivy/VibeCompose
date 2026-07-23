@@ -1,7 +1,7 @@
 import Carbon
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func hotkeyBindingDisplaysStableFunctionAndModifiedKeyNames() {
@@ -55,17 +55,17 @@ func hotkeyBindingRejectsUnsafeAndInternalConflicts() {
 
 @Test
 func skillSwitcherShortcutMustRemainDistinctFromDictation() throws {
-    try OpenWhisperShortcutSetValidator.validate(
+    try VibeWhisperShortcutSetValidator.validate(
         dictation: .f5,
         skillSwitcher: .skillSwitcher
     )
 
     #expect(
         throws:
-            OpenWhisperShortcutConflictError
+            VibeWhisperShortcutConflictError
                 .dictationAndSkillSwitcherMatch
     ) {
-        try OpenWhisperShortcutSetValidator.validate(
+        try VibeWhisperShortcutSetValidator.validate(
             dictation: .skillSwitcher,
             skillSwitcher: .skillSwitcher
         )

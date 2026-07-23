@@ -1,19 +1,19 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func productIdentityUsesCanonicalMacValues() {
-    #expect(ProductIdentity.name == "OpenWhisper")
-    #expect(ProductIdentity.slug == "openwhisper")
-    #expect(ProductIdentity.defaultBundleIdentifier == "app.openwhisper.mac")
-    #expect(ProductIdentity.keychainService == "app.openwhisper.mac.ChatGPTSession")
+    #expect(ProductIdentity.name == "VibeWhisper")
+    #expect(ProductIdentity.slug == "vibewhisper")
+    #expect(ProductIdentity.defaultBundleIdentifier == "app.vibewhisper.mac")
+    #expect(ProductIdentity.keychainService == "app.vibewhisper.mac.ChatGPTSession")
     #expect(
         ProductIdentity.recoveryAPIKeychainService
-            == "app.openwhisper.mac.OpenAICompatibleAPIKey"
+            == "app.vibewhisper.mac.OpenAICompatibleAPIKey"
     )
-    #expect(ProductIdentity.installedAppURL.path == "/Applications/OpenWhisper.app")
-    #expect(ProductIdentity.userAgent.hasPrefix("OpenWhisper/"))
+    #expect(ProductIdentity.installedAppURL.path == "/Applications/VibeWhisper.app")
+    #expect(ProductIdentity.userAgent.hasPrefix("VibeWhisper/"))
 }
 
 @Test
@@ -27,8 +27,8 @@ func productEnvironmentMatchesRuntimeIdentity() throws {
         encoding: .utf8
     )
 
-    #expect(contents.contains("OPENWHISPER_APP_NAME=\(ProductIdentity.name)"))
-    #expect(contents.contains("OPENWHISPER_BUNDLE_ID=\(ProductIdentity.defaultBundleIdentifier)"))
+    #expect(contents.contains("VIBEWHISPER_APP_NAME=\(ProductIdentity.name)"))
+    #expect(contents.contains("VIBEWHISPER_BUNDLE_ID=\(ProductIdentity.defaultBundleIdentifier)"))
 }
 
 @Test
@@ -37,10 +37,10 @@ func productIdentityBuildsApplicationSupportPaths() {
 
     #expect(
         ProductIdentity.applicationSupportURL(homeDirectoryURL: home).path
-            == "/Users/example/Library/Application Support/OpenWhisper"
+            == "/Users/example/Library/Application Support/VibeWhisper"
     )
     #expect(
         ProductIdentity.recoveryURL(homeDirectoryURL: home).path
-            == "/Users/example/Library/Application Support/OpenWhisper/Recovery"
+            == "/Users/example/Library/Application Support/VibeWhisper/Recovery"
     )
 }

@@ -1,7 +1,7 @@
 import ApplicationServices
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func ordinaryContextSettingsExposeOnlyAvailableSources() {
@@ -117,13 +117,19 @@ private func contextTestTarget()
 private func contextTestSnapshot()
     -> SelectionContextSnapshot
 {
-    let text =
-        "Keep API v2 and 2026-07-14."
+    contextTestSnapshot(
+        text: "Keep API v2 and 2026-07-14."
+    )
+}
+
+private func contextTestSnapshot(
+    text: String
+) -> SelectionContextSnapshot {
     return SelectionContextSnapshot(
         target: contextTestTarget(),
         selectedRange:
             CFRange(
-                location: 4,
+                location: 0,
                 length:
                     (text as NSString)
                         .length
@@ -275,6 +281,268 @@ func contextBrokerReadsSelectionOnlyAfterExplicitPermission()
         prepared
             .persistentGrant == nil
     )
+}
+
+@MainActor
+@Test
+func builtInSelectionSkillsReceiveTheCapturedSelection()
+    async
+{
+    let selectedText =
+        "Please keep API v2 available until 2026-08-01."
+    let snapshot = contextTestSnapshot(
+        text: selectedText
+    )
+    let provider = SelectionContextProvider(
+        capture: { _, _ in .captured(snapshot) },
+        verify: { _ in .unchanged }
+    )
+
+    for skillID in [
+        SkillRegistry.contextReplySkillID,
+        SkillRegistry.contextRewriteSkillID,
+    ] {
+        let plan = SkillResolver().resolve(
+            manualSkillID: skillID,
+            config: SkillsConfig(),
+            launchAppContext: nil
+        )
+        var config = ContextConfig()
+        config.setScope(
+            .alwaysAllow,
+            skillID: skillID,
+            capability: .selection
+        )
+
+        let prepared = await ContextBroker(
+            selectionProvider: provider
+        ).prepare(
+            plan: plan,
+            launchAppContext: nil,
+            contextConfig: config,
+            privacyConfig: PrivacyConfig(),
+            permissionPrompter:
+                FakeContextPermissionPrompter(
+                    choice: .allowOnce
+                )
+        )
+
+        #expect(!prepared.blocksExecution)
+        #expect(prepared.reason == .captured)
+        #expect(
+            prepared.promptContext.selection
+                == selectedText
+        )
+        #expect(
+            prepared.contextSnapshot?
+                .content(for: .selection)
+                == selectedText
+        )
+    }
+}
+
+@MainActor
+@Test
+func contextBrokerFallsBackToClipboardForAXOpaqueHosts()
+    async
+{
+    let selectedText =
+        "VibeWhisper WeChat selection acceptance."
+    let snapshot = contextTestSnapshot(
+        text: selectedText
+    )
+    var axCaptureCount = 0
+    var clipboardCaptureCount = 0
+    let provider = SelectionContextProvider(
+        capture: { _, _ in
+            axCaptureCount += 1
+            return .unavailable
+        },
+        clipboardCapture: { _, _ in
+            clipboardCaptureCount += 1
+            return .captured(snapshot)
+        },
+        verify: { _ in .unchanged }
+    )
+    let plan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.contextRewriteSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    var config = ContextConfig()
+    config.setScope(
+        .alwaysAllow,
+        skillID: plan.skill.id,
+        capability: .selection
+    )
+
+    let prepared = await ContextBroker(
+        selectionProvider: provider
+    ).prepare(
+        plan: plan,
+        launchAppContext:
+            LaunchAppContext(
+                bundleIdentifier:
+                    "com.tencent.xinWeChat",
+                localizedName: "WeChat",
+                processIdentifier: 42
+            ),
+        contextConfig: config,
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter:
+            FakeContextPermissionPrompter(
+                choice: .allowOnce
+            )
+    )
+
+    #expect(axCaptureCount == 1)
+    #expect(clipboardCaptureCount == 1)
+    #expect(prepared.reason == .captured)
+    #expect(!prepared.blocksExecution)
+    #expect(
+        prepared.promptContext.selection
+            == selectedText
+    )
+}
+
+@MainActor
+@Test
+func contextBrokerDoesNotCopyWhenAXConfirmsNoSelection()
+    async
+{
+    var clipboardCaptureCount = 0
+    let provider = SelectionContextProvider(
+        capture: { _, _ in .noSelection },
+        clipboardCapture: { _, _ in
+            clipboardCaptureCount += 1
+            return .captured(
+                contextTestSnapshot()
+            )
+        },
+        verify: { _ in .unchanged }
+    )
+    let plan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.contextReplySkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    var config = ContextConfig()
+    config.setScope(
+        .alwaysAllow,
+        skillID: plan.skill.id,
+        capability: .selection
+    )
+
+    let prepared = await ContextBroker(
+        selectionProvider: provider
+    ).prepare(
+        plan: plan,
+        launchAppContext: nil,
+        contextConfig: config,
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter:
+            FakeContextPermissionPrompter(
+                choice: .allowOnce
+            )
+    )
+
+    #expect(clipboardCaptureCount == 0)
+    #expect(prepared.reason == .noSelection)
+    #expect(prepared.blocksExecution)
+}
+
+@MainActor
+@Test
+func whitespaceOnlySelectionIsTreatedAsMissingContext()
+    async
+{
+    let snapshot = contextTestSnapshot(
+        text: " \n\t "
+    )
+    let provider = SelectionContextProvider(
+        capture: { _, _ in .captured(snapshot) },
+        verify: { _ in .unchanged }
+    )
+    let plan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.contextRewriteSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    var config = ContextConfig()
+    config.setScope(
+        .alwaysAllow,
+        skillID: plan.skill.id,
+        capability: .selection
+    )
+
+    let prepared = await ContextBroker(
+        selectionProvider: provider
+    ).prepare(
+        plan: plan,
+        launchAppContext: nil,
+        contextConfig: config,
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter:
+            FakeContextPermissionPrompter(
+                choice: .allowOnce
+            )
+    )
+
+    #expect(prepared.reason == .noSelection)
+    #expect(prepared.blocksExecution)
+    #expect(
+        prepared.blockedRequiredSources
+            == [.selection]
+    )
+    #expect(prepared.promptContext.selection == nil)
+    #expect(
+        prepared.contextSnapshot?
+            .content(for: .selection) == nil
+    )
+}
+
+@MainActor
+@Test
+func ordinarySkillDoesNotCaptureSelectionContext()
+    async
+{
+    var captureCount = 0
+    let plan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.directSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+
+    let prepared = await ContextBroker(
+        selectionProvider:
+            SelectionContextProvider(
+                capture: { _, _ in
+                    captureCount += 1
+                    return .captured(
+                        contextTestSnapshot()
+                    )
+                },
+                verify: { _ in .unchanged }
+            )
+    ).prepare(
+        plan: plan,
+        launchAppContext: nil,
+        contextConfig: ContextConfig(),
+        privacyConfig: PrivacyConfig(),
+        permissionPrompter:
+            FakeContextPermissionPrompter(
+                choice: .allowOnce
+            )
+    )
+
+    #expect(captureCount == 0)
+    #expect(prepared.reason == .notRequested)
+    #expect(!prepared.blocksExecution)
+    #expect(prepared.promptContext.selection == nil)
 }
 
 @MainActor

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private func writeCommunitySkillPackage(
     root: URL,
@@ -25,7 +25,7 @@ private func writeCommunitySkillPackage(
 ) throws -> URL {
     let package =
         root.appendingPathComponent(
-            "Issue-\(version).openwhisperskill",
+            "Issue-\(version).vibewhisperskill",
             isDirectory: true
         )
     try FileManager.default
@@ -278,7 +278,7 @@ func repositoryCommunitySkillTemplateRemainsInstallable()
     )
     let packageURL = repositoryRoot
         .appendingPathComponent(
-            "examples/skills/IssueDraft.openwhisperskill",
+            "examples/skills/IssueDraft.vibewhisperskill",
             isDirectory: true
         )
     let supportRoot = FileManager.default
@@ -302,7 +302,7 @@ func repositoryCommunitySkillTemplateRemainsInstallable()
 
     #expect(
         inspected.definition.id
-            == "dev.openwhisper.example.issue-draft"
+            == "dev.vibewhisper.example.issue-draft"
     )
     #expect(
         inspected.definition

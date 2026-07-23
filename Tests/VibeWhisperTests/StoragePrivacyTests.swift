@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func privacyConfigDefaultsAreBoundedAndMinimizeStoredContent() throws {
@@ -49,7 +49,7 @@ func privacyConfigDefaultsAreBoundedAndMinimizeStoredContent() throws {
 
 @Test
 func transcriptionHistoryAppliesAgeAndCountRetention() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let recorder = TranscriptionHistoryRecorder(directoryURL: root)
     let now = Date(timeIntervalSince1970: 1_000_000)
     let policy = HistoryRetentionPolicy(maxRecords: 2, retentionDays: 2, now: now)
@@ -83,7 +83,7 @@ func transcriptionHistoryAppliesAgeAndCountRetention() throws {
 
 @Test
 func legacyTranscriptionHistoryUsesStableIdentifiersAndCanBeDeleted() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let historyURL = root.appendingPathComponent("transcription-history.jsonl")
     let legacyLine = #"{"timestamp":"2026-07-13T00:00:00Z","rawText":"raw","finalText":"final","appName":"Notes","appBundleIdentifier":"com.apple.Notes","outcome":"pasted"}"#
@@ -101,7 +101,7 @@ func legacyTranscriptionHistoryUsesStableIdentifiersAndCanBeDeleted() throws {
 
 @Test
 func transcriptionHistoryPersistsSafeUndoStateTransitions() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let recorder = TranscriptionHistoryRecorder(directoryURL: root)
     let record = TranscriptionHistoryRecord(
         timestamp: Date(),
@@ -126,13 +126,13 @@ func transcriptionHistoryPersistsSafeUndoStateTransitions() throws {
 
 @Test
 func transcriptionHistoryPersistsRedactedSkillRunReceipt() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let recorder = TranscriptionHistoryRecorder(directoryURL: root)
     let installationID = UUID()
     let receipt = SkillRunReceipt(
         runID: UUID(),
         skillInstallationID: installationID,
-        skillID: "com.openwhisper.direct",
+        skillID: "com.vibewhisper.direct",
         displayName: "Direct",
         source: "builtin",
         version: "1.0.0",
@@ -176,7 +176,7 @@ func transcriptionHistoryPersistsRedactedSkillRunReceipt() throws {
 
 @Test
 func latencyRecorderRotatesByAgeAndCount() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let recorder = LatencyRecorder(directoryURL: root)
     let now = Date(timeIntervalSince1970: 2_000_000)
     let policy = DiagnosticsRetentionPolicy(maxRecords: 2, retentionDays: 7, now: now)
@@ -191,7 +191,7 @@ func latencyRecorderRotatesByAgeAndCount() throws {
 
 @Test
 func recoveryStoreExpiresFailedAudioAndKeepsOnlyBoundedRecords() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let sourceAudioURL = root.deletingLastPathComponent().appendingPathComponent("source.wav")
     try FileManager.default.createDirectory(
         at: sourceAudioURL.deletingLastPathComponent(),
@@ -254,7 +254,7 @@ func recoveryStoreExpiresFailedAudioAndKeepsOnlyBoundedRecords() throws {
 
 @Test
 func recoveryStoreTightensLegacyAudioPermissionsWhenPruning() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let sourceAudioURL = root.deletingLastPathComponent().appendingPathComponent("source.wav")
     try FileManager.default.createDirectory(
         at: sourceAudioURL.deletingLastPathComponent(),
@@ -297,7 +297,7 @@ func recoveryStoreTightensLegacyAudioPermissionsWhenPruning() throws {
 
 @Test
 func recoveryStoreRejectsSymlinkedStorageWithoutTouchingTarget() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let outside = root.deletingLastPathComponent()
         .appendingPathComponent("outside-recovery", isDirectory: true)
     let sentinel = outside.appendingPathComponent("sentinel.txt")
@@ -325,7 +325,7 @@ func recoveryStoreRejectsSymlinkedStorageWithoutTouchingTarget() throws {
 
 @Test
 func recoveryStoreRejectsSymlinkedIndex() throws {
-    let root = temporaryOpenWhisperDirectory()
+    let root = temporaryVibeWhisperDirectory()
     let recoveryURL = root.appendingPathComponent("Recovery", isDirectory: true)
     let outsideIndex = root.deletingLastPathComponent().appendingPathComponent("outside-index.jsonl")
     try FileManager.default.createDirectory(at: recoveryURL, withIntermediateDirectories: true)
@@ -367,7 +367,7 @@ func sensitiveAppPolicyBlocksBuiltInAndUserDefinedTargets() {
 }
 
 @Test
-func storageCleanupDeletesOnlyTheOpenWhisperContainer() throws {
+func storageCleanupDeletesOnlyTheVibeWhisperContainer() throws {
     let parent = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let root = parent.appendingPathComponent(ProductIdentity.name, isDirectory: true)
@@ -393,19 +393,19 @@ func temporaryArtifactCleanupRemovesOnlyOwnedCrashOrphans() throws {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
 
-    let recordingName = "openwhisper-\(UUID().uuidString).wav"
-    let uploadName = "openwhisper-upload-\(UUID().uuidString).multipart"
-    let symlinkName = "openwhisper-\(UUID().uuidString).wav"
+    let recordingName = "vibewhisper-\(UUID().uuidString).wav"
+    let uploadName = "vibewhisper-upload-\(UUID().uuidString).multipart"
+    let symlinkName = "vibewhisper-\(UUID().uuidString).wav"
     let recordingURL = root.appendingPathComponent(recordingName)
     let uploadURL = root.appendingPathComponent(uploadName)
     let symlinkURL = root.appendingPathComponent(symlinkName)
-    let lookalikeURL = root.appendingPathComponent("openwhisper-not-a-uuid.wav")
+    let lookalikeURL = root.appendingPathComponent("vibewhisper-not-a-uuid.wav")
     let directoryLookalike = root.appendingPathComponent(
-        "openwhisper-\(UUID().uuidString).wav",
+        "vibewhisper-\(UUID().uuidString).wav",
         isDirectory: true
     )
     let outsideTarget = root.deletingLastPathComponent()
-        .appendingPathComponent("openwhisper-cleanup-sentinel-\(UUID().uuidString)")
+        .appendingPathComponent("vibewhisper-cleanup-sentinel-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: outsideTarget) }
 
     try Data("recording".utf8).write(to: recordingURL)
@@ -432,7 +432,7 @@ func temporaryArtifactCleanupRemovesOnlyOwnedCrashOrphans() throws {
     #expect(FileManager.default.fileExists(atPath: directoryLookalike.path))
 }
 
-private func temporaryOpenWhisperDirectory() -> URL {
+private func temporaryVibeWhisperDirectory() -> URL {
     FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
         .appendingPathComponent(ProductIdentity.name, isDirectory: true)

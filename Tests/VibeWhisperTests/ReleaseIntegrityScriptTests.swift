@@ -7,12 +7,12 @@ func strictEnvironmentLoaderAcceptsDataWithoutExecutingIt() throws {
     let root = repositoryRoot()
     let loaderURL = root.appendingPathComponent("scripts/lib/load_env.sh")
     let temporaryDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent("OpenWhisperReleaseTests-\(UUID().uuidString)", isDirectory: true)
+        .appendingPathComponent("VibeWhisperReleaseTests-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
     let safeURL = temporaryDirectory.appendingPathComponent("safe.env")
-    try "OPENWHISPER_APP_NAME=OpenWhisper\n".write(
+    try "VIBEWHISPER_APP_NAME=VibeWhisper\n".write(
         to: safeURL,
         atomically: true,
         encoding: .utf8
@@ -21,17 +21,17 @@ func strictEnvironmentLoaderAcceptsDataWithoutExecutingIt() throws {
     let safeResult = try runBash(
         """
         source "$1"
-        load_env_file "$2" OPENWHISPER_APP_NAME
-        printf '%s' "$OPENWHISPER_APP_NAME"
+        load_env_file "$2" VIBEWHISPER_APP_NAME
+        printf '%s' "$VIBEWHISPER_APP_NAME"
         """,
         arguments: [loaderURL.path, safeURL.path]
     )
     #expect(safeResult.status == 0)
-    #expect(safeResult.stdout == "OpenWhisper")
+    #expect(safeResult.stdout == "VibeWhisper")
 
     let markerURL = temporaryDirectory.appendingPathComponent("executed")
     let maliciousURL = temporaryDirectory.appendingPathComponent("malicious.env")
-    try "OPENWHISPER_APP_NAME=$(touch \(markerURL.path))\n".write(
+    try "VIBEWHISPER_APP_NAME=$(touch \(markerURL.path))\n".write(
         to: maliciousURL,
         atomically: true,
         encoding: .utf8
@@ -40,7 +40,7 @@ func strictEnvironmentLoaderAcceptsDataWithoutExecutingIt() throws {
     let maliciousResult = try runBash(
         """
         source "$1"
-        load_env_file "$2" OPENWHISPER_APP_NAME
+        load_env_file "$2" VIBEWHISPER_APP_NAME
         """,
         arguments: [loaderURL.path, maliciousURL.path]
     )
@@ -65,12 +65,12 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("verify_repository_hygiene.py"))
     #expect(!packageScript.contains("source \"$PRODUCT_ENV\""))
     #expect(!packageScript.contains("source \"$VERSION_ENV\""))
-    #expect(packageScript.contains("OPENWHISPER_REQUIRE_DEVELOPER_ID"))
-    #expect(packageScript.contains("OPENWHISPER_BUILD_CONFIGURATION"))
+    #expect(packageScript.contains("VIBEWHISPER_REQUIRE_DEVELOPER_ID"))
+    #expect(packageScript.contains("VIBEWHISPER_BUILD_CONFIGURATION"))
     #expect(packageScript.contains("--configuration \"$BUILD_CONFIGURATION\""))
     #expect(
         packageScript.contains(
-            "Developer ID release packaging requires OPENWHISPER_BUILD_CONFIGURATION=release."
+            "Developer ID release packaging requires VIBEWHISPER_BUILD_CONFIGURATION=release."
         )
     )
     #expect(packageScript.contains("notarytool submit"))
@@ -79,7 +79,7 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("notarization-dmg.json"))
     #expect(packageScript.contains("submit_for_notarization"))
     #expect(packageScript.contains("python3 -m json.tool"))
-    #expect(packageScript.contains("OPENWHISPER_NOTARY_KEYCHAIN"))
+    #expect(packageScript.contains("VIBEWHISPER_NOTARY_KEYCHAIN"))
     #expect(packageScript.contains("NOTARY_AUTH_ARGUMENTS"))
     #expect(packageScript.contains("stapler validate"))
     #expect(packageScript.contains("spctl --assess"))
@@ -88,12 +88,12 @@ func packagingAndInstallationScriptsKeepReleaseIntegrityFailClosed() throws {
     #expect(packageScript.contains("codesign --verify --deep --strict"))
     #expect(packageScript.contains("Sparkle.framework"))
     #expect(packageScript.contains("@executable_path/../Frameworks"))
-    #expect(packageScript.contains("OPENWHISPER_SPARKLE_FEED_URL"))
-    #expect(packageScript.contains("OPENWHISPER_SPARKLE_PUBLIC_ED_KEY"))
-    #expect(packageScript.contains("OPENWHISPER_CAPABILITY_POLICY_URL"))
-    #expect(packageScript.contains("OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY"))
-    #expect(!packageScript.contains("OPENWHISPER_LICENSE_PUBLIC_ED_KEY"))
-    #expect(!packageScript.contains("OPENWHISPER_PRO_PREVIEW_ENABLED"))
+    #expect(packageScript.contains("VIBEWHISPER_SPARKLE_FEED_URL"))
+    #expect(packageScript.contains("VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY"))
+    #expect(packageScript.contains("VIBEWHISPER_CAPABILITY_POLICY_URL"))
+    #expect(packageScript.contains("VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY"))
+    #expect(!packageScript.contains("VIBEWHISPER_LICENSE_PUBLIC_ED_KEY"))
+    #expect(!packageScript.contains("VIBEWHISPER_PRO_PREVIEW_ENABLED"))
     #expect(packageScript.contains("OWCapabilityPolicyURL"))
     #expect(packageScript.contains("OWCapabilityPublicEDKey"))
     #expect(!packageScript.contains("OWLicensePublicEDKey"))
@@ -126,7 +126,7 @@ func releaseMetadataGeneratorProducesExactArtifactContract() throws {
     )
     let temporaryDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperReleaseMetadataTests-\(UUID().uuidString)",
+            "VibeWhisperReleaseMetadataTests-\(UUID().uuidString)",
             isDirectory: true
         )
     try FileManager.default.createDirectory(
@@ -137,8 +137,8 @@ func releaseMetadataGeneratorProducesExactArtifactContract() throws {
         try? FileManager.default.removeItem(at: temporaryDirectory)
     }
 
-    let zipURL = temporaryDirectory.appendingPathComponent("OpenWhisper.zip")
-    let dmgURL = temporaryDirectory.appendingPathComponent("OpenWhisper.dmg")
+    let zipURL = temporaryDirectory.appendingPathComponent("VibeWhisper.zip")
+    let dmgURL = temporaryDirectory.appendingPathComponent("VibeWhisper.dmg")
     let outputURL = temporaryDirectory.appendingPathComponent("manifest.json")
     let zipData = Data("zip-artifact".utf8)
     let dmgData = Data("dmg-artifact".utf8)
@@ -149,17 +149,17 @@ func releaseMetadataGeneratorProducesExactArtifactContract() throws {
         """
         swift "$1" \
           --output "$2" \
-          --app-name OpenWhisper \
-          --bundle-id app.openwhisper.mac \
-          --repository forever-ivy/openwhisper \
+          --app-name VibeWhisper \
+          --bundle-id app.vibewhisper.mac \
+          --repository forever-ivy/vibewhisper \
           --minimum-macos 13.0 \
           --version 0.1.0 \
           --build 1 \
           --architecture arm64 \
           --zip "$3" \
           --dmg "$4" \
-          --zip-url https://example.invalid/OpenWhisper.zip \
-          --dmg-url https://example.invalid/OpenWhisper.dmg \
+          --zip-url https://example.invalid/VibeWhisper.zip \
+          --dmg-url https://example.invalid/VibeWhisper.dmg \
           --generated-at 2026-07-13T00:00:00Z
         """,
         arguments: [
@@ -204,17 +204,17 @@ func releaseMetadataGeneratorProducesExactArtifactContract() throws {
         """
         swift "$1" \
           --output "$2" \
-          --app-name OpenWhisper \
-          --bundle-id app.openwhisper.mac \
-          --repository forever-ivy/openwhisper \
+          --app-name VibeWhisper \
+          --bundle-id app.vibewhisper.mac \
+          --repository forever-ivy/vibewhisper \
           --minimum-macos 13.0 \
           --version 0.1.0 \
           --build 1 \
           --architecture arm64 \
           --zip "$3" \
           --dmg "$4" \
-          --zip-url http://example.invalid/OpenWhisper.zip \
-          --dmg-url https://example.invalid/OpenWhisper.dmg
+          --zip-url http://example.invalid/VibeWhisper.zip \
+          --dmg-url https://example.invalid/VibeWhisper.dmg
         """,
         arguments: [
             generatorURL.path,
@@ -234,7 +234,7 @@ func sparkleAppcastVerifierMatchesManifestArchiveAndPublicKey() throws {
     )
     let temporaryDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperSparkleVerificationTests-\(UUID().uuidString)",
+            "VibeWhisperSparkleVerificationTests-\(UUID().uuidString)",
             isDirectory: true
         )
     try FileManager.default.createDirectory(
@@ -246,13 +246,13 @@ func sparkleAppcastVerifierMatchesManifestArchiveAndPublicKey() throws {
     }
 
     let archiveURL = temporaryDirectory.appendingPathComponent(
-        "OpenWhisper-0.1.0-macos-arm64.zip"
+        "VibeWhisper-0.1.0-macos-arm64.zip"
     )
     let manifestURL = temporaryDirectory.appendingPathComponent(
         "release-manifest.json"
     )
     let appcastURL = temporaryDirectory.appendingPathComponent("appcast.xml")
-    let archiveData = Data("signed-openwhisper-update".utf8)
+    let archiveData = Data("signed-vibewhisper-update".utf8)
     try archiveData.write(to: archiveURL)
 
     let privateKey = Curve25519.Signing.PrivateKey()
@@ -262,7 +262,7 @@ func sparkleAppcastVerifierMatchesManifestArchiveAndPublicKey() throws {
     let sha256 = SHA256.hash(data: archiveData)
         .map { String(format: "%02x", $0) }
         .joined()
-    let downloadURL = "https://example.invalid/OpenWhisper-0.1.0-macos-arm64.zip"
+    let downloadURL = "https://example.invalid/VibeWhisper-0.1.0-macos-arm64.zip"
 
     let manifest: [String: Any] = [
         "release": [
@@ -343,7 +343,7 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     let root = repositoryRoot()
     let cask = try String(
         contentsOf: root.appendingPathComponent(
-            "packaging/homebrew/Casks/openwhisper.rb"
+            "packaging/homebrew/Casks/vibewhisper.rb"
         ),
         encoding: .utf8
     )
@@ -447,9 +447,9 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(updateCaskScript.contains("^[0-9a-f]{64}$"))
     #expect(updateCaskScript.contains("must not use the unreleased fail-closed value"))
     #expect(updateCaskScript.contains("ZIP_DOWNLOAD_URL"))
-    #expect(updateCaskScript.contains("OPENWHISPER_CASK_OUTPUT_PATH"))
-    #expect(metadataScript.contains("OPENWHISPER_RELEASE_BASE_URL"))
-    #expect(metadataScript.contains("OPENWHISPER_REQUIRE_DEVELOPER_ID"))
+    #expect(updateCaskScript.contains("VIBEWHISPER_CASK_OUTPUT_PATH"))
+    #expect(metadataScript.contains("VIBEWHISPER_RELEASE_BASE_URL"))
+    #expect(metadataScript.contains("VIBEWHISPER_REQUIRE_DEVELOPER_ID"))
     #expect(
         metadataScript.contains(
             "pointing to a public HTTPS artifact host"
@@ -469,10 +469,10 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(releaseGate.contains("SUPublicEDKey"))
     #expect(releaseGate.contains("Sparkle.framework"))
     #expect(releaseGate.contains("sparkle:edSignature"))
-    #expect(releaseGate.contains("OPENWHISPER_SPARKLE_APPCAST_PATH"))
+    #expect(releaseGate.contains("VIBEWHISPER_SPARKLE_APPCAST_PATH"))
     #expect(releaseGate.contains("OWCapabilityPolicyURL"))
     #expect(releaseGate.contains("OWCapabilityPublicEDKey"))
-    #expect(releaseGate.contains("OPENWHISPER_CAPABILITY_POLICY_PATH"))
+    #expect(releaseGate.contains("VIBEWHISPER_CAPABILITY_POLICY_PATH"))
     #expect(releaseGate.contains("verify_provider_capability_policy.swift"))
     #expect(
         releaseGate.contains(
@@ -488,11 +488,11 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(appcastScript.contains("sparkle:edSignature"))
     #expect(appcastScript.contains("verify_sparkle_appcast.swift"))
     #expect(releaseGate.contains("verify_sparkle_appcast.swift"))
-    #expect(releaseGate.contains("OPENWHISPER_RELEASE_BASE_URL"))
+    #expect(releaseGate.contains("VIBEWHISPER_RELEASE_BASE_URL"))
     #expect(releaseGate.contains("url \\\"$ZIP_DOWNLOAD_URL\\\""))
     #expect(
         capabilityPolicyGenerator.contains(
-            "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE"
+            "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE"
         )
     )
     #expect(capabilityPolicyGenerator.contains("Curve25519.Signing.PrivateKey"))
@@ -512,7 +512,7 @@ func releaseScriptsKeepCaskAndUpdaterGateFailClosed() throws {
     #expect(remoteReleaseVerifier.contains("/usr/bin/cmp -s"))
     #expect(remoteReleaseVerifier.contains("Published appcast does not exactly match"))
     #expect(signedRelease.contains("prepare|finalize"))
-    #expect(signedRelease.contains("OPENWHISPER_BUILD_CONFIGURATION=release"))
+    #expect(signedRelease.contains("VIBEWHISPER_BUILD_CONFIGURATION=release"))
     #expect(signedRelease.contains("verify_release_readiness.py"))
     #expect(signedRelease.contains("--phase candidate"))
     #expect(signedRelease.contains("--phase public"))
@@ -634,7 +634,7 @@ func homebrewCaskUpdaterWritesManifestURLAndChecksumTogether() throws {
     let root = repositoryRoot()
     let temporaryDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperCaskTests-\(UUID().uuidString)",
+            "VibeWhisperCaskTests-\(UUID().uuidString)",
             isDirectory: true
         )
     try FileManager.default.createDirectory(
@@ -644,9 +644,9 @@ func homebrewCaskUpdaterWritesManifestURLAndChecksumTogether() throws {
     defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
     let manifestURL = temporaryDirectory.appendingPathComponent("release-manifest.json")
-    let outputURL = temporaryDirectory.appendingPathComponent("openwhisper.rb")
+    let outputURL = temporaryDirectory.appendingPathComponent("vibewhisper.rb")
     let checksum = String(repeating: "a", count: 64)
-    let downloadURL = "https://downloads.example.com/openwhisper/v0.1.0/OpenWhisper-0.1.0-macos-arm64.zip"
+    let downloadURL = "https://downloads.example.com/vibewhisper/v0.1.0/VibeWhisper-0.1.0-macos-arm64.zip"
     let manifest: [String: Any] = [
         "release": ["version": "0.1.0"],
         "artifacts": [
@@ -667,8 +667,8 @@ func homebrewCaskUpdaterWritesManifestURLAndChecksumTogether() throws {
     )
     let result = try runBash(
         """
-        OPENWHISPER_RELEASE_MANIFEST_PATH="$2" \
-        OPENWHISPER_CASK_OUTPUT_PATH="$3" \
+        VIBEWHISPER_RELEASE_MANIFEST_PATH="$2" \
+        VIBEWHISPER_CASK_OUTPUT_PATH="$3" \
         "$1"
         """,
         arguments: [updaterURL.path, manifestURL.path, outputURL.path]
@@ -693,8 +693,8 @@ func homebrewCaskUpdaterWritesManifestURLAndChecksumTogether() throws {
     ).write(to: manifestURL)
     let unsafeResult = try runBash(
         """
-        OPENWHISPER_RELEASE_MANIFEST_PATH="$2" \
-        OPENWHISPER_CASK_OUTPUT_PATH="$3" \
+        VIBEWHISPER_RELEASE_MANIFEST_PATH="$2" \
+        VIBEWHISPER_CASK_OUTPUT_PATH="$3" \
         "$1"
         """,
         arguments: [updaterURL.path, manifestURL.path, outputURL.path]

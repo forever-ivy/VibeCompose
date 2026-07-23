@@ -1,5 +1,5 @@
 import Foundation
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 final class FakeChatGPTAuthManager: ChatGPTAuthProviding, @unchecked Sendable {
     private let lock = NSLock()

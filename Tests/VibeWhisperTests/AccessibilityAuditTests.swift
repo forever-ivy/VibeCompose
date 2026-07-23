@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func accessibilityAuditPassesLabeledActionableControls() {
@@ -11,7 +11,7 @@ func accessibilityAuditPassesLabeledActionableControls() {
                 role: "AXWindow",
                 subrole: nil,
                 roleDescription: "window",
-                name: "OpenWhisper",
+                name: "VibeWhisper",
                 identifier: nil,
                 actionNames: []
             ),
@@ -87,25 +87,25 @@ func accessibilityAuditOutputAndSettingsPaneArgumentsAreParsed() {
         AppLaunchMode.accessibilityAuditOutputURL(
             environment: [:],
             arguments: [
-                "OpenWhisper",
+                "VibeWhisper",
                 "--accessibility-audit-output=/tmp/audit.json",
             ]
         ) == URL(fileURLWithPath: "/tmp/audit.json")
     )
     #expect(
         AppLaunchMode.settingsPane(
-            arguments: ["OpenWhisper", "--settings-pane=ai-polish"]
+            arguments: ["VibeWhisper", "--settings-pane=ai-polish"]
         ) == .polish
     )
     #expect(
         AppLaunchMode.settingsPane(
-            arguments: ["OpenWhisper", "--settings-pane=context"]
+            arguments: ["VibeWhisper", "--settings-pane=context"]
         ) == .context
     )
     #expect(
         AppLaunchMode.settingsPane(
             arguments: [
-                "OpenWhisper",
+                "VibeWhisper",
                 "--settings-pane",
                 "dictation",
             ]
@@ -114,7 +114,7 @@ func accessibilityAuditOutputAndSettingsPaneArgumentsAreParsed() {
     #expect(
         AppLaunchMode.onboardingStep(
             arguments: [
-                "OpenWhisper",
+                "VibeWhisper",
                 "--onboarding-step=paste-and-practice",
             ]
         ) == .practice
@@ -122,7 +122,7 @@ func accessibilityAuditOutputAndSettingsPaneArgumentsAreParsed() {
     #expect(
         AppLaunchMode.onboardingStep(
             arguments: [
-                "OpenWhisper",
+                "VibeWhisper",
                 "--onboarding-step",
                 "microphone",
             ]

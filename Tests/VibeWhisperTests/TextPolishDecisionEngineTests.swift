@@ -1,5 +1,5 @@
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func textPolishDecisionSkipsShortLowComplexityDirectDictation() {

@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func statusMenuVisualStatesExposeStableLabels() {
@@ -21,7 +21,7 @@ func statusMenuVisualStateMarksAttentionStates() {
 
 @Test @MainActor
 func statusMenuRendererProducesNativeTemplateImage() {
-    let image = OpenWhisperStatusIconRenderer.image(
+    let image = VibeWhisperStatusIconRenderer.image(
         for: .ready
     )
 

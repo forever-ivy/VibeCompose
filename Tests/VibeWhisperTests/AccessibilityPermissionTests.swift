@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func accessibilityRepairActionsPreferGuidedFlowAndKeepTypedSettingsFallback() {
@@ -26,9 +26,9 @@ func accessibilityRepairActionsPreferGuidedFlowAndKeepTypedSettingsFallback() {
 @Test
 func accessibilityRepairGuidanceFlagsAdHocBuilds() {
     let guidance = AccessibilityPermission.repairGuidance(
-        appName: "OpenWhisper",
+        appName: "VibeWhisper",
         signatureState: .adHocOrUnsigned,
-        bundleURL: URL(fileURLWithPath: "/Users/tester/Projects/openwhisper/dist/OpenWhisper.app")
+        bundleURL: URL(fileURLWithPath: "/Users/tester/Projects/vibewhisper/dist/VibeWhisper.app")
     )
 
     #expect(guidance.detail?.contains("ad-hoc") == true)
@@ -38,11 +38,67 @@ func accessibilityRepairGuidanceFlagsAdHocBuilds() {
 @Test
 func accessibilityRepairGuidanceIncludesManualAddPathOutsideApplications() {
     let guidance = AccessibilityPermission.repairGuidance(
-        appName: "OpenWhisper",
+        appName: "VibeWhisper",
         signatureState: .stable(teamIdentifier: "TEAM123"),
-        bundleURL: URL(fileURLWithPath: "/Users/tester/Projects/openwhisper/dist/OpenWhisper.app")
+        bundleURL: URL(fileURLWithPath: "/Users/tester/Projects/vibewhisper/dist/VibeWhisper.app")
     )
 
-    #expect(guidance.detail?.contains("/Users/tester/Projects/openwhisper/dist/OpenWhisper.app") == true)
+    #expect(guidance.detail?.contains("/Users/tester/Projects/vibewhisper/dist/VibeWhisper.app") == true)
     #expect(guidance.detail?.contains("click +") == true)
+}
+
+@Test
+func accessibilityStatusTitleIsGrantedWhenProcessIsTrusted() {
+    #expect(
+        AccessibilityPermission.statusTitle(
+            isTrusted: true,
+            signatureState: .adHocOrUnsigned
+        ) == "Granted"
+    )
+    #expect(
+        AccessibilityPermission.statusTitle(
+            isTrusted: true,
+            signatureState: .stable(teamIdentifier: "TEAM123")
+        ) == "Granted"
+    )
+}
+
+@Test
+func accessibilityStatusTitleEscalatesOnlyForAdHocWhenUntrusted() {
+    #expect(
+        AccessibilityPermission.statusTitle(
+            isTrusted: false,
+            signatureState: .adHocOrUnsigned
+        ) == "Re-add required"
+    )
+    #expect(
+        AccessibilityPermission.statusTitle(
+            isTrusted: false,
+            signatureState: .stable(teamIdentifier: "TEAM123")
+        ) == "Not enabled"
+    )
+    #expect(
+        AccessibilityPermission.statusTitle(
+            isTrusted: false,
+            signatureState: .unavailable
+        ) == "Not enabled"
+    )
+}
+
+@Test
+func accessibilityIsTrustedPrefersInjectedTrustCheckWithoutPrompt() {
+    var checks = 0
+    let trusted = AccessibilityPermission.isTrusted {
+        checks += 1
+        return true
+    }
+    #expect(trusted)
+    #expect(checks == 1)
+
+    let untrusted = AccessibilityPermission.isTrusted {
+        checks += 1
+        return false
+    }
+    #expect(untrusted == false)
+    #expect(checks == 2)
 }

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func outputRouterEnforcesSkillDeliveryAndRetryBoundaries() {
@@ -57,6 +57,34 @@ func outputRouterEnforcesSkillDeliveryAndRetryBoundaries() {
             hasSelectionContext: true
         ) == .copyOnly
     )
+    // User preference: skip Preview for ordinary insert-only Skill results.
+    #expect(
+        router.route(
+            plan: email,
+            automaticPasteAllowed: true,
+            hasSelectionContext: false,
+            skipPreviewWhenSafe: true
+        ) == .automatic
+    )
+    // Selection rewrite still forces Preview even when the skip is enabled.
+    #expect(
+        router.route(
+            plan: contextRewrite,
+            automaticPasteAllowed: true,
+            hasSelectionContext: true,
+            skipPreviewWhenSafe: true
+        ) == .preview
+    )
+    // High-risk still forces Preview.
+    #expect(
+        router.route(
+            plan: email,
+            automaticPasteAllowed: true,
+            hasSelectionContext: false,
+            additionalRisk: .high,
+            skipPreviewWhenSafe: true
+        ) == .preview
+    )
 }
 
 @Test
@@ -98,7 +126,7 @@ func previewRequestUsesSelectionAsDiffSourceWhenAvailable() {
         skillID:
             SkillRegistry
                 .contextRewriteSkillID,
-        skillVersion: "1.0.0",
+        skillVersion: "1.1.0",
         skillName: "Context Rewrite",
         originalTranscript:
             "shorten this",
@@ -115,6 +143,38 @@ func previewRequestUsesSelectionAsDiffSourceWhenAvailable() {
         request.comparisonSource
             == "Old text"
     )
+    #expect(request.allowsSelectionReplacement)
+}
+
+@Test
+func optionalSelectionIsSupportingPreviewContext() {
+    let request = PreviewRequest(
+        skillID:
+            SkillRegistry
+                .commitMessageSkillID,
+        skillVersion: "1.1.0",
+        skillName: "Commit Message",
+        originalTranscript:
+            "Describe the authentication fix.",
+        resultText:
+            "Fix authentication retry",
+        selectedText:
+            "Supporting diff context",
+        contextCapabilities: [
+            .selection,
+        ],
+        allowsSelectionReplacement: true
+    )
+
+    #expect(
+        request.comparisonSource
+            == "Describe the authentication fix."
+    )
+    #expect(
+        request.validationSourceText
+            == "Describe the authentication fix."
+    )
+    #expect(!request.allowsSelectionReplacement)
 }
 
 @Test
@@ -150,4 +210,14 @@ func previewDecisionCarriesTheFinalEditedText() {
     #expect(decision.action == .replaceSelection)
     #expect(decision.finalText == "Edited result")
     #expect(PreviewDecision.cancel.finalText == nil)
+    #expect(
+        PreviewDecision.changeSkill(
+            editedSource: "draft"
+        ).finalText == nil
+    )
+    #expect(
+        PreviewDecision.changeSkill(
+            editedSource: "draft"
+        ).action == nil
+    )
 }

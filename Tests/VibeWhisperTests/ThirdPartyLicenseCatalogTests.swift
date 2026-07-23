@@ -1,13 +1,13 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func thirdPartyLicenseCatalogCoversResolvedDependencies() throws {
     let root = thirdPartyLicenseRepositoryRoot()
     let documents = try ThirdPartyLicenseCatalog.load(
         resourceRootURL: root.appendingPathComponent(
-            "Sources/OpenWhisper/Resources",
+            "Sources/VibeWhisper/Resources",
             isDirectory: true
         )
     )
@@ -129,23 +129,24 @@ func dependencyLicenseGateIsPartOfChecksPackagingAndRelease() throws {
 
     let settingsSource = try String(
         contentsOf: root.appendingPathComponent(
-            "Sources/OpenWhisper/PreferencesWindowController.swift"
+            "Sources/VibeWhisper/PreferencesWindowController.swift"
         ),
         encoding: .utf8
     )
-    #expect(settingsSource.contains("View Third-Party Licenses…"))
+    // License sheet remains available in code; Advanced no longer surfaces the button.
     #expect(settingsSource.contains("ThirdPartyLicensesView"))
+    #expect(settingsSource.contains("showThirdPartyLicenses"))
 }
 
 private func makeThirdPartyLicenseFixture() throws -> URL {
     let root = thirdPartyLicenseRepositoryRoot()
     let source = root.appendingPathComponent(
-        "Sources/OpenWhisper/Resources",
+        "Sources/VibeWhisper/Resources",
         isDirectory: true
     )
     let fixture = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperThirdPartyLicenses-\(UUID().uuidString)",
+            "VibeWhisperThirdPartyLicenses-\(UUID().uuidString)",
             isDirectory: true
         )
     try FileManager.default.copyItem(at: source, to: fixture)

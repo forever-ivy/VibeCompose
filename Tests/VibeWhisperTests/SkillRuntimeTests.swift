@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func builtInSkillRegistryExposesStableVersionedDeclarations() {
@@ -43,6 +43,7 @@ func builtInSkillRegistryExposesStableVersionedDeclarations() {
                     skill.version
                 )
         )
+        #expect(skill.version == "1.1.0")
         #expect(
             skill.requiredCapabilities
                 .contains(.voice)
@@ -56,6 +57,51 @@ func builtInSkillRegistryExposesStableVersionedDeclarations() {
                 .contains(.externalAction)
         )
     }
+}
+
+@Test
+func builtInInstallationIdentitySurvivesDeclarationUpgrade()
+    throws
+{
+    let current = try #require(
+        SkillRegistry.builtIn.definition(
+            id: SkillRegistry.directSkillID
+        )
+    )
+    let previous = SkillDefinition(
+        id: current.id,
+        version: "1.0.0",
+        name: current.name,
+        promptInstruction:
+            "Previous reviewed Direct prompt.",
+        output: current.output,
+        legacyMode: .direct
+    )
+    let previousBuiltIn =
+        InstalledSkillIdentity.normalized(
+            definition: previous,
+            sourceID: "builtin"
+        )
+    let currentBuiltIn =
+        InstalledSkillIdentity.normalized(
+            definition: current,
+            sourceID: "builtin"
+        )
+    #expect(previousBuiltIn.id == currentBuiltIn.id)
+    #expect(previousBuiltIn.revision == "1.0.0")
+    #expect(currentBuiltIn.revision == "1.1.0")
+
+    let previousImported =
+        InstalledSkillIdentity.normalized(
+            definition: previous,
+            sourceID: "installed"
+        )
+    let currentImported =
+        InstalledSkillIdentity.normalized(
+            definition: current,
+            sourceID: "installed"
+        )
+    #expect(previousImported.id != currentImported.id)
 }
 
 @Test
@@ -78,6 +124,156 @@ func pilotBuiltInSkillsHaveReviewableTaskContracts() throws {
         #expect(!skill.promptInstruction.isEmpty)
         #expect(!skill.allCapabilities.contains(.externalAction))
     }
+
+    let bugReport = try #require(
+        registry.definition(
+            id: SkillRegistry.bugReportSkillID
+        )
+    )
+    #expect(
+        bugReport.validators
+            .requiredSectionAlternatives.count
+            == 6
+    )
+    #expect(
+        bugReport.validators
+            .requireClosedMarkdownFences
+    )
+
+    let commitMessage = try #require(
+        registry.definition(
+            id:
+                SkillRegistry
+                    .commitMessageSkillID
+        )
+    )
+    #expect(
+        commitMessage.validators
+            .maximumCharacters == 1_000
+    )
+
+    let meeting = try #require(
+        registry.definition(
+            id:
+                SkillRegistry
+                    .meetingActionItemsSkillID
+        )
+    )
+    #expect(
+        meeting.validators
+            .requiredSectionAlternatives.count
+            == 3
+    )
+
+    let productBrief = try #require(
+        registry.definition(
+            id:
+                SkillRegistry
+                    .productBriefSkillID
+        )
+    )
+    #expect(
+        productBrief.validators
+            .requiredSectionAlternatives.count
+            == 7
+    )
+
+    let supportReply = try #require(
+        registry.definition(
+            id:
+                SkillRegistry
+                    .customerSupportReplySkillID
+        )
+    )
+    #expect(
+        !supportReply.validators
+            .forbiddenPhrases.contains(
+                "I have issued a refund"
+            )
+    )
+    #expect(
+        supportReply.validators
+            .forbiddenPhrases.contains(
+                "保证解决"
+            )
+    )
+}
+
+@Test
+func builtInValidationUsesTheScenarioPrimaryInput() throws {
+    let registry = SkillRegistry.builtIn
+    let commit = try #require(
+        registry.definition(
+            id:
+                SkillRegistry
+                    .commitMessageSkillID
+        )
+    )
+    let commitSource = commit
+        .validationSourceText(
+            transcript:
+                "Fix API v2.0.0 auth handling.",
+            selection:
+                "Noise from /tmp/old.swift at v9.9.9"
+        )
+    #expect(
+        commitSource
+            == "Fix API v2.0.0 auth handling."
+    )
+    let commitValidation =
+        SkillValidatorEngine().validate(
+            output:
+                "Fix API v2.0.0 auth handling",
+            originalText: commitSource,
+            plan: ResolvedSkillExecutionPlan(
+                skill: commit,
+                source: .manual,
+                matchedApplicationRuleID: nil
+            )
+        )
+    #expect(commitValidation.isValid)
+
+    let rewrite = try #require(
+        registry.definition(
+            id:
+                SkillRegistry
+                    .contextRewriteSkillID
+        )
+    )
+    #expect(rewrite.usesSelectionAsPrimaryInput)
+    #expect(!rewrite.protectsVoiceTechnicalLiterals)
+    let rewriteSource = rewrite
+        .validationSourceText(
+            transcript:
+                "Follow /tmp/rewrite-template.md.",
+            selection:
+                "Keep API v2.0.0 unchanged."
+        )
+    #expect(
+        rewriteSource
+            == "Keep API v2.0.0 unchanged."
+    )
+    let rewritePlan =
+        ResolvedSkillExecutionPlan(
+            skill: rewrite,
+            source: .manual,
+            matchedApplicationRuleID: nil
+        )
+    #expect(
+        SkillValidatorEngine().validate(
+            output:
+                "Keep API v2.0.0 unchanged.",
+            originalText: rewriteSource,
+            plan: rewritePlan
+        ).isValid
+    )
+    #expect(
+        !SkillValidatorEngine().validate(
+            output: "Keep the API unchanged.",
+            originalText: rewriteSource,
+            plan: rewritePlan
+        ).isValid
+    )
 }
 
 @Test
@@ -299,7 +495,7 @@ func skillResolverUsesManualThenAppThenDefaultAndFreezesVersion()
     )
     #expect(
         frozen.resolvedSkillPlan?
-            .skill.version == "1.0.0"
+            .skill.version == "1.1.0"
     )
 }
 
@@ -361,7 +557,7 @@ func promptCompilerKeepsSystemBoundaryAheadOfSkillAndContextData()
     let malicious =
         SkillDefinition(
             id:
-                "app.openwhisper.skill.test",
+                "app.vibewhisper.skill.test",
             version: "1.0.0",
             name: "Test",
             optionalCapabilities: [
@@ -390,7 +586,7 @@ func promptCompilerKeepsSystemBoundaryAheadOfSkillAndContextData()
             terminologyEntries: [
                 TerminologyEntry(
                     canonical:
-                        "OpenWhisper",
+                        "VibeWhisper",
                     aliases: [
                         "open whisper",
                     ]
@@ -470,10 +666,68 @@ func promptCompilerKeepsSystemBoundaryAheadOfSkillAndContextData()
 }
 
 @Test
+func promptCompilerIncludesOnlyDeclaredContextCapabilities() {
+    let compiler = SkillPromptCompiler()
+    let directMessages = compiler.compile(
+        transcript: "Keep this direct.",
+        terminologyEntries: [],
+        config: TextPolishConfig(),
+        plan: .direct,
+        context: SkillPromptContext(
+            styleCapsule: "Use pirate style.",
+            selection: "Private selection"
+        )
+    )
+    let directSystem =
+        directMessages.first?.content ?? ""
+    #expect(
+        !directSystem.contains(
+            SkillPromptCompiler.styleMarker
+        )
+    )
+    #expect(
+        !directSystem.contains(
+            SkillPromptCompiler.contextMarker
+        )
+    )
+    #expect(!directSystem.contains("Use pirate style."))
+    #expect(!directSystem.contains("Private selection"))
+
+    let rewritePlan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.contextRewriteSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    let rewriteMessages = compiler.compile(
+        transcript: "Make this concise.",
+        terminologyEntries: [],
+        config: TextPolishConfig(),
+        plan: rewritePlan,
+        context: SkillPromptContext(
+            styleCapsule: "Use short sentences.",
+            selection: "Selected source"
+        )
+    )
+    let rewriteSystem =
+        rewriteMessages.first?.content ?? ""
+    #expect(
+        rewriteSystem.contains(
+            SkillPromptCompiler.styleMarker
+        )
+    )
+    #expect(
+        rewriteSystem.contains(
+            SkillPromptCompiler.contextMarker
+        )
+    )
+}
+
+@Test
 func validatorEnforcesFormatSectionsLiteralsAndPromptBoundary() {
     let skill = SkillDefinition(
         id:
-            "app.openwhisper.skill.json-test",
+            "app.vibewhisper.skill.json-test",
         version: "1.0.0",
         name: "JSON Test",
         promptInstruction:
@@ -501,9 +755,9 @@ func validatorEnforcesFormatSectionsLiteralsAndPromptBoundary() {
 
     let valid = engine.validate(
         output:
-            #"{"Goal":"Use /tmp/openwhisper with v1.2.3"}"#,
+            #"{"Goal":"Use /tmp/vibewhisper with v1.2.3"}"#,
         originalText:
-            "Use /tmp/openwhisper with v1.2.3",
+            "Use /tmp/vibewhisper with v1.2.3",
         plan: plan
     )
     #expect(valid.isValid)
@@ -512,7 +766,7 @@ func validatorEnforcesFormatSectionsLiteralsAndPromptBoundary() {
         output:
             "\(SkillPromptCompiler.systemMarker) {not-json}",
         originalText:
-            "Use /tmp/openwhisper with v1.2.3",
+            "Use /tmp/vibewhisper with v1.2.3",
         plan: plan
     )
     let codes = Set(
@@ -587,7 +841,7 @@ func pipelineRejectsInvalidSkillOutputAndFallsBackBeforeDelivery()
 {
     let skill = SkillDefinition(
         id:
-            "app.openwhisper.skill.section-test",
+            "app.vibewhisper.skill.section-test",
         version: "1.0.0",
         name: "Section Test",
         promptInstruction:
@@ -671,6 +925,159 @@ func pipelineRejectsInvalidSkillOutputAndFallsBackBeforeDelivery()
             .contains(
                 "failed local validation"
             ) == true
+    )
+}
+
+@Test
+func selectionFirstPipelineTreatsVoiceLiteralsAsInstructions()
+    async throws
+{
+    let skill = try #require(
+        SkillRegistry.builtIn.definition(
+            id:
+                SkillRegistry
+                    .contextRewriteSkillID
+        )
+    )
+    var polishConfig = TextPolishConfig()
+    polishConfig.mode = .always
+    let pipeline = DictationPipeline(
+        transcriber: SkillTestTranscriber(
+            text:
+                "Use the tone from /tmp/rewrite-template.md."
+        ),
+        normalizer: TerminologyNormalizer(),
+        importedEntries: [],
+        hintTerms: [],
+        textPolisher: SkillTestPolisher(
+            output: "A clear release note."
+        ),
+        textPolishConfig: polishConfig,
+        skillPlan: ResolvedSkillExecutionPlan(
+            skill: skill,
+            source: .manual,
+            matchedApplicationRuleID: nil
+        ),
+        skillPromptContext: SkillPromptContext(
+            selection:
+                "This release note should be clearer."
+        )
+    )
+
+    let result = try await pipeline.prepare(
+        audio: RecordedAudio(
+            fileURL: FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent(
+                    "selection-first-skill.wav"
+                ),
+            durationMs: 1_000
+        )
+    )
+
+    #expect(
+        result.finalText
+            == "A clear release note."
+    )
+    #expect(
+        result.metrics
+            .skillValidationIssueCodes
+            .isEmpty
+    )
+}
+
+@Test
+func promptCompilerKeepsSelectionWithinConfiguredContextLimit()
+    throws
+{
+    let plan = SkillResolver().resolve(
+        manualSkillID:
+            SkillRegistry.contextRewriteSkillID,
+        config: SkillsConfig(),
+        launchAppContext: nil
+    )
+    let tailMarker =
+        "AUTHORIZED_SELECTION_TAIL"
+    let selection =
+        String(repeating: "a", count: 7_000)
+        + tailMarker
+    var config = TextPolishConfig()
+    config.mode = .always
+
+    let messages = SkillPromptCompiler()
+        .compile(
+            transcript:
+                "Rewrite this more clearly.",
+            terminologyEntries: [],
+            config: config,
+            plan: plan,
+            context:
+                SkillPromptContext(
+                    selection: selection
+                ),
+            locale: "en-US"
+        )
+
+    let system = try #require(
+        messages.first?.content
+    )
+    #expect(
+        system.contains(tailMarker)
+    )
+}
+
+@Test
+func transformationSkillsMayIntentionallyCompressLongDictation()
+    async throws
+{
+    let skill = try #require(
+        SkillRegistry.builtIn.definition(
+            id:
+                SkillRegistry
+                    .commitMessageSkillID
+        )
+    )
+    let transcript =
+        "We fixed authentication retries. The old flow discarded the previous shortcut. The new flow restores it after a conflict. Tests cover the rollback."
+    var polishConfig = TextPolishConfig()
+    polishConfig.mode = .always
+    let pipeline = DictationPipeline(
+        transcriber: SkillTestTranscriber(
+            text: transcript
+        ),
+        normalizer: TerminologyNormalizer(),
+        importedEntries: [],
+        hintTerms: [],
+        textPolisher: SkillTestPolisher(
+            output:
+                "Preserve shortcut on auth conflict"
+        ),
+        textPolishConfig: polishConfig,
+        skillPlan: ResolvedSkillExecutionPlan(
+            skill: skill,
+            source: .manual,
+            matchedApplicationRuleID: nil
+        )
+    )
+
+    let result = try await pipeline.prepare(
+        audio: RecordedAudio(
+            fileURL: FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent(
+                    "compressed-skill.wav"
+                ),
+            durationMs: 1_000
+        )
+    )
+
+    #expect(
+        result.finalText
+            == "Preserve shortcut on auth conflict"
+    )
+    #expect(
+        result.metrics
+            .textPolishErrorMessage == nil
     )
 }
 

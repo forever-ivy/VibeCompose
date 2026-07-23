@@ -1,13 +1,13 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func terminologyTextImporterExtractsPlainTextTerms() throws {
     let text = """
-    # OpenWhisper terms
+    # VibeWhisper terms
     shadowd
-    OpenWhisper
+    VibeWhisper
 
     ExampleSDK
     """
@@ -18,7 +18,7 @@ func terminologyTextImporterExtractsPlainTextTerms() throws {
     )
 
     #expect(result.source == "terms.txt")
-    #expect(result.entries.map(\.original) == ["shadowd", "OpenWhisper", "ExampleSDK"])
+    #expect(result.entries.map(\.original) == ["shadowd", "VibeWhisper", "ExampleSDK"])
     #expect(result.entries.allSatisfy { $0.type == .term && $0.isEnabled && $0.source == "terms.txt" })
 }
 
@@ -27,7 +27,7 @@ func terminologyTextImporterExtractsFirstCsvColumnTerms() throws {
     let text = """
     term,notes
     shadowd,daemon name
-    OpenWhisper,app
+    VibeWhisper,app
     "OpenAI Compatible",provider
     """
 
@@ -36,15 +36,15 @@ func terminologyTextImporterExtractsFirstCsvColumnTerms() throws {
         sourceName: "terms.csv"
     )
 
-    #expect(result.entries.map(\.original) == ["shadowd", "OpenWhisper", "OpenAI Compatible"])
+    #expect(result.entries.map(\.original) == ["shadowd", "VibeWhisper", "OpenAI Compatible"])
 }
 
 @Test
 func terminologyTextImporterReadsStructuredCorrectionsAndDisabledEntries() throws {
     let text = """
     type,original,replacement,enabled,aliases
-    term,OpenWhisper,,true,Open Whisper|OW
-    correction,open wisper,OpenWhisper,false,
+    term,VibeWhisper,,true,Open Whisper|OW
+    correction,open wisper,VibeWhisper,false,
     correction,missing replacement,,true,
     """
 
@@ -57,7 +57,7 @@ func terminologyTextImporterReadsStructuredCorrectionsAndDisabledEntries() throw
     #expect(result.entries[0].type == .term)
     #expect(result.entries[0].aliases == ["Open Whisper", "OW"])
     #expect(result.entries[1].type == .correction)
-    #expect(result.entries[1].replacement == "OpenWhisper")
+    #expect(result.entries[1].replacement == "VibeWhisper")
     #expect(!result.entries[1].isEnabled)
 }
 
@@ -86,7 +86,7 @@ func terminologyTextImporterRejectsSymlinkedDictionaryFiles() throws {
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let target = root.appendingPathComponent("target.txt")
     let link = root.appendingPathComponent("terms.txt")
-    try Data("OpenWhisper\n".utf8).write(to: target)
+    try Data("VibeWhisper\n".utf8).write(to: target)
     try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
 
     #expect(throws: TerminologyTextImportError.unreadableText("terms.txt")) {

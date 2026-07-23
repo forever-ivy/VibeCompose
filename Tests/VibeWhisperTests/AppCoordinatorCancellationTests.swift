@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @MainActor
 private final class FakeCoordinatorRecorder: RecordingControlling {
@@ -87,6 +87,7 @@ private final class FakeCoordinatorOverlay: OverlayControlling {
         onShowProcessing?()
     }
     func showResult(text: String, outcome: InjectionOutcome) {}
+    func showConfirmation(title: String) {}
     func showError(_ message: String) {}
     func showRetryableError(_ message: String) {
         retryableErrors.append(message)
@@ -196,8 +197,13 @@ private final class FakePreviewPresenter:
     }
 
     func present(
-        _ request: PreviewRequest
+        _ request: PreviewRequest,
+        regenerate: @escaping @MainActor (
+            _ skillInstallationID: UUID,
+            _ editedSource: String
+        ) async -> Result<PreviewRequest, any Error>
     ) async -> PreviewDecision {
+        _ = regenerate
         requests.append(request)
         return decision
             ?? .pasteToTarget(
@@ -781,6 +787,9 @@ struct AppCoordinatorCancellationTests {
 
     @Test
     func startRecordingCapturesLaunchContextBeforeProcessingOverlay() async throws {
+        // Isolation: a previous product identity may have left onboarding unfinished
+        // in this process's UserDefaults; force the first-run gate closed.
+        OnboardingStateStore().markCompleted()
         let startGate = CoordinatorGate()
         let recorder = FakeCoordinatorRecorder()
         recorder.onStartRecording = {
@@ -1081,7 +1090,7 @@ struct AppCoordinatorCancellationTests {
     func recordingStartFailureDoesNotPlayFeedbackSound() async throws {
         let recorder = FakeCoordinatorRecorder()
         recorder.startRecordingError = NSError(
-            domain: "OpenWhisperTests",
+            domain: "VibeWhisperTests",
             code: 1,
             userInfo: [NSLocalizedDescriptionKey: "recorder failed"]
         )
@@ -1336,7 +1345,7 @@ struct AppCoordinatorCancellationTests {
 
         let retryDirectory = root
             .appendingPathComponent(
-                "Library/Application Support/OpenWhisper/Retry",
+                "Library/Application Support/VibeWhisper/Retry",
                 isDirectory: true
             )
         let retryFiles = (

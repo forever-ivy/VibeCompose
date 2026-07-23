@@ -1,20 +1,20 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func softwareUpdateConfigurationRequiresHTTPSFeedAndEd25519PublicKey() throws {
     let publicKey = Data(repeating: 0x42, count: 32).base64EncodedString()
     let configuration = try SoftwareUpdateConfiguration(
         infoDictionary: [
-            "SUFeedURL": "https://updates.openwhisper.example/stable/appcast.xml",
+            "SUFeedURL": "https://updates.vibewhisper.example/stable/appcast.xml",
             "SUPublicEDKey": publicKey,
         ]
     )
 
     #expect(
         configuration.feedURL.absoluteString
-            == "https://updates.openwhisper.example/stable/appcast.xml"
+            == "https://updates.vibewhisper.example/stable/appcast.xml"
     )
     #expect(configuration.publicKey == publicKey)
 }
@@ -27,7 +27,7 @@ func softwareUpdateConfigurationRejectsIncompleteOrUnsafeConfiguration() {
     #expect(throws: SoftwareUpdateConfiguration.ValidationError.invalidFeedURL) {
         _ = try SoftwareUpdateConfiguration(
             infoDictionary: [
-                "SUFeedURL": "http://updates.openwhisper.example/appcast.xml",
+                "SUFeedURL": "http://updates.vibewhisper.example/appcast.xml",
                 "SUPublicEDKey": Data(repeating: 1, count: 32)
                     .base64EncodedString(),
             ]
@@ -36,7 +36,7 @@ func softwareUpdateConfigurationRejectsIncompleteOrUnsafeConfiguration() {
     #expect(throws: SoftwareUpdateConfiguration.ValidationError.invalidFeedURL) {
         _ = try SoftwareUpdateConfiguration(
             infoDictionary: [
-                "SUFeedURL": "https://user@updates.openwhisper.example/appcast.xml",
+                "SUFeedURL": "https://user@updates.vibewhisper.example/appcast.xml",
                 "SUPublicEDKey": Data(repeating: 1, count: 32)
                     .base64EncodedString(),
             ]
@@ -45,7 +45,7 @@ func softwareUpdateConfigurationRejectsIncompleteOrUnsafeConfiguration() {
     #expect(throws: SoftwareUpdateConfiguration.ValidationError.invalidPublicKey) {
         _ = try SoftwareUpdateConfiguration(
             infoDictionary: [
-                "SUFeedURL": "https://updates.openwhisper.example/appcast.xml",
+                "SUFeedURL": "https://updates.vibewhisper.example/appcast.xml",
                 "SUPublicEDKey": Data(repeating: 1, count: 31)
                     .base64EncodedString(),
             ]
@@ -58,7 +58,7 @@ func softwareUpdateConfigurationRejectsIncompleteOrUnsafeConfiguration() {
 func unconfiguredSparkleUpdaterFailsClosedWithoutStartingAnUpdate() throws {
     let temporaryBundleURL = FileManager.default.temporaryDirectory
         .appendingPathComponent(
-            "OpenWhisperUpdaterTests-\(UUID().uuidString).bundle",
+            "VibeWhisperUpdaterTests-\(UUID().uuidString).bundle",
             isDirectory: true
         )
     try FileManager.default.createDirectory(
@@ -74,7 +74,7 @@ func unconfiguredSparkleUpdaterFailsClosedWithoutStartingAnUpdate() throws {
     <plist version="1.0">
     <dict>
       <key>CFBundleIdentifier</key>
-      <string>app.openwhisper.tests.updater</string>
+      <string>app.vibewhisper.tests.updater</string>
     </dict>
     </plist>
     """.write(

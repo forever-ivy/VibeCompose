@@ -1,7 +1,7 @@
 import Carbon
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func defaultConfigUsesChatGPTAccountDefaults() throws {
@@ -13,6 +13,7 @@ func defaultConfigUsesChatGPTAccountDefaults() throws {
     )
     #expect(config.skillSwitcherHotkey == nil)
     #expect(config.transcription.provider == .chatGPTManagedAuth)
+    #expect(config.transcription.openAIFallbackEnabled == false)
     #expect(config.transcription.openAITranscriptionURL == "https://api.openai.com/v1/audio/transcriptions")
     #expect(config.transcription.openAIModel == "gpt-4o-mini-transcribe")
     #expect(config.transcription.hintTerms.isEmpty)
@@ -120,7 +121,7 @@ func configRoundTripPreservesOptionalSkillSwitcherHotkey() throws {
     )
 
     #expect(decoded.skillSwitcherHotkey == .skillSwitcher)
-    try OpenWhisperShortcutSetValidator.validate(
+    try VibeWhisperShortcutSetValidator.validate(
         dictation: decoded.transcription.dictationHotkey,
         skillSwitcher: decoded.skillSwitcherHotkey
     )
@@ -189,6 +190,7 @@ func legacyRecoveryEnvironmentFieldDecodesAndIsDroppedOnEncode() throws {
     let encodedJSON = String(data: encoded, encoding: .utf8) ?? ""
 
     #expect(decoded.transcription.provider == .openAICompatible)
+    #expect(decoded.transcription.openAIFallbackEnabled == false)
     #expect(
         decoded.transcription.openAITranscriptionURL
             == "https://api.example.com/v1/audio/transcriptions"
@@ -197,6 +199,70 @@ func legacyRecoveryEnvironmentFieldDecodesAndIsDroppedOnEncode() throws {
     #expect(encodedJSON.contains("openAIAuthTokenEnv") == false)
     #expect(encodedJSON.contains("PRIVATE_API_KEY") == false)
 }
+
+@Test
+func openAIFallbackEnabledRoundTripsThroughConfig() throws {
+    var config = AppConfig()
+    config.transcription.provider = .chatGPTManagedAuth
+    config.transcription.openAIFallbackEnabled = true
+    config.transcription.openAIModel = "gpt-4o-transcribe"
+
+    let data = try JSONEncoder().encode(config)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+    let encodedJSON = String(data: data, encoding: .utf8) ?? ""
+
+    #expect(decoded.transcription.openAIFallbackEnabled == true)
+    #expect(decoded.transcription.provider == .chatGPTManagedAuth)
+    #expect(decoded.transcription.openAIModel == "gpt-4o-transcribe")
+    #expect(encodedJSON.contains("openAIFallbackEnabled"))
+    #expect(
+        DictationRouteStrategy.resolve(
+            provider: decoded.transcription.provider,
+            openAIFallbackEnabled: decoded.transcription.openAIFallbackEnabled
+        ) == .compatibleFallback
+    )
+    #expect(
+        DictationRouteStrategy.resolve(
+            provider: .openAICompatible,
+            openAIFallbackEnabled: false
+        ) == .importOwnAPI
+    )
+    #expect(
+        DictationRouteStrategy.resolve(
+            provider: .chatGPTManagedAuth,
+            openAIFallbackEnabled: false
+        ) == .chatGPTAccount
+    )
+}
+
+@Test
+func textPolishOwnAPIConfigRoundTrips() throws {
+    var config = AppConfig()
+    config.transcription.textPolish.openAICompatibleEnabled = true
+    config.transcription.textPolish.chatGPTAuthEnabled = false
+    config.transcription.textPolish.openAIFallbackEnabled = false
+    config.transcription.textPolish.openAICompatibleURL =
+        "https://api.example.com/v1/chat/completions"
+    config.transcription.textPolish.openAICompatibleModel = "gpt-4o"
+
+    let data = try JSONEncoder().encode(config)
+    let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
+    #expect(decoded.transcription.textPolish.openAICompatibleEnabled)
+    #expect(decoded.transcription.textPolish.openAIFallbackEnabled == false)
+    #expect(decoded.transcription.textPolish.chatGPTAuthEnabled == false)
+    #expect(
+        decoded.transcription.textPolish.openAICompatibleURL
+            == "https://api.example.com/v1/chat/completions"
+    )
+    #expect(decoded.transcription.textPolish.openAICompatibleModel == "gpt-4o")
+
+    let json = String(data: data, encoding: .utf8) ?? ""
+    #expect(json.contains("openAICompatibleEnabled"))
+    #expect(json.contains("openAICompatibleURL"))
+    #expect(json.contains("openAICompatibleModel"))
+    #expect(json.contains("apiKey") == false)
+}
+
 
 @Test
 func legacyProviderFallbackMatrixDecodesAndIsDroppedOnEncode() throws {
@@ -211,7 +277,7 @@ func legacyProviderFallbackMatrixDecodesAndIsDroppedOnEncode() throws {
               "title": "Groq Whisper",
               "model": "whisper-large-v3",
               "baseURL": "https://api.groq.com/openai/v1/audio/transcriptions",
-              "keychainService": "openwhisper-groq-api-key",
+              "keychainService": "vibewhisper-groq-api-key",
               "documentationURL": "https://console.groq.com/docs/speech-to-text",
               "isEnabled": true
             }
@@ -222,7 +288,7 @@ func legacyProviderFallbackMatrixDecodesAndIsDroppedOnEncode() throws {
               "title": "DeepSeek",
               "model": "deepseek-v4-pro",
               "baseURL": "https://api.deepseek.com",
-              "keychainService": "openwhisper-deepseek-api-key",
+              "keychainService": "vibewhisper-deepseek-api-key",
               "documentationURL": "https://api-docs.deepseek.com/api/list-models",
               "isEnabled": true
             }
@@ -265,7 +331,7 @@ func configRoundTripPreservesHiddenHintTerms() throws {
     var config = AppConfig()
     config.transcription.hintTerms = [
         "budget v2.xlsx",
-        "OpenWhisper",
+        "VibeWhisper",
         "review",
     ]
 
@@ -277,7 +343,7 @@ func configRoundTripPreservesHiddenHintTerms() throws {
     let decoded = try JSONDecoder().decode(AppConfig.self, from: Data(contentsOf: configURL))
     #expect(decoded.transcription.hintTerms == [
         "budget v2.xlsx",
-        "OpenWhisper",
+        "VibeWhisper",
         "review",
     ])
 }
@@ -343,7 +409,7 @@ func configRoundTripPreservesTerminologyEntries() throws {
     var config = AppConfig()
     config.transcription.terminology.entries = [
         TerminologyEntry(
-            canonical: "OpenWhisper",
+            canonical: "VibeWhisper",
             aliases: ["Open Whisper"]
         ),
         TerminologyEntry(
@@ -362,7 +428,7 @@ func configRoundTripPreservesTerminologyEntries() throws {
     let decoded = try JSONDecoder().decode(AppConfig.self, from: Data(contentsOf: configURL))
     #expect(decoded.transcription.terminology.enabled == true)
     #expect(decoded.transcription.terminology.entries.count == 2)
-    #expect(decoded.transcription.terminology.entries[0].canonical == "OpenWhisper")
+    #expect(decoded.transcription.terminology.entries[0].canonical == "VibeWhisper")
     #expect(decoded.transcription.terminology.entries[0].aliases == ["Open Whisper"])
     #expect(decoded.transcription.terminology.lastImportedSource == "/Users/test/terms.csv")
     #expect(decoded.transcription.terminology.lastImportedAt == "2026-04-19T10:00:00Z")
@@ -403,7 +469,7 @@ func legacyTerminologyEntriesReceiveAndPersistStableIdentifiers() throws {
     let json = """
     {
       "type": "term",
-      "original": "OpenWhisper",
+      "original": "VibeWhisper",
       "aliases": [],
       "isEnabled": true,
       "source": "legacy-import",
@@ -419,7 +485,7 @@ func legacyTerminologyEntriesReceiveAndPersistStableIdentifiers() throws {
 
     #expect(independentlyMigrated.id == migrated.id)
     #expect(reloaded.id == migrated.id)
-    #expect(reloaded.original == "OpenWhisper")
+    #expect(reloaded.original == "VibeWhisper")
 }
 
 @Test
@@ -434,7 +500,7 @@ func terminologyImportMetadataIsPreserved() throws {
           "entries": [
             {
               "type": "term",
-              "original": "OpenWhisper",
+              "original": "VibeWhisper",
               "aliases": [],
               "isEnabled": true,
               "source": "dictionary-import",
@@ -458,7 +524,6 @@ func terminologyImportMetadataIsPreserved() throws {
 @Test
 func configRoundTripPreservesUserDictionaryEntryFields() throws {
     var config = AppConfig()
-    config.transcription.languagePreference = .traditionalChinese
     config.transcription.punctuationPreference = .halfWidth
     config.transcription.terminology.entries = [
         TerminologyEntry(
@@ -491,18 +556,16 @@ func configRoundTripPreservesUserDictionaryEntryFields() throws {
     let entries = try #require(terminology["entries"] as? [[String: Any]])
 
     #expect(decoded.transcription.terminology.entries == config.transcription.terminology.entries)
-    #expect(decoded.transcription.languagePreference == .traditionalChinese)
     #expect(decoded.transcription.punctuationPreference == .halfWidth)
     #expect(entries.allSatisfy { $0["caseSensitive"] == nil })
     #expect(entries.allSatisfy { ($0["type"] as? String) != "suggestion" })
 }
 
 @Test
-func legacyConfigDefaultsToSimplifiedChineseAndAutomaticPunctuation() throws {
-    let data = Data(#"{"transcription":{"hintTerms":["OpenWhisper"]}}"#.utf8)
+func legacyConfigDefaultsToAutomaticPunctuation() throws {
+    let data = Data(#"{"transcription":{"hintTerms":["VibeWhisper"]}}"#.utf8)
     let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
 
-    #expect(decoded.transcription.languagePreference == .simplifiedChinese)
     #expect(decoded.transcription.punctuationPreference == .automatic)
 }
 
@@ -579,7 +642,7 @@ func legacyConfigWithoutTerminologyReencodesWithTerminologyDefaults() throws {
     let json = """
     {
       "transcription": {
-        "hintTerms": ["OpenWhisper"]
+        "hintTerms": ["VibeWhisper"]
       }
     }
     """.data(using: .utf8)!
@@ -595,7 +658,7 @@ func legacyConfigWithoutTerminologyReencodesWithTerminologyDefaults() throws {
 }
 
 @Test
-func configStoreUsesOnlyOpenWhisperApplicationSupportPath() {
+func configStoreUsesOnlyVibeWhisperApplicationSupportPath() {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let store = ConfigStore(
@@ -603,11 +666,11 @@ func configStoreUsesOnlyOpenWhisperApplicationSupportPath() {
         homeDirectoryURL: root
     )
 
-    #expect(store.directoryURL.path == root.appendingPathComponent("Library/Application Support/OpenWhisper", isDirectory: true).path)
+    #expect(store.directoryURL.path == root.appendingPathComponent("Library/Application Support/VibeWhisper", isDirectory: true).path)
 }
 
 @Test
-func configStoreDoesNotImportPreOpenWhisperLegacyConfig() throws {
+func configStoreDoesNotImportPreVibeWhisperLegacyConfig() throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let fileManager = FileManager.default
@@ -637,3 +700,59 @@ func configStoreDoesNotImportPreOpenWhisperLegacyConfig() throws {
     let stored = try JSONDecoder().decode(AppConfig.self, from: storedData)
     #expect(stored.transcription.hintTerms.isEmpty)
 }
+
+@Test
+func configStoreLoadDoesNotRewriteCanonicalConfig() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let fileManager = FileManager.default
+    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+
+    let store = ConfigStore(
+        fileManager: fileManager,
+        homeDirectoryURL: root
+    )
+    // First load may create defaults; second settles decoder-applied defaults
+    // into the encoder's canonical form.
+    _ = try store.load()
+    _ = try store.load()
+    let settledData = try Data(contentsOf: store.configURL)
+    let settledAttrs = try fileManager.attributesOfItem(atPath: store.configURL.path)
+    let settledMod = settledAttrs[.modificationDate] as? Date
+
+    // Brief pause so mtime would change if a rewrite occurred.
+    Thread.sleep(forTimeInterval: 0.05)
+    _ = try store.load()
+    let thirdData = try Data(contentsOf: store.configURL)
+    let thirdAttrs = try fileManager.attributesOfItem(atPath: store.configURL.path)
+    let thirdMod = thirdAttrs[.modificationDate] as? Date
+
+    #expect(settledData == thirdData)
+    #expect(settledMod == thirdMod)
+}
+
+@Test
+func configStoreLoadRewritesNonCanonicalConfig() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let fileManager = FileManager.default
+    try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+
+    let store = ConfigStore(
+        fileManager: fileManager,
+        homeDirectoryURL: root
+    )
+    try fileManager.createDirectory(at: store.directoryURL, withIntermediateDirectories: true)
+    // Compact JSON without pretty-print / sorted keys is non-canonical.
+    try Data(#"{"transcription":{"hintTerms":["alpha"]}}"#.utf8)
+        .write(to: store.configURL)
+
+    let loaded = try store.load()
+    #expect(loaded.transcription.hintTerms == ["alpha"])
+    let storedData = try Data(contentsOf: store.configURL)
+    // Canonical form is pretty-printed with sorted keys — not identical to compact input.
+    #expect(storedData != Data(#"{"transcription":{"hintTerms":["alpha"]}}"#.utf8))
+    let stored = try JSONDecoder().decode(AppConfig.self, from: storedData)
+    #expect(stored.transcription.hintTerms == ["alpha"])
+}
+

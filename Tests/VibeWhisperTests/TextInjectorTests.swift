@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @Test
 func accessibilityRequestSkipsPromptWhenAlreadyTrusted() {
@@ -73,7 +73,7 @@ func injectionPlanUsesNativePasteForPlainFocusedSnapshot() {
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper ",
+        text: "VibeWhisper ",
         accessibilityTrusted: true,
         editableTextSnapshot: snapshot,
         fallbackEditableTextSnapshot: nil,
@@ -92,7 +92,7 @@ func injectionPlanUsesNativePasteForSelectedTextSnapshot() {
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: snapshot,
         fallbackEditableTextSnapshot: nil,
@@ -111,7 +111,7 @@ func injectionPlanUsesNativePasteForExistingTextSnapshot() {
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: snapshot,
         fallbackEditableTextSnapshot: nil,
@@ -130,7 +130,7 @@ func injectionPlanUsesNativePasteForFallbackSnapshotWhenLaunchAppEditorHasFocus(
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: snapshot,
@@ -149,7 +149,7 @@ func injectionPlanUsesNativePasteWhenFocusedSnapshotIsOnlyCodexPlaceholder() {
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: snapshot,
         fallbackEditableTextSnapshot: nil,
@@ -168,7 +168,7 @@ func injectionPlanUsesNativePasteForFeishuComposerAccessibilityWrapper() {
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: snapshot,
         fallbackEditableTextSnapshot: nil,
@@ -182,7 +182,7 @@ func injectionPlanUsesNativePasteForFeishuComposerAccessibilityWrapper() {
 @Test
 func injectionPlanDoesNotPasteWithoutAnyEditableTarget() {
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: nil,
@@ -197,7 +197,7 @@ func injectionPlanDoesNotPasteWithoutAnyEditableTarget() {
 @Test
 func injectionPlanDoesNotPasteWhenOnlyLaunchAppContextExists() {
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: nil,
@@ -210,9 +210,203 @@ func injectionPlanDoesNotPasteWhenOnlyLaunchAppContextExists() {
 }
 
 @Test
+func injectionPlanUsesNativePasteForSameAppBestEffortWhenAXTargetMissing() {
+    // WeChat-style: dictation started on an app that never exposes a focused
+    // editable AX element. Same-process reactivation is still enough to try
+    // Cmd+V; verification remains unavailable.
+    let plan = TextInjector.injectionPlan(
+        text: "VibeWhisper",
+        accessibilityTrusted: true,
+        editableTextSnapshot: nil,
+        fallbackEditableTextSnapshot: nil,
+        hasEditableTextFocus: false,
+        hasFallbackEditableTextFocus: false,
+        hasLaunchAppContext: true,
+        allowsSameAppBestEffortPaste: true
+    )
+
+    #expect(plan == .keyPressPaste)
+}
+
+@Test
+func sameAppBestEffortPasteRequiresLaunchContextWithoutCapturedTarget() {
+    #expect(
+        !TextInjector.allowsSameAppBestEffortPaste(
+            launchAppContext: nil
+        )
+    )
+
+    // WeChat-style: process known, no AX editor ever captured.
+    let withoutTarget = LaunchAppContext(
+        bundleIdentifier: "com.tencent.xinWeChat",
+        localizedName: "WeChat",
+        processIdentifier: 2_125,
+        processLaunchDate: Date(timeIntervalSince1970: 1),
+        focusedTarget: nil
+    )
+    #expect(
+        TextInjector.allowsSameAppBestEffortPaste(
+            launchAppContext: withoutTarget
+        )
+    )
+
+    // Invalid pid must never unlock paste.
+    #expect(
+        !TextInjector.allowsSameAppBestEffortPaste(
+            launchAppContext: LaunchAppContext(
+                bundleIdentifier: "com.tencent.xinWeChat",
+                localizedName: "WeChat",
+                processIdentifier: 0,
+                processLaunchDate: nil,
+                focusedTarget: nil
+            )
+        )
+    )
+}
+
+@Test
+func ghosttyStyleTextRoleIsEditableEvenWhenAttributesAreNotSettable() {
+    #expect(
+        FocusedElementInspector.isEditableTextFocusDecision(
+            role: "AXTextArea",
+            subrole: nil,
+            enabled: nil,
+            hidden: nil,
+            valueIsSettable: false,
+            selectionIsSettable: false
+        )
+    )
+    #expect(
+        FocusedElementInspector.isEditableTextFocusDecision(
+            role: "AXTextField",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false
+        )
+    )
+    #expect(
+        !FocusedElementInspector.isEditableTextFocusDecision(
+            role: "AXTextField",
+            subrole: "AXSecureTextField",
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false
+        )
+    )
+    #expect(
+        !FocusedElementInspector.isEditableTextFocusDecision(
+            role: "AXGroup",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false
+        )
+    )
+    #expect(
+        FocusedElementInspector.isEditableTextFocusDecision(
+            role: "AXGroup",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: true,
+            selectionIsSettable: true
+        )
+    )
+}
+
+@Test
+func selectionContextAcceptsNonTextRolesWhenSelectedTextIsReadable() {
+    // Word / Feishu / contenteditable: focused AXGroup with AXSelectedText but
+    // neither value nor selected-text-range marked settable — must still qualify
+    // for Context Rewrite capture (paste-target editability stays strict).
+    #expect(
+        FocusedElementInspector.canExposeSelectionContextDecision(
+            role: "AXGroup",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false,
+            hasReadableSelectedText: true,
+            hasValueAndRangeSelection: false
+        )
+    )
+    #expect(
+        FocusedElementInspector.canExposeSelectionContextDecision(
+            role: "AXWebArea",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false,
+            hasReadableSelectedText: false,
+            hasValueAndRangeSelection: true
+        )
+    )
+    // Word compatibility-mode document nodes can report AXEnabled=false while
+    // still exposing a real, readable selection. Selection capture is read-only
+    // and must not confuse that host quirk with a disabled UI control.
+    #expect(
+        FocusedElementInspector.canExposeSelectionContextDecision(
+            role: "AXTextArea",
+            subrole: nil,
+            enabled: false,
+            hidden: false,
+            valueIsSettable: true,
+            selectionIsSettable: true,
+            hasReadableSelectedText: true,
+            hasValueAndRangeSelection: true
+        )
+    )
+    // Bare chrome without any selection surface must not unlock capture.
+    #expect(
+        !FocusedElementInspector.canExposeSelectionContextDecision(
+            role: "AXGroup",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false,
+            hasReadableSelectedText: false,
+            hasValueAndRangeSelection: false
+        )
+    )
+    // Secure fields stay blocked even if selected text is present.
+    #expect(
+        !FocusedElementInspector.canExposeSelectionContextDecision(
+            role: "AXTextField",
+            subrole: "AXSecureTextField",
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false,
+            hasReadableSelectedText: true,
+            hasValueAndRangeSelection: false
+        )
+    )
+    // Classic text roles remain accepted via the editable-focus path.
+    #expect(
+        FocusedElementInspector.canExposeSelectionContextDecision(
+            role: "AXTextArea",
+            subrole: nil,
+            enabled: true,
+            hidden: false,
+            valueIsSettable: false,
+            selectionIsSettable: false,
+            hasReadableSelectedText: false,
+            hasValueAndRangeSelection: false
+        )
+    )
+}
+
+@Test
 func retryInjectionPlanAlwaysUsesClipboardEvenWithEditableFocus() {
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: nil,
@@ -252,7 +446,7 @@ func injectionPlanIgnoresStaleSnapshotsWithoutEditableFocusSignal() {
     )
 
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: snapshot,
         fallbackEditableTextSnapshot: snapshot,
@@ -266,7 +460,7 @@ func injectionPlanIgnoresStaleSnapshotsWithoutEditableFocusSignal() {
 @Test
 func injectionPlanUsesNativePasteWhenFocusedEditorIsNotDirectlyWritable() {
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: nil,
@@ -280,7 +474,7 @@ func injectionPlanUsesNativePasteWhenFocusedEditorIsNotDirectlyWritable() {
 @Test
 func injectionPlanUsesNativePasteWhenLaunchAppEditorStillHasFocus() {
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: nil,
@@ -294,7 +488,7 @@ func injectionPlanUsesNativePasteWhenLaunchAppEditorStillHasFocus() {
 @Test
 func injectionPlanStillUsesClipboardWhenNoEditorSignalExists() {
     let plan = TextInjector.injectionPlan(
-        text: "OpenWhisper",
+        text: "VibeWhisper",
         accessibilityTrusted: true,
         editableTextSnapshot: nil,
         fallbackEditableTextSnapshot: nil,
@@ -312,7 +506,7 @@ func pasteTransitionVerifierConfirmsInsertionAtUTF16Caret() {
         selectedRange: CFRange(location: 3, length: 0)
     )
     let after = EditableTextSnapshot(
-        value: "a🙂OpenWhisperb",
+        value: "a🙂VibeWhisperb",
         selectedRange: CFRange(location: 14, length: 0)
     )
 
@@ -320,7 +514,7 @@ func pasteTransitionVerifierConfirmsInsertionAtUTF16Caret() {
         PasteTransitionVerifier.result(
             before: before,
             after: after,
-            insertedText: "OpenWhisper",
+            insertedText: "VibeWhisper",
             targetStillMatches: true
         ) == .verified
     )
@@ -333,7 +527,7 @@ func pasteTransitionVerifierConfirmsSelectedTextReplacement() {
         selectedRange: CFRange(location: 6, length: 5)
     )
     let after = EditableTextSnapshot(
-        value: "hello OpenWhisper world",
+        value: "hello VibeWhisper world",
         selectedRange: CFRange(location: 17, length: 0)
     )
 
@@ -341,7 +535,7 @@ func pasteTransitionVerifierConfirmsSelectedTextReplacement() {
         PasteTransitionVerifier.result(
             before: before,
             after: after,
-            insertedText: "OpenWhisper",
+            insertedText: "VibeWhisper",
             targetStillMatches: true
         ) == .verified
     )
@@ -350,7 +544,7 @@ func pasteTransitionVerifierConfirmsSelectedTextReplacement() {
 @Test
 func pasteTransitionVerifierRequiresObservableChange() {
     let snapshot = EditableTextSnapshot(
-        value: "OpenWhisper",
+        value: "VibeWhisper",
         selectedRange: CFRange(location: 11, length: 0)
     )
 
@@ -367,11 +561,11 @@ func pasteTransitionVerifierRequiresObservableChange() {
 @Test
 func pasteTransitionVerifierCanProveSameTextReplacementBySelectionCollapse() {
     let before = EditableTextSnapshot(
-        value: "OpenWhisper",
+        value: "VibeWhisper",
         selectedRange: CFRange(location: 0, length: 11)
     )
     let after = EditableTextSnapshot(
-        value: "OpenWhisper",
+        value: "VibeWhisper",
         selectedRange: CFRange(location: 11, length: 0)
     )
 
@@ -379,7 +573,7 @@ func pasteTransitionVerifierCanProveSameTextReplacementBySelectionCollapse() {
         PasteTransitionVerifier.result(
             before: before,
             after: after,
-            insertedText: "OpenWhisper",
+            insertedText: "VibeWhisper",
             targetStillMatches: true
         ) == .verified
     )
@@ -393,7 +587,7 @@ func safeUndoRequiresExactInsertedTextButAllowsCursorMovement() {
     )
     let expected = PasteTransitionVerifier.expectedSnapshot(
         before: before,
-        insertedText: "OpenWhisper"
+        insertedText: "VibeWhisper"
     )!
     let movedCursor = EditableTextSnapshot(
         value: expected.value,
@@ -441,7 +635,7 @@ func pasteTransitionVerifierRejectsUnrelatedValueChange() {
         PasteTransitionVerifier.result(
             before: before,
             after: after,
-            insertedText: " OpenWhisper",
+            insertedText: " VibeWhisper",
             targetStillMatches: true
         ) == .notObserved
     )
@@ -473,7 +667,7 @@ func pasteTransitionVerifierDistinguishesUnavailableAndChangedTarget() {
 }
 
 @Test
-func clipboardRestoreRequiresOpenWhisperToStillOwnThePasteboard() {
+func clipboardRestoreRequiresVibeWhisperToStillOwnThePasteboard() {
     #expect(TextInjector.shouldRestoreClipboard(currentChangeCount: 42, ownedChangeCount: 42))
     #expect(!TextInjector.shouldRestoreClipboard(currentChangeCount: 43, ownedChangeCount: 42))
 }
@@ -574,4 +768,131 @@ func asyncPasteVerificationWaiterStopsWhenTargetChanges() async throws {
 
     #expect(result == .targetChanged)
     #expect(checks == 1)
+}
+
+@Test
+func selectionMaximumIsClampedToSafeBounds() {
+    #expect(FocusedElementInspector.boundedSelectionMaximum(0) == 100)
+    #expect(FocusedElementInspector.boundedSelectionMaximum(50) == 100)
+    #expect(FocusedElementInspector.boundedSelectionMaximum(6_000) == 6_000)
+    #expect(FocusedElementInspector.boundedSelectionMaximum(100_000) == 20_000)
+}
+
+@Test
+func selectedTextExtractionPrefersValueRangeThenAttribute() {
+    let valueRange = FocusedElementInspector.selectedTextFromValueAndRange(
+        value: "hello brave world",
+        selectedRange: CFRange(location: 6, length: 5)
+    )
+    #expect(valueRange == "brave")
+
+    // Zero-length caret must not produce selected text from the value path.
+    #expect(
+        FocusedElementInspector.selectedTextFromValueAndRange(
+            value: "hello",
+            selectedRange: CFRange(location: 2, length: 0)
+        ) == nil
+    )
+
+    // Out-of-bounds range is rejected.
+    #expect(
+        FocusedElementInspector.selectedTextFromValueAndRange(
+            value: "hi",
+            selectedRange: CFRange(location: 0, length: 99)
+        ) == nil
+    )
+
+    // Prefer value+range text when both are available.
+    #expect(
+        FocusedElementInspector.preferredSelectedText(
+            valueAndRangeText: "from-range",
+            attributeText: "from-attribute"
+        ) == "from-range"
+    )
+    // Fall back to AXSelectedText when range extraction fails.
+    #expect(
+        FocusedElementInspector.preferredSelectedText(
+            valueAndRangeText: nil,
+            attributeText: "from-attribute"
+        ) == "from-attribute"
+    )
+    #expect(
+        FocusedElementInspector.preferredSelectedText(
+            valueAndRangeText: "",
+            attributeText: "from-attribute"
+        ) == "from-attribute"
+    )
+    #expect(
+        FocusedElementInspector.preferredSelectedText(
+            valueAndRangeText: nil,
+            attributeText: nil
+        ) == nil
+    )
+}
+
+@Test
+func softIdentityMatchingSurvivesProxyRebuild() {
+    let expected = FocusedTargetIdentity(
+        elementHash: 1,
+        role: "AXTextArea",
+        subrole: nil,
+        identifier: "editor",
+        windowHash: 99
+    )
+    // Same control, different CFHash (proxy rebuild) still matches.
+    let rebuilt = FocusedTargetIdentity(
+        elementHash: 9_999,
+        role: "AXTextArea",
+        subrole: nil,
+        identifier: "editor",
+        windowHash: 99
+    )
+    #expect(FocusedElementInspector.identitiesMatch(rebuilt, expected))
+
+    // Wrong role must not match.
+    let wrongRole = FocusedTargetIdentity(
+        elementHash: 9_999,
+        role: "AXTextField",
+        subrole: nil,
+        identifier: "editor",
+        windowHash: 99
+    )
+    #expect(!FocusedElementInspector.identitiesMatch(wrongRole, expected))
+
+    // Wrong identifier must not match when expected has one.
+    let wrongID = FocusedTargetIdentity(
+        elementHash: 9_999,
+        role: "AXTextArea",
+        subrole: nil,
+        identifier: "other",
+        windowHash: 99
+    )
+    #expect(!FocusedElementInspector.identitiesMatch(wrongID, expected))
+
+    // Without an expected identifier, role + window is enough.
+    let noIDExpected = FocusedTargetIdentity(
+        elementHash: 1,
+        role: "AXTextArea",
+        subrole: nil,
+        identifier: nil,
+        windowHash: 99
+    )
+    let noIDCurrent = FocusedTargetIdentity(
+        elementHash: 2,
+        role: "AXTextArea",
+        subrole: nil,
+        identifier: nil,
+        windowHash: 99
+    )
+    #expect(FocusedElementInspector.identitiesMatch(noIDCurrent, noIDExpected))
+
+    // Window hash mismatch rejects.
+    let wrongWindow = FocusedTargetIdentity(
+        elementHash: 2,
+        role: "AXTextArea",
+        subrole: nil,
+        identifier: nil,
+        windowHash: 1
+    )
+    #expect(!FocusedElementInspector.identitiesMatch(wrongWindow, noIDExpected))
 }

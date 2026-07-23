@@ -1,5 +1,5 @@
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @MainActor
 @Test
@@ -119,4 +119,58 @@ func permissionStatusMonitorBoundsPollingWhenSystemStateStaysUndetermined() asyn
     }
     #expect(pauseCount == 2)
     #expect(monitor.snapshot.microphone == .undetermined)
+}
+
+@MainActor
+@Test
+func permissionStatusMonitorPollsUntilAccessibilityTrustSettles() async {
+    var current = PermissionStatusSnapshot(
+        microphone: .granted,
+        accessibilityTrusted: false
+    )
+    var pauseCount = 0
+    let monitor = PermissionStatusMonitor {
+        current
+    }
+
+    let trusted = await monitor.refreshAccessibilityUntilTrusted(
+        maximumRefreshAttempts: 5,
+        pause: { _ in
+            pauseCount += 1
+            if pauseCount == 2 {
+                current = PermissionStatusSnapshot(
+                    microphone: .granted,
+                    accessibilityTrusted: true
+                )
+            }
+        }
+    )
+
+    #expect(trusted)
+    #expect(pauseCount == 2)
+    #expect(monitor.snapshot.accessibilityTrusted)
+}
+
+@MainActor
+@Test
+func permissionStatusMonitorStopsAccessibilityPollingWhenStillUntrusted() async {
+    let current = PermissionStatusSnapshot(
+        microphone: .granted,
+        accessibilityTrusted: false
+    )
+    var pauseCount = 0
+    let monitor = PermissionStatusMonitor {
+        current
+    }
+
+    let trusted = await monitor.refreshAccessibilityUntilTrusted(
+        maximumRefreshAttempts: 3,
+        pause: { _ in
+            pauseCount += 1
+        }
+    )
+
+    #expect(trusted == false)
+    #expect(pauseCount == 2)
+    #expect(monitor.snapshot.accessibilityTrusted == false)
 }

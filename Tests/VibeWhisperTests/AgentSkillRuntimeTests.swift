@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 private func agentSkillTestRoot() throws -> URL {
     let url = FileManager.default.temporaryDirectory
@@ -31,7 +31,7 @@ private func writeAgentSkill(
     let skill = [
         "---",
         "name: \(name)",
-        "description: A portable Agent Skill used by OpenWhisper tests",
+        "description: A portable Agent Skill used by VibeWhisper tests",
         allowedTools.map { "allowed-tools: \($0)" },
         "metadata:",
         "  version: \(version)",
@@ -46,7 +46,7 @@ private func writeAgentSkill(
     )
     if let profile {
         try Data(profile.utf8).write(
-            to: directory.appendingPathComponent("openwhisper.yaml")
+            to: directory.appendingPathComponent("vibewhisper.yaml")
         )
     }
     for (relativePath, data) in resources {

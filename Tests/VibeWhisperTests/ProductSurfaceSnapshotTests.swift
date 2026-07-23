@@ -1,7 +1,7 @@
 import AppKit
 import CoreGraphics
 import Testing
-@testable import OpenWhisper
+@testable import VibeWhisper
 
 @MainActor
 @Test
