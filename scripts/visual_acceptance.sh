@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$OPENWHISPER_APP_NAME"
+APP_NAME="$VIBEWHISPER_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 OUT_ROOT="$ROOT/dist/visual-acceptance"
@@ -79,17 +79,17 @@ capture_state() {
   local output_file="$2"
   local profile="${3:-baseline}"
   local followup_output_file="${4:-}"
-  local log_file="$OUT_DIR/openwhisper-overlay-demo-$state-$profile.log"
+  local log_file="$OUT_DIR/vibewhisper-overlay-demo-$state-$profile.log"
   local launch_log_file
   local self_capture_file
   local followup_capture_file=""
   local reduce_motion="off"
   local increase_contrast="off"
-  launch_log_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-overlay-demo-$state-$profile.XXXXXX")"
-  self_capture_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-overlay-snapshot-$state-$profile.XXXXXX")"
+  launch_log_file="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-overlay-demo-$state-$profile.XXXXXX")"
+  self_capture_file="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-overlay-snapshot-$state-$profile.XXXXXX")"
   rm -f "$self_capture_file"
   if [[ -n "$followup_output_file" ]]; then
-    followup_capture_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-overlay-followup-$state-$profile.XXXXXX")"
+    followup_capture_file="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-overlay-followup-$state-$profile.XXXXXX")"
     rm -f "$followup_capture_file"
   fi
 
@@ -172,8 +172,8 @@ capture_preview() {
   local output_file="$1"
   local launch_log_file
   local self_capture_file
-  launch_log_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-preview-demo.XXXXXX")"
-  self_capture_file="$(mktemp "${TMPDIR:-/tmp}/openwhisper-preview-snapshot.XXXXXX")"
+  launch_log_file="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-preview-demo.XXXXXX")"
+  self_capture_file="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-preview-snapshot.XXXXXX")"
   rm -f "$self_capture_file"
 
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
@@ -208,7 +208,7 @@ capture_preview() {
   cp "$self_capture_file" "$OUT_DIR/$output_file"
   wait "$OPEN_PID" >/dev/null 2>&1 || true
   OPEN_PID=""
-  cp "$launch_log_file" "$OUT_DIR/openwhisper-preview-demo.log"
+  cp "$launch_log_file" "$OUT_DIR/vibewhisper-preview-demo.log"
   rm -f "$launch_log_file" "$self_capture_file"
 }
 
@@ -258,7 +258,7 @@ fi
 RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
 
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# OpenWhisper Visual Acceptance
+# VibeWhisper Visual Acceptance
 
 - Run ID: \`$RUN_ID\`
 - App: \`$APP_BINARY\`
@@ -281,8 +281,8 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
   - \`11-diff-preview.png\`
   - \`verification.txt\`
   - \`feedback-mode-acceptance.txt\`
-  - \`openwhisper-overlay-demo-*.log\`
-  - \`openwhisper-preview-demo.log\`
+  - \`vibewhisper-overlay-demo-*.log\`
+  - \`vibewhisper-preview-demo.log\`
 
 SUMMARY
 

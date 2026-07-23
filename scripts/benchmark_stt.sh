@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/load_env.sh"
 load_product_env "$ROOT_DIR/product.env"
 
-APP_BIN="/Applications/$OPENWHISPER_APP_NAME.app/Contents/MacOS/$OPENWHISPER_APP_NAME"
+APP_BIN="/Applications/$VIBEWHISPER_APP_NAME.app/Contents/MacOS/$VIBEWHISPER_APP_NAME"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <audio-file-1> [audio-file-2 ...]"
@@ -35,7 +35,7 @@ PY
 )"
 done
 
-OPENWHISPER_BENCHMARK=1 \
-OPENWHISPER_BENCHMARK_AUDIO_FILES="$audio_csv" \
-OPENWHISPER_BENCHMARK_RUNS="${OPENWHISPER_BENCHMARK_RUNS:-5}" \
+VIBEWHISPER_BENCHMARK=1 \
+VIBEWHISPER_BENCHMARK_AUDIO_FILES="$audio_csv" \
+VIBEWHISPER_BENCHMARK_RUNS="${VIBEWHISPER_BENCHMARK_RUNS:-5}" \
 "$APP_BIN"

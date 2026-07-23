@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
   "status": "blocked",
-  "productName": "OpenWhisper",
-  "reviewedAt": "2026-07-14T00:00:00Z",
-  "reviewer": "OpenWhisper repository naming audit",
+  "productName": "VibeWhisper",
+  "reviewedAt": "2026-07-22T00:00:00Z",
+  "reviewer": "VibeWhisper repository naming audit",
   "checks": {
     "trademark": false,
     "domains": false,
-    "appStore": true,
-    "github": true,
+    "appStore": false,
+    "github": false,
     "social": false
   },
   "conflicts": [
     {
-      "type": "same-category-software",
+      "type": "historical-same-category-software",
       "name": "OpenWhisper",
       "url": "https://github.com/dimatura/open-whisper",
-      "detail": "An independently maintained macOS speech-to-text application already uses the same OpenWhisper name and publishes release artifacts."
+      "detail": "The previous product name OpenWhisper conflicted with an independently maintained macOS speech-to-text application that publishes release artifacts. The product was renamed to VibeWhisper to exit that collision; VibeWhisper still needs a fresh trademark/domain/App Store/GitHub audit before public distribution."
     }
   ],
-  "decision": "Do not publish notarized stable updates, public domains, or marketplace listings under this name until the owner chooses a distinct name or obtains documented legal clearance."
+  "decision": "Product code and packaging now use VibeWhisper. Do not publish notarized stable updates, public domains, or marketplace listings until a fresh clearance pass marks this file approved with all checks true and no active conflicts for the VibeWhisper name."
 }

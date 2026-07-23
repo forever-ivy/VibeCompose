@@ -7,12 +7,12 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-SOURCE_APP="$ROOT/dist/$OPENWHISPER_APP_NAME.app"
-TARGET_APP="/Applications/$OPENWHISPER_APP_NAME.app"
-STAGED_APP="/Applications/.$OPENWHISPER_APP_NAME.install.$$.app"
-BACKUP_APP="/Applications/.$OPENWHISPER_APP_NAME.backup.$$.app"
-REQUIRE_GATEKEEPER="${OPENWHISPER_INSTALL_REQUIRE_GATEKEEPER:-0}"
-EXPECTED_TEAM_ID="${OPENWHISPER_TEAM_ID:-}"
+SOURCE_APP="$ROOT/dist/$VIBEWHISPER_APP_NAME.app"
+TARGET_APP="/Applications/$VIBEWHISPER_APP_NAME.app"
+STAGED_APP="/Applications/.$VIBEWHISPER_APP_NAME.install.$$.app"
+BACKUP_APP="/Applications/.$VIBEWHISPER_APP_NAME.backup.$$.app"
+REQUIRE_GATEKEEPER="${VIBEWHISPER_INSTALL_REQUIRE_GATEKEEPER:-0}"
+EXPECTED_TEAM_ID="${VIBEWHISPER_TEAM_ID:-}"
 
 cleanup() {
   rm -rf "$STAGED_APP"
@@ -25,7 +25,7 @@ trap cleanup EXIT
 validate_app() {
   local app="$1"
   local plist="$app/Contents/Info.plist"
-  local executable="$app/Contents/MacOS/$OPENWHISPER_APP_NAME"
+  local executable="$app/Contents/MacOS/$VIBEWHISPER_APP_NAME"
   local bundle_id=""
   local version=""
   local build=""
@@ -33,23 +33,23 @@ validate_app() {
   local signature_details=""
 
   [[ -f "$plist" && -x "$executable" ]] || {
-    echo "Invalid OpenWhisper bundle layout: $app" >&2
+    echo "Invalid VibeWhisper bundle layout: $app" >&2
     return 1
   }
 
   bundle_id="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$plist")"
   version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$plist")"
   build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$plist")"
-  [[ "$bundle_id" == "$OPENWHISPER_BUNDLE_ID" ]] || {
-    echo "Bundle identifier mismatch: expected $OPENWHISPER_BUNDLE_ID, got $bundle_id" >&2
+  [[ "$bundle_id" == "$VIBEWHISPER_BUNDLE_ID" ]] || {
+    echo "Bundle identifier mismatch: expected $VIBEWHISPER_BUNDLE_ID, got $bundle_id" >&2
     return 1
   }
-  [[ "$version" == "$OPENWHISPER_VERSION" ]] || {
-    echo "Version mismatch: expected $OPENWHISPER_VERSION, got $version" >&2
+  [[ "$version" == "$VIBEWHISPER_VERSION" ]] || {
+    echo "Version mismatch: expected $VIBEWHISPER_VERSION, got $version" >&2
     return 1
   }
-  [[ "$build" == "$OPENWHISPER_BUILD" ]] || {
-    echo "Build mismatch: expected $OPENWHISPER_BUILD, got $build" >&2
+  [[ "$build" == "$VIBEWHISPER_BUILD" ]] || {
+    echo "Build mismatch: expected $VIBEWHISPER_BUILD, got $build" >&2
     return 1
   }
 
@@ -66,7 +66,7 @@ validate_app() {
 
   if [[ "$REQUIRE_GATEKEEPER" == "1" ]]; then
     [[ -n "$EXPECTED_TEAM_ID" ]] || {
-      echo "OPENWHISPER_TEAM_ID is required when Gatekeeper installation is enforced." >&2
+      echo "VIBEWHISPER_TEAM_ID is required when Gatekeeper installation is enforced." >&2
       return 1
     }
     signature_details="$(/usr/bin/codesign -dvvv "$app" 2>&1)"
@@ -75,7 +75,7 @@ validate_app() {
       return 1
     }
     [[ "$signature_details" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
-      echo "Installed app Team ID does not match OPENWHISPER_TEAM_ID." >&2
+      echo "Installed app Team ID does not match VIBEWHISPER_TEAM_ID." >&2
       return 1
     }
     /usr/sbin/spctl --assess --type execute --verbose=4 "$app"
@@ -86,11 +86,29 @@ if [[ ! -d "$SOURCE_APP" ]]; then
   "$ROOT/scripts/package_app.sh" >/dev/null
 fi
 
+# Strip Finder/FileProvider detritus that can reappear after copy into
+# /Applications (or Desktop/iCloud paths). codesign --verify --deep --strict
+# rejects com.apple.FinderInfo even when the signature itself is intact.
+strip_codesign_hostile_xattrs() {
+  local app="$1"
+  # Prefer a clean copy path first; then scrub anything Finder re-applies.
+  /usr/bin/xattr -cr "$app" >/dev/null 2>&1 || true
+  /usr/bin/find "$app" \( -type f -o -type d \) -print0 2>/dev/null \
+    | while IFS= read -r -d '' path; do
+        /usr/bin/xattr -d com.apple.FinderInfo "$path" >/dev/null 2>&1 || true
+        /usr/bin/xattr -d com.apple.fileprovider.fpfs#P "$path" >/dev/null 2>&1 || true
+        /usr/bin/xattr -d com.apple.fileprovider.detached#P "$path" >/dev/null 2>&1 || true
+      done
+}
+
 rm -rf "$STAGED_APP" "$BACKUP_APP"
-/usr/bin/ditto "$SOURCE_APP" "$STAGED_APP"
+# Copy without resource forks / extended attributes so Sparkle nested XPC
+# bundles don't pick up FinderInfo that codesign will reject.
+/usr/bin/ditto --norsrc --noextattr --noqtn "$SOURCE_APP" "$STAGED_APP"
+strip_codesign_hostile_xattrs "$STAGED_APP"
 validate_app "$STAGED_APP"
 
-pkill -x "$OPENWHISPER_APP_NAME" >/dev/null 2>&1 || true
+pkill -x "$VIBEWHISPER_APP_NAME" >/dev/null 2>&1 || true
 
 if [[ -d "$TARGET_APP" ]]; then
   mv "$TARGET_APP" "$BACKUP_APP"
@@ -104,6 +122,9 @@ if ! mv "$STAGED_APP" "$TARGET_APP"; then
   fi
   exit 1
 fi
+
+# Finder can re-tag the bundle the moment it lands under /Applications.
+strip_codesign_hostile_xattrs "$TARGET_APP"
 
 if ! validate_app "$TARGET_APP"; then
   echo "Installed bundle verification failed; restoring the previous app." >&2

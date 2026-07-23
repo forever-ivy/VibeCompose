@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-let appName = CommandLine.arguments.dropFirst().first ?? "OpenWhisper"
+let appName = CommandLine.arguments.dropFirst().first ?? "VibeWhisper"
 let timeoutSeconds = CommandLine.arguments.dropFirst(2).first.flatMap(Double.init) ?? 5
 let deadline = Date().addingTimeInterval(timeoutSeconds)
 

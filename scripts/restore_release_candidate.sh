@@ -42,7 +42,7 @@ import sys
 import zipfile
 
 archive = pathlib.Path(sys.argv[1])
-root_name = "OpenWhisper-release-candidate"
+root_name = "VibeWhisper-release-candidate"
 maximum_entries = 20_000
 maximum_uncompressed_bytes = 4 * 1024 * 1024 * 1024
 
@@ -68,10 +68,10 @@ with zipfile.ZipFile(archive) as candidate:
             raise SystemExit("Candidate archive exceeds the extraction byte limit.")
 PY
 
-TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/openwhisper-restore.XXXXXX")"
-EXTRACTED_ROOT="$TEMPORARY_DIRECTORY/OpenWhisper-release-candidate"
-STAGED_DIST="$ROOT/.openwhisper-dist-restore.$$"
-BACKUP_DIST="$ROOT/.openwhisper-dist-backup.$$"
+TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-restore.XXXXXX")"
+EXTRACTED_ROOT="$TEMPORARY_DIRECTORY/VibeWhisper-release-candidate"
+STAGED_DIST="$ROOT/.vibewhisper-dist-restore.$$"
+BACKUP_DIST="$ROOT/.vibewhisper-dist-backup.$$"
 TARGET_DIST="$ROOT/dist"
 RESTORE_COMMITTED=0
 trap '
@@ -97,11 +97,11 @@ umask 077
 
 python3 - \
   "$EXTRACTED_ROOT" \
-  "$OPENWHISPER_REPOSITORY" \
-  "$OPENWHISPER_APP_NAME" \
-  "$OPENWHISPER_BUNDLE_ID" \
-  "$OPENWHISPER_VERSION" \
-  "$OPENWHISPER_BUILD" \
+  "$VIBEWHISPER_REPOSITORY" \
+  "$VIBEWHISPER_APP_NAME" \
+  "$VIBEWHISPER_BUNDLE_ID" \
+  "$VIBEWHISPER_VERSION" \
+  "$VIBEWHISPER_BUILD" \
   "$(uname -m)" \
   "$(git -C "$ROOT" rev-parse HEAD)" <<'PY'
 import hashlib
@@ -220,7 +220,7 @@ required = (
     dist / "notarization-dmg.json",
     dist / "release-candidate-readiness.json",
     dist / "SHA256SUMS",
-    dist / "openwhisper.rb",
+    dist / "vibewhisper.rb",
 )
 for path in required:
     if path.name == f"{app_name}.app":

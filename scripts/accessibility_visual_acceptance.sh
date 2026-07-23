@@ -6,13 +6,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$OPENWHISPER_APP_NAME"
+APP_NAME="$VIBEWHISPER_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 OUT_ROOT="$ROOT/dist/accessibility-visual-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="$OUT_ROOT/$RUN_ID"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/openwhisper-accessibility-visual.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-accessibility-visual.XXXXXX")"
 
 INSTALL_FIRST=0
 if [[ "${1:-}" == "--install" ]]; then
@@ -275,7 +275,7 @@ fi
 RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
 
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# OpenWhisper Accessibility Visual Acceptance
+# VibeWhisper Accessibility Visual Acceptance
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_BINARY\`
@@ -293,7 +293,7 @@ Each surface has:
 - matching transient launch logs
 - aggregate \`verification.txt\`
 
-This proves deterministic installed-app rendering of OpenWhisper's
+This proves deterministic installed-app rendering of VibeWhisper's
 high-contrast treatment. It does not replace official Computer Use keyboard,
 VoiceOver speech-output, focus, timing, or permission interaction acceptance.
 SUMMARY

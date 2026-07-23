@@ -285,11 +285,11 @@ def audit_identity(
         return {}, {}
 
     required_product = (
-        "OPENWHISPER_APP_NAME",
-        "OPENWHISPER_BUNDLE_ID",
-        "OPENWHISPER_REPOSITORY",
+        "VIBEWHISPER_APP_NAME",
+        "VIBEWHISPER_BUNDLE_ID",
+        "VIBEWHISPER_REPOSITORY",
     )
-    required_version = ("OPENWHISPER_VERSION", "OPENWHISPER_BUILD")
+    required_version = ("VIBEWHISPER_VERSION", "VIBEWHISPER_BUILD")
     missing = [
         name
         for name in required_product
@@ -311,21 +311,21 @@ def audit_identity(
 
 def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     public_names = (
-        "OPENWHISPER_TEAM_ID",
-        "OPENWHISPER_RELEASE_BASE_URL",
-        "OPENWHISPER_SPARKLE_FEED_URL",
-        "OPENWHISPER_SPARKLE_PUBLIC_ED_KEY",
-        "OPENWHISPER_CAPABILITY_POLICY_URL",
-        "OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY",
+        "VIBEWHISPER_TEAM_ID",
+        "VIBEWHISPER_RELEASE_BASE_URL",
+        "VIBEWHISPER_SPARKLE_FEED_URL",
+        "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY",
+        "VIBEWHISPER_CAPABILITY_POLICY_URL",
+        "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY",
     )
     candidate_names = (
-        "OPENWHISPER_CODESIGN_IDENTITY",
-        "OPENWHISPER_NOTARY_PROFILE",
-        "OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE",
-        "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE",
-        "OPENWHISPER_CAPABILITY_POLICY_REVISION",
-        "OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT",
-        "OPENWHISPER_BUILD_CONFIGURATION",
+        "VIBEWHISPER_CODESIGN_IDENTITY",
+        "VIBEWHISPER_NOTARY_PROFILE",
+        "VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE",
+        "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE",
+        "VIBEWHISPER_CAPABILITY_POLICY_REVISION",
+        "VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT",
+        "VIBEWHISPER_BUILD_CONFIGURATION",
     )
     required_names = public_names + (candidate_names if phase == "candidate" else ())
     missing = [name for name in required_names if not os.environ.get(name, "").strip()]
@@ -337,7 +337,7 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         else f"missing values: {', '.join(missing)}",
     )
 
-    team_id = os.environ.get("OPENWHISPER_TEAM_ID", "").strip()
+    team_id = os.environ.get("VIBEWHISPER_TEAM_ID", "").strip()
     audit.add(
         "configuration.team-id",
         TEAM_ID_PATTERN.fullmatch(team_id) is not None,
@@ -345,9 +345,9 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     )
 
     url_names = (
-        "OPENWHISPER_RELEASE_BASE_URL",
-        "OPENWHISPER_SPARKLE_FEED_URL",
-        "OPENWHISPER_CAPABILITY_POLICY_URL",
+        "VIBEWHISPER_RELEASE_BASE_URL",
+        "VIBEWHISPER_SPARKLE_FEED_URL",
+        "VIBEWHISPER_CAPABILITY_POLICY_URL",
     )
     invalid_urls = [
         name
@@ -363,8 +363,8 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     )
 
     key_names = (
-        "OPENWHISPER_SPARKLE_PUBLIC_ED_KEY",
-        "OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY",
+        "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY",
+        "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY",
     )
     public_keys = [os.environ.get(name, "").strip() for name in key_names]
     public_keys_valid = all(valid_public_key(value) for value in public_keys)
@@ -378,7 +378,7 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         return
 
     build_configuration = os.environ.get(
-        "OPENWHISPER_BUILD_CONFIGURATION",
+        "VIBEWHISPER_BUILD_CONFIGURATION",
         "",
     ).strip()
     audit.add(
@@ -387,9 +387,9 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         "Developer ID candidate uses the optimized release build configuration",
     )
 
-    revision = os.environ.get("OPENWHISPER_CAPABILITY_POLICY_REVISION", "")
+    revision = os.environ.get("VIBEWHISPER_CAPABILITY_POLICY_REVISION", "")
     expires_at = parse_date(
-        os.environ.get("OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT", "")
+        os.environ.get("VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT", "")
     )
     now = dt.datetime.now(dt.timezone.utc)
     policy_window_valid = (
@@ -405,8 +405,8 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     )
 
     private_key_names = (
-        "OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE",
-        "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE",
+        "VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE",
+        "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE",
     )
     private_paths: list[pathlib.Path] = []
     private_errors: list[str] = []
@@ -441,7 +441,7 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         else ", ".join(private_errors),
     )
 
-    notary_keychain = os.environ.get("OPENWHISPER_NOTARY_KEYCHAIN", "").strip()
+    notary_keychain = os.environ.get("VIBEWHISPER_NOTARY_KEYCHAIN", "").strip()
     if not notary_keychain:
         audit.add(
             "configuration.notary-keychain",
@@ -842,7 +842,7 @@ def audit_installed_acceptance(
         == {"schemaVersion", "status", "installedApp", "release", "checks", "evidence"}
         and value.get("schemaVersion") == 2
         and value.get("status") == "approved"
-        and value.get("installedApp") == "/Applications/OpenWhisper.app"
+        and value.get("installedApp") == "/Applications/VibeWhisper.app"
         and release_matches
         and checks_have_exact_schema
         and not failed_checks
@@ -1245,8 +1245,8 @@ def write_report(
         "passed": audit.passed,
         "sourceCommit": source_commit,
         "release": {
-            "version": version.get("OPENWHISPER_VERSION", ""),
-            "build": version.get("OPENWHISPER_BUILD", ""),
+            "version": version.get("VIBEWHISPER_VERSION", ""),
+            "build": version.get("VIBEWHISPER_BUILD", ""),
         },
         "evidenceDigests": dict(sorted(audit.evidence_digests.items())),
         "gates": [asdict(gate) for gate in audit.gates],
@@ -1278,7 +1278,7 @@ def write_report(
 
 def self_test() -> None:
     now = dt.datetime(2026, 7, 18, tzinfo=dt.timezone.utc)
-    with tempfile.TemporaryDirectory(prefix="openwhisper-release-readiness-") as directory:
+    with tempfile.TemporaryDirectory(prefix="vibewhisper-release-readiness-") as directory:
         root = pathlib.Path(directory)
         source_commit = "a" * 40
         archive_sha256 = "b" * 64
@@ -1293,7 +1293,7 @@ def self_test() -> None:
         brand = {
             "schemaVersion": 1,
             "status": "approved",
-            "productName": "OpenWhisper",
+            "productName": "VibeWhisper",
             "reviewedAt": "2026-07-18T00:00:00Z",
             "reviewer": "Product owner",
             "checks": {
@@ -1311,10 +1311,10 @@ def self_test() -> None:
             "status": "approved",
             "reviewedAt": "2026-07-18T00:00:00Z",
             "reviewer": "Product owner",
-            "supportURL": "https://support.example.com/openwhisper",
-            "securityURL": "https://security.example.com/openwhisper",
-            "privacyContactURL": "https://privacy.example.com/openwhisper",
-            "legalContactURL": "https://legal.example.com/openwhisper",
+            "supportURL": "https://support.example.com/vibewhisper",
+            "securityURL": "https://security.example.com/vibewhisper",
+            "privacyContactURL": "https://privacy.example.com/vibewhisper",
+            "legalContactURL": "https://legal.example.com/vibewhisper",
             "supportOwner": "Support owner",
             "securityOwner": "Security owner",
             "privacyOwner": "Privacy owner",
@@ -1323,7 +1323,7 @@ def self_test() -> None:
         installed = {
             "schemaVersion": 2,
             "status": "approved",
-            "installedApp": "/Applications/OpenWhisper.app",
+            "installedApp": "/Applications/VibeWhisper.app",
             "release": {
                 "version": "0.1.0",
                 "build": "1",
@@ -1516,7 +1516,7 @@ def self_test() -> None:
             raise AssertionError("valid notarization receipts did not pass")
 
         passing = Audit()
-        audit_brand(passing, brand_path, "OpenWhisper", now)
+        audit_brand(passing, brand_path, "VibeWhisper", now)
         audit_public_contacts(root, passing, public_contact_path, now)
         audit_installed_acceptance(
             passing,
@@ -1534,7 +1534,7 @@ def self_test() -> None:
         brand["status"] = "blocked"
         brand_path.write_text(json.dumps(brand) + "\n", encoding="utf-8")
         blocked_brand = Audit()
-        audit_brand(blocked_brand, brand_path, "OpenWhisper", now)
+        audit_brand(blocked_brand, brand_path, "VibeWhisper", now)
         if blocked_brand.passed:
             raise AssertionError("blocked brand evidence passed")
 
@@ -1605,28 +1605,28 @@ def self_test() -> None:
         sparkle_key.chmod(0o600)
         capability_key.chmod(0o600)
         candidate_environment = {
-            "OPENWHISPER_TEAM_ID": "ABCDE12345",
-            "OPENWHISPER_RELEASE_BASE_URL": "https://downloads.example.com/openwhisper/v0.1.0",
-            "OPENWHISPER_SPARKLE_FEED_URL": "https://updates.example.com/stable/appcast.xml",
-            "OPENWHISPER_SPARKLE_PUBLIC_ED_KEY": base64.b64encode(
+            "VIBEWHISPER_TEAM_ID": "ABCDE12345",
+            "VIBEWHISPER_RELEASE_BASE_URL": "https://downloads.example.com/vibewhisper/v0.1.0",
+            "VIBEWHISPER_SPARKLE_FEED_URL": "https://updates.example.com/stable/appcast.xml",
+            "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY": base64.b64encode(
                 bytes(range(32))
             ).decode("ascii"),
-            "OPENWHISPER_CAPABILITY_POLICY_URL": "https://updates.example.com/provider-capabilities.json",
-            "OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY": base64.b64encode(
+            "VIBEWHISPER_CAPABILITY_POLICY_URL": "https://updates.example.com/provider-capabilities.json",
+            "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY": base64.b64encode(
                 bytes(range(1, 33))
             ).decode("ascii"),
-            "OPENWHISPER_CODESIGN_IDENTITY": "Developer ID Application identity",
-            "OPENWHISPER_NOTARY_PROFILE": "openwhisper-notary",
-            "OPENWHISPER_NOTARY_KEYCHAIN": "",
-            "OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE": str(sparkle_key),
-            "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE": str(capability_key),
-            "OPENWHISPER_CAPABILITY_POLICY_REVISION": "1",
-            "OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT": (
+            "VIBEWHISPER_CODESIGN_IDENTITY": "Developer ID Application identity",
+            "VIBEWHISPER_NOTARY_PROFILE": "vibewhisper-notary",
+            "VIBEWHISPER_NOTARY_KEYCHAIN": "",
+            "VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE": str(sparkle_key),
+            "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE": str(capability_key),
+            "VIBEWHISPER_CAPABILITY_POLICY_REVISION": "1",
+            "VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT": (
                 dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
             )
             .isoformat()
             .replace("+00:00", "Z"),
-            "OPENWHISPER_BUILD_CONFIGURATION": "release",
+            "VIBEWHISPER_BUILD_CONFIGURATION": "release",
         }
         previous_environment = {
             name: os.environ.get(name) for name in candidate_environment
@@ -1638,8 +1638,8 @@ def self_test() -> None:
             if not candidate_audit.passed:
                 raise AssertionError("valid candidate configuration did not pass")
 
-            os.environ["OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY"] = os.environ[
-                "OPENWHISPER_SPARKLE_PUBLIC_ED_KEY"
+            os.environ["VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY"] = os.environ[
+                "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY"
             ]
             reused_key_audit = Audit()
             audit_environment(candidate_root, reused_key_audit, "candidate")
@@ -1682,14 +1682,14 @@ def main() -> int:
     source_commit = audit_git(
         root,
         audit,
-        product.get("OPENWHISPER_REPOSITORY", ""),
-        version.get("OPENWHISPER_VERSION", ""),
+        product.get("VIBEWHISPER_REPOSITORY", ""),
+        version.get("VIBEWHISPER_VERSION", ""),
         require_tag=arguments.phase == "public",
     )
 
     if arguments.phase == "public":
-        current_version = version.get("OPENWHISPER_VERSION", "")
-        current_build = version.get("OPENWHISPER_BUILD", "")
+        current_version = version.get("VIBEWHISPER_VERSION", "")
+        current_build = version.get("VIBEWHISPER_BUILD", "")
         zip_sha256 = read_manifest_zip_sha256(
             root,
             audit,
@@ -1708,35 +1708,35 @@ def main() -> int:
         audit_notarization_receipts(root, audit)
         brand_path = pathlib.Path(
             os.environ.get(
-                "OPENWHISPER_BRAND_CLEARANCE_PATH",
+                "VIBEWHISPER_BRAND_CLEARANCE_PATH",
                 root / "release" / "brand-clearance.json",
             )
         )
         installed_path = pathlib.Path(
             os.environ.get(
-                "OPENWHISPER_INSTALLED_ACCEPTANCE_PATH",
+                "VIBEWHISPER_INSTALLED_ACCEPTANCE_PATH",
                 root / "release" / "installed-acceptance.json",
             )
         )
         summary_path = pathlib.Path(
             os.environ.get(
-                "OPENWHISPER_COMMUNITY_PILOT_SUMMARY_PATH",
+                "VIBEWHISPER_COMMUNITY_PILOT_SUMMARY_PATH",
                 root / "release" / "community-pilot-summary.json",
             )
         )
         review_path = pathlib.Path(
             os.environ.get(
-                "OPENWHISPER_BETA_METRICS_PATH",
+                "VIBEWHISPER_BETA_METRICS_PATH",
                 root / "release" / "beta-metrics.json",
             )
         )
         public_contact_path = pathlib.Path(
             os.environ.get(
-                "OPENWHISPER_PUBLIC_CONTACT_PATH",
+                "VIBEWHISPER_PUBLIC_CONTACT_PATH",
                 root / "release" / "public-contact.json",
             )
         )
-        audit_brand(audit, brand_path, product.get("OPENWHISPER_APP_NAME", ""), now)
+        audit_brand(audit, brand_path, product.get("VIBEWHISPER_APP_NAME", ""), now)
         audit_public_contacts(root, audit, public_contact_path, now)
         audit_installed_acceptance(
             audit,

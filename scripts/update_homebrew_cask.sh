@@ -7,9 +7,9 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-MANIFEST="${OPENWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
-CASK_SOURCE="$ROOT/packaging/homebrew/Casks/openwhisper.rb"
-CASK="${OPENWHISPER_CASK_OUTPUT_PATH:-$CASK_SOURCE}"
+MANIFEST="${VIBEWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
+CASK_SOURCE="$ROOT/packaging/homebrew/Casks/vibewhisper.rb"
+CASK="${VIBEWHISPER_CASK_OUTPUT_PATH:-$CASK_SOURCE}"
 
 [[ -f "$MANIFEST" ]] || {
   echo "Missing release manifest: $MANIFEST" >&2
@@ -25,7 +25,7 @@ ZIP_KIND="$(/usr/bin/plutil -extract artifacts.0.kind raw -o - "$MANIFEST")"
 ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$MANIFEST")"
 ZIP_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.0.downloadURL raw -o - "$MANIFEST")"
 
-[[ "$MANIFEST_VERSION" == "$OPENWHISPER_VERSION" ]] || {
+[[ "$MANIFEST_VERSION" == "$VIBEWHISPER_VERSION" ]] || {
   echo "Manifest version does not match version.env." >&2
   exit 1
 }
@@ -55,7 +55,7 @@ TEMPORARY_CASK="$CASK.tmp"
 trap 'rm -f "$TEMPORARY_CASK"' EXIT
 mkdir -p "$(dirname "$CASK")"
 python3 - "$CASK_SOURCE" "$TEMPORARY_CASK" \
-  "$OPENWHISPER_VERSION" "$ZIP_SHA256" "$ZIP_DOWNLOAD_URL" <<'PY'
+  "$VIBEWHISPER_VERSION" "$ZIP_SHA256" "$ZIP_DOWNLOAD_URL" <<'PY'
 import pathlib
 import re
 import sys
@@ -78,7 +78,7 @@ for pattern, replacement in replacements:
 destination.write_text(text, encoding="utf-8")
 PY
 
-grep -q "version \"$OPENWHISPER_VERSION\"" "$TEMPORARY_CASK"
+grep -q "version \"$VIBEWHISPER_VERSION\"" "$TEMPORARY_CASK"
 grep -q "sha256 \"$ZIP_SHA256\"" "$TEMPORARY_CASK"
 grep -Fq "url \"$ZIP_DOWNLOAD_URL\"" "$TEMPORARY_CASK"
 if grep -q "sha256 :no_check" "$TEMPORARY_CASK"; then

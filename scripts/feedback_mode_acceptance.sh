@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$OPENWHISPER_APP_NAME"
+APP_NAME="$VIBEWHISPER_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 OUT_ROOT="$ROOT/dist/feedback-mode-acceptance"
@@ -87,8 +87,8 @@ capture_mode() {
   local temporary_png=""
   local temporary_log
 
-  temporary_debug="$(mktemp "${TMPDIR:-/tmp}/openwhisper-feedback-debug.XXXXXX")"
-  temporary_log="$(mktemp "${TMPDIR:-/tmp}/openwhisper-feedback-log.XXXXXX")"
+  temporary_debug="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-feedback-debug.XXXXXX")"
+  temporary_log="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-feedback-log.XXXXXX")"
   rm -f "$temporary_debug"
 
   local launch_args=(
@@ -100,7 +100,7 @@ capture_mode() {
   )
 
   if [[ "$capture_png" == "1" ]]; then
-    temporary_png="$(mktemp "${TMPDIR:-/tmp}/openwhisper-feedback-png.XXXXXX")"
+    temporary_png="$(mktemp "${TMPDIR:-/tmp}/vibewhisper-feedback-png.XXXXXX")"
     rm -f "$temporary_png"
     launch_args+=(
       --visual-acceptance-output "$temporary_png"
@@ -263,7 +263,7 @@ if [[ "$FINAL_LAUNCH" == "1" ]]; then
 fi
 
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# OpenWhisper Feedback Mode Acceptance
+# VibeWhisper Feedback Mode Acceptance
 
 - Installed app: \`$APP_DIR\`
 - Modes: Refined HUD, AI Activity Glow, Hidden

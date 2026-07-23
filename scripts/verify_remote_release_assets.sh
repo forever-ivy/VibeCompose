@@ -7,11 +7,11 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-APP="${OPENWHISPER_RELEASE_APP_PATH:-$ROOT/dist/$OPENWHISPER_APP_NAME.app}"
-MANIFEST="${OPENWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
-LOCAL_ZIP="$ROOT/dist/${OPENWHISPER_APP_NAME}-${OPENWHISPER_VERSION}-macos-$(uname -m).zip"
-LOCAL_APPCAST="${OPENWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
-LOCAL_POLICY="${OPENWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
+APP="${VIBEWHISPER_RELEASE_APP_PATH:-$ROOT/dist/$VIBEWHISPER_APP_NAME.app}"
+MANIFEST="${VIBEWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
+LOCAL_ZIP="$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-$(uname -m).zip"
+LOCAL_APPCAST="${VIBEWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
+LOCAL_POLICY="${VIBEWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
 
 [[ -d "$APP" \
   && -f "$MANIFEST" \
@@ -44,7 +44,7 @@ for url in "$FEED_URL" "$CAPABILITY_POLICY_URL" "$ZIP_URL" "$DMG_URL"; do
   }
 done
 
-TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/openwhisper-remote-release.XXXXXX")"
+TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-remote-release.XXXXXX")"
 chmod 0700 "$TEMPORARY_DIRECTORY"
 trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
 
@@ -106,6 +106,6 @@ actual_dmg_sha256="$(/usr/bin/shasum -a 256 "$REMOTE_DMG" | awk '{print $1}')"
 "$ROOT/scripts/verify_provider_capability_policy.swift" \
   --policy "$REMOTE_POLICY" \
   --public-key "$CAPABILITY_PUBLIC_KEY" \
-  --build "$OPENWHISPER_BUILD"
+  --build "$VIBEWHISPER_BUILD"
 
-echo "Remote OpenWhisper release assets, appcast, and provider policy verified."
+echo "Remote VibeWhisper release assets, appcast, and provider policy verified."

@@ -6,13 +6,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$OPENWHISPER_APP_NAME"
+APP_NAME="$VIBEWHISPER_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 OUT_ROOT="$ROOT/dist/accessibility-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="$OUT_ROOT/$RUN_ID"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/openwhisper-accessibility.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-accessibility.XXXXXX")"
 
 INSTALL_FIRST=0
 if [[ "${1:-}" == "--install" ]]; then
@@ -160,7 +160,7 @@ if failed:
     )
     raise SystemExit(1)
 
-print("OpenWhisper accessibility structure acceptance passed.")
+print("VibeWhisper accessibility structure acceptance passed.")
 PY
 
 trap - EXIT
@@ -181,14 +181,14 @@ fi
 
 RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# OpenWhisper Accessibility Structure Acceptance
+# VibeWhisper Accessibility Structure Acceptance
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_DIR\`
 - Surfaces: five canonical Settings panes (plus legacy deep-link aliases), four Onboarding steps, History, Terminology, Quick Add, Skill Switcher, Skill Library Installed/Discover/Created, Editable Preview
 - Validation: SwiftUI enhanced accessibility tree, actionable names, non-empty control surface
 - Privacy: capture mode uses default configuration and empty in-memory user data
-- Final live state: normal installed OpenWhisper relaunched and left running as PID \`$RUNNING_PID\`
+- Final live state: normal installed VibeWhisper relaunched and left running as PID \`$RUNNING_PID\`
 
 This installed-app structure audit is a repeatable precheck. It does not replace
 official Computer Use keyboard navigation, VoiceOver speech-output, focus,

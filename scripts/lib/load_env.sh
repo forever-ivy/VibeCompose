@@ -58,15 +58,15 @@ load_env_file() {
 load_product_env() {
   load_env_file \
     "$1" \
-    OPENWHISPER_APP_NAME \
-    OPENWHISPER_BUNDLE_ID \
-    OPENWHISPER_REPOSITORY \
-    OPENWHISPER_MIN_MACOS
+    VIBEWHISPER_APP_NAME \
+    VIBEWHISPER_BUNDLE_ID \
+    VIBEWHISPER_REPOSITORY \
+    VIBEWHISPER_MIN_MACOS
 }
 
 load_version_env() {
   load_env_file \
     "$1" \
-    OPENWHISPER_VERSION \
-    OPENWHISPER_BUILD
+    VIBEWHISPER_VERSION \
+    VIBEWHISPER_BUILD
 }

@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$OPENWHISPER_APP_NAME"
+APP_NAME="$VIBEWHISPER_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 OUT_ROOT="$ROOT/dist/window-activation-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -56,12 +56,12 @@ done
 
 /usr/bin/xcrun swift \
   "$ROOT/scripts/verify_window_activation.swift" \
-  "$OPENWHISPER_BUNDLE_ID" \
+  "$VIBEWHISPER_BUNDLE_ID" \
   "$OUT_DIR/evidence.json" \
   | tee "$OUT_DIR/verification.txt"
 
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# OpenWhisper Window Activation Acceptance
+# VibeWhisper Window Activation Acceptance
 
 - Installed app: \`$APP_DIR\`
 - Settings-open policy: regular, with the packaged App Icon available to Dock

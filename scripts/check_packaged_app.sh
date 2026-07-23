@@ -7,12 +7,22 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-APP="$ROOT/dist/$OPENWHISPER_APP_NAME.app"
+PACKAGED_APP="$ROOT/dist/$VIBEWHISPER_APP_NAME.app"
+CHECK_WORK_DIR="$(/usr/bin/mktemp -d /tmp/vibewhisper-package-check.XXXXXX)"
+APP="$CHECK_WORK_DIR/$VIBEWHISPER_APP_NAME.app"
+cleanup_check_work_dir() {
+  rm -rf "$CHECK_WORK_DIR"
+}
+trap cleanup_check_work_dir EXIT
 PLIST="$APP/Contents/Info.plist"
-EXECUTABLE="$APP/Contents/MacOS/$OPENWHISPER_APP_NAME"
+EXECUTABLE="$APP/Contents/MacOS/$VIBEWHISPER_APP_NAME"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 
 "$ROOT/scripts/package_app.sh" >/dev/null
+# Desktop File Provider can attach FinderInfo to the published bundle after
+# packaging completes. Validate a metadata-free byte-for-byte copy under /tmp
+# so those host xattrs cannot turn an intact code signature into a false fail.
+/usr/bin/ditto --norsrc --noextattr --noqtn "$PACKAGED_APP" "$APP"
 swift "$ROOT/scripts/verify_dependency_licenses.swift" \
   --root "$ROOT" \
   --app-resources "$APP/Contents/Resources"
@@ -31,7 +41,7 @@ fi
 
 if ! /usr/bin/otool -L "$EXECUTABLE" \
   | grep -q '@rpath/Sparkle.framework/Versions/B/Sparkle'; then
-  echo "OpenWhisper is not linked against the embedded Sparkle framework." >&2
+  echo "VibeWhisper is not linked against the embedded Sparkle framework." >&2
   exit 1
 fi
 
@@ -46,7 +56,7 @@ if ! /usr/bin/otool -l "$EXECUTABLE" \
       }
       END { exit(found ? 0 : 1) }
     '; then
-  echo "OpenWhisper is missing the app Frameworks runtime search path." >&2
+  echo "VibeWhisper is missing the app Frameworks runtime search path." >&2
   exit 1
 fi
 
@@ -141,26 +151,26 @@ if [[ "$LOCALIZATIONS" != *'"zh-Hans"'* ]]; then
 fi
 
 BUNDLE_ID="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")"
-if [[ "$BUNDLE_ID" != "$OPENWHISPER_BUNDLE_ID" ]]; then
-  echo "Packaged app bundle identifier mismatch: expected $OPENWHISPER_BUNDLE_ID, got $BUNDLE_ID" >&2
+if [[ "$BUNDLE_ID" != "$VIBEWHISPER_BUNDLE_ID" ]]; then
+  echo "Packaged app bundle identifier mismatch: expected $VIBEWHISPER_BUNDLE_ID, got $BUNDLE_ID" >&2
   exit 1
 fi
 
 EXECUTABLE_NAME="$(/usr/bin/plutil -extract CFBundleExecutable raw -o - "$PLIST")"
-if [[ "$EXECUTABLE_NAME" != "$OPENWHISPER_APP_NAME" ]]; then
-  echo "Packaged app executable mismatch: expected $OPENWHISPER_APP_NAME, got $EXECUTABLE_NAME" >&2
+if [[ "$EXECUTABLE_NAME" != "$VIBEWHISPER_APP_NAME" ]]; then
+  echo "Packaged app executable mismatch: expected $VIBEWHISPER_APP_NAME, got $EXECUTABLE_NAME" >&2
   exit 1
 fi
 
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
-if [[ "$VERSION" != "$OPENWHISPER_VERSION" ]]; then
-  echo "Packaged app version mismatch: expected $OPENWHISPER_VERSION, got $VERSION" >&2
+if [[ "$VERSION" != "$VIBEWHISPER_VERSION" ]]; then
+  echo "Packaged app version mismatch: expected $VIBEWHISPER_VERSION, got $VERSION" >&2
   exit 1
 fi
 
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
-if [[ "$BUILD" != "$OPENWHISPER_BUILD" ]]; then
-  echo "Packaged app build mismatch: expected $OPENWHISPER_BUILD, got $BUILD" >&2
+if [[ "$BUILD" != "$VIBEWHISPER_BUILD" ]]; then
+  echo "Packaged app build mismatch: expected $VIBEWHISPER_BUILD, got $BUILD" >&2
   exit 1
 fi
 
@@ -188,15 +198,15 @@ MANIFEST_ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$RE
 MANIFEST_DMG_NAME="$(/usr/bin/plutil -extract artifacts.1.fileName raw -o - "$RELEASE_MANIFEST")"
 MANIFEST_DMG_SHA256="$(/usr/bin/plutil -extract artifacts.1.sha256 raw -o - "$RELEASE_MANIFEST")"
 
-[[ "$MANIFEST_VERSION" == "$OPENWHISPER_VERSION" ]] || {
+[[ "$MANIFEST_VERSION" == "$VIBEWHISPER_VERSION" ]] || {
   echo "Release manifest version mismatch." >&2
   exit 1
 }
-[[ "$MANIFEST_BUILD" == "$OPENWHISPER_BUILD" ]] || {
+[[ "$MANIFEST_BUILD" == "$VIBEWHISPER_BUILD" ]] || {
   echo "Release manifest build mismatch." >&2
   exit 1
 }
-[[ "$MANIFEST_BUNDLE_ID" == "$OPENWHISPER_BUNDLE_ID" ]] || {
+[[ "$MANIFEST_BUNDLE_ID" == "$VIBEWHISPER_BUNDLE_ID" ]] || {
   echo "Release manifest bundle identifier mismatch." >&2
   exit 1
 }

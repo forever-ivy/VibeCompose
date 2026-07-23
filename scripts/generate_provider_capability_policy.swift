@@ -42,7 +42,7 @@ private func usage() -> Never {
     fputs(
         """
         Usage:
-          OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/key \
+          VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/key \
           scripts/generate_provider_capability_policy.swift \
             --revision 1 \
             --incident-id OW-INC-2026-001 \
@@ -233,12 +233,12 @@ do {
 
     guard
         let privateKeyPath = ProcessInfo.processInfo.environment[
-            "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE"
+            "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE"
         ],
         !privateKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else {
         throw GeneratorError.unsafePrivateKey(
-            "OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE is required."
+            "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE is required."
         )
     }
     let signingKey = try privateKey(

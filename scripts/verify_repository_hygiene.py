@@ -73,10 +73,10 @@ PRIVATE_KEY_FILENAME_PATTERN = re.compile(
 )
 
 REMOVED_COMMERCIAL_ARTIFACTS = (
-    "Sources/OpenWhisper/CommercialLicensing.swift",
-    "Sources/OpenWhisperLicensing",
-    "Sources/OpenWhisperLicenseTool",
-    "Tests/OpenWhisperLicensingTests",
+    "Sources/VibeWhisper/CommercialLicensing.swift",
+    "Sources/VibeWhisperLicensing",
+    "Sources/VibeWhisperLicenseTool",
+    "Tests/VibeWhisperLicensingTests",
     "docs/engineering/licensing.md",
     "docs/legal/refund-policy.md",
     "docs/legal/refund-policy.zh-CN.md",
@@ -93,7 +93,7 @@ COMMERCIALIZATION_MARKERS = (
     "commercial release",
     "commercial-release",
     "commercialization",
-    "openwhisper pro",
+    "vibewhisper pro",
     "pro preview",
     "license activation",
     "license receipt",
@@ -202,7 +202,7 @@ def verify_commercialization_removal(paths: list[Path]) -> list[str]:
             or relative_path.startswith("Tests/")
             or relative_path == "scripts/verify_repository_hygiene.py"
             or relative_path.startswith(
-                "Sources/OpenWhisper/Resources/Legal/ThirdPartyLicenses/"
+                "Sources/VibeWhisper/Resources/Legal/ThirdPartyLicenses/"
             )
             or relative_path == "LICENSE"
         ):
@@ -229,7 +229,7 @@ def verify_commercialization_removal(paths: list[Path]) -> list[str]:
 
 def verify_localization() -> list[str]:
     failures: list[str] = []
-    source_root = ROOT / "Sources" / "OpenWhisper"
+    source_root = ROOT / "Sources" / "VibeWhisper"
     strings_path = (
         source_root
         / "Resources"

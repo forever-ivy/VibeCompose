@@ -419,7 +419,7 @@ do {
         )
     }
 
-    print("OpenWhisper accessibility visual acceptance passed.")
+    print("VibeWhisper accessibility visual acceptance passed.")
 } catch {
     fputs("Accessibility visual acceptance failed: \(error)\n", stderr)
     exit(1)

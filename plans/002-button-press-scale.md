@@ -4,22 +4,22 @@
 - **Commit**: c4f9052
 - **Severity**: HIGH
 - **Category**: Physicality & origin
-- **Estimated scope**: 1 file (OpenWhisperVisualSystem.swift), 3 button styles, ~6 lines
+- **Estimated scope**: 1 file (VibeWhisperVisualSystem.swift), 3 button styles, ~6 lines
 
 ## Problem
 
-`OpenWhisperVisualSystem.swift:509–590` — All three button styles (`OpenWhisperPrimaryButtonStyle`, `OpenWhisperSecondaryButtonStyle`, `OpenWhisperQuietButtonStyle`) handle press state with opacity changes only. No `scaleEffect` is applied on press. Per the audit standard: pressable elements must give tactile feedback via `scale(0.97)` with `transition: transform 160ms ease-out`.
+`VibeWhisperVisualSystem.swift:509–590` — All three button styles (`VibeWhisperPrimaryButtonStyle`, `VibeWhisperSecondaryButtonStyle`, `VibeWhisperQuietButtonStyle`) handle press state with opacity changes only. No `scaleEffect` is applied on press. Per the audit standard: pressable elements must give tactile feedback via `scale(0.97)` with `transition: transform 160ms ease-out`.
 
 ```swift
-// OpenWhisperVisualSystem.swift:554–556 — current Primary
+// VibeWhisperVisualSystem.swift:554–556 — current Primary
 .background(
-    Color(nsColor: OpenWhisperPalette.brandBlue)
+    Color(nsColor: VibeWhisperPalette.brandBlue)
         .opacity(isEnabled ? (configuration.isPressed ? 0.76 : 1) : 0.38),
     // ← no scaleEffect on isPressed
 ```
 
 ```swift
-// OpenWhisperVisualSystem.swift:537–538 — current Secondary
+// VibeWhisperVisualSystem.swift:537–538 — current Secondary
 .opacity(isEnabled ? (configuration.isPressed ? 0.78 : 1) : 0.68)
 // ← no scaleEffect on isPressed
 ```
@@ -37,9 +37,9 @@ Add `.scaleEffect` driven by `configuration.isPressed` to all three styles, usin
 ```
 
 Scale values by style:
-- `OpenWhisperPrimaryButtonStyle`: `0.97` (most tactile — it's the main CTA)
-- `OpenWhisperSecondaryButtonStyle`: `0.975` (slightly subtler)
-- `OpenWhisperQuietButtonStyle`: `0.98` (near-invisible — quiet style should stay quiet)
+- `VibeWhisperPrimaryButtonStyle`: `0.97` (most tactile — it's the main CTA)
+- `VibeWhisperSecondaryButtonStyle`: `0.975` (slightly subtler)
+- `VibeWhisperQuietButtonStyle`: `0.98` (near-invisible — quiet style should stay quiet)
 
 Keep all existing opacity behavior. Add scale on top, don't replace opacity.
 
@@ -52,19 +52,19 @@ Keep all existing opacity behavior. Add scale on top, don't replace opacity.
 
 ## Steps
 
-1. **`OpenWhisperPrimaryButtonStyle.makeBody`** (~line 544–563): Add after `.background(...)`:
+1. **`VibeWhisperPrimaryButtonStyle.makeBody`** (~line 544–563): Add after `.background(...)`:
    ```swift
    .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
    .animation(.spring(response: 0.2, dampingFraction: 0.85), value: configuration.isPressed)
    ```
 
-2. **`OpenWhisperSecondaryButtonStyle.makeBody`** (~line 509–538): Add after the final `.opacity(...)`:
+2. **`VibeWhisperSecondaryButtonStyle.makeBody`** (~line 509–538): Add after the final `.opacity(...)`:
    ```swift
    .scaleEffect(configuration.isPressed ? 0.975 : 1.0)
    .animation(.spring(response: 0.2, dampingFraction: 0.85), value: configuration.isPressed)
    ```
 
-3. **`OpenWhisperQuietButtonStyle.makeBody`** (~line 566–587): Add after the final `.background(...)`:
+3. **`VibeWhisperQuietButtonStyle.makeBody`** (~line 566–587): Add after the final `.background(...)`:
    ```swift
    .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
    .animation(.spring(response: 0.2, dampingFraction: 0.85), value: configuration.isPressed)
@@ -73,7 +73,7 @@ Keep all existing opacity behavior. Add scale on top, don't replace opacity.
 ## Boundaries
 
 - Do NOT touch color, opacity, font, padding, or corner radius values.
-- Do NOT touch `OpenWhisperIconWell`, `OpenWhisperStatusChip`, or any other component in the same file.
+- Do NOT touch `VibeWhisperIconWell`, `VibeWhisperStatusChip`, or any other component in the same file.
 - Only the three `ButtonStyle` structs are in scope.
 - Do NOT add new dependencies.
 

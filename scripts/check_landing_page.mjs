@@ -21,7 +21,7 @@ function hasHref(href) {
 }
 
 assert.match(html, /<html\s+lang=["']zh-CN["']/, "landing page should be Chinese-first");
-includes("OpenWhisper", "product name");
+includes("VibeWhisper", "product name");
 includes("0.1.0 Alpha", "alpha version status");
 includes("F5", "F5 workflow");
 includes("ChatGPT", "ChatGPT account boundary");
@@ -34,9 +34,9 @@ for (const id of ["hero", "workflow", "product", "safety"]) {
   hasAnchor(id);
 }
 
-hasHref("https://github.com/forever-ivy/openwhisper");
+hasHref("https://github.com/forever-ivy/vibewhisper");
 hasHref("product/community-skills-core-next-step-plan-2026-07-15.md");
 hasHref("audits/security-audit-2026-07-13.md");
 
 assert.ok(!html.includes("releases/tag/"), "alpha landing page must not claim a published release");
-console.log("OpenWhisper landing page content contract passed");
+console.log("VibeWhisper landing page content contract passed");
