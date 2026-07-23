@@ -103,9 +103,9 @@ enum RecoveryAudioError: LocalizedError, Equatable {
         case .missing:
             return L10n.text("Saved recovery audio is missing.")
         case .unsafePath:
-            return L10n.text("OpenWhisper blocked an unsafe recovery audio path.")
+            return L10n.text("VibeWhisper blocked an unsafe recovery audio path.")
         case .symbolicLink:
-            return L10n.text("OpenWhisper blocked a symbolic link in recovery storage.")
+            return L10n.text("VibeWhisper blocked a symbolic link in recovery storage.")
         case .notRegularFile:
             return L10n.text("Saved recovery audio is not a regular file.")
         case .invalidWaveFile:

@@ -330,7 +330,7 @@ enum StyleCapsuleError:
         switch self {
         case .invalidIdentifier:
             return L10n.text(
-                "The Style Capsule identifier is invalid."
+                "The Writing Style identifier is invalid."
             )
         case .invalidContent:
             return L10n.text(
@@ -338,19 +338,19 @@ enum StyleCapsuleError:
             )
         case .builtInReadOnly:
             return L10n.text(
-                "Built-in Style Capsules cannot be changed or deleted."
+                "Built-in Writing Styles cannot be changed or deleted."
             )
         case .symbolicLink:
             return L10n.text(
-                "OpenWhisper blocked a symbolic link in Style Capsule storage."
+                "VibeWhisper blocked a symbolic link in Writing Style storage."
             )
         case .oversized:
             return L10n.text(
-                "The Style Capsule is too large."
+                "The Writing Style is too large."
             )
         case .missing:
             return L10n.text(
-                "The Style Capsule no longer exists."
+                "The Writing Style no longer exists."
             )
         }
     }
@@ -786,11 +786,11 @@ struct TerminologyPackDefinition:
 
 enum TerminologyPackRegistry {
     static let backendID =
-        "app.openwhisper.terms.backend"
+        "app.vibewhisper.terms.backend"
     static let medicalID =
-        "app.openwhisper.terms.medical"
+        "app.vibewhisper.terms.medical"
     static let kubernetesID =
-        "app.openwhisper.terms.kubernetes"
+        "app.vibewhisper.terms.kubernetes"
 
     static let builtIn: [TerminologyPackDefinition] = [
         make(
@@ -866,7 +866,7 @@ enum TerminologyPackRegistry {
                             StableIdentifier
                                 .uuid(
                                     namespace:
-                                        "OpenWhisper.TerminologyPack",
+                                        "VibeWhisper.TerminologyPack",
                                     components: [
                                         id,
                                         canonical,

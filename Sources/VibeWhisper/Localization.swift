@@ -42,10 +42,10 @@ enum AppLanguage:
 
 extension Notification.Name {
     static let openWhisperLanguageDidChange = Notification.Name(
-        "OpenWhisper.LanguageDidChange"
+        "VibeWhisper.LanguageDidChange"
     )
     static let openWhisperNavigateSettingsPane = Notification.Name(
-        "OpenWhisper.NavigateSettingsPane"
+        "VibeWhisper.NavigateSettingsPane"
     )
 }
 

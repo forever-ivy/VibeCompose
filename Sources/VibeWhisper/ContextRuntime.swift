@@ -50,6 +50,8 @@ struct ContextConfig:
 {
     static let defaultMaximumSelectionCharacters =
         6_000
+    static let maximumSelectionCharacterLimit =
+        20_000
     static let maximumGrantCount = 200
 
     var selectionEnabled = true
@@ -235,7 +237,10 @@ struct ContextConfig:
     private static func boundedMaximumCharacters(
         _ value: Int
     ) -> Int {
-        min(20_000, max(100, value))
+        min(
+            maximumSelectionCharacterLimit,
+            max(100, value)
+        )
     }
 
     private static func normalizedGrants(
@@ -364,6 +369,11 @@ struct SelectionContextProvider:
             LaunchAppContext?,
             Int
         ) -> SelectionContextCaptureResult
+    var clipboardCapture:
+        @MainActor @Sendable (
+            LaunchAppContext?,
+            Int
+        ) async -> SelectionContextCaptureResult
     var verify:
         @MainActor @Sendable (
             SelectionContextSnapshot
@@ -384,6 +394,20 @@ struct SelectionContextProvider:
                             maximumCharacters
                     )
             },
+        clipboardCapture:
+            @escaping @MainActor @Sendable (
+                LaunchAppContext?,
+                Int
+            ) async -> SelectionContextCaptureResult = {
+                launchContext,
+                maximumCharacters in
+                await ClipboardSelectionContextCapture
+                    .capture(
+                        in: launchContext,
+                        maximumCharacters:
+                            maximumCharacters
+                    )
+            },
         verify:
             @escaping @MainActor @Sendable (
                 SelectionContextSnapshot
@@ -396,6 +420,8 @@ struct SelectionContextProvider:
             }
     ) {
         self.capture = capture
+        self.clipboardCapture =
+            clipboardCapture
         self.verify = verify
     }
 }
@@ -452,7 +478,7 @@ final class ContextPermissionPromptController:
                 "the current app"
             )
         alert.informativeText = L10n.format(
-            "OpenWhisper will read only the text you selected in %@, up to %ld characters. It will not read the rest of the window, document, clipboard, or screen.",
+            "VibeWhisper will read only the text you selected in %@, up to %ld characters. It will not read the rest of the window, document, clipboard, or screen.",
             appName,
             request.maximumCharacters
         )
@@ -896,12 +922,69 @@ struct ContextBroker {
             }
         }
 
-        switch selectionProvider.capture(
-            launchAppContext,
-            contextConfig
-                .maximumSelectionCharacters
-        ) {
+        // Permission dialogs and mic prompts may have fronted VibeWhisper.
+        // Restore the launch app before reading AX selection so hosts that
+        // clear or hide selection while backgrounded still yield text.
+        let didRestore = LaunchAppContext.restoreFrontmostIfNeeded(
+            launchAppContext
+        )
+        // activate(options:) is asynchronous; give the host a brief settle
+        // window so AXFocusedUIElement / AXSelectedText become readable again.
+        if didRestore {
+            try? await Task.sleep(for: .milliseconds(80))
+        }
+
+        let accessibilityCapture =
+            selectionProvider.capture(
+                launchAppContext,
+                contextConfig
+                    .maximumSelectionCharacters
+            )
+        let selectionCapture:
+            SelectionContextCaptureResult
+        switch accessibilityCapture {
+        case .unavailable, .targetChanged:
+            // WeChat and a few custom-rendered editors expose no usable AX
+            // document subtree. After policy and user permission checks, use
+            // the host's normal Copy command as a narrow read-only fallback.
+            // The implementation restores the previous clipboard before
+            // returning and never runs for ordinary non-context Skills.
+            selectionCapture =
+                await selectionProvider
+                    .clipboardCapture(
+                        launchAppContext,
+                        contextConfig
+                            .maximumSelectionCharacters
+                    )
+        default:
+            selectionCapture =
+                accessibilityCapture
+        }
+
+        switch selectionCapture {
         case .captured(let snapshot):
+            guard
+                !snapshot.selectedText
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+                    .isEmpty
+            else {
+                var prepared = PreparedSkillContext(
+                    reason: .noSelection,
+                    persistentGrant:
+                        persistentGrant,
+                    emptySources: [.selection],
+                    contextSnapshot: initialSnapshot
+                )
+                prepared.blockMissingRequiredSources(
+                    for: request
+                )
+                prepared.refreshReceipt(
+                    request: request
+                )
+                return prepared
+            }
             var fabricSnapshot = initialSnapshot
             var items = fabricSnapshot.items
             items.append(

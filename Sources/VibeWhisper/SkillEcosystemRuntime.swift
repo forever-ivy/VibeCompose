@@ -531,7 +531,7 @@ struct SkillCreatorDraft:
     var license: String?
     var version: String
     var author: String
-    var profile: OpenWhisperSkillProfile
+    var profile: VibeWhisperSkillProfile
     var references: [String: String]
     var assets: [String: Data]
     var goldenCasesJSONL: String?
@@ -542,12 +542,12 @@ struct SkillCreatorDraft:
         let risk = template.defaultRisk
         return SkillCreatorDraft(
             name: template.rawValue,
-            description: "OpenWhisper \(template.title) Skill",
+            description: "VibeWhisper \(template.title) Skill",
             instructions: template.instructions,
             license: "MIT",
             version: "1.0.0",
             author: "Local Creator",
-            profile: OpenWhisperSkillProfile(
+            profile: VibeWhisperSkillProfile(
                 contextRequest: ContextRequest(
                     required: [.voice],
                     optional: [.selection, .styleCapsule, .terminology]
@@ -621,7 +621,7 @@ struct SkillCreator:
         _ draft: SkillCreatorDraft
     ) -> SkillCreatorValidationReport {
         let temporary = fileManager.temporaryDirectory
-            .appendingPathComponent("OpenWhisper-SkillCreator-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("VibeWhisper-SkillCreator-\(UUID().uuidString)", isDirectory: true)
         do {
             try fileManager.createDirectory(at: temporary, withIntermediateDirectories: true)
             try write(draft, to: temporary)
@@ -661,8 +661,8 @@ struct SkillCreator:
                 references[descriptor.relativePath] = text
             }
         }
-        let profileURL = package.rootURL.appendingPathComponent("openwhisper.yaml")
-        let profile = (try? OpenWhisperProfileLoader().load(
+        let profileURL = package.rootURL.appendingPathComponent("vibewhisper.yaml")
+        let profile = (try? VibeWhisperProfileLoader().load(
             from: fileManager.fileExists(atPath: profileURL.path) ? profileURL : nil
         )) ?? .safeDefault
         return SkillCreatorDraft(
@@ -704,7 +704,7 @@ struct SkillCreator:
             "",
         ].compactMap { $0 }.joined(separator: "\n")
         try secureWrite(Data(frontmatter.utf8), to: root.appendingPathComponent("SKILL.md"))
-        try secureWrite(Data(profileYAML(draft.profile).utf8), to: root.appendingPathComponent("openwhisper.yaml"))
+        try secureWrite(Data(profileYAML(draft.profile).utf8), to: root.appendingPathComponent("vibewhisper.yaml"))
 
         for (relativePath, content) in draft.references.sorted(by: { $0.key < $1.key }) {
             let safe = try safeResourcePath(relativePath, root: "references")
@@ -752,7 +752,7 @@ struct SkillCreator:
             .replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
-    private func profileYAML(_ profile: OpenWhisperSkillProfile) -> String {
+    private func profileYAML(_ profile: VibeWhisperSkillProfile) -> String {
         func list(_ values: [String]) -> String {
             "[" + values.map(yamlScalar).joined(separator: ", ") + "]"
         }
@@ -870,7 +870,7 @@ enum TrustedSkillRegistryError:
         case .revoked(let revision): "Skill revision \(revision) has been revoked."
         case .hashMismatch: "The downloaded Skill archive hash does not match the signed index."
         case .packageNotFound(let packageID): "The Registry package \(packageID) was not found."
-        case .responseTooLarge: "The Registry response exceeds OpenWhisper's size limit."
+        case .responseTooLarge: "The Registry response exceeds VibeWhisper's size limit."
         case .transport(let detail): "The Registry request failed: \(detail)"
         }
     }

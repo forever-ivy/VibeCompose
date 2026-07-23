@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-private final class HistoryAudioPlayer: ObservableObject {
+private final class HistoryAudioPlayer: NSObject, ObservableObject, NSSoundDelegate {
     private var sound: NSSound?
     @Published private(set) var playingRecordID: UUID?
 
@@ -12,15 +12,28 @@ private final class HistoryAudioPlayer: ObservableObject {
             NSSound.beep()
             return
         }
+        sound.delegate = self
         self.sound = sound
         playingRecordID = recordID
         sound.play()
     }
 
     func stop() {
+        sound?.delegate = nil
         sound?.stop()
         sound = nil
         playingRecordID = nil
+    }
+
+    /// Clear play-state when the clip ends naturally so the History row
+    /// no longer shows "Restart Audio" after playback finishes.
+    nonisolated func sound(_ sound: NSSound, didFinishPlaying flag: Bool) {
+        Task { @MainActor in
+            guard self.sound === sound else { return }
+            self.sound?.delegate = nil
+            self.sound = nil
+            self.playingRecordID = nil
+        }
     }
 }
 
@@ -52,7 +65,7 @@ final class HistoryWindowController: NSWindowController {
             onDeleteTranscriptionRecord: onDeleteTranscriptionRecord,
             onDeleteRecoveryRecord: onDeleteRecoveryRecord
         )
-        .applyingOpenWhisperBrandTint()
+        .applyingVibeWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
         )
@@ -69,13 +82,13 @@ final class HistoryWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = L10n.text("OpenWhisper History")
+        window.title = L10n.text("VibeWhisper History")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         window.toolbarStyle = .unified
         let historyToolbar = NSToolbar(
-            identifier: "OpenWhisper.HistoryToolbar"
+            identifier: "VibeWhisper.HistoryToolbar"
         )
         historyToolbar.displayMode = .iconOnly
         historyToolbar.allowsUserCustomization = false
@@ -83,13 +96,13 @@ final class HistoryWindowController: NSWindowController {
         window.toolbar = historyToolbar
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.HistoryWindow")
+        window.identifier = NSUserInterfaceItemIdentifier("VibeWhisper.HistoryWindow")
         window.collectionBehavior.remove(.fullScreenPrimary)
         window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.minSize = NSSize(width: 760, height: 500)
         window.tabbingMode = .disallowed
-        let restored = window.setFrameUsingName("OpenWhisper.HistoryWindow")
-        window.setFrameAutosaveName("OpenWhisper.HistoryWindow")
+        let restored = window.setFrameUsingName("VibeWhisper.HistoryWindow")
+        window.setFrameAutosaveName("VibeWhisper.HistoryWindow")
         if !restored {
             window.center()
         }
@@ -244,15 +257,15 @@ struct HistoryWindowView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(entry.target)
-                        .font(OpenWhisperTypography.callout(.semibold))
+                        .font(VibeWhisperTypography.callout(.semibold))
                         .lineLimit(1)
                     Spacer()
                     Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
-                        .font(OpenWhisperTypography.micro())
+                        .font(VibeWhisperTypography.micro())
                         .foregroundStyle(.secondary)
                 }
                 Text(entry.summary)
-                    .font(OpenWhisperTypography.caption())
+                    .font(VibeWhisperTypography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 metadataRow(for: entry)
@@ -268,10 +281,10 @@ struct HistoryWindowView: View {
             : outcomeSymbol(entry.outcome)
         return Image(systemName: symbol)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color(nsColor: OpenWhisperPalette.brandBlue))
+            .foregroundStyle(Color(nsColor: VibeWhisperPalette.brandBlue))
             .frame(width: 32, height: 32)
             .background(
-                Color(nsColor: OpenWhisperPalette.brandBlue).opacity(0.09),
+                Color(nsColor: VibeWhisperPalette.brandBlue).opacity(0.09),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
             .accessibilityHidden(true)
@@ -284,7 +297,7 @@ struct HistoryWindowView: View {
             Text(entry.kind == .recovery
                 ? L10n.text("Recovery")
                 : TextDeliveryStatus.localizedLabel(for: entry.outcome))
-                .font(OpenWhisperTypography.micro(.medium))
+                .font(VibeWhisperTypography.micro(.medium))
         }
         .foregroundStyle(.tertiary)
     }
@@ -303,10 +316,10 @@ struct HistoryWindowView: View {
                     }
                     if let message {
                         Text(message)
-                            .font(OpenWhisperTypography.caption())
+                            .font(VibeWhisperTypography.caption())
                             .foregroundStyle(
                                 messageIsError
-                                    ? Color(nsColor: OpenWhisperPalette.error)
+                                    ? Color(nsColor: VibeWhisperPalette.error)
                                     : Color.secondary
                             )
                     }
@@ -316,7 +329,7 @@ struct HistoryWindowView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
         } else {
-            OpenWhisperEmptyState(
+            VibeWhisperEmptyState(
                 systemImage: "clock.arrow.circlepath",
                 title: L10n.text("Select a record"),
                 detail: L10n.text("Inspect, copy, retry, reveal, play, or delete local dictation records.")
@@ -328,7 +341,7 @@ struct HistoryWindowView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(entry.target)
-                    .font(OpenWhisperTypography.title())
+                    .font(VibeWhisperTypography.title())
                     .tracking(-0.18)
                 Spacer()
                 Button(role: .destructive) {
@@ -336,19 +349,19 @@ struct HistoryWindowView: View {
                 } label: {
                     Label(L10n.text("Delete"), systemImage: "trash")
                 }
-                .buttonStyle(OpenWhisperSecondaryButtonStyle())
+                .buttonStyle(VibeWhisperSecondaryButtonStyle())
             }
             Text(entry.timestamp.formatted(date: .complete, time: .standard))
-                .font(OpenWhisperTypography.callout())
+                .font(VibeWhisperTypography.callout())
                 .foregroundStyle(.secondary)
-            OpenWhisperStatusChip(
+            VibeWhisperStatusChip(
                 text: TextDeliveryStatus.localizedLabel(for: entry.outcome),
                 kind: statusChipKind(for: entry.outcome)
             )
         }
     }
 
-    private func statusChipKind(for outcome: String) -> OpenWhisperStatusChip.Kind {
+    private func statusChipKind(for outcome: String) -> VibeWhisperStatusChip.Kind {
         switch TextDeliveryStatus.kind(for: outcome) {
         case .insertedAndVerified:
             return .success
@@ -366,112 +379,24 @@ struct HistoryWindowView: View {
     private func transcriptionDetail(_ record: TranscriptionHistoryRecord) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             if let skillName = record.skillName {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.text("Skill run"))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Text(skillName)
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(
-                        [
-                            record.skillSource.flatMap {
-                                SkillResolutionSource(rawValue: $0)?
-                                    .localizedLabel
-                            },
-                            record.skillVersion.map { "v\($0)" },
-                            record.skillRevision,
-                        ].compactMap { $0 }.joined(separator: " · ")
-                    )
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    if !record.skillValidationIssueCodes.isEmpty {
-                        Label(
-                            L10n.format(
-                                "Validator fallback: %@",
-                                record.skillValidationIssueCodes
-                                    .joined(separator: ", ")
-                            ),
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.orange)
-                    }
-                    if let fallback = record.skillFallbackMessage {
-                        Text(fallback)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.orange)
-                    }
-                    if let action = record.skillDeliveryAction {
-                        Label(
-                            record.skillResultEdited
-                                ? L10n.format(
-                                    "Edited by you · %@",
-                                    localizedDeliveryAction(
-                                        action
-                                    )
-                                )
-                                : localizedDeliveryAction(
-                                    action
-                                ),
-                            systemImage:
-                                record.skillResultEdited
-                                ? "pencil.line"
-                                : "arrow.right.circle"
-                        )
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    }
-                    if let receipt = record.skillRunReceipt {
-                        let context = receipt.contextDecisions
-                            .filter {
-                                $0.decisionCode != "not_requested"
-                            }
-                            .map { decision in
-                                "\(decision.source.title):\(decision.decisionCode)"
-                            }
-                            .joined(separator: " · ")
-                        if !context.isEmpty {
-                            Label(
-                                L10n.format(
-                                    "Context: %@",
-                                    context
-                                ),
-                                systemImage: "checkmark.shield"
-                            )
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        }
-                        Text(
-                            L10n.format(
-                                "Receipt: %@ · %@",
-                                receipt.targetVerification,
-                                receipt.finalUserAction
-                            )
-                        )
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                    }
-                }
+                skillSummary(record, name: skillName)
             }
-            historyTextSection(title: "Final text", text: record.finalText)
+
+            historyTextSection(title: "Text", text: record.finalText)
 
             if let rawText = record.rawText,
                rawText.trimmingCharacters(in: .whitespacesAndNewlines) != record.finalText
             {
-                historyTextSection(title: "Original ASR", text: rawText)
+                historyTextSection(title: "Original", text: rawText)
             }
 
-            HStack {
+            HStack(spacing: 10) {
                 Button {
                     copyText(record.finalText)
                 } label: {
                     Label(L10n.text("Copy"), systemImage: "doc.on.doc")
                 }
-                if let provider = record.textPolishProvider {
-                    Text(L10n.format("Polished with %@", provider))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
+
                 if record.undoState == .available,
                    onCanUndoTranscriptionRecord(record.id)
                 {
@@ -492,47 +417,46 @@ struct HistoryWindowView: View {
                         )
                     }
                     .buttonStyle(.borderedProminent)
-                } else if let undoState = record.undoState {
-                    Label(
-                        localizedUndoState(undoState),
-                        systemImage: undoState == .restored
-                            ? "checkmark.arrow.trianglehead.counterclockwise"
-                            : "arrow.uturn.backward.circle"
-                    )
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func localizedUndoState(
-        _ state: HistoryUndoState
-    ) -> String {
-        switch state {
-        case .available:
-            return L10n.text("Safe Undo expired")
-        case .restored:
-            return L10n.text("Insertion safely undone")
-        case .originalCopied:
-            return L10n.text("Original selected text copied")
-        case .unavailable:
-            return L10n.text("Safe Undo unavailable")
-        }
-    }
+    @ViewBuilder
+    private func skillSummary(
+        _ record: TranscriptionHistoryRecord,
+        name: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(name)
+                .font(VibeWhisperTypography.callout(.semibold))
 
-    private func localizedDeliveryAction(
-        _ action: String
-    ) -> String {
-        switch PreviewAction(rawValue: action) {
-        case .replaceSelection:
-            return L10n.text("Replaced selection")
-        case .pasteToTarget:
-            return L10n.text("Pasted to target")
-        case .copy:
-            return L10n.text("Copied")
-        case nil:
-            return action
+            // Only surface actionable issues — hide source/version/receipt/context dumps.
+            if !record.skillValidationIssueCodes.isEmpty {
+                Label(
+                    L10n.format(
+                        "Validator fallback: %@",
+                        record.skillValidationIssueCodes
+                            .joined(separator: ", ")
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(VibeWhisperTypography.caption(.semibold))
+                .foregroundStyle(.orange)
+            }
+            if let fallback = record.skillFallbackMessage, !fallback.isEmpty {
+                Text(fallback)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(.orange)
+            }
+            if record.skillResultEdited {
+                Label(
+                    L10n.text("Edited by you"),
+                    systemImage: "pencil.line"
+                )
+                .font(VibeWhisperTypography.caption(.medium))
+                .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -593,30 +517,30 @@ struct HistoryWindowView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.text(title))
-                .font(OpenWhisperTypography.micro(.semibold))
+                .font(VibeWhisperTypography.micro(.semibold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
                 .tracking(0.3)
             Text(text)
-                .font(OpenWhisperTypography.body())
+                .font(VibeWhisperTypography.body())
                 .foregroundStyle(color)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(
-                    Color(nsColor: OpenWhisperPalette.insetSurface),
+                    Color(nsColor: VibeWhisperPalette.insetSurface),
                     in: RoundedRectangle(
-                        cornerRadius: OpenWhisperMetrics.radiusM,
+                        cornerRadius: VibeWhisperMetrics.radiusM,
                         style: .continuous
                     )
                 )
                 .overlay {
                     RoundedRectangle(
-                        cornerRadius: OpenWhisperMetrics.radiusM,
+                        cornerRadius: VibeWhisperMetrics.radiusM,
                         style: .continuous
                     )
                     .stroke(
-                        Color(nsColor: OpenWhisperPalette.hairline),
+                        Color(nsColor: VibeWhisperPalette.hairline),
                         lineWidth: 0.5
                     )
                 }
@@ -624,7 +548,7 @@ struct HistoryWindowView: View {
     }
 
     private var emptyState: some View {
-        OpenWhisperEmptyState(
+        VibeWhisperEmptyState(
             systemImage: "text.bubble",
             title: L10n.text("No matching history"),
             detail: L10n.format(
@@ -789,7 +713,7 @@ private struct HistoryChromeModifier: ViewModifier {
     func body(content: Content) -> some View {
         if isEmbedded {
             VStack(spacing: 0) {
-                OpenWhisperPaneHeader(title: L10n.text("History")) {
+                VibeWhisperPaneHeader(title: L10n.text("History")) {
                     headerControls
                 }
                 Divider().opacity(0.45)

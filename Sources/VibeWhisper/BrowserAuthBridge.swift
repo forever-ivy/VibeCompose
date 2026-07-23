@@ -17,7 +17,7 @@ struct BrowserBridgeSnapshot: Sendable, Equatable {
 
     static let available = BrowserBridgeSnapshot(
         state: .available,
-        detail: L10n.text("Use the default browser ChatGPT OAuth flow to connect OpenWhisper.")
+        detail: L10n.text("Use the default browser ChatGPT OAuth flow to connect VibeWhisper.")
     )
 }
 
@@ -64,7 +64,7 @@ final class BrowserAuthBridge: BrowserAuthBridging, @unchecked Sendable {
     private static let issuer = "https://auth.openai.com"
     private static let callbackPort: UInt16 = 1455
     private static let callbackPath = "/auth/callback"
-    private static let originator = "openwhisper_desktop"
+    private static let originator = "vibewhisper_desktop"
     private static let scopes = "openid profile email offline_access"
 
     private let timeoutNanoseconds: UInt64
@@ -128,7 +128,7 @@ final class BrowserAuthBridge: BrowserAuthBridging, @unchecked Sendable {
 
             let response = try await exchangeAuthorizationCode(code, codeVerifier: pkce.codeVerifier)
             let session = makeSession(from: response, now: nowProvider())
-            setSnapshot(.connected, L10n.text("OpenWhisper connected to ChatGPT via browser OAuth."))
+            setSnapshot(.connected, L10n.text("VibeWhisper connected to ChatGPT via browser OAuth."))
             await callbackServer.stop()
             return session
         } catch {
@@ -375,7 +375,7 @@ final class BrowserOAuthCallbackServer: @unchecked Sendable {
                     self.respond(
                         to: connection,
                         status: 200,
-                        body: L10n.text("OpenWhisper authorization completed. Return to OpenWhisper.")
+                        body: L10n.text("VibeWhisper authorization completed. Return to VibeWhisper.")
                     )
                     self.complete(.success(code))
                 case .oauthFailure(let error):

@@ -99,15 +99,15 @@ enum ThirdPartyLicenseCatalogError: Error, Equatable, LocalizedError {
         switch self {
         case .missingResourceRoot:
             return L10n.text(
-                "OpenWhisper could not find its bundled third-party license resources."
+                "VibeWhisper could not find its bundled third-party license resources."
             )
         case .invalidManifest:
             return L10n.text(
-                "OpenWhisper could not read its third-party license manifest."
+                "VibeWhisper could not read its third-party license manifest."
             )
         case .unsupportedSchema(let version):
             return L10n.format(
-                "OpenWhisper cannot read third-party license manifest schema %ld.",
+                "VibeWhisper cannot read third-party license manifest schema %ld.",
                 version
             )
         case .duplicateIdentity(let identity):

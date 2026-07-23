@@ -62,6 +62,69 @@ struct LaunchAppContext: Sendable, Equatable {
             focusedTarget: FocusedElementInspector.captureTarget(in: app.processIdentifier)
         )
     }
+
+    /// Capture the process that should own focus again after a transient
+    /// VibeWhisper panel (Skill Switcher, Result Preview) closes.
+    ///
+    /// When another app is frontmost, that app is returned. When VibeWhisper is
+    /// already frontmost, returns `nil` so dismiss does not re-activate us and
+    /// accidentally promote a background Settings window over the host.
+    @MainActor
+    static func externalFrontmostForTransientRestore() -> LaunchAppContext? {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            return nil
+        }
+        let selfBundle = Bundle.main.bundleIdentifier
+        if let selfBundle,
+           app.bundleIdentifier == selfBundle
+        {
+            return nil
+        }
+        return LaunchAppContext(
+            bundleIdentifier: app.bundleIdentifier,
+            localizedName: app.localizedName,
+            processIdentifier: app.processIdentifier,
+            processLaunchDate: app.launchDate,
+            focusedTarget: nil
+        )
+    }
+
+    /// Bring the launch-app process back to the front before AX selection reads
+    /// or paste. Permission alerts and mic prompts may have fronted VibeWhisper;
+    /// without this, some hosts clear selection or refuse AXSelectedText while
+    /// backgrounded. No-op when already frontmost or context is missing.
+    ///
+    /// Also used after Skill Switcher / Result Preview dismiss so AppKit does not
+    /// fall through to a still-open Settings window as the new key window.
+    ///
+    /// - Returns: `true` when an activate was issued (caller may want a short
+    ///   settle delay before reading AX).
+    @MainActor
+    @discardableResult
+    static func restoreFrontmostIfNeeded(
+        _ context: LaunchAppContext?
+    ) -> Bool {
+        guard
+            let context,
+            context.processIdentifier > 0,
+            let currentFrontmost = NSWorkspace.shared.frontmostApplication,
+            currentFrontmost.processIdentifier != context.processIdentifier,
+            let app = NSRunningApplication(
+                processIdentifier: context.processIdentifier
+            )
+        else {
+            return false
+        }
+        // Never "restore" into ourselves — that re-keys whatever VW window is
+        // still ordered (often Settings) after a transient panel closes.
+        if let selfBundle = Bundle.main.bundleIdentifier,
+           context.bundleIdentifier == selfBundle
+        {
+            return false
+        }
+        app.activate(options: [.activateIgnoringOtherApps])
+        return true
+    }
 }
 
 enum InjectionError: LocalizedError {
@@ -100,7 +163,7 @@ enum ClipboardFallbackReason: Sendable, Equatable {
     var overlaySubtitle: String {
         switch self {
         case .accessibilityPermissionRequired:
-            return L10n.text("Accessibility permission is off, so OpenWhisper left the text in the clipboard.")
+            return L10n.text("Accessibility permission is off, so VibeWhisper left the text in the clipboard.")
         case .noEditableTarget:
             return L10n.text("No editable cursor was found. Paste manually.")
         case .retryRequiresManualPaste:
@@ -108,7 +171,7 @@ enum ClipboardFallbackReason: Sendable, Equatable {
         case .deliveryRequiresManualPaste:
             return L10n.text("The result was copied for manual paste.")
         case .selectionChanged:
-            return L10n.text("The original selection changed, so OpenWhisper did not replace it.")
+            return L10n.text("The original selection changed, so VibeWhisper did not replace it.")
         }
     }
 }
@@ -155,12 +218,12 @@ enum SafeUndoOutcome: Sendable, Equatable {
             return L10n.text("Last verified insertion was undone.")
         case .copiedOriginal(let reason):
             return L10n.format(
-                "OpenWhisper could not safely undo because %@. The original selected text was copied instead.",
+                "VibeWhisper could not safely undo because %@. The original selected text was copied instead.",
                 reason.localizedLabel
             )
         case .unavailable:
             return L10n.text(
-                "Safe Undo is unavailable because OpenWhisper cannot verify the last inserted result."
+                "Safe Undo is unavailable because VibeWhisper cannot verify the last inserted result."
             )
         }
     }
@@ -401,6 +464,7 @@ final class TextInjector: TextInjecting {
         hasEditableTextFocus: Bool,
         hasFallbackEditableTextFocus: Bool,
         hasLaunchAppContext _: Bool = false,
+        allowsSameAppBestEffortPaste: Bool = false,
         automaticPasteAllowed: Bool = true,
         automaticPasteFallbackReason:
             ClipboardFallbackReason =
@@ -416,11 +480,33 @@ final class TextInjector: TextInjecting {
             return .clipboardFallback(reason: .accessibilityPermissionRequired)
         }
 
-        guard hasEditableTextFocus || hasFallbackEditableTextFocus else {
-            return .clipboardFallback(reason: .noEditableTarget)
+        if hasEditableTextFocus || hasFallbackEditableTextFocus {
+            return .keyPressPaste
         }
 
-        return .keyPressPaste
+        // AX-opaque hosts (WeChat composers, some Electron shells) often expose
+        // no focused editable element at all. When dictation started against
+        // that process, allow a same-app Cmd+V attempt after reactivation.
+        // Identity is re-checked by process/bundle/launchDate before dispatch;
+        // the outcome stays paste_dispatched (never verified) because AX cannot
+        // prove the insertion.
+        if allowsSameAppBestEffortPaste {
+            return .keyPressPaste
+        }
+
+        return .clipboardFallback(reason: .noEditableTarget)
+    }
+
+    /// Best-effort paste is only for launch contexts that never captured an AX
+    /// editor. A captured target must still match that exact element.
+    nonisolated static func allowsSameAppBestEffortPaste(
+        launchAppContext: LaunchAppContext?
+    ) -> Bool {
+        guard let launchAppContext else {
+            return false
+        }
+        return launchAppContext.focusedTarget == nil
+            && launchAppContext.processIdentifier > 0
     }
 
     nonisolated static func selectionFallbackReason(
@@ -455,6 +541,8 @@ final class TextInjector: TextInjecting {
         let hasCurrentEditableTextFocus = accessibilityTrusted && FocusedElementInspector.hasEditableTextFocus()
         let hasMatchingLaunchTarget = accessibilityTrusted &&
             FocusedElementInspector.hasEditableTextFocus(in: launchAppContext)
+        let allowsSameAppBestEffortPaste = accessibilityTrusted &&
+            Self.allowsSameAppBestEffortPaste(launchAppContext: launchAppContext)
         let plan = Self.injectionPlan(
             text: text,
             accessibilityTrusted: accessibilityTrusted,
@@ -463,13 +551,14 @@ final class TextInjector: TextInjecting {
             hasEditableTextFocus: launchAppContext == nil && hasCurrentEditableTextFocus,
             hasFallbackEditableTextFocus: hasMatchingLaunchTarget,
             hasLaunchAppContext: launchAppContext != nil,
+            allowsSameAppBestEffortPaste: allowsSameAppBestEffortPaste,
             automaticPasteAllowed: automaticPasteAllowed,
             automaticPasteFallbackReason:
                 automaticPasteFallbackReason
         )
 
         logger.info(
-            "Injection plan resolved to \(String(describing: plan), privacy: .public); currentEditableFocus=\(hasCurrentEditableTextFocus, privacy: .public); matchingLaunchTarget=\(hasMatchingLaunchTarget, privacy: .public); hasLaunchAppContext=\(launchAppContext != nil, privacy: .public)"
+            "Injection plan resolved to \(String(describing: plan), privacy: .public); currentEditableFocus=\(hasCurrentEditableTextFocus, privacy: .public); matchingLaunchTarget=\(hasMatchingLaunchTarget, privacy: .public); sameAppBestEffort=\(allowsSameAppBestEffortPaste, privacy: .public); hasLaunchAppContext=\(launchAppContext != nil, privacy: .public)"
         )
 
         switch plan {
@@ -532,9 +621,13 @@ final class TextInjector: TextInjecting {
             logger.error("Paste target changed after clipboard write; leaving transcript in clipboard")
             return .copiedToClipboard(reason: .noEditableTarget)
         }
-        guard let targetCapture = FocusedElementInspector.capturePasteTarget(
+
+        let targetCapture = FocusedElementInspector.capturePasteTarget(
             in: launchAppContext
-        ) else {
+        )
+        let usingBestEffortPaste = targetCapture == nil
+            && Self.allowsSameAppBestEffortPaste(launchAppContext: launchAppContext)
+        if targetCapture == nil && !usingBestEffortPaste {
             logger.error("Paste target could not be captured before dispatch; leaving transcript in clipboard")
             return .copiedToClipboard(reason: .noEditableTarget)
         }
@@ -549,9 +642,17 @@ final class TextInjector: TextInjecting {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        guard FocusedElementInspector.isCurrentTarget(targetCapture.target) else {
-            logger.error("Paste target changed immediately before dispatch; leaving transcript in clipboard")
-            return .copiedToClipboard(reason: .noEditableTarget)
+        if let targetCapture {
+            guard FocusedElementInspector.isCurrentTarget(targetCapture.target) else {
+                logger.error("Paste target changed immediately before dispatch; leaving transcript in clipboard")
+                return .copiedToClipboard(reason: .noEditableTarget)
+            }
+        } else {
+            // Best-effort path: process identity is the only stable signal.
+            guard isPasteTargetReady(launchAppContext: launchAppContext) else {
+                logger.error("Launch app left the front before best-effort paste; leaving transcript in clipboard")
+                return .copiedToClipboard(reason: .noEditableTarget)
+            }
         }
         if
             let expectedSelectionContext,
@@ -573,6 +674,13 @@ final class TextInjector: TextInjecting {
         }
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
+
+        guard let targetCapture else {
+            logger.info(
+                "Best-effort paste command dispatched without AX target; retaining transcript in clipboard"
+            )
+            return .pasteDispatchedClipboardRetained
+        }
 
         guard let beforeSnapshot = targetCapture.editableTextSnapshot else {
             logger.info("Paste command dispatched; AX text verification is unavailable, retaining transcript in clipboard")
@@ -736,26 +844,45 @@ final class TextInjector: TextInjecting {
             return FocusedElementInspector.hasEditableTextFocus()
         }
 
+        guard isLaunchAppFrontmost(launchAppContext) else {
+            return false
+        }
+
+        if launchAppContext.focusedTarget != nil {
+            return FocusedElementInspector.hasEditableTextFocus(in: launchAppContext)
+        }
+
+        // No AX editor was captured at session start (WeChat-style). Same-process
+        // frontmost state is enough to attempt Cmd+V; never claim verification.
+        return Self.allowsSameAppBestEffortPaste(launchAppContext: launchAppContext)
+    }
+
+    private func isLaunchAppFrontmost(_ launchAppContext: LaunchAppContext) -> Bool {
         guard
             let frontmostApplication = NSWorkspace.shared.frontmostApplication,
             frontmostApplication.processIdentifier == launchAppContext.processIdentifier,
-            frontmostApplication.bundleIdentifier == launchAppContext.bundleIdentifier,
-            let currentLaunchDate = frontmostApplication.launchDate,
-            let expectedLaunchDate = launchAppContext.processLaunchDate,
-            currentLaunchDate == expectedLaunchDate
+            frontmostApplication.bundleIdentifier == launchAppContext.bundleIdentifier
         else {
             return false
         }
 
-        return FocusedElementInspector.hasEditableTextFocus(in: launchAppContext)
+        // Prefer launch-date identity when both sides expose it. Some processes
+        // omit launchDate; fall back to pid + bundle only in that case.
+        switch (frontmostApplication.launchDate, launchAppContext.processLaunchDate) {
+        case let (current?, expected?):
+            return current == expected
+        case (nil, nil):
+            return true
+        default:
+            return false
+        }
     }
 
     private func restoreLaunchAppIfNeeded(_ launchAppContext: LaunchAppContext?) {
         guard
             let launchAppContext,
             let currentFrontmostApp = NSWorkspace.shared.frontmostApplication,
-            currentFrontmostApp.processIdentifier != launchAppContext.processIdentifier,
-            let app = NSRunningApplication(processIdentifier: launchAppContext.processIdentifier)
+            currentFrontmostApp.processIdentifier != launchAppContext.processIdentifier
         else {
             return
         }
@@ -764,7 +891,7 @@ final class TextInjector: TextInjecting {
         logger.info(
             "Reactivating launch app before paste: pid=\(launchAppContext.processIdentifier, privacy: .public) bundleID=\(bundleIdentifier, privacy: .public)"
         )
-        app.activate(options: [.activateIgnoringOtherApps])
+        LaunchAppContext.restoreFrontmostIfNeeded(launchAppContext)
     }
 
     private func scheduleClipboardRestore(

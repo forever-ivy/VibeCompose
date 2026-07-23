@@ -73,7 +73,7 @@ struct OpenAICompatibleConnectionTester: Sendable {
             )
         }
 
-        let boundary = "OpenWhisper-Connection-\(UUID().uuidString)"
+        let boundary = "VibeWhisper-Connection-\(UUID().uuidString)"
         let body = Self.makeMultipartBody(
             boundary: boundary,
             model: model,
@@ -131,7 +131,7 @@ struct OpenAICompatibleConnectionTester: Sendable {
                         + "Content-Disposition: form-data; name=\"model\"\r\n\r\n"
                         + "\(model)\r\n"
                         + "--\(boundary)\r\n"
-                        + "Content-Disposition: form-data; name=\"file\"; filename=\"openwhisper-connection-test.wav\"\r\n"
+                        + "Content-Disposition: form-data; name=\"file\"; filename=\"vibewhisper-connection-test.wav\"\r\n"
                         + "Content-Type: audio/wav\r\n\r\n"
                 ).utf8
             )

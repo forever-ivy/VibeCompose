@@ -39,7 +39,7 @@ enum DictationMode: String, Codable, Sendable, Equatable, CaseIterable, Identifi
             )
         case .email:
             return L10n.text(
-                "Shape the dictation into a clear, complete email while preserving names, dates, requests, and constraints."
+                "Shape the dictation into a clear, complete email while preserving names, dates, requests, constraints, and the intended next step."
             )
         case .agentPlan:
             return L10n.text(
@@ -59,17 +59,17 @@ enum DictationMode: String, Codable, Sendable, Equatable, CaseIterable, Identifi
     var promptInstruction: String {
         switch self {
         case .direct:
-            return "Voice Mode: Direct. Preserve the speaker's wording, order, tone, and level of detail. Remove filler and superseded self-corrections, but do not turn ordinary prose into a plan unless the speaker explicitly requests structure."
+            return "Voice Mode: Direct. Return faithful cleaned dictation in the speaker's language. Preserve wording, order, tone, simplified/traditional Chinese form, and level of detail. Remove only filler, false starts, and superseded self-corrections. Do not translate. Do not add facts, headings, bullets, greetings, conclusions, or structural rewrites unless the speaker explicitly requests them."
         case .reply:
-            return "Voice Mode: Reply. Return a concise, natural conversational reply ready to send. Do not add a greeting, sign-off, subject line, explanation, or facts that were not spoken."
+            return "Voice Mode: Reply. Turn the spoken intent into one concise, natural conversational reply in the speaker's language and tone. Preserve every stated fact, request, commitment, and qualifier. Add a greeting or sign-off only when spoken or requested. Do not translate unless the speaker asks. Do not add a subject line, preamble, explanation, or unsupported facts."
         case .email:
-            return "Voice Mode: Email. Produce a polished email body with a clear purpose and complete sentences. Preserve every named person, date, attachment, request, constraint, and follow-up. Add a subject line only when the speaker asks for one."
+            return "Voice Mode: Email. Produce a polished email body in the speaker's language with a clear purpose, readable paragraphs, an explicit request or next step when stated, and complete sentences. Preserve every named person, date, attachment, request, constraint, and follow-up. Add a greeting, sign-off, or subject line only when the speaker provides or requests it. Do not invent attachment status, availability, deadlines, or commitments. Do not translate unless the speaker asks."
         case .agentPlan:
-            return "Skill: Backend Prompt Composer. Organize the request into short bullets / 分点 with explicit goals, constraints, implementation steps, edge cases, and acceptance criteria. Keep the result directly executable by a coding or task agent."
+            return "Skill: Backend Prompt Composer. Produce an implementation-ready Markdown task in the speaker's language. If the transcript is predominantly Chinese, write the entire task in Chinese and use Chinese section headings in this order: 目标, 约束, 实现步骤, 边界情况, 验收标准. If the transcript is predominantly another language, write the entire task in that language and use equivalent local headings (English: Goal, Constraints, Implementation Steps, Edge Cases, Acceptance Criteria). Keep requirements atomic and testable. Write ‘Not provided’ / ‘未提供’ instead of inventing repository state, architecture, files, APIs, tests, or product decisions. Never translate away from the speaker's language unless they explicitly request another language."
         case .codePrompt:
-            return "Voice Mode: Code Prompt. Produce an implementation-ready coding request. Preserve all paths, commands, flags, APIs, class and method names, versions, identifiers, error messages, and quoted literals exactly."
+            return "Voice Mode: Code Prompt. Produce an implementation-ready coding request in the speaker's language. If the transcript is predominantly Chinese, write the entire request in Chinese and prefer Chinese headings such as 目标, 上下文, 需求, 约束, 验收. If the transcript is predominantly another language, write the entire request in that language (English headings may be Objective, Context, Requirements, Constraints, Verification). Preserve all spoken paths, commands, flags, APIs, symbols, versions, identifiers, error messages, and quoted literals exactly. Do not invent repository state, affected files, test results, or tool access. Never translate away from the speaker's language unless they explicitly request another language."
         case .translate:
-            return "Voice Mode: Translate. Translate into the target language explicitly named by the speaker. If no target language is named, translate predominantly Chinese input to English and other input to Simplified Chinese. Preserve technical literals and output only the translation."
+            return "Voice Mode: Translate. Treat an explicitly named target language as an instruction, not source content. If none is named, translate predominantly Chinese input to English and other input to Simplified Chinese. Preserve meaning, tone, paragraph structure, names, numbers, Markdown, and technical literals; do not translate code or identifiers unless explicitly requested. Output only the translation with no labels or explanation."
         }
     }
 }
@@ -156,7 +156,7 @@ struct AppModeRule: Codable, Sendable, Equatable, Identifiable {
         )) ?? true
         id = (try? container.decodeIfPresent(UUID.self, forKey: .id))
             ?? StableIdentifier.uuid(
-                namespace: "OpenWhisper.AppModeRule",
+                namespace: "VibeWhisper.AppModeRule",
                 components: [bundleIdentifier]
             )
     }

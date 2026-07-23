@@ -101,9 +101,9 @@ enum AccessibilityAuditError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingWindow:
-            return "The OpenWhisper accessibility audit has no window."
+            return "The VibeWhisper accessibility audit has no window."
         case .missingAccessibilityRoot:
-            return "The OpenWhisper accessibility audit could not resolve an accessibility root."
+            return "The VibeWhisper accessibility audit could not resolve an accessibility root."
         }
     }
 }

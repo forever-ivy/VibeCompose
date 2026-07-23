@@ -36,6 +36,7 @@ final class FeedbackSurfaceController:
             text: String,
             outcome: InjectionOutcome
         )
+        case confirmation(title: String)
         case error(String)
         case retryableError(String)
 
@@ -43,7 +44,7 @@ final class FeedbackSurfaceController:
             switch self {
             case .recording, .processing:
                 return true
-            case .result, .error, .retryableError:
+            case .result, .confirmation, .error, .retryableError:
                 return false
             }
         }
@@ -148,17 +149,26 @@ final class FeedbackSurfaceController:
         level: CGFloat,
         elapsedText: String
     ) {
-        let scaledLevel = min(
-            1,
-            max(
-                0,
-                level
-                    * CGFloat(
-                        config.intensity
-                            .amplitudeScale
-                    )
+        // Intensity only scales Edge Glow. Status Bar always uses the
+        // raw normalized level so a leftover Subtle/Expressive preference
+        // cannot change the pill waveform after the control is hidden.
+        let scaledLevel: CGFloat
+        switch config.mode {
+        case .aiActivityGlow:
+            scaledLevel = min(
+                1,
+                max(
+                    0,
+                    level
+                        * CGFloat(
+                            config.intensity
+                                .amplitudeScale
+                        )
+                )
             )
-        )
+        case .refinedHUD, .hidden:
+            scaledLevel = min(1, max(0, level))
+        }
         presentation = .recording(
             level: scaledLevel,
             elapsedText: elapsedText
@@ -197,6 +207,15 @@ final class FeedbackSurfaceController:
             afterSeconds:
                 resultDisplayDuration(for: outcome)
         )
+    }
+
+    func showConfirmation(title: String) {
+        let trimmed = title.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !trimmed.isEmpty else { return }
+        beginPresentation(.confirmation(title: trimmed))
+        scheduleHide(afterSeconds: 1.4)
     }
 
     func showError(_ message: String) {
@@ -305,12 +324,20 @@ final class FeedbackSurfaceController:
                     previousPresentation
             )
         case .hidden:
-            refinedHUD.hide()
-            blueSignalFrame.hide()
-            configureEscapeCancellation(
-                for: presentation
-            )
-            announce(presentation)
+            // Skill Switcher confirmation is always capsule-first so the
+            // selected Skill remains readable even when dictation HUD is off.
+            if case .confirmation(let title) = presentation {
+                blueSignalFrame.hide()
+                deactivateEscapeCancellation()
+                refinedHUD.showConfirmation(title: title)
+            } else {
+                refinedHUD.hide()
+                blueSignalFrame.hide()
+                configureEscapeCancellation(
+                    for: presentation
+                )
+                announce(presentation)
+            }
         }
     }
 
@@ -336,6 +363,8 @@ final class FeedbackSurfaceController:
                 text: text,
                 outcome: outcome
             )
+        case .confirmation(let title):
+            refinedHUD.showConfirmation(title: title)
         case .error(let message):
             refinedHUD.showError(message)
         case .retryableError(let message):
@@ -401,6 +430,15 @@ final class FeedbackSurfaceController:
             } else {
                 announce(presentation)
             }
+        case .confirmation(let title):
+            // Confirmation content is the Skill name — always use the capsule
+            // so the selected Skill is readable; Edge Glow only flashes success.
+            blueSignalFrame.show(
+                state: .success,
+                level: 0,
+                config: config
+            )
+            refinedHUD.showConfirmation(title: title)
         case .error(let message):
             blueSignalFrame.show(
                 state: .error,
@@ -509,6 +547,8 @@ final class FeedbackSurfaceController:
             case .copiedToClipboard:
                 announcement = L10n.text("Copied")
             }
+        case .confirmation(let title):
+            announcement = title
         case .error(let message),
              .retryableError(let message):
             announcement =

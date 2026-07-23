@@ -49,7 +49,8 @@ final class HotkeyRecorderButton: NSButton {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: 176, height: 30)
+        // Prefer the SwiftUI frame from settings forms (aligned control cluster).
+        NSSize(width: GeneralSettingsChrome.recorderWidth, height: GeneralSettingsChrome.controlHeight)
     }
 
     init() {

@@ -24,6 +24,8 @@ protocol OverlayControlling: AnyObject {
     func updateRecording(level: CGFloat, elapsedText: String)
     func showProcessing()
     func showResult(text: String, outcome: InjectionOutcome)
+    /// Capsule confirmation for non-dictation actions (e.g. Skill selection).
+    func showConfirmation(title: String)
     func showError(_ message: String)
     func showRetryableError(_ message: String)
     func hide()
@@ -45,6 +47,10 @@ extension OverlayControlling {
     ) {
         _ = config
     }
+
+    func showConfirmation(title: String) {
+        _ = title
+    }
 }
 
 enum OverlaySnapshotError: LocalizedError {
@@ -55,11 +61,11 @@ enum OverlaySnapshotError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingContentView:
-            return "The OpenWhisper HUD has no content view to capture."
+            return "The VibeWhisper HUD has no content view to capture."
         case .bitmapUnavailable:
-            return "The OpenWhisper HUD could not create a bitmap snapshot."
+            return "The VibeWhisper HUD could not create a bitmap snapshot."
         case .pngEncodingFailed:
-            return "The OpenWhisper HUD could not encode its snapshot as PNG."
+            return "The VibeWhisper HUD could not encode its snapshot as PNG."
         }
     }
 }
@@ -91,6 +97,7 @@ struct OverlayAccessibilityAppearance: Sendable, Equatable {
     let retryControlOpacity: CGFloat
     let waveformBaseOpacity: CGFloat
 
+    @MainActor
     static func resolve(
         options: AccessibilityDisplayOptions,
         style: OverlayStylePreset
@@ -102,17 +109,25 @@ struct OverlayAccessibilityAppearance: Sendable, Equatable {
                 timerOpacity: 1,
                 cancelControlOpacity: 1,
                 retryControlOpacity: 1,
-                waveformBaseOpacity: 0.86
+                waveformBaseOpacity: 1
             )
         }
 
+        // Dark glass needs higher glyph opacity so the waveform and timer stay
+        // crisp against the translucent material; light mode stays calmer.
+        let isDark = NSApp.effectiveAppearance.bestMatch(
+            from: [.darkAqua, .aqua]
+        ) == .darkAqua
         return OverlayAccessibilityAppearance(
             backgroundBorderWidth: 1,
-            backgroundBorderAlpha: 0.08,
-            timerOpacity: style.timerOpacity,
-            cancelControlOpacity: 0.78,
-            retryControlOpacity: 0.84,
-            waveformBaseOpacity: 0.68
+            backgroundBorderAlpha: isDark ? 0.14 : 0.08,
+            // Elapsed time is primary status during recording — match the skill
+            // title at full label opacity. Dimmed secondary labels wash out on
+            // both light and dark Liquid Glass.
+            timerOpacity: 1,
+            cancelControlOpacity: isDark ? 0.92 : 0.78,
+            retryControlOpacity: isDark ? 0.94 : 0.84,
+            waveformBaseOpacity: isDark ? 0.94 : 0.82
         )
     }
 }
@@ -135,18 +150,26 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private let textStack = NSStackView()
     private let trailingAccessoryStack = NSStackView()
     private var hideTask: Task<Void, Never>?
-    private var processingTimer: Timer?
+    // nonisolated(unsafe): only touched on MainActor; read in deinit for teardown.
+    nonisolated(unsafe) private var processingTimer: Timer?
     private var processingFrameIndex = 0
+    /// Absolute media-time origin for continuous processing pulse motion.
+    private var processingAnimationOrigin: CFTimeInterval = 0
     private var displayedLevels: [CGFloat]
     private var currentState: OverlayVisualState
     private var hotkeyDisplayName = HotkeyBinding.f5.displayName
     private var skillPresentation:
         SkillRuntimePresentation?
     private var alwaysReduceMotion = false
+    private var hudPlacement: HUDPlacement = .top
     private var accessibilityAppearance: OverlayAccessibilityAppearance
     private var presentationGeneration = OverlayPresentationGeneration()
     private var escapeHotkeyMonitor: HotkeyMonitor?
     private var activeAccentColor: NSColor?
+    /// Token for `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification`.
+    /// Block-based `addObserver` retains the closure; we must remove it on teardown.
+    /// nonisolated(unsafe): only mutated on MainActor; read in deinit for teardown.
+    nonisolated(unsafe) private var accessibilityDisplayOptionsObserver: NSObjectProtocol?
     var onCancel: (@MainActor (OverlayCancelSource) -> Void)?
     var onRetry: (@MainActor () -> Void)?
 
@@ -208,12 +231,29 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         observeAccessibilityDisplayOptions()
     }
 
+    isolated deinit {
+        if let accessibilityDisplayOptionsObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(
+                accessibilityDisplayOptionsObserver
+            )
+        }
+        processingTimer?.invalidate()
+        hideTask?.cancel()
+    }
+
     func updateHotkeyBinding(_ binding: HotkeyBinding) {
         hotkeyDisplayName = binding.displayName
-        if case .recording = currentState, panel.isVisible {
-            titleLabel.stringValue = currentState.label(
-                hotkeyDisplayName: hotkeyDisplayName
-            )
+        // Recording never surfaces the hotkey; only processing/error labels
+        // still consult it, so refresh when those states are visible.
+        guard panel.isVisible else { return }
+        switch currentState {
+        case .recording:
+            break
+        case .processing, .success, .error, .retryableError:
+            let title = displayLabel(for: currentState)
+            titleLabel.stringValue = title
+            titleLabel.isHidden = title.isEmpty
+            textStack.isHidden = title.isEmpty
         }
     }
 
@@ -230,8 +270,14 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     ) {
         let reduceMotionChanged =
             alwaysReduceMotion != config.alwaysReduceMotion
+        let placementChanged =
+            hudPlacement != config.hudPlacement
         alwaysReduceMotion = config.alwaysReduceMotion
+        hudPlacement = config.hudPlacement
         updateAccessibilityAppearance()
+        if placementChanged, panel.isVisible {
+            positionPanel(size: panelSize(for: currentState))
+        }
         if reduceMotionChanged,
            case .processing = currentState,
            panel.isVisible
@@ -252,10 +298,13 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
     func updateRecording(level: CGFloat, elapsedText: String) {
         stopProcessingAnimation()
+        // Continuous media-time phase keeps multi-frequency organic motion alive
+        // between level samples so the glyph never freezes into a static envelope.
         displayedLevels = WaveformNormalizer.smoothedLevels(
             previous: displayedLevels,
             targetLevel: level,
-            barCount: style.waveformBarCount
+            barCount: style.waveformBarCount,
+            phase: CACurrentMediaTime()
         )
         apply(state: .recording(levels: displayedLevels, elapsedText: elapsedText))
         present()
@@ -263,8 +312,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
     func showProcessing() {
         processingFrameIndex = 0
+        processingAnimationOrigin = CACurrentMediaTime()
         displayedLevels = WaveformNormalizer.processingPulseLevels(
-            frame: processingFrameIndex,
+            time: 0,
             barCount: style.waveformBarCount
         )
         apply(state: .processing)
@@ -295,10 +345,23 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             1.5
         case .copied:
             2
+        case .confirmation:
+            1.4
         }
         scheduleHide(
             afterSeconds: displayDuration
         )
+    }
+
+    func showConfirmation(title: String) {
+        let trimmed = title.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !trimmed.isEmpty else { return }
+        stopProcessingAnimation()
+        apply(state: .success(.confirmation(title: trimmed)))
+        present()
+        scheduleHide(afterSeconds: 1.4)
     }
 
     func showError(_ message: String) {
@@ -353,7 +416,10 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         positionPanel(size: panelSize(for: state))
         updateAccessibilityAppearance()
 
-        titleLabel.stringValue = displayLabel(for: state)
+        let title = displayLabel(for: state)
+        titleLabel.stringValue = title
+        titleLabel.isHidden = title.isEmpty
+        textStack.isHidden = title.isEmpty
         trailingTimerLabel.stringValue = state.trailingText ?? ""
         trailingTimerLabel.isHidden = state.trailingText == nil
         trailingAccessoryStack.isHidden = !state.showsCancelControl && !state.showsRetryControl && state.trailingText == nil
@@ -362,46 +428,48 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         switch state {
         case .recording(let levels, _):
             displayedLevels = levels
-            // Recording keeps the shell neutral and lets the voice glyph lead.
+            // Recording: warm brand-blue waveform so live audio is obvious.
             waveformView.isHidden = false
             waveformView.update(levels: levels)
-            waveformView.update(accentColor: nil)
-            leadingBadgeView.isHidden = true
-            iconView.isHidden = true
-            setAccentRing(nil)
-        case .processing:
-            waveformView.isHidden = false
-            waveformView.update(levels: displayedLevels)
             waveformView.update(
-                accentColor: OpenWhisperPalette.hudProcessingAccent
+                accentColor: VibeWhisperPalette.hudRecordingAccent
             )
             leadingBadgeView.isHidden = true
             iconView.isHidden = true
-            setAccentRing(OpenWhisperPalette.hudProcessingAccent)
+            setAccentRing(VibeWhisperPalette.hudRecordingAccent)
+        case .processing:
+            // Processing: warmer amber pulse, distinct from live recording blue.
+            waveformView.isHidden = false
+            waveformView.update(levels: displayedLevels)
+            waveformView.update(
+                accentColor: VibeWhisperPalette.hudProcessingAccent
+            )
+            leadingBadgeView.isHidden = true
+            iconView.isHidden = true
+            setAccentRing(VibeWhisperPalette.hudProcessingAccent)
         case .success(let kind):
             waveformView.isHidden = true
+            waveformView.update(accentColor: nil)
             switch kind {
-            case .inserted:
+            case .inserted, .pasteSent, .confirmation:
+                // Green check reads as success for every delivered path;
+                // clipboard-only stays amber so the outcome remains distinct.
                 configureBadge(
                     symbolName: "checkmark",
-                    tintColor: OpenWhisperPalette.success
-                )
-            case .pasteSent:
-                configureBadge(
-                    symbolName: "arrow.right",
-                    tintColor: OpenWhisperPalette.brandBlue
+                    tintColor: VibeWhisperPalette.success
                 )
             case .copied:
                 configureBadge(
                     symbolName: "doc.on.clipboard.fill",
-                    tintColor: OpenWhisperPalette.amber
+                    tintColor: VibeWhisperPalette.amber
                 )
             }
         case .error, .retryableError:
             waveformView.isHidden = true
+            waveformView.update(accentColor: nil)
             configureBadge(
                 symbolName: "exclamationmark",
-                tintColor: OpenWhisperPalette.error
+                tintColor: VibeWhisperPalette.error
             )
         }
 
@@ -413,10 +481,11 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         tintColor: NSColor
     ) {
         leadingBadgeView.isHidden = false
+        // Softer fill sits on glass without fighting the material.
         leadingBadgeView.layer?.backgroundColor =
-            tintColor.withAlphaComponent(0.20).cgColor
+            tintColor.withAlphaComponent(0.14).cgColor
         leadingBadgeView.layer?.borderColor =
-            tintColor.withAlphaComponent(0.45).cgColor
+            tintColor.withAlphaComponent(0.32).cgColor
 
         if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) {
             iconView.image = image
@@ -444,16 +513,26 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             displayedLevels = WaveformNormalizer.reducedMotionProcessingLevels(
                 barCount: style.waveformBarCount
             )
-            waveformView.update(levels: displayedLevels)
+            waveformView.update(levels: displayedLevels, animated: false)
             return
         }
 
-        processingTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { [weak self] _ in
+        // ~30 fps continuous time sampling — high enough for smooth travel,
+        // low enough that CALayer height springs own the visual interpolation.
+        processingAnimationOrigin = CACurrentMediaTime()
+        processingTimer = Timer.scheduledTimer(
+            withTimeInterval: 1.0 / 30.0,
+            repeats: true
+        ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.processingFrameIndex += 1
+                let elapsed = max(
+                    0,
+                    CACurrentMediaTime() - self.processingAnimationOrigin
+                )
                 self.displayedLevels = WaveformNormalizer.processingPulseLevels(
-                    frame: self.processingFrameIndex,
+                    time: elapsed,
                     barCount: self.style.waveformBarCount
                 )
                 if case .processing = self.currentState {
@@ -461,6 +540,8 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
                 }
             }
         }
+        // Tolerate a bit of scheduling jitter so the run loop stays calm.
+        processingTimer?.tolerance = 1.0 / 120.0
     }
 
     private func stopProcessingAnimation() {
@@ -470,18 +551,39 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
     private func present() {
         if panel.alphaValue == 0 || !panel.isVisible {
+            // Float-in from slightly above/below the rest frame so the capsule
+            // reads as descending onto the desktop (macOS floating chrome feel),
+            // not as a hard opacity flash.
+            let restFrame = panel.frame
+            let floatOffset: CGFloat = 8
+            let entryFrame: NSRect
+            switch hudPlacement {
+            case .top:
+                entryFrame = restFrame.offsetBy(dx: 0, dy: floatOffset)
+            case .bottom:
+                entryFrame = restFrame.offsetBy(dx: 0, dy: -floatOffset)
+            }
+            panel.setFrame(entryFrame, display: false)
             panel.alphaValue = 0
             panel.orderFrontRegardless()
             if resolvedAccessibilityDisplayOptions()
                 .reduceMotion
             {
+                panel.setFrame(restFrame, display: false)
                 panel.alphaValue = 1
                 return
             }
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                // Spring-like ease: short response, slight overshoot damping via
+                // allowsImplicitAnimation + easeOut (no CASpringAnimation on
+                // NSPanel frame without a custom layer host).
+                context.duration = 0.32
+                context.timingFunction = CAMediaTimingFunction(
+                    controlPoints: 0.2, 0.9, 0.25, 1.0
+                )
+                context.allowsImplicitAnimation = true
                 panel.animator().alphaValue = 1
+                panel.animator().setFrame(restFrame, display: true)
             }
         } else {
             panel.alphaValue = 1
@@ -506,10 +608,23 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
                 self.hide()
                 return
             }
+            let restFrame = self.panel.frame
+            let floatOffset: CGFloat = 6
+            let exitFrame: NSRect
+            switch self.hudPlacement {
+            case .top:
+                exitFrame = restFrame.offsetBy(dx: 0, dy: floatOffset)
+            case .bottom:
+                exitFrame = restFrame.offsetBy(dx: 0, dy: -floatOffset)
+            }
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.2
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(
+                    controlPoints: 0.4, 0.0, 0.6, 1.0
+                )
+                context.allowsImplicitAnimation = true
                 panel.animator().alphaValue = 0
+                panel.animator().setFrame(exitFrame, display: true)
             }, completionHandler: {
                 Task { @MainActor in
                     guard self.presentationGeneration.isCurrent(scheduledGeneration) else {
@@ -537,8 +652,8 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
         leadingBadgeView.translatesAutoresizingMaskIntoConstraints = false
         leadingBadgeView.wantsLayer = true
-        // A compact continuous rounded square reads like a native status tile.
-        leadingBadgeView.layer?.cornerRadius = 9
+        // Status tile sized for the taller capsule / larger leading glyph.
+        leadingBadgeView.layer?.cornerRadius = 7
         leadingBadgeView.layer?.cornerCurve = .continuous
         leadingBadgeView.layer?.borderWidth = 1
         leadingBadgeView.isHidden = true
@@ -546,25 +661,40 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         waveformView.translatesAutoresizingMaskIntoConstraints = false
 
         iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.symbolConfiguration = .init(pointSize: 15, weight: .bold)
+        iconView.symbolConfiguration = .init(pointSize: 11, weight: .semibold)
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.isHidden = true
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.textColor = OpenWhisperPalette.hudText
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        titleLabel.textColor = VibeWhisperPalette.hudText
+        titleLabel.lineBreakMode = .byClipping
+        // Prefer growing the pill over truncating short status words
+        // ("已完成" / "错误" / "Done"). Recording skill names still fit via
+        // the larger recording width budget.
+        titleLabel.setContentCompressionResistancePriority(
+            .required,
+            for: .horizontal
+        )
+        titleLabel.setContentHuggingPriority(
+            .defaultHigh,
+            for: .horizontal
+        )
 
         trailingTimerLabel.translatesAutoresizingMaskIntoConstraints = false
-        trailingTimerLabel.font = NSFont.monospacedDigitSystemFont(ofSize: style.timerFontSize, weight: .semibold)
-        trailingTimerLabel.textColor = OpenWhisperPalette.hudTextMuted.withAlphaComponent(style.timerOpacity)
+        // Same size / weight as the skill title — only tabular digits differ so
+        // "代码提示词" and "00:06" feel like one type system.
+        trailingTimerLabel.font = NSFont.monospacedDigitSystemFont(
+            ofSize: style.timerFontSize,
+            weight: .semibold
+        )
+        trailingTimerLabel.textColor = VibeWhisperPalette.hudText
         trailingTimerLabel.alignment = .right
         trailingTimerLabel.isHidden = true
 
         textStack.translatesAutoresizingMaskIntoConstraints = false
         textStack.orientation = .vertical
-        textStack.spacing = 2
+        textStack.spacing = 1
         textStack.alignment = .leading
         textStack.addArrangedSubview(titleLabel)
 
@@ -575,9 +705,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             systemSymbolName: "xmark",
             accessibilityDescription: L10n.text("Cancel dictation")
         )
-        closeButton.symbolConfiguration = .init(pointSize: 12, weight: .regular)
+        closeButton.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         closeButton.imagePosition = .imageOnly
-        closeButton.contentTintColor = OpenWhisperPalette.hudTextMuted.withAlphaComponent(0.78)
+        closeButton.contentTintColor = VibeWhisperPalette.hudTextMuted.withAlphaComponent(0.86)
         closeButton.toolTip = L10n.text("Cancel and discard this recording (Esc)")
         closeButton.setAccessibilityLabel(L10n.text("Cancel dictation"))
         closeButton.setAccessibilityHelp(L10n.text("Cancel and discard this recording (Esc)"))
@@ -594,9 +724,9 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             systemSymbolName: "arrow.clockwise",
             accessibilityDescription: L10n.text("Retry transcription")
         )
-        retryButton.symbolConfiguration = .init(pointSize: 12, weight: .semibold)
+        retryButton.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         retryButton.imagePosition = .imageOnly
-        retryButton.contentTintColor = OpenWhisperPalette.hudTextMuted.withAlphaComponent(0.84)
+        retryButton.contentTintColor = VibeWhisperPalette.hudTextMuted.withAlphaComponent(0.88)
         retryButton.target = self
         retryButton.action = #selector(handleRetryControlPressed)
         retryButton.setButtonType(.momentaryChange)
@@ -633,16 +763,24 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
 
             leadingBadgeView.centerXAnchor.constraint(equalTo: leadingContainer.centerXAnchor),
             leadingBadgeView.centerYAnchor.constraint(equalTo: leadingContainer.centerYAnchor),
-            leadingBadgeView.widthAnchor.constraint(equalToConstant: 30),
-            leadingBadgeView.heightAnchor.constraint(equalToConstant: 30),
+            leadingBadgeView.widthAnchor.constraint(equalToConstant: 22),
+            leadingBadgeView.heightAnchor.constraint(equalToConstant: 22),
 
             iconView.centerXAnchor.constraint(equalTo: leadingBadgeView.centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: leadingBadgeView.centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 18),
-            iconView.heightAnchor.constraint(equalToConstant: 18),
+            iconView.widthAnchor.constraint(equalToConstant: 13),
+            iconView.heightAnchor.constraint(equalToConstant: 13),
 
             textStack.leadingAnchor.constraint(equalTo: leadingContainer.trailingAnchor, constant: style.textGap),
-            textStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAccessoryStack.leadingAnchor, constant: -style.textGap),
+            // When trailing chrome is hidden the title may reach the trailing pad.
+            textStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: hudContentView.trailingAnchor,
+                constant: -style.contentPaddingH
+            ),
+            textStack.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAccessoryStack.leadingAnchor,
+                constant: -style.textGap
+            ),
             textStack.centerYAnchor.constraint(equalTo: hudContentView.centerYAnchor),
 
             trailingAccessoryStack.trailingAnchor.constraint(equalTo: hudContentView.trailingAnchor, constant: -style.contentPaddingH),
@@ -656,25 +794,42 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     private func panelSize(for state: OverlayVisualState) -> NSSize {
-        style.size(for: state)
+        let title = displayLabel(for: state)
+        let titleWidth = measuredTitleWidth(title)
+        return style.size(for: state, titleWidth: titleWidth)
+    }
+
+    private func measuredTitleWidth(_ title: String) -> CGFloat {
+        guard !title.isEmpty else { return 0 }
+        let font = titleLabel.font
+            ?? NSFont.systemFont(ofSize: 12, weight: .semibold)
+        return ceil(
+            (title as NSString).size(withAttributes: [.font: font]).width
+        )
     }
 
     private func observeAccessibilityDisplayOptions() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else {
-                    return
-                }
-                self.updateAccessibilityAppearance()
-                if case .processing = self.currentState {
-                    self.startProcessingAnimation()
+        if let accessibilityDisplayOptionsObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(
+                accessibilityDisplayOptionsObserver
+            )
+        }
+        accessibilityDisplayOptionsObserver =
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.updateAccessibilityAppearance()
+                    if case .processing = self.currentState {
+                        self.startProcessingAnimation()
+                    }
                 }
             }
-        }
     }
 
     private func updateAccessibilityAppearance() {
@@ -689,32 +844,38 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
         if let surfaceView = backgroundView as? OverlayHUDSurfaceView {
             surfaceView.updateChrome(
                 width: accessibilityAppearance.backgroundBorderWidth,
-                color: OpenWhisperPalette.hudText.withAlphaComponent(
+                color: VibeWhisperPalette.hudText.withAlphaComponent(
                     accessibilityAppearance.backgroundBorderAlpha
                 )
             )
         }
-        titleLabel.textColor = OpenWhisperPalette.hudText
-        trailingTimerLabel.textColor = OpenWhisperPalette.hudTextMuted.withAlphaComponent(
-            accessibilityAppearance.timerOpacity
-        )
-        closeButton.contentTintColor = OpenWhisperPalette.hudTextMuted.withAlphaComponent(
+        titleLabel.textColor = VibeWhisperPalette.hudText
+        // Same primary fill as the skill title — one type system across the HUD.
+        trailingTimerLabel.textColor = VibeWhisperPalette.hudText
+            .withAlphaComponent(accessibilityAppearance.timerOpacity)
+        closeButton.contentTintColor = VibeWhisperPalette.hudTextMuted.withAlphaComponent(
             accessibilityAppearance.cancelControlOpacity
         )
-        retryButton.contentTintColor = OpenWhisperPalette.hudTextMuted.withAlphaComponent(
+        retryButton.contentTintColor = VibeWhisperPalette.hudTextMuted.withAlphaComponent(
             accessibilityAppearance.retryControlOpacity
         )
         waveformView.update(baseOpacity: accessibilityAppearance.waveformBaseOpacity)
+        waveformView.update(reduceMotion: options.reduceMotion)
     }
 
     private func announce(_ state: OverlayVisualState) {
+        let title = displayLabel(for: state)
         let announcement: String
         if let supplementaryText = state.supplementaryText, !supplementaryText.isEmpty {
-            announcement =
-                "\(displayLabel(for: state)). "
-                + supplementaryText
+            let head = title.isEmpty
+                ? L10n.text("Error")
+                : title
+            announcement = "\(head). " + supplementaryText
+        } else if title.isEmpty {
+            // Recording with no skill still needs a VoiceOver cue.
+            announcement = L10n.text("Recording")
         } else {
-            announcement = displayLabel(for: state)
+            announcement = title
         }
 
         backgroundView.setAccessibilityElement(true)
@@ -733,28 +894,25 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     private func displayLabel(
         for state: OverlayVisualState
     ) -> String {
-        let base = state.label(
-            hotkeyDisplayName: hotkeyDisplayName
-        )
-        guard let skillPresentation else {
-            return base
-        }
         switch state {
-        case .recording, .processing:
-            return L10n.format(
-                "%@ · %@",
-                skillPresentation.displayName,
-                base
-            )
-        case .success, .error, .retryableError:
-            return base
+        case .recording:
+            // Skill name only — never the hotkey hint.
+            return skillPresentation?.displayName ?? ""
+        case .processing, .success, .error, .retryableError:
+            // No skill prefix on processing / terminal states.
+            return state.label(hotkeyDisplayName: hotkeyDisplayName)
         }
     }
 
     private func positionPanel(size: NSSize) {
         let screen = activeScreen() ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let newFrame = Self.panelFrame(for: size, in: visibleFrame, topInset: style.topInset)
+        let newFrame = Self.panelFrame(
+            for: size,
+            in: visibleFrame,
+            edgeInset: style.topInset,
+            placement: hudPlacement
+        )
         animateToFrame(newFrame)
     }
 
@@ -768,8 +926,13 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             return
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            // Width morph between states — slightly springier than linear ease
+            // so the glass capsule feels like liquid chrome, not a resize box.
+            context.duration = 0.28
+            context.timingFunction = CAMediaTimingFunction(
+                controlPoints: 0.22, 0.9, 0.28, 1.0
+            )
+            context.allowsImplicitAnimation = true
             panel.animator().setFrame(newFrame, display: true)
         }
     }
@@ -777,22 +940,45 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     static func panelFrame(
         for size: NSSize,
         in visibleFrame: NSRect,
-        topInset: CGFloat
+        edgeInset: CGFloat,
+        placement: HUDPlacement = .top
     ) -> NSRect {
         let fittedSize = NSSize(
             width: min(size.width, visibleFrame.width),
             height: min(size.height, visibleFrame.height)
         )
+        let y: CGFloat
+        switch placement {
+        case .top:
+            y = max(
+                visibleFrame.minY,
+                visibleFrame.maxY - edgeInset - fittedSize.height
+            )
+        case .bottom:
+            y = min(
+                visibleFrame.maxY - fittedSize.height,
+                visibleFrame.minY + edgeInset
+            )
+        }
         let origin = NSPoint(
             x: visibleFrame.midX - (fittedSize.width / 2),
-            y: max(
-                visibleFrame.minY,
-                visibleFrame.maxY
-                    - topInset
-                    - fittedSize.height
-            )
+            y: y
         )
         return NSRect(origin: origin, size: fittedSize)
+    }
+
+    /// Back-compat for tests / callers that still pass `topInset`.
+    static func panelFrame(
+        for size: NSSize,
+        in visibleFrame: NSRect,
+        topInset: CGFloat
+    ) -> NSRect {
+        panelFrame(
+            for: size,
+            in: visibleFrame,
+            edgeInset: topInset,
+            placement: .top
+        )
     }
 
     private func resolvedAccessibilityDisplayOptions()
@@ -897,10 +1083,12 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
     }
 
     var debugSnapshot: OverlayDebugSnapshot {
-        OverlayDebugSnapshot(
-            usesLiquidGlassMaterial: false,
-            usesNativeAppKitHUDMaterial:
-                panel.contentView is OverlayHUDSurfaceView,
+        let surface = panel.contentView as? OverlayHUDSurfaceView
+        return OverlayDebugSnapshot(
+            usesLiquidGlassMaterial:
+                surface?.usesLiquidGlassMaterial
+                    ?? VibeWhisperFloatingChrome.usesSystemLiquidGlass,
+            usesNativeAppKitHUDMaterial: surface != nil,
             usesIntegratedSessionControl: closeButton.superview === trailingAccessoryStack,
             hasDetachedClosePanel: false,
             panelIgnoresMouseEvents: panel.ignoresMouseEvents,
@@ -911,13 +1099,22 @@ final class OverlayController: OverlayControlling, OverlaySnapshotCapturing {
             panelIsVisible: panel.isVisible,
             processingAnimationIsActive: processingTimer?.isValid == true,
             displayedLevels: displayedLevels,
-            accessibilityAppearance: accessibilityAppearance
+            accessibilityAppearance: accessibilityAppearance,
+            visibleTitle: titleLabel.stringValue,
+            isTitleHidden: titleLabel.isHidden,
+            waveformAccent: waveformView.debugAccentKind
         )
     }
 
 }
 
 struct OverlayDebugSnapshot: Sendable, Equatable {
+    enum WaveformAccentKind: Sendable, Equatable {
+        case none
+        case recording
+        case processing
+    }
+
     let usesLiquidGlassMaterial: Bool
     let usesNativeAppKitHUDMaterial: Bool
     let usesIntegratedSessionControl: Bool
@@ -931,6 +1128,9 @@ struct OverlayDebugSnapshot: Sendable, Equatable {
     let processingAnimationIsActive: Bool
     let displayedLevels: [CGFloat]
     let accessibilityAppearance: OverlayAccessibilityAppearance
+    let visibleTitle: String
+    let isTitleHidden: Bool
+    let waveformAccent: WaveformAccentKind
 }
 
 private struct OverlaySurfaceComponents {
@@ -983,15 +1183,21 @@ private func interactiveHitTest(
     return nil
 }
 
+/// Floating dictation HUD shell, aligned with Apple's AppKit Liquid Glass sample:
+/// on macOS 26 a bare `NSGlassEffectView` fills the panel edge-to-edge (glass
+/// owns its optical edge + adaptive elevation). Pre-26 falls back to
+/// `NSVisualEffectView.Material.hudWindow` with a soft silhouette shadow plate.
 @MainActor
 private final class OverlayHUDSurfaceView:
     NSView,
     OverlayInteractiveSurface
 {
-    private let chromeInset: CGFloat
     private let cornerRadius: CGFloat
-    private let shadowView = NSView()
-    private let materialView = NSVisualEffectView()
+    private let usesLiquidGlass: Bool
+    /// Pre-26 only: hosts the soft elevation plate. Nil under Liquid Glass.
+    private let shadowView: NSView?
+    /// Classic material host (macOS 13–25). Nil when Liquid Glass is active.
+    private let materialView: NSVisualEffectView?
     var interactiveViewsProvider: (() -> [NSView])?
 
     init(
@@ -1000,76 +1206,95 @@ private final class OverlayHUDSurfaceView:
         contentView: NSView
     ) {
         self.cornerRadius = cornerRadius
-        self.chromeInset = chromeInset
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.clear.cgColor
-
-        shadowView.translatesAutoresizingMaskIntoConstraints = false
-        shadowView.wantsLayer = true
-        shadowView.layer?.cornerRadius = cornerRadius
-        shadowView.layer?.cornerCurve = .continuous
-        shadowView.layer?.shadowColor = NSColor.black.cgColor
-        shadowView.layer?.shadowOpacity = 0.22
-        shadowView.layer?.shadowRadius = 14
-        shadowView.layer?.shadowOffset = CGSize(width: 0, height: -3)
-        shadowView.layer?.masksToBounds = false
-
-        materialView.translatesAutoresizingMaskIntoConstraints = false
-        materialView.material = .popover
-        materialView.blendingMode = .behindWindow
-        materialView.state = .active
-        materialView.wantsLayer = true
-        materialView.layer?.cornerRadius = cornerRadius
-        materialView.layer?.cornerCurve = .continuous
-        materialView.layer?.masksToBounds = true
-
-        addSubview(shadowView)
-        addSubview(materialView)
 
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        materialView.addSubview(contentView)
-        NSLayoutConstraint.activate([
-            shadowView.leadingAnchor.constraint(
-                equalTo: leadingAnchor,
-                constant: chromeInset
-            ),
-            shadowView.trailingAnchor.constraint(
-                equalTo: trailingAnchor,
-                constant: -chromeInset
-            ),
-            shadowView.topAnchor.constraint(
-                equalTo: topAnchor,
-                constant: chromeInset
-            ),
-            shadowView.bottomAnchor.constraint(
-                equalTo: bottomAnchor,
-                constant: -chromeInset
-            ),
 
-            materialView.leadingAnchor.constraint(
-                equalTo: shadowView.leadingAnchor
-            ),
-            materialView.trailingAnchor.constraint(
-                equalTo: shadowView.trailingAnchor
-            ),
-            materialView.topAnchor.constraint(equalTo: shadowView.topAnchor),
-            materialView.bottomAnchor.constraint(
-                equalTo: shadowView.bottomAnchor
-            ),
+        if #available(macOS 26, *) {
+            // Official sample pattern: glass is the surface. No painted shadow
+            // plate, no inset, no manual hairline — Liquid Glass lenses the
+            // desktop behind the capsule and draws its own edge.
+            let glass = NSGlassEffectView()
+            glass.translatesAutoresizingMaskIntoConstraints = false
+            glass.style = .regular
+            glass.cornerRadius = cornerRadius
+            // Neutral shell — state accents live on glyphs/badges, never tint
+            // the glass (Apple: "tint only primary actions").
+            glass.tintColor = nil
+            glass.contentView = contentView
 
-            contentView.leadingAnchor.constraint(
-                equalTo: materialView.leadingAnchor
-            ),
-            contentView.trailingAnchor.constraint(
-                equalTo: materialView.trailingAnchor
-            ),
-            contentView.topAnchor.constraint(equalTo: materialView.topAnchor),
-            contentView.bottomAnchor.constraint(
-                equalTo: materialView.bottomAnchor
-            ),
-        ])
-        updateAdaptiveChrome()
+            self.materialView = nil
+            self.shadowView = nil
+            self.usesLiquidGlass = true
+            super.init(frame: .zero)
+
+            wantsLayer = true
+            layer?.backgroundColor = NSColor.clear.cgColor
+            addSubview(glass)
+            NSLayoutConstraint.activate(Self.pin(glass, to: self))
+            return
+        }
+
+        // Pre-26: hudWindow material + soft elevation plate so the pill still
+        // reads as floating chrome without Liquid Glass.
+        let material = NSVisualEffectView()
+        material.translatesAutoresizingMaskIntoConstraints = false
+        material.material = .hudWindow
+        material.blendingMode = .behindWindow
+        material.state = .active
+        material.wantsLayer = true
+        material.layer?.cornerRadius = cornerRadius
+        material.layer?.cornerCurve = .continuous
+        material.layer?.masksToBounds = true
+        material.addSubview(contentView)
+        NSLayoutConstraint.activate(Self.pin(contentView, to: material))
+
+        let elevation = NSView()
+        elevation.translatesAutoresizingMaskIntoConstraints = false
+        elevation.wantsLayer = true
+        elevation.layer?.cornerRadius = cornerRadius
+        elevation.layer?.cornerCurve = .continuous
+        elevation.layer?.shadowColor = NSColor.black.cgColor
+        elevation.layer?.shadowOpacity =
+            VibeWhisperFloatingChrome.capsuleShadowOpacity
+        elevation.layer?.shadowRadius =
+            VibeWhisperFloatingChrome.capsuleShadowRadius
+        elevation.layer?.shadowOffset = CGSize(
+            width: 0,
+            height: VibeWhisperFloatingChrome.capsuleShadowOffsetY
+        )
+        elevation.layer?.masksToBounds = false
+        elevation.layer?.backgroundColor = NSColor.clear.cgColor
+
+        self.materialView = material
+        self.shadowView = elevation
+        self.usesLiquidGlass = false
+        super.init(frame: .zero)
+
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+        addSubview(elevation)
+        addSubview(material)
+        NSLayoutConstraint.activate(
+            Self.pin(material, to: elevation) + [
+                elevation.leadingAnchor.constraint(
+                    equalTo: leadingAnchor,
+                    constant: chromeInset
+                ),
+                elevation.trailingAnchor.constraint(
+                    equalTo: trailingAnchor,
+                    constant: -chromeInset
+                ),
+                elevation.topAnchor.constraint(
+                    equalTo: topAnchor,
+                    constant: chromeInset
+                ),
+                elevation.bottomAnchor.constraint(
+                    equalTo: bottomAnchor,
+                    constant: -chromeInset
+                ),
+            ]
+        )
+        updateClassicAdaptiveFill()
     }
 
     @available(*, unavailable)
@@ -1077,8 +1302,11 @@ private final class OverlayHUDSurfaceView:
         fatalError("init(coder:) has not been implemented")
     }
 
+    var usesLiquidGlassMaterial: Bool { usesLiquidGlass }
+
     override func layout() {
         super.layout()
+        guard let shadowView else { return }
         shadowView.layer?.shadowPath = CGPath(
             roundedRect: shadowView.bounds,
             cornerWidth: cornerRadius,
@@ -1089,21 +1317,40 @@ private final class OverlayHUDSurfaceView:
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        updateAdaptiveChrome()
+        if !usesLiquidGlass {
+            updateClassicAdaptiveFill()
+        }
     }
 
     func updateChrome(width: CGFloat, color: NSColor) {
+        // Liquid Glass owns its edge; only classic material takes a manual hairline.
+        guard !usesLiquidGlass, let materialView else { return }
         materialView.layer?.borderWidth = width
         materialView.layer?.borderColor = color.cgColor
     }
 
-    private func updateAdaptiveChrome() {
-        let base = NSColor.windowBackgroundColor
-            .withAlphaComponent(0.94)
-        shadowView.layer?.backgroundColor = base.cgColor
-        materialView.layer?.backgroundColor = NSColor.controlBackgroundColor
-            .withAlphaComponent(0.16)
+    /// Light adaptive fill so the classic material stays legible without
+    /// fighting the blur. Never applied under Liquid Glass.
+    private func updateClassicAdaptiveFill() {
+        guard !usesLiquidGlass else { return }
+        shadowView?.layer?.backgroundColor = NSColor.windowBackgroundColor
+            .withAlphaComponent(0.55)
             .cgColor
+        materialView?.layer?.backgroundColor = NSColor.controlBackgroundColor
+            .withAlphaComponent(0.08)
+            .cgColor
+    }
+
+    private static func pin(
+        _ child: NSView,
+        to parent: NSView
+    ) -> [NSLayoutConstraint] {
+        [
+            child.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+            child.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
+            child.topAnchor.constraint(equalTo: parent.topAnchor),
+            child.bottomAnchor.constraint(equalTo: parent.bottomAnchor),
+        ]
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -1134,6 +1381,11 @@ private final class OverlayWaveformView: NSView {
     private let style: OverlayStylePreset
     private var baseOpacity: CGFloat
     private var accentColor: NSColor?
+    private var barLayers: [CALayer] = []
+    /// Cached bar geometry so we can spring-animate height without re-layout noise.
+    private var barWidth: CGFloat = 2
+    private var contentOriginX: CGFloat = 0
+    private var prefersReducedMotion = false
 
     init(
         levels: [CGFloat],
@@ -1145,6 +1397,15 @@ private final class OverlayWaveformView: NSView {
         self.baseOpacity = baseOpacity
         super.init(frame: .zero)
         wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        // Disable implicit NSView animations on the host layer; bars own motion.
+        layer?.actions = [
+            "contents": NSNull(),
+            "bounds": NSNull(),
+            "position": NSNull(),
+            "sublayers": NSNull(),
+        ]
+        rebuildBarLayersIfNeeded(count: style.waveformBarCount)
     }
 
     @available(*, unavailable)
@@ -1152,7 +1413,32 @@ private final class OverlayWaveformView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(levels: [CGFloat]) {
+    var debugAccentKind: OverlayDebugSnapshot.WaveformAccentKind {
+        guard let accentColor else { return .none }
+        // Named dynamic colors resolve per appearance; compare resolved sRGB.
+        let resolved = accentColor.usingColorSpace(.sRGB) ?? accentColor
+        let recording = VibeWhisperPalette.hudRecordingAccent
+            .usingColorSpace(.sRGB)
+            ?? VibeWhisperPalette.hudRecordingAccent
+        let processing = VibeWhisperPalette.hudProcessingAccent
+            .usingColorSpace(.sRGB)
+            ?? VibeWhisperPalette.hudProcessingAccent
+        if abs(resolved.redComponent - recording.redComponent) < 0.04,
+           abs(resolved.greenComponent - recording.greenComponent) < 0.04,
+           abs(resolved.blueComponent - recording.blueComponent) < 0.04
+        {
+            return .recording
+        }
+        if abs(resolved.redComponent - processing.redComponent) < 0.04,
+           abs(resolved.greenComponent - processing.greenComponent) < 0.04,
+           abs(resolved.blueComponent - processing.blueComponent) < 0.04
+        {
+            return .processing
+        }
+        return .none
+    }
+
+    func update(levels: [CGFloat], animated: Bool = true) {
         let trimmed = Array(levels.prefix(style.waveformBarCount))
         if trimmed.count == style.waveformBarCount {
             self.levels = trimmed
@@ -1162,63 +1448,182 @@ private final class OverlayWaveformView: NSView {
                 count: max(0, style.waveformBarCount - trimmed.count)
             )
         }
-        needsDisplay = true
+        applyBarPresentation(animated: animated && !prefersReducedMotion)
     }
 
     func update(baseOpacity: CGFloat) {
         self.baseOpacity = baseOpacity
-        needsDisplay = true
+        applyBarPresentation(animated: false)
     }
 
     func update(accentColor: NSColor?) {
         self.accentColor = accentColor
-        needsDisplay = true
+        applyBarPresentation(animated: false)
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
+    func update(reduceMotion: Bool) {
+        prefersReducedMotion = reduceMotion
+    }
+
+    override func layout() {
+        super.layout()
+        rebuildGeometry()
+        applyBarPresentation(animated: false)
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        let scale = window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 2
+        for bar in barLayers {
+            bar.contentsScale = scale
+        }
+    }
+
+    private func rebuildBarLayersIfNeeded(count: Int) {
+        guard barLayers.count != count else { return }
+        barLayers.forEach { $0.removeFromSuperlayer() }
+        barLayers.removeAll(keepingCapacity: true)
+        let host = layer ?? {
+            wantsLayer = true
+            return layer!
+        }()
+        let scale = window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 2
+        for _ in 0..<count {
+            let bar = CALayer()
+            bar.contentsScale = scale
+            // Disable implicit layout animations; height/opacity are driven
+            // explicitly with a spring-like timing curve.
+            bar.actions = [
+                "bounds": NSNull(),
+                "position": NSNull(),
+                "backgroundColor": NSNull(),
+                "opacity": NSNull(),
+                "cornerRadius": NSNull(),
+            ]
+            host.addSublayer(bar)
+            barLayers.append(bar)
+        }
+    }
+
+    private func rebuildGeometry() {
+        rebuildBarLayersIfNeeded(count: style.waveformBarCount)
+        let count = max(1, style.waveformBarCount)
+        let totalSpacing = style.waveformBarSpacing * CGFloat(max(0, count - 1))
+        let availableWidth = max(0, bounds.width - totalSpacing)
+        let rawBarWidth = availableWidth / CGFloat(count)
+        // Flat Liquid Glass bars — thin rounded rods.
+        barWidth = max(1.75, min(2.4, rawBarWidth))
+        let contentWidth = (barWidth * CGFloat(count)) + totalSpacing
+        contentOriginX = bounds.midX - (contentWidth / 2)
+    }
+
+    private func applyBarPresentation(animated: Bool) {
+        guard bounds.width > 0.5, bounds.height > 0.5 else { return }
+        rebuildGeometry()
 
         let activeLevels = levels.isEmpty
-            ? Array(repeating: WaveformNormalizer.minimumVisibleLevel, count: style.waveformBarCount)
+            ? Array(
+                repeating: WaveformNormalizer.minimumVisibleLevel,
+                count: style.waveformBarCount
+            )
             : levels
+        let fill = accentColor ?? VibeWhisperPalette.hudText
+        let resolvedFill = fill.usingColorSpace(.sRGB) ?? fill
+        // Critically-damped spring-like ease: short response, no overshoot —
+        // Apple voice-meter feel rather than bouncy game juice.
+        let spring = CAMediaTimingFunction(controlPoints: 0.22, 0.9, 0.28, 1.0)
+        let duration: CFTimeInterval = animated ? 0.12 : 0
 
-        let totalSpacing = style.waveformBarSpacing * CGFloat(max(0, activeLevels.count - 1))
-        let availableWidth = bounds.width - totalSpacing
-        let rawBarWidth = availableWidth / CGFloat(max(1, activeLevels.count))
-        let barWidth = max(2, min(3.5, floor(rawBarWidth)))
-        let contentWidth = (barWidth * CGFloat(activeLevels.count)) + totalSpacing
-        var x = bounds.midX - (contentWidth / 2)
-        for level in activeLevels {
-            let barHeight = max(style.waveformMinimumBarHeight, bounds.height * level)
-            let barRect = CGRect(
+        for (index, bar) in barLayers.enumerated() {
+            let level: CGFloat
+            if activeLevels.indices.contains(index) {
+                level = activeLevels[index]
+            } else {
+                level = WaveformNormalizer.minimumVisibleLevel
+            }
+            let barHeight = max(
+                style.waveformMinimumBarHeight,
+                bounds.height * level
+            )
+            let x = contentOriginX
+                + CGFloat(index) * (barWidth + style.waveformBarSpacing)
+            let frame = CGRect(
                 x: x,
                 y: bounds.midY - (barHeight / 2),
                 width: barWidth,
                 height: barHeight
             )
+            let opacity = Float(
+                min(1, baseOpacity * (0.50 + level * 0.50))
+            )
 
-            let barColor: NSColor
-            if let accentColor {
-                // State-tinted glyph (processing): keep the bars luminous and
-                // let level drive brightness so the pulse stays readable.
-                let lift = 0.18 + (level * 0.34)
-                barColor = accentColor
-                    .blended(withFraction: lift, of: .white)?
-                    .withAlphaComponent(min(1, baseOpacity + 0.18))
-                    ?? accentColor
+            if animated, duration > 0 {
+                // Animate from the live presentation value so mid-flight
+                // retargets never jump (Apple interruptibility principle).
+                let fromBounds = bar.presentation()?.bounds ?? bar.bounds
+                let fromPosition = bar.presentation()?.position ?? bar.position
+                let fromOpacity = bar.presentation()?.opacity ?? bar.opacity
+
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                bar.bounds = CGRect(
+                    origin: .zero,
+                    size: frame.size
+                )
+                bar.position = CGPoint(x: frame.midX, y: frame.midY)
+                bar.cornerRadius = barWidth / 2
+                bar.backgroundColor = resolvedFill.cgColor
+                bar.opacity = opacity
+                CATransaction.commit()
+
+                let boundsAnim = CABasicAnimation(keyPath: "bounds")
+                boundsAnim.fromValue = NSValue(rect: fromBounds)
+                boundsAnim.toValue = NSValue(
+                    rect: CGRect(origin: .zero, size: frame.size)
+                )
+                boundsAnim.duration = duration
+                boundsAnim.timingFunction = spring
+                boundsAnim.fillMode = .both
+                boundsAnim.isRemovedOnCompletion = true
+
+                let positionAnim = CABasicAnimation(keyPath: "position")
+                positionAnim.fromValue = NSValue(
+                    point: fromPosition
+                )
+                positionAnim.toValue = NSValue(
+                    point: CGPoint(x: frame.midX, y: frame.midY)
+                )
+                positionAnim.duration = duration
+                positionAnim.timingFunction = spring
+                positionAnim.fillMode = .both
+                positionAnim.isRemovedOnCompletion = true
+
+                let opacityAnim = CABasicAnimation(keyPath: "opacity")
+                opacityAnim.fromValue = fromOpacity
+                opacityAnim.toValue = opacity
+                opacityAnim.duration = duration
+                opacityAnim.timingFunction = spring
+                opacityAnim.fillMode = .both
+                opacityAnim.isRemovedOnCompletion = true
+
+                bar.add(boundsAnim, forKey: "vibewhisper.waveform.bounds")
+                bar.add(positionAnim, forKey: "vibewhisper.waveform.position")
+                bar.add(opacityAnim, forKey: "vibewhisper.waveform.opacity")
             } else {
-                barColor = OpenWhisperPalette.hudText
-                    .withAlphaComponent(baseOpacity)
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                bar.removeAllAnimations()
+                bar.bounds = CGRect(origin: .zero, size: frame.size)
+                bar.position = CGPoint(x: frame.midX, y: frame.midY)
+                bar.cornerRadius = barWidth / 2
+                bar.backgroundColor = resolvedFill.cgColor
+                bar.opacity = opacity
+                CATransaction.commit()
             }
-
-            barColor.setFill()
-            NSBezierPath(
-                roundedRect: barRect,
-                xRadius: barWidth / 2,
-                yRadius: barWidth / 2
-            ).fill()
-
-            x += barWidth + style.waveformBarSpacing
         }
     }
 }

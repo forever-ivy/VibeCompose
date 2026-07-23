@@ -4,49 +4,41 @@ struct TranscriptionPromptBuilder {
     func buildPrompt(
         hintTerms: [String],
         speechCleanupEnabled: Bool = true,
-        languagePreference: TranscriptLanguagePreference = .simplifiedChinese,
         punctuationPreference: TranscriptPunctuationPreference = .automatic,
         locale: String = Locale.preferredLanguages.first ?? "zh-CN"
     ) -> String {
         let hints = Self.clippedHintTerms(hintTerms)
 
         var lines: [String] = [
-            "请将这段语音转成可直接粘贴使用的文本。",
-            "输出带自然标点和断句，但不要做二次改写。",
-            "保留中英混合表达，保持原意。",
-            languageInstruction(for: languagePreference),
+            "Transcribe this speech into text that can be pasted directly.",
+            "Add natural punctuation and sentence breaks, but do not rewrite meaning.",
+            "Preserve the speaker's language exactly. If they spoke Chinese, keep Chinese (including the original simplified/traditional form). If they spoke English or another language, keep that language. Do not translate.",
+            "Keep mixed-language phrases as spoken.",
             punctuationInstruction(for: punctuationPreference),
-            "不要改动文件名、版本号、路径、URL、邮箱、产品名、命令、参数名。",
-            "不要把系统界面、输入框提示、按钮文案当作语音内容输出。",
-            "优先正确写出术语、缩写、品牌词。",
-            "只返回最终文本。",
+            "Do not alter filenames, version numbers, paths, URLs, emails, product names, commands, or parameter names.",
+            "Do not treat system UI, placeholder text, or button labels as spoken content.",
+            "Prefer correct spellings for terms, acronyms, and brand names.",
+            "Return only the final transcript text.",
             "Locale: \(locale)",
         ]
 
         if speechCleanupEnabled {
-            lines.insert("清理口头填充词、无意义重复、停顿词和说话中途改口，只保留最终想表达的文本。", at: 2)
-            lines.insert("如果用户口头说出列表、步骤或要点，用简洁的换行或项目符号整理，但不要扩写内容。", at: 3)
+            lines.insert(
+                "Remove filler words, meaningless repeats, hesitation sounds, and mid-sentence self-corrections; keep only the final intended wording.",
+                at: 2
+            )
+            lines.insert(
+                "If the speaker dictates a list, steps, or bullet points, use concise line breaks or bullets without expanding the content.",
+                at: 3
+            )
         }
 
         if !hints.isEmpty {
-            lines.append("请特别注意这些术语：")
+            lines.append("Pay special attention to these terms:")
             lines.append(contentsOf: hints.map { "- \($0)" })
         }
 
         return lines.joined(separator: "\n")
-    }
-
-    private func languageInstruction(
-        for preference: TranscriptLanguagePreference
-    ) -> String {
-        switch preference {
-        case .simplifiedChinese:
-            return "中文内容输出简体中文，不要输出繁体中文。"
-        case .traditionalChinese:
-            return "中文内容輸出繁體中文，不要轉成簡體中文。"
-        case .preserve:
-            return "保留转录结果原本的语言和中文简繁体，不要主动转换。"
-        }
     }
 
     private func punctuationInstruction(
@@ -54,13 +46,13 @@ struct TranscriptionPromptBuilder {
     ) -> String {
         switch preference {
         case .automatic:
-            return "标点随语言自动选择：中文使用全角标点，纯英文保留半角标点。"
+            return "Choose punctuation style from the language of each phrase: full-width for Chinese runs, half-width for pure English runs."
         case .fullWidth:
-            return "输出使用中文全角标点。"
+            return "Use Chinese full-width punctuation."
         case .halfWidth:
-            return "输出使用 ASCII 半角标点。"
+            return "Use ASCII half-width punctuation."
         case .preserve:
-            return "保留转录结果原有标点样式，不要主动转换全角或半角。"
+            return "Preserve the transcript's original punctuation width; do not convert full-width and half-width forms."
         }
     }
 
@@ -75,18 +67,23 @@ struct TranscriptionPromptBuilder {
                 continue
             }
 
-            let key = trimmed.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            let key = trimmed.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
             guard seen.insert(key).inserted else {
                 continue
             }
 
-            let nextTotal = totalCharacters + trimmed.count + (output.isEmpty ? 0 : 2)
-            guard nextTotal <= 600 else {
+            let projected = totalCharacters + trimmed.count
+            guard projected <= 400 else {
                 break
             }
-
+            totalCharacters = projected
             output.append(trimmed)
-            totalCharacters = nextTotal
+            if output.count >= 24 {
+                break
+            }
         }
 
         return output

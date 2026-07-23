@@ -78,7 +78,11 @@ struct TerminologyQuickAddDraft: Equatable {
 }
 
 @MainActor
-final class TerminologyQuickAddWindowController: NSWindowController {
+final class TerminologyQuickAddWindowController: NSWindowController, NSWindowDelegate {
+    /// Host app frontmost before Quick Add activated VibeWhisper.
+    private var priorExternalFrontmost: LaunchAppContext?
+    private var didRestoreFrontmost = false
+
     init(
         existingEntries: [TerminologyEntry],
         onSave: @escaping (TerminologyEntry) -> Result<Void, any Error>
@@ -91,7 +95,7 @@ final class TerminologyQuickAddWindowController: NSWindowController {
                 weakWindow?.close()
             }
         )
-        .applyingOpenWhisperBrandTint()
+        .applyingVibeWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
         )
@@ -106,7 +110,7 @@ final class TerminologyQuickAddWindowController: NSWindowController {
         window.title = L10n.text("Quick Add Terminology")
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.TerminologyQuickAdd")
+        window.identifier = NSUserInterfaceItemIdentifier("VibeWhisper.TerminologyQuickAdd")
         window.level = .floating
         window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -117,6 +121,7 @@ final class TerminologyQuickAddWindowController: NSWindowController {
         window.center()
 
         super.init(window: window)
+        window.delegate = self
     }
 
     @available(*, unavailable)
@@ -128,10 +133,31 @@ final class TerminologyQuickAddWindowController: NSWindowController {
         guard let window else {
             return
         }
+        if priorExternalFrontmost == nil {
+            priorExternalFrontmost =
+                LaunchAppContext.externalFrontmostForTransientRestore()
+        }
+        didRestoreFrontmost = false
         DispatchQueue.main.async {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        restorePriorFrontmostIfNeeded()
+    }
+
+    override func close() {
+        restorePriorFrontmostIfNeeded()
+        super.close()
+    }
+
+    private func restorePriorFrontmostIfNeeded() {
+        guard !didRestoreFrontmost else { return }
+        didRestoreFrontmost = true
+        LaunchAppContext.restoreFrontmostIfNeeded(priorExternalFrontmost)
+        priorExternalFrontmost = nil
     }
 
     func writeSnapshot(to url: URL) throws {
@@ -150,14 +176,14 @@ private struct TerminologyQuickAddView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
-                OpenWhisperIconWell(
+                VibeWhisperIconWell(
                     systemName: "text.book.closed",
                     size: 40,
                     symbolSize: 16
                 )
                 VStack(alignment: .leading, spacing: 3) {
                     Text(L10n.text("Quick Add Terminology"))
-                        .font(OpenWhisperTypography.title())
+                        .font(VibeWhisperTypography.title())
                 }
             }
 
@@ -180,8 +206,9 @@ private struct TerminologyQuickAddView: View {
                 }
 
                 TextField(
-                    L10n.text("Aliases separated by commas"),
-                    text: $draft.aliases
+                    L10n.text("Also match"),
+                    text: $draft.aliases,
+                    prompt: Text(L10n.text("e.g. vibewhisper, vibe whisper"))
                 )
                 .textFieldStyle(.roundedBorder)
             }
@@ -189,17 +216,17 @@ private struct TerminologyQuickAddView: View {
 
             if let message {
                 Text(message)
-                    .font(OpenWhisperTypography.caption())
-                    .foregroundStyle(Color(nsColor: OpenWhisperPalette.error))
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(Color(nsColor: VibeWhisperPalette.error))
             }
 
             HStack {
                 Spacer()
                 Button(L10n.text("Cancel"), action: onClose)
-                    .buttonStyle(OpenWhisperSecondaryButtonStyle())
+                    .buttonStyle(VibeWhisperSecondaryButtonStyle())
                     .keyboardShortcut(.cancelAction)
                 Button(L10n.text("Add Entry"), action: save)
-                    .buttonStyle(OpenWhisperPrimaryButtonStyle())
+                    .buttonStyle(VibeWhisperPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }

@@ -3,6 +3,8 @@ import Foundation
 enum ManagedEndpointKind: Sendable, CaseIterable {
     case transcription
     case responses
+    /// Account-scoped Codex model catalog (`GET …/codex/models`).
+    case models
 
     var url: URL {
         switch self {
@@ -10,6 +12,8 @@ enum ManagedEndpointKind: Sendable, CaseIterable {
             return ManagedEndpointPolicy.transcriptionURL
         case .responses:
             return ManagedEndpointPolicy.responsesURL
+        case .models:
+            return ManagedEndpointPolicy.modelsURL
         }
     }
 }
@@ -23,7 +27,7 @@ enum EndpointPolicyError: LocalizedError, Equatable {
         case .invalidURL(let value):
             return L10n.format("The configured endpoint is invalid: %@", value)
         case .disallowedManagedEndpoint:
-            return L10n.text("OpenWhisper blocked a non-approved endpoint for the managed ChatGPT session.")
+            return L10n.text("VibeWhisper blocked a non-approved endpoint for the managed ChatGPT session.")
         }
     }
 }
@@ -31,6 +35,8 @@ enum EndpointPolicyError: LocalizedError, Equatable {
 enum ManagedEndpointPolicy {
     static let transcriptionURL = makeURL("https://chatgpt.com/backend-api/transcribe")
     static let responsesURL = makeURL("https://chatgpt.com/backend-api/codex/responses")
+    /// Codex account model catalog. Same origin as responses; query may only add `client_version`.
+    static let modelsURL = makeURL("https://chatgpt.com/backend-api/codex/models")
 
     static func validatedURL(_ candidate: URL, for kind: ManagedEndpointKind) throws -> URL {
         let expected = kind.url
@@ -42,13 +48,49 @@ enum ManagedEndpointPolicy {
             components.user == nil,
             components.password == nil,
             components.path == expected.path,
-            components.query == nil,
             components.fragment == nil
         else {
             throw EndpointPolicyError.disallowedManagedEndpoint(candidate.absoluteString)
         }
 
-        return expected
+        switch kind {
+        case .transcription, .responses:
+            guard components.query == nil else {
+                throw EndpointPolicyError.disallowedManagedEndpoint(candidate.absoluteString)
+            }
+            return expected
+        case .models:
+            // Codex clients append `?client_version=…` only. Reject any other query shape.
+            if let items = components.queryItems, !items.isEmpty {
+                guard
+                    items.count == 1,
+                    items[0].name == "client_version",
+                    let value = items[0].value,
+                    !value.isEmpty,
+                    value.allSatisfy({ $0.isASCII && !$0.isWhitespace })
+                else {
+                    throw EndpointPolicyError.disallowedManagedEndpoint(candidate.absoluteString)
+                }
+                return candidate
+            }
+            return expected
+        }
+    }
+
+    /// Build the approved models catalog URL with an optional Codex `client_version` query.
+    static func modelsListURL(clientVersion: String) throws -> URL {
+        let trimmed = clientVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return try validatedURL(modelsURL, for: .models)
+        }
+        var components = URLComponents(url: modelsURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "client_version", value: trimmed),
+        ]
+        guard let url = components.url else {
+            throw EndpointPolicyError.invalidURL(modelsURL.absoluteString)
+        }
+        return try validatedURL(url, for: .models)
     }
 
     static func validatedUserOwnedURL(_ value: String) throws -> URL {
@@ -68,7 +110,7 @@ enum ManagedEndpointPolicy {
 
     private static func makeURL(_ value: String) -> URL {
         guard let url = URL(string: value) else {
-            preconditionFailure("Invalid built-in OpenWhisper endpoint: \(value)")
+            preconditionFailure("Invalid built-in VibeWhisper endpoint: \(value)")
         }
         return url
     }

@@ -8,7 +8,7 @@ enum BenchmarkError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAudioFiles:
-            return "Set OPENWHISPER_BENCHMARK_AUDIO_FILES to one or more local audio file paths."
+            return "Set VIBEWHISPER_BENCHMARK_AUDIO_FILES to one or more local audio file paths."
         case .unreadableAudioFile(let path):
             return "Could not read benchmark audio file: \(path)"
         }
@@ -49,7 +49,7 @@ struct BenchmarkRunner {
             throw BenchmarkError.missingAudioFiles
         }
 
-        let runs = Int(environment["OPENWHISPER_BENCHMARK_RUNS"] ?? "") ?? 5
+        let runs = Int(environment["VIBEWHISPER_BENCHMARK_RUNS"] ?? "") ?? 5
         var results: [BenchmarkRunResult] = []
 
         for fileURL in files {
@@ -63,7 +63,6 @@ struct BenchmarkRunner {
                         config: config.transcription
                     ),
                     normalizer: TerminologyNormalizer(
-                        languagePreference: config.transcription.languagePreference,
                         punctuationPreference: config.transcription.punctuationPreference
                     ),
                     importedEntries: config.transcription.activeDictionaryEntries,
@@ -106,7 +105,6 @@ struct BenchmarkRunner {
                         config: config.transcription
                     ),
                     normalizer: TerminologyNormalizer(
-                        languagePreference: config.transcription.languagePreference,
                         punctuationPreference: config.transcription.punctuationPreference
                     ),
                     importedEntries: config.transcription.activeDictionaryEntries,
@@ -146,7 +144,7 @@ struct BenchmarkRunner {
     }
 
     private func benchmarkAudioFiles() -> [URL] {
-        let rawValue = environment["OPENWHISPER_BENCHMARK_AUDIO_FILES"] ?? ""
+        let rawValue = environment["VIBEWHISPER_BENCHMARK_AUDIO_FILES"] ?? ""
         return rawValue
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

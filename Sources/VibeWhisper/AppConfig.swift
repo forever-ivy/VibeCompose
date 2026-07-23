@@ -3,6 +3,10 @@ import Foundation
 struct AppConfig: Codable, Sendable, Equatable {
     var appLanguage: AppLanguage = .system
     var skillSwitcherHotkey: HotkeyBinding?
+    /// Optional global shortcut that reopens the last dictation Preview and
+    /// allows switching Skills to regenerate results for the same transcript.
+    /// Default is nil — user enables it in Settings.
+    var resultPreviewHotkey: HotkeyBinding?
     var transcription: TranscriptionConfig = .init()
     var injection: InjectionConfig = .init()
     var auth: AuthConfig = .init()
@@ -29,6 +33,14 @@ struct AppConfig: Codable, Sendable, Equatable {
             skillSwitcherHotkey = try? decodedSkillSwitcherHotkey.validated()
         } else {
             skillSwitcherHotkey = nil
+        }
+        if let decodedResultPreviewHotkey = try container.decodeIfPresent(
+            HotkeyBinding.self,
+            forKey: .resultPreviewHotkey
+        ) {
+            resultPreviewHotkey = try? decodedResultPreviewHotkey.validated()
+        } else {
+            resultPreviewHotkey = nil
         }
         transcription = try container.decodeIfPresent(TranscriptionConfig.self, forKey: .transcription) ?? .init()
         injection = try container.decodeIfPresent(InjectionConfig.self, forKey: .injection) ?? .init()
@@ -212,17 +224,103 @@ enum TranscriptionProvider: String, Codable, Sendable, CaseIterable, Identifiabl
         case .chatGPTManagedAuth:
             return L10n.text("ChatGPT Account")
         case .openAICompatible:
-            return L10n.text("OpenAI-Compatible Recovery")
+            return L10n.text("Import Your Own API")
         }
     }
 
     var caption: String {
         switch self {
         case .chatGPTManagedAuth:
-            return L10n.text("Recommended. OpenWhisper signs in to ChatGPT directly and keeps its own session on this Mac.")
+            return L10n.text("Recommended. VibeWhisper signs in to ChatGPT directly and keeps its own session on this Mac.")
         case .openAICompatible:
-            return L10n.text("Optional recovery route. Bring your own OpenAI-compatible API only if you want a separate endpoint.")
+            return L10n.text("Dictation uses your OpenAI-compatible endpoint and API key. AI rewrite still uses ChatGPT Auth.")
         }
+    }
+}
+
+/// Product-facing dictation path shown on Advanced settings.
+enum DictationRouteStrategy: String, CaseIterable, Identifiable, Sendable, Equatable {
+    case chatGPTAccount
+    case importOwnAPI
+    case compatibleFallback
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .chatGPTAccount:
+            return L10n.text("ChatGPT Account")
+        case .importOwnAPI:
+            return L10n.text("Import Your Own API")
+        case .compatibleFallback:
+            return L10n.text("Compatible Fallback")
+        }
+    }
+
+    var caption: String {
+        switch self {
+        case .chatGPTAccount:
+            return L10n.text("Recommended. Dictation uses your ChatGPT account on this Mac.")
+        case .importOwnAPI:
+            return L10n.text("Primary dictation path uses your own OpenAI-compatible API.")
+        case .compatibleFallback:
+            return L10n.text("ChatGPT first. If it fails, automatically retry with your API.")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .chatGPTAccount:
+            return "person.crop.circle.badge.checkmark"
+        case .importOwnAPI:
+            return "key.horizontal"
+        case .compatibleFallback:
+            return "arrow.triangle.branch"
+        }
+    }
+
+    static func resolve(
+        provider: TranscriptionProvider,
+        openAIFallbackEnabled: Bool
+    ) -> Self {
+        switch provider {
+        case .openAICompatible:
+            return .importOwnAPI
+        case .chatGPTManagedAuth:
+            return openAIFallbackEnabled ? .compatibleFallback : .chatGPTAccount
+        }
+    }
+}
+
+/// Curated model IDs for Advanced pickers (plus free-form custom).
+enum ProductModelCatalog {
+    static let dictationPresets: [String] = [
+        "gpt-4o-mini-transcribe",
+        "gpt-4o-transcribe",
+        "whisper-1",
+    ]
+
+    static let rewritePresets: [String] = [
+        "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.2",
+        "gpt-5",
+        "gpt-4.1",
+        "gpt-4o",
+    ]
+
+    static let customModelTag = "__custom__"
+
+    static func selectionTag(
+        for model: String,
+        presets: [String]
+    ) -> String {
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if presets.contains(trimmed) {
+            return trimmed
+        }
+        return customModelTag
     }
 }
 
@@ -230,25 +328,6 @@ enum TextPolishMode: String, Codable, Sendable, Equatable, CaseIterable {
     case automaticWhenKeyAvailable
     case disabled
     case always
-}
-
-enum TranscriptLanguagePreference: String, Codable, Sendable, Equatable, CaseIterable, Identifiable {
-    case simplifiedChinese
-    case traditionalChinese
-    case preserve
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .simplifiedChinese:
-            return L10n.text("Simplified Chinese")
-        case .traditionalChinese:
-            return L10n.text("Traditional Chinese")
-        case .preserve:
-            return L10n.text("Preserve transcript language")
-        }
-    }
 }
 
 enum TranscriptPunctuationPreference: String, Codable, Sendable, Equatable, CaseIterable, Identifiable {
@@ -275,6 +354,7 @@ enum TranscriptPunctuationPreference: String, Codable, Sendable, Equatable, Case
 
 enum TextPolishProviderID: String, Codable, Sendable, Equatable, Hashable, CaseIterable, Identifiable {
     case chatGPTAuth
+    case openAICompatible
 
     var id: String { rawValue }
 
@@ -282,14 +362,24 @@ enum TextPolishProviderID: String, Codable, Sendable, Equatable, Hashable, CaseI
         switch self {
         case .chatGPTAuth:
             return L10n.text("ChatGPT Auth")
+        case .openAICompatible:
+            return L10n.text("Own API")
         }
     }
 }
 
 struct TextPolishConfig: Codable, Sendable, Equatable {
     var mode: TextPolishMode = .automaticWhenKeyAvailable
+    /// Prefer ChatGPT Auth Responses when true (and a session is ready).
     var chatGPTAuthEnabled: Bool = true
+    /// Prefer the user-owned OpenAI-compatible chat endpoint when true.
+    /// Mutually exclusive with `chatGPTAuthEnabled` in the Advanced UI.
+    var openAICompatibleEnabled: Bool = false
+    /// When ChatGPT Auth is primary, retry polish via Own API on recoverable failure.
+    var openAIFallbackEnabled: Bool = false
     var chatGPTResponseModel: String = "gpt-5.5"
+    var openAICompatibleURL: String = "https://api.openai.com/v1/chat/completions"
+    var openAICompatibleModel: String = "gpt-4o"
     var temperature: Double = 0.2
     var maxOutputTokens: Int = 1_200
     var glossaryBudgetCharacters: Int = 1_200
@@ -303,8 +393,31 @@ struct TextPolishConfig: Codable, Sendable, Equatable {
         chatGPTAuthEnabled = try container.decodeIfPresent(Bool.self, forKey: .chatGPTAuthEnabled)
             ?? container.decodeIfPresent(Bool.self, forKey: .allowChatGPTAuthFallback)
             ?? true
+        openAICompatibleEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .openAICompatibleEnabled
+        ) ?? false
+        openAIFallbackEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .openAIFallbackEnabled
+        ) ?? false
+        // If both flags decode true from a hand-edited config, prefer ChatGPT Auth.
+        if openAICompatibleEnabled && chatGPTAuthEnabled {
+            openAICompatibleEnabled = false
+        }
+        if openAICompatibleEnabled {
+            openAIFallbackEnabled = false
+        }
         chatGPTResponseModel = try container.decodeIfPresent(String.self, forKey: .chatGPTResponseModel)
             ?? "gpt-5.5"
+        openAICompatibleURL = try container.decodeIfPresent(
+            String.self,
+            forKey: .openAICompatibleURL
+        ) ?? "https://api.openai.com/v1/chat/completions"
+        openAICompatibleModel = try container.decodeIfPresent(
+            String.self,
+            forKey: .openAICompatibleModel
+        ) ?? "gpt-4o"
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.2
         maxOutputTokens = try container.decodeIfPresent(Int.self, forKey: .maxOutputTokens) ?? 1_200
         glossaryBudgetCharacters = try container.decodeIfPresent(Int.self, forKey: .glossaryBudgetCharacters) ?? 1_200
@@ -314,7 +427,11 @@ struct TextPolishConfig: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case mode
         case chatGPTAuthEnabled
+        case openAICompatibleEnabled
+        case openAIFallbackEnabled
         case chatGPTResponseModel
+        case openAICompatibleURL
+        case openAICompatibleModel
         case temperature
         case maxOutputTokens
         case glossaryBudgetCharacters
@@ -326,7 +443,11 @@ struct TextPolishConfig: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(mode, forKey: .mode)
         try container.encode(chatGPTAuthEnabled, forKey: .chatGPTAuthEnabled)
+        try container.encode(openAICompatibleEnabled, forKey: .openAICompatibleEnabled)
+        try container.encode(openAIFallbackEnabled, forKey: .openAIFallbackEnabled)
         try container.encode(chatGPTResponseModel, forKey: .chatGPTResponseModel)
+        try container.encode(openAICompatibleURL, forKey: .openAICompatibleURL)
+        try container.encode(openAICompatibleModel, forKey: .openAICompatibleModel)
         try container.encode(temperature, forKey: .temperature)
         try container.encode(maxOutputTokens, forKey: .maxOutputTokens)
         try container.encode(glossaryBudgetCharacters, forKey: .glossaryBudgetCharacters)
@@ -336,6 +457,9 @@ struct TextPolishConfig: Codable, Sendable, Equatable {
 
 struct TranscriptionConfig: Codable, Sendable, Equatable {
     var provider: TranscriptionProvider = .chatGPTManagedAuth
+    /// When true and `provider == .chatGPTManagedAuth`, a failed ChatGPT
+    /// transcription may retry via the configured OpenAI-compatible endpoint.
+    var openAIFallbackEnabled: Bool = false
     var dictationHotkey: HotkeyBinding = .f5
     var openAITranscriptionURL: String = "https://api.openai.com/v1/audio/transcriptions"
     var openAIModel: String = "gpt-4o-mini-transcribe"
@@ -344,7 +468,6 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
     var hintTerms: [String] = []
     var speechCleanupEnabled: Bool = true
     var feedbackSoundsEnabled: Bool = true
-    var languagePreference: TranscriptLanguagePreference = .simplifiedChinese
     var punctuationPreference: TranscriptPunctuationPreference = .automatic
     var skills: SkillsConfig = .init()
     var terminology: TerminologyConfig = .init()
@@ -371,6 +494,10 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         } else {
             provider = .chatGPTManagedAuth
         }
+        openAIFallbackEnabled = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .openAIFallbackEnabled
+        ) ?? false
         if let decodedBinding = try container.decodeIfPresent(
             HotkeyBinding.self,
             forKey: .dictationHotkey
@@ -399,10 +526,6 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         hintTerms = try container.decodeIfPresent([String].self, forKey: .hintTerms) ?? []
         speechCleanupEnabled = try container.decodeIfPresent(Bool.self, forKey: .speechCleanupEnabled) ?? true
         feedbackSoundsEnabled = try container.decodeIfPresent(Bool.self, forKey: .feedbackSoundsEnabled) ?? true
-        languagePreference = try container.decodeIfPresent(
-            TranscriptLanguagePreference.self,
-            forKey: .languagePreference
-        ) ?? .simplifiedChinese
         punctuationPreference = try container.decodeIfPresent(
             TranscriptPunctuationPreference.self,
             forKey: .punctuationPreference
@@ -470,6 +593,7 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         CodingKey
     {
         case provider
+        case openAIFallbackEnabled
         case dictationHotkey
         case openAITranscriptionURL
         case openAIModel
@@ -478,7 +602,6 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         case hintTerms
         case speechCleanupEnabled
         case feedbackSoundsEnabled
-        case languagePreference
         case punctuationPreference
         case skills
         case voiceModes
@@ -496,6 +619,10 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
         try container.encode(
             provider,
             forKey: .provider
+        )
+        try container.encode(
+            openAIFallbackEnabled,
+            forKey: .openAIFallbackEnabled
         )
         try container.encode(
             dictationHotkey,
@@ -532,11 +659,6 @@ struct TranscriptionConfig: Codable, Sendable, Equatable {
             feedbackSoundsEnabled,
             forKey:
                 .feedbackSoundsEnabled
-        )
-        try container.encode(
-            languagePreference,
-            forKey:
-                .languagePreference
         )
         try container.encode(
             punctuationPreference,
@@ -720,7 +842,7 @@ struct TerminologyEntry: Codable, Sendable, Equatable, Identifiable {
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
             ?? ISO8601DateFormatter().string(from: Date())
         id = decodedID ?? StableIdentifier.uuid(
-            namespace: "OpenWhisper.TerminologyEntry",
+            namespace: "VibeWhisper.TerminologyEntry",
             components: [
                 type.rawValue,
                 original,
@@ -769,6 +891,12 @@ struct TerminologyEntry: Codable, Sendable, Equatable, Identifiable {
 struct InjectionConfig: Codable, Sendable, Equatable {
     var preserveClipboard: Bool = false
     var restoreDelayMilliseconds: UInt64 = 350
+    /// When true, low/medium-risk Skill results that would normally open the
+    /// Preview panel paste (or copy) straight to the target instead — so long
+    /// as Accessibility paste is allowed, there is no selection replacement,
+    /// and local validation did not fall back. High-risk Skills, selection
+    /// rewrites, and failed validation still force Preview.
+    var skipResultPreviewWhenSafe: Bool = false
 
     init() {}
 
@@ -776,6 +904,10 @@ struct InjectionConfig: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         preserveClipboard = try container.decodeIfPresent(Bool.self, forKey: .preserveClipboard) ?? false
         restoreDelayMilliseconds = try container.decodeIfPresent(UInt64.self, forKey: .restoreDelayMilliseconds) ?? 350
+        skipResultPreviewWhenSafe = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .skipResultPreviewWhenSafe
+        ) ?? false
     }
 }
 
@@ -821,7 +953,15 @@ struct ConfigStore {
 
         let data = try Data(contentsOf: configURL)
         let config = try JSONDecoder().decode(AppConfig.self, from: data)
-        try save(config)
+        // Normalize/migrate missing keys by re-encoding, but skip the write when
+        // the on-disk document is already canonical. Unconditional rewrite made
+        // every launch touch config.json (mtime, backup noise, SSD wear).
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let normalized = try encoder.encode(config)
+        if normalized != data {
+            try save(config)
+        }
         return config
     }
 

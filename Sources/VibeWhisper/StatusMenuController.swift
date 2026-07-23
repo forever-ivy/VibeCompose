@@ -195,10 +195,10 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
         currentState = state
         if let button = statusItem.button {
             button.title = ""
-            button.image = OpenWhisperStatusIconRenderer.image(for: state)
+            button.image = VibeWhisperStatusIconRenderer.image(for: state)
             button.imagePosition = .imageOnly
-            button.setAccessibilityLabel(L10n.format("OpenWhisper %@", state.stateDescription))
-            button.toolTip = L10n.format("OpenWhisper: %@", state.stateDescription)
+            button.setAccessibilityLabel(L10n.format("VibeWhisper %@", state.stateDescription))
+            button.toolTip = L10n.format("VibeWhisper: %@", state.stateDescription)
         }
 
         stateItem.title = L10n.format("State: %@", state.stateDescription)
@@ -317,12 +317,12 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
         if let button = statusItem.button {
             button.setAccessibilityLabel(
                 L10n.format(
-                    "OpenWhisper %@",
+                    "VibeWhisper %@",
                     currentState.stateDescription
                 )
             )
             button.toolTip = L10n.format(
-                "OpenWhisper: %@",
+                "VibeWhisper: %@",
                 currentState.stateDescription
             )
         }
@@ -418,7 +418,7 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: L10n.text("Quit OpenWhisper"),
+            title: L10n.text("Quit VibeWhisper"),
             action: #selector(quitApp),
             keyEquivalent: "q"
         )
@@ -475,22 +475,7 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
         openSwitcher.target = self
         submenu.addItem(openSwitcher)
 
-        if snapshot.nextRunInstallationID != nil {
-            let clear = NSMenuItem(
-                title: L10n.text("Clear next-use override"),
-                action: #selector(clearNextRun),
-                keyEquivalent: ""
-            )
-            clear.target = self
-            submenu.addItem(clear)
-        }
-
-        addSkillSection(
-            title: L10n.text("Favorites"),
-            entries: snapshot.favorites,
-            snapshot: snapshot,
-            to: submenu
-        )
+        // Favorites and next-use override are retired from the product chrome.
         addSkillSection(
             title: L10n.text("Recent"),
             entries: snapshot.recent,
@@ -545,11 +530,6 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
         snapshot: SkillMenuSnapshot
     ) -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(actionItem(
-            title: L10n.text("Use Next Time"),
-            selector: #selector(useNextSkill(_:)),
-            installationID: entry.installationID
-        ))
         if snapshot.currentApplicationName != nil {
             menu.addItem(actionItem(
                 title: L10n.format(
@@ -563,16 +543,6 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
         menu.addItem(actionItem(
             title: L10n.text("Set as Global Default"),
             selector: #selector(setGlobalDefault(_:)),
-            installationID: entry.installationID
-        ))
-        let isFavorite = snapshot.favorites.contains {
-            $0.installationID == entry.installationID
-        }
-        menu.addItem(actionItem(
-            title: isFavorite
-                ? L10n.text("Remove from Favorites")
-                : L10n.text("Add to Favorites"),
-            selector: #selector(toggleFavorite(_:)),
             installationID: entry.installationID
         ))
         return menu
@@ -600,11 +570,6 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
             .flatMap(UUID.init(uuidString:))
     }
 
-    @objc private func useNextSkill(_ sender: NSMenuItem) {
-        guard let id = installationID(from: sender) else { return }
-        skillMenuActionHandler(.useNext(id))
-    }
-
     @objc private func setApplicationDefault(_ sender: NSMenuItem) {
         guard
             let id = installationID(from: sender),
@@ -624,15 +589,6 @@ final class StatusMenuController: NSObject, StatusMenuUpdating, NSMenuDelegate {
     @objc private func setGlobalDefault(_ sender: NSMenuItem) {
         guard let id = installationID(from: sender) else { return }
         skillMenuActionHandler(.setGlobalDefault(id))
-    }
-
-    @objc private func toggleFavorite(_ sender: NSMenuItem) {
-        guard let id = installationID(from: sender) else { return }
-        skillMenuActionHandler(.toggleFavorite(id))
-    }
-
-    @objc private func clearNextRun() {
-        skillMenuActionHandler(.clearNextRun)
     }
 
     @objc

@@ -194,7 +194,7 @@ enum ProductMetricsStorageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsafeStorage(let path):
-            return "OpenWhisper refused unsafe product metrics storage at \(path)."
+            return "VibeWhisper refused unsafe product metrics storage at \(path)."
         }
     }
 }
@@ -459,7 +459,7 @@ enum ProductMetricsExportError: LocalizedError, Equatable {
         switch self {
         case .destinationIsDirectory(let name):
             return L10n.format(
-                "OpenWhisper cannot replace the folder named %@ with a product metrics report.",
+                "VibeWhisper cannot replace the folder named %@ with a product metrics report.",
                 name
             )
         }
@@ -487,7 +487,7 @@ struct ProductMetricsExporter {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return "OpenWhisper-Product-Metrics-\(formatter.string(from: now)).json"
+        return "VibeWhisper-Product-Metrics-\(formatter.string(from: now)).json"
     }
 
     func export(
@@ -518,7 +518,7 @@ struct ProductMetricsExporter {
         let stagedURL = destinationURL
             .deletingLastPathComponent()
             .appendingPathComponent(
-                ".openwhisper-product-metrics-\(UUID().uuidString).json"
+                ".vibewhisper-product-metrics-\(UUID().uuidString).json"
             )
         defer {
             try? fileManager.removeItem(at: stagedURL)

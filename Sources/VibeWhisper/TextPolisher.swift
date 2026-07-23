@@ -51,14 +51,41 @@ enum TextPolishError: LocalizedError {
 struct TextPolishProviderSelector: Sendable {
     func selectProvider(
         config: TextPolishConfig,
-        chatGPTAuthAvailable: Bool
+        chatGPTAuthAvailable: Bool,
+        openAICompatibleKeyAvailable: Bool = false
     ) -> TextPolishProviderSelection? {
         guard config.mode != .disabled else {
             return nil
         }
 
+        // Own API as primary path.
+        if config.openAICompatibleEnabled {
+            guard openAICompatibleKeyAvailable else {
+                return nil
+            }
+            let url = config.openAICompatibleURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = config.openAICompatibleModel
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !url.isEmpty, !model.isEmpty else {
+                return nil
+            }
+            return TextPolishProviderSelection(id: .openAICompatible)
+        }
+
         if config.chatGPTAuthEnabled && chatGPTAuthAvailable {
             return TextPolishProviderSelection(id: .chatGPTAuth)
+        }
+
+        // Account disabled but fallback credentials ready: allow Own API alone.
+        if config.openAIFallbackEnabled && openAICompatibleKeyAvailable {
+            let url = config.openAICompatibleURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = config.openAICompatibleModel
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !url.isEmpty, !model.isEmpty {
+                return TextPolishProviderSelection(id: .openAICompatible)
+            }
         }
 
         return nil
@@ -147,6 +174,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         SkillPromptContext
     let chatGPTAuthProvider: (any ChatGPTAuthProviding)?
     let chatGPTAuthAvailable: Bool
+    let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
+    let polishCredentialStore: any OpenAICompatibleCredentialPersisting
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let providerHealthMonitor: any ProviderHealthMonitoring
     let promptBuilder: TextPolishPromptBuilder
@@ -166,6 +195,13 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
             SkillPromptContext = .init(),
         chatGPTAuthProvider: (any ChatGPTAuthProviding)? = nil,
         chatGPTAuthAvailable: Bool,
+        recoveryCredentialStore: any OpenAICompatibleCredentialPersisting =
+            KeychainOpenAICompatibleCredentialStore(),
+        polishCredentialStore: any OpenAICompatibleCredentialPersisting =
+            KeychainOpenAICompatibleCredentialStore(
+                service: ProductIdentity.polishAPIKeychainService,
+                account: "polish"
+            ),
         providerCapabilityPolicy: any ProviderCapabilityChecking = ProviderCapabilityPolicyController.shared,
         providerHealthMonitor: any ProviderHealthMonitoring =
             ProviderHealthMonitor(),
@@ -199,6 +235,8 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
             skillPromptContext
         self.chatGPTAuthProvider = chatGPTAuthProvider
         self.chatGPTAuthAvailable = chatGPTAuthAvailable
+        self.recoveryCredentialStore = recoveryCredentialStore
+        self.polishCredentialStore = polishCredentialStore
         self.providerCapabilityPolicy = providerCapabilityPolicy
         self.providerHealthMonitor = providerHealthMonitor
         self.promptBuilder = promptBuilder
@@ -227,37 +265,98 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
             config: config
         )
 
+        let openAIKeyAvailable =
+            (try? polishCredentialStore.hasAPIKey()) ?? false
         guard let selected = selector.selectProvider(
             config: config,
-            chatGPTAuthAvailable: chatGPTAuthAvailable
+            chatGPTAuthAvailable: chatGPTAuthAvailable,
+            openAICompatibleKeyAvailable: openAIKeyAvailable
         ) else {
             throw TextPolishError.providerUnavailable
         }
 
-        guard selected.id == .chatGPTAuth, let chatGPTAuthProvider else {
-            throw TextPolishError.providerUnavailable
-        }
+        let messages = promptBuilder.buildMessages(
+            transcript: text,
+            terminologyEntries: allEntries,
+            config: config,
+            plan: skillPlan,
+            context: skillPromptContext
+        )
 
-        try await providerCapabilityPolicy.require(.chatGPTTextPolish)
-        let token = try await chatGPTAuthProvider.bestAvailableAccessToken()
-        let polished = try await executeChatGPTResponsesRequest(
-            token: token,
-            messages: promptBuilder.buildMessages(
-                transcript: text,
-                terminologyEntries: allEntries,
-                config: config,
-                plan: skillPlan,
-                context:
-                    skillPromptContext
+        switch selected.id {
+        case .chatGPTAuth:
+            guard let chatGPTAuthProvider else {
+                throw TextPolishError.providerUnavailable
+            }
+            try await providerCapabilityPolicy.require(.chatGPTTextPolish)
+            do {
+                let token = try await chatGPTAuthProvider.bestAvailableAccessToken()
+                let polished = try await executeChatGPTResponsesRequest(
+                    token: token,
+                    messages: messages
+                )
+                return TextPolishResult(
+                    text: polished,
+                    provider: .chatGPTAuth,
+                    applied: polished != text,
+                    estimatedInputTokens: estimate.inputTokens,
+                    estimatedOutputTokens: estimate.outputTokens
+                )
+            } catch {
+                if shouldFallbackToOpenAICompatible(after: error),
+                   openAIKeyAvailable
+                {
+                    let polished = try await executeOpenAICompatibleChatRequest(
+                        messages: messages
+                    )
+                    return TextPolishResult(
+                        text: polished,
+                        provider: .openAICompatible,
+                        applied: polished != text,
+                        estimatedInputTokens: estimate.inputTokens,
+                        estimatedOutputTokens: estimate.outputTokens
+                    )
+                }
+                throw error
+            }
+        case .openAICompatible:
+            let polished = try await executeOpenAICompatibleChatRequest(
+                messages: messages
             )
-        )
-        return TextPolishResult(
-            text: polished,
-            provider: .chatGPTAuth,
-            applied: polished != text,
-            estimatedInputTokens: estimate.inputTokens,
-            estimatedOutputTokens: estimate.outputTokens
-        )
+            return TextPolishResult(
+                text: polished,
+                provider: .openAICompatible,
+                applied: polished != text,
+                estimatedInputTokens: estimate.inputTokens,
+                estimatedOutputTokens: estimate.outputTokens
+            )
+        }
+    }
+
+    private func shouldFallbackToOpenAICompatible(after error: any Error) -> Bool {
+        guard config.openAIFallbackEnabled else {
+            return false
+        }
+        guard !config.openAICompatibleEnabled else {
+            return false
+        }
+        if error is CancellationError {
+            return false
+        }
+        if let failure = error as? ProviderRequestFailure {
+            switch failure.category {
+            case .network,
+                 .serviceUnavailable,
+                 .rateLimited,
+                 .challenge,
+                 .authentication,
+                 .unknown:
+                return true
+            case .requestRejected, .contractChanged, .invalidResponse:
+                return false
+            }
+        }
+        return true
     }
 
     private func executeChatGPTResponsesRequest(
@@ -446,6 +545,157 @@ struct OpenAICompatibleTextPolisher: TextPolishing {
         }
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func executeOpenAICompatibleChatRequest(
+        messages: [TextPolishMessage]
+    ) async throws -> String {
+        let model = config.openAICompatibleModel
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty else {
+            throw TextPolishError.providerUnavailable
+        }
+        guard let apiKey = try polishCredentialStore.loadAPIKey(),
+              !apiKey.isEmpty
+        else {
+            throw TextPolishError.providerUnavailable
+        }
+        let url = try ManagedEndpointPolicy.validatedUserOwnedURL(
+            config.openAICompatibleURL
+        )
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(ProductIdentity.userAgent, forHTTPHeaderField: "User-Agent")
+
+        let body: [String: Any] = [
+            "model": model,
+            "messages": messages.map { message in
+                [
+                    "role": message.role,
+                    "content": message.content,
+                ]
+            },
+            "temperature": config.temperature,
+            "max_tokens": config.maxOutputTokens,
+            "stream": false,
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        return try await executeChatCompletionsRequest(request)
+    }
+
+    private func executeChatCompletionsRequest(
+        _ request: URLRequest
+    ) async throws -> String {
+        var attempt = 1
+        while true {
+            do {
+                return try await executeSingleChatCompletionsRequest(request)
+            } catch let failure as ProviderRequestFailure {
+                let reportedFailure = failure.withAttempts(attempt)
+                guard
+                    !failure.circuitOpen,
+                    failure.isAutomaticallyRetryable,
+                    attempt < transientFailureMaxAttempts
+                else {
+                    throw reportedFailure
+                }
+
+                let delay = retrySchedule.delayMilliseconds(
+                    afterFailedAttempt: attempt,
+                    jitterUnit: retryJitter()
+                )
+                if delay > 0 {
+                    try await retrySleeper(delay)
+                }
+                attempt += 1
+            }
+        }
+    }
+
+    private func executeSingleChatCompletionsRequest(
+        _ request: URLRequest
+    ) async throws -> String {
+        try await providerHealthMonitor.requireRequestPermission(
+            for: .textPolish
+        )
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await dataLoader(request)
+        } catch is CancellationError {
+            await providerHealthMonitor.recordCancellation(for: .textPolish)
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            await providerHealthMonitor.recordCancellation(for: .textPolish)
+            throw CancellationError()
+        } catch {
+            let failure = ProviderFailureClassifier.network(
+                route: .textPolish
+            )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            let failure = ProviderFailureClassifier.invalidResponse(
+                route: .textPolish
+            )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let failure = ProviderFailureClassifier.http(
+                route: .textPolish,
+                response: httpResponse,
+                bodyPrefix: String(data: data.prefix(512), encoding: .utf8)
+            )
+            await providerHealthMonitor.recordFailure(failure)
+            throw failure
+        }
+
+        if let text = decodeChatCompletionsText(from: data) {
+            await providerHealthMonitor.recordSuccess(for: .textPolish)
+            return text
+        }
+        let failure = ProviderFailureClassifier.invalidResponse(
+            route: .textPolish
+        )
+        await providerHealthMonitor.recordFailure(failure)
+        throw failure
+    }
+
+    private func decodeChatCompletionsText(from data: Data) -> String? {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: data)
+                as? [String: Any],
+            let choices = object["choices"] as? [[String: Any]]
+        else {
+            return nil
+        }
+        for choice in choices {
+            if let message = choice["message"] as? [String: Any],
+               let content = message["content"] as? String
+            {
+                let trimmed = content
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+            if let text = choice["text"] as? String {
+                let trimmed = text
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        }
+        return nil
     }
 
 }

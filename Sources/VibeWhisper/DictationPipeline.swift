@@ -154,10 +154,17 @@ struct DictationPipeline: DictationPreparing {
             textPolishAttempted = true
             let polishStarted = DispatchTime.now().uptimeNanoseconds
             do {
-                let literalTokenization = literalTokenizer.tokenize(
-                    prePolish.text,
-                    style: .modelSafe
-                )
+                let literalTokenization =
+                    executionPlan.skill
+                        .protectsVoiceTechnicalLiterals
+                    ? literalTokenizer.tokenize(
+                        prePolish.text,
+                        style: .modelSafe
+                    )
+                    : TechnicalLiteralTokenization
+                        .passthrough(
+                            prePolish.text
+                        )
                 let polished = try await textPolisher.polish(
                     text: literalTokenization.maskedText,
                     terminologyEntries: importedEntries,
@@ -171,7 +178,7 @@ struct DictationPipeline: DictationPreparing {
                     in: polished.text
                 ) else {
                     textPolishErrorMessage = L10n.text(
-                        "AI Polish changed a protected technical literal; OpenWhisper used the normalized transcript instead."
+                        "AI Polish changed a protected technical literal; VibeWhisper used the normalized transcript instead."
                     )
                     return fallbackPreparedDictation(
                         transcription: transcription,
@@ -188,12 +195,19 @@ struct DictationPipeline: DictationPreparing {
                     )
                 }
 
-                guard !isSuspiciousPolishTruncation(
-                    original: prePolish.text,
-                    polished: literalSafePolishedText
-                ) else {
+                guard
+                    executionPlan.skill.id
+                        != SkillRegistry
+                            .directSkillID
+                        || !isSuspiciousPolishTruncation(
+                            original:
+                                prePolish.text,
+                            polished:
+                                literalSafePolishedText
+                        )
+                else {
                     textPolishErrorMessage = L10n.text(
-                        "AI Polish output looked truncated; OpenWhisper used the normalized transcript instead."
+                        "AI Polish output looked truncated; VibeWhisper used the normalized transcript instead."
                     )
                     return fallbackPreparedDictation(
                         transcription: transcription,
@@ -223,9 +237,13 @@ struct DictationPipeline: DictationPreparing {
                     skillValidator.validate(
                         output: postPolish.text,
                         originalText:
-                            validationSourceText(
-                                transcript:
-                                    prePolish.text
+                            executionPlan.skill
+                                .validationSourceText(
+                                    transcript:
+                                        prePolish.text,
+                                    selection:
+                                        skillPromptContext
+                                            .selection
                             ),
                         plan: executionPlan
                     )
@@ -236,7 +254,7 @@ struct DictationPipeline: DictationPreparing {
                 guard validation.isValid else {
                     textPolishErrorMessage =
                         L10n.format(
-                            "Skill output failed local validation (%@); OpenWhisper used the normalized transcript instead.",
+                            "Skill output failed local validation (%@); VibeWhisper used the normalized transcript instead.",
                             skillValidationIssueCodes
                                 .joined(
                                     separator: ", "
@@ -347,20 +365,6 @@ struct DictationPipeline: DictationPreparing {
                         .count ?? 0
             )
         )
-    }
-
-    private func validationSourceText(
-        transcript: String
-    ) -> String {
-        guard
-            let selection =
-                skillPromptContext
-                    .selection,
-            !selection.isEmpty
-        else {
-            return transcript
-        }
-        return transcript + "\n" + selection
     }
 
     private var contextCapabilityCodes:

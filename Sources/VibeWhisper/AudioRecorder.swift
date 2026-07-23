@@ -108,7 +108,7 @@ final class AudioRecorder: RecordingControlling {
         },
         temporaryFileURLFactory: @escaping TemporaryFileURLFactory = {
             FileManager.default.temporaryDirectory
-                .appendingPathComponent("openwhisper-\(UUID().uuidString).wav")
+                .appendingPathComponent("vibewhisper-\(UUID().uuidString).wav")
         },
         fileManager: FileManager = .default,
         maxDurationSeconds: Int = 120

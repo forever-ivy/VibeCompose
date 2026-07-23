@@ -99,10 +99,15 @@ struct SkillTestEngine: Sendable {
             )
         }
 
-        let tokenization = literalTokenizer.tokenize(
-            input,
-            style: .modelSafe
-        )
+        let tokenization =
+            request.plan.skill
+                .protectsVoiceTechnicalLiterals
+            ? literalTokenizer.tokenize(
+                input,
+                style: .modelSafe
+            )
+            : TechnicalLiteralTokenization
+                .passthrough(input)
         let result = try await polisher.polish(
             text: tokenization.maskedText,
             terminologyEntries: request.terminologyEntries,
@@ -113,10 +118,12 @@ struct SkillTestEngine: Sendable {
         else {
             throw SkillTestRunError.protectedLiteralChanged
         }
-        let originalText = [
-            input,
-            request.context.selection,
-        ].compactMap { $0 }.joined(separator: "\n")
+        let originalText = request.plan.skill
+            .validationSourceText(
+                transcript: input,
+                selection:
+                    request.context.selection
+            )
         return SkillTestExecution(
             inputText: input,
             generatedText: generatedText,
@@ -158,7 +165,7 @@ enum SkillTestRunError: LocalizedError, Equatable {
             )
         case .protectedLiteralChanged:
             return L10n.text(
-                "The test Provider changed a protected technical literal, so OpenWhisper rejected the result."
+                "The test Provider changed a protected technical literal, so VibeWhisper rejected the result."
             )
         }
     }

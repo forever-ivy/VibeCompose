@@ -62,11 +62,11 @@ enum VisualFeedbackMode:
     var title: String {
         switch self {
         case .refinedHUD:
-            return L10n.text("Compact HUD")
+            return L10n.text("Status Bar")
         case .aiActivityGlow:
-            return L10n.text("Ambient Glow")
+            return L10n.text("Edge Glow")
         case .hidden:
-            return L10n.text("Hidden")
+            return L10n.text("Off")
         }
     }
 
@@ -74,15 +74,15 @@ enum VisualFeedbackMode:
         switch self {
         case .refinedHUD:
             return L10n.text(
-                "A quiet top-center pill with status, timer, cancel, and Retry."
+                "A quiet center pill with status, timer, cancel, and Retry. Choose top or bottom in Settings."
             )
         case .aiActivityGlow:
             return L10n.text(
-                "A soft edge glow on the active display or focused window while OpenWhisper works."
+                "A soft edge glow on the active display or focused window while VibeWhisper works."
             )
         case .hidden:
             return L10n.text(
-                "No on-screen HUD. Menu status, sounds, Esc cancel, and Retry still work."
+                "No on-screen feedback. Menu status, sounds, Esc cancel, and Retry still work."
             )
         }
     }
@@ -157,9 +157,49 @@ enum BlueSignalFrameTarget:
         case .activeDisplay:
             return L10n.text("Active display")
         case .focusedWindow:
+            return L10n.text("Focused window")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .activeDisplay:
             return L10n.text(
-                "Focused window (Experimental)"
+                "Wraps the edge of the display under the pointer."
             )
+        case .focusedWindow:
+            return L10n.text(
+                "Wraps the frontmost app window. Needs Accessibility access; falls back to the active display if the window cannot be read."
+            )
+        }
+    }
+}
+
+/// Vertical edge for the Status Bar pill on the active display.
+enum HUDPlacement:
+    String,
+    Codable,
+    CaseIterable,
+    Identifiable,
+    Sendable
+{
+    case top
+    case bottom
+
+    var id: String { rawValue }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = Self(rawValue: rawValue) ?? .top
+    }
+
+    var title: String {
+        switch self {
+        case .top:
+            return L10n.text("Top of screen")
+        case .bottom:
+            return L10n.text("Bottom of screen")
         }
     }
 }
@@ -173,6 +213,8 @@ struct VisualFeedbackConfig:
     var intensity: VisualFeedbackIntensity = .standard
     var frameTarget: BlueSignalFrameTarget =
         .activeDisplay
+    /// Status Bar edge on the active display. Ignored for Edge Glow / Off.
+    var hudPlacement: HUDPlacement = .top
     var showStatusText = true
     var completionNotificationEnabled = false
     var alwaysReduceMotion = false
@@ -195,6 +237,10 @@ struct VisualFeedbackConfig:
             BlueSignalFrameTarget.self,
             forKey: .frameTarget
         ) ?? .activeDisplay
+        hudPlacement = try container.decodeIfPresent(
+            HUDPlacement.self,
+            forKey: .hudPlacement
+        ) ?? .top
         showStatusText = try container.decodeIfPresent(
             Bool.self,
             forKey: .showStatusText

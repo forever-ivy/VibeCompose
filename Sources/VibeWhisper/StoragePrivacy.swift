@@ -175,9 +175,9 @@ enum StorageCleanupError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unsafeApplicationSupportPath(let path):
-            return L10n.format("OpenWhisper refused to delete an unsafe data path: %@", path)
+            return L10n.format("VibeWhisper refused to delete an unsafe data path: %@", path)
         case .symbolicLink(let path):
-            return L10n.format("OpenWhisper refused to delete data through a symbolic link: %@", path)
+            return L10n.format("VibeWhisper refused to delete data through a symbolic link: %@", path)
         }
     }
 }

@@ -37,6 +37,13 @@ struct HotkeyBinding:
         modifiers: UInt32(controlKey | optionKey)
     )
 
+    /// Suggested binding when the user enables Result Preview reopen.
+    /// Not applied automatically — Settings starts with no default.
+    static let resultPreview = HotkeyBinding(
+        keyCode: UInt32(kVK_ANSI_P),
+        modifiers: UInt32(controlKey | optionKey)
+    )
+
     var displayName: String {
         modifierDisplayPrefix + Self.keyDisplayName(
             keyCode: keyCode
@@ -308,7 +315,7 @@ extension HotkeyBindingValidationError: LocalizedError {
             )
         case .quickAddConflict:
             return L10n.text(
-                "This shortcut is already used by OpenWhisper Quick Add."
+                "This shortcut is already used by VibeWhisper Quick Add."
             )
         }
     }
@@ -376,13 +383,15 @@ enum HotkeyBindingValidator {
     }
 }
 
-enum OpenWhisperShortcutConflictError:
+enum VibeWhisperShortcutConflictError:
     Error,
     Equatable,
     Sendable,
     LocalizedError
 {
     case dictationAndSkillSwitcherMatch
+    case dictationAndResultPreviewMatch
+    case skillSwitcherAndResultPreviewMatch
 
     var errorDescription: String? {
         switch self {
@@ -390,23 +399,42 @@ enum OpenWhisperShortcutConflictError:
             return L10n.text(
                 "The Skill Switcher shortcut must be different from the dictation shortcut."
             )
+        case .dictationAndResultPreviewMatch:
+            return L10n.text(
+                "The Result Preview shortcut must be different from the dictation shortcut."
+            )
+        case .skillSwitcherAndResultPreviewMatch:
+            return L10n.text(
+                "The Result Preview shortcut must be different from the Skill Switcher shortcut."
+            )
         }
     }
 }
 
-enum OpenWhisperShortcutSetValidator {
+enum VibeWhisperShortcutSetValidator {
     static func validate(
         dictation: HotkeyBinding,
-        skillSwitcher: HotkeyBinding?
+        skillSwitcher: HotkeyBinding?,
+        resultPreview: HotkeyBinding? = nil
     ) throws {
         _ = try dictation.validated()
-        guard let skillSwitcher else {
-            return
+        if let skillSwitcher {
+            _ = try skillSwitcher.validated()
+            guard skillSwitcher != dictation else {
+                throw VibeWhisperShortcutConflictError
+                    .dictationAndSkillSwitcherMatch
+            }
         }
-        _ = try skillSwitcher.validated()
-        guard skillSwitcher != dictation else {
-            throw OpenWhisperShortcutConflictError
-                .dictationAndSkillSwitcherMatch
+        if let resultPreview {
+            _ = try resultPreview.validated()
+            guard resultPreview != dictation else {
+                throw VibeWhisperShortcutConflictError
+                    .dictationAndResultPreviewMatch
+            }
+            if let skillSwitcher, resultPreview == skillSwitcher {
+                throw VibeWhisperShortcutConflictError
+                    .skillSwitcherAndResultPreviewMatch
+            }
         }
     }
 }

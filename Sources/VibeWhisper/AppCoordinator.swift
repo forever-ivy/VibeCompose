@@ -59,6 +59,8 @@ final class AppCoordinator {
     let hotkeyRegistrationService: HotkeyRegistrationService
     let skillSwitcherHotkeyRegistrationService:
         HotkeyRegistrationService
+    let resultPreviewHotkeyRegistrationService:
+        HotkeyRegistrationService
     let recorderFactory: RecorderFactory
     let statusMenuFactory: StatusMenuFactory
     let pipelineFactory: PipelineFactory
@@ -110,6 +112,8 @@ final class AppCoordinator {
         PreparedSkillContext()
     private var pendingRetry: PendingRetry?
     private var pendingRetryExpiryTask: Task<Void, Never>?
+    /// Memory-only last successful dictation for reopen / re-skill Preview.
+    private var lastDictationSession: LastDictationSession?
     private var authStateObserver: NSObjectProtocol?
     private var activeProcessingAudio: ActiveProcessingAudio?
     private var snapshotPrivacyMode = SnapshotPrivacyMode.disabled
@@ -160,6 +164,9 @@ final class AppCoordinator {
         skillSwitcherHotkeyRegistrationService:
             HotkeyRegistrationService =
                 HotkeyRegistrationService(),
+        resultPreviewHotkeyRegistrationService:
+            HotkeyRegistrationService =
+                HotkeyRegistrationService(),
         recorderFactory: @escaping RecorderFactory = { AudioRecorder(sampleRateHz: $0) },
         statusMenuFactory: @escaping StatusMenuFactory = {
             openHistory,
@@ -199,10 +206,18 @@ final class AppCoordinator {
                 skillPlan.legacyMode
             let chatGPTAuthAvailable =
                 authManager.authSnapshot().state == .ready
+            let polishCredentialStore =
+                KeychainOpenAICompatibleCredentialStore(
+                    service: ProductIdentity.polishAPIKeychainService,
+                    account: "polish"
+                )
+            let openAICompatibleKeyAvailable =
+                (try? polishCredentialStore.hasAPIKey()) ?? false
             let textPolishAvailable = TextPolishProviderSelector()
                 .selectProvider(
                     config: textPolishConfig,
-                    chatGPTAuthAvailable: chatGPTAuthAvailable
+                    chatGPTAuthAvailable: chatGPTAuthAvailable,
+                    openAICompatibleKeyAvailable: openAICompatibleKeyAvailable
                 ) != nil
             let textPolisher: (any TextPolishing)? = textPolishAvailable
                 ? OpenAICompatibleTextPolisher(
@@ -214,6 +229,8 @@ final class AppCoordinator {
                             .skillPromptContext,
                     chatGPTAuthProvider: authManager,
                     chatGPTAuthAvailable: chatGPTAuthAvailable,
+                    recoveryCredentialStore: recoveryCredentialStore,
+                    polishCredentialStore: polishCredentialStore,
                     providerCapabilityPolicy: providerCapabilityPolicy,
                     providerHealthMonitor: ProviderHealthMonitor.shared
                 )
@@ -232,7 +249,6 @@ final class AppCoordinator {
                         attemptPolicy.transientFailureMaxAttempts
                 ),
                 normalizer: TerminologyNormalizer(
-                    languagePreference: transcriptionConfig.languagePreference,
                     punctuationPreference: transcriptionConfig.punctuationPreference
                 ),
                 importedEntries: transcriptionConfig.activeDictionaryEntries,
@@ -286,6 +302,8 @@ final class AppCoordinator {
             hotkeyRegistrationService
         self.skillSwitcherHotkeyRegistrationService =
             skillSwitcherHotkeyRegistrationService
+        self.resultPreviewHotkeyRegistrationService =
+            resultPreviewHotkeyRegistrationService
         self.recorderFactory = recorderFactory
         self.statusMenuFactory = statusMenuFactory
         self.pipelineFactory = pipelineFactory
@@ -331,7 +349,7 @@ final class AppCoordinator {
             if let launchBlocker = AppInstallLocation.launchBlocker() {
                 NSSound.beep()
                 showInstallRequiredAlert(message: launchBlocker.message)
-                notifier.notify(title: L10n.text("OpenWhisper install required"), body: launchBlocker.message)
+                notifier.notify(title: L10n.text("VibeWhisper install required"), body: launchBlocker.message)
                 AppInstallLocation.revealApplicationsFolder()
                 NSApplication.shared.terminate(nil)
                 return
@@ -423,14 +441,15 @@ final class AppCoordinator {
                     )
                     configureDictationHotkeyAtStartup()
                     configureSkillSwitcherHotkeyAtStartup()
+                    configureResultPreviewHotkeyAtStartup()
                     refreshReadyState()
                     checkLaunchLoginState()
                     prewarmAuthIfNeeded()
 
                     do {
                         quickAddHotkeyMonitor = try HotkeyMonitor(
-                            keyCode: OpenWhisperHotkeys.quickAddKeyCode,
-                            modifiers: OpenWhisperHotkeys.quickAddModifiers
+                            keyCode: VibeWhisperHotkeys.quickAddKeyCode,
+                            modifiers: VibeWhisperHotkeys.quickAddModifiers
                         ) { [weak self] in
                             Task { @MainActor in
                                 self?.openQuickAdd()
@@ -586,7 +605,7 @@ final class AppCoordinator {
             }
         } catch {
             NSSound.beep()
-            notifier.notify(title: L10n.text("OpenWhisper launch failed"), body: error.localizedDescription)
+            notifier.notify(title: L10n.text("VibeWhisper launch failed"), body: error.localizedDescription)
             statusMenu?.update(state: .error, detail: error.localizedDescription)
         }
     }
@@ -610,7 +629,7 @@ final class AppCoordinator {
                 StyleCapsuleRegistry
                     .builtIn
             logger.error(
-                "Loading Style Capsules failed: \(error.localizedDescription, privacy: .public)"
+                "Loading Writing Styles failed: \(error.localizedDescription, privacy: .public)"
             )
         }
         let capsule =
@@ -712,6 +731,16 @@ final class AppCoordinator {
         }
     }
 
+    private func resultPreviewHotkeyPressHandler()
+        -> @Sendable () -> Void
+    {
+        { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.reopenLastResultPreview()
+            }
+        }
+    }
+
     private func configureDictationHotkeyAtStartup() {
         let requested = config.transcription.dictationHotkey
         let outcome = hotkeyRegistrationService.start(
@@ -733,7 +762,7 @@ final class AppCoordinator {
             try? configStore.save(config)
             applyActiveDictationHotkey(active)
             let detail = L10n.format(
-                "%@ could not be registered. OpenWhisper restored %@. Choose another shortcut in Settings. %@",
+                "%@ could not be registered. VibeWhisper restored %@. Choose another shortcut in Settings. %@",
                 requested.displayName,
                 active.displayName,
                 reason
@@ -743,7 +772,7 @@ final class AppCoordinator {
             )
             notifier.notify(
                 title: L10n.text(
-                    "OpenWhisper shortcut restored"
+                    "VibeWhisper shortcut restored"
                 ),
                 body: detail
             )
@@ -758,7 +787,7 @@ final class AppCoordinator {
             )
             notifier.notify(
                 title: L10n.text(
-                    "OpenWhisper shortcut unavailable"
+                    "VibeWhisper shortcut unavailable"
                 ),
                 body: hotkeyRegistrationIssue
                     ?? reason
@@ -778,7 +807,7 @@ final class AppCoordinator {
         }
 
         do {
-            try OpenWhisperShortcutSetValidator.validate(
+            try VibeWhisperShortcutSetValidator.validate(
                 dictation: config.transcription.dictationHotkey,
                 skillSwitcher: requested
             )
@@ -796,7 +825,41 @@ final class AppCoordinator {
             statusMenu?.updateSkillSwitcherHotkey(nil)
             notifier.notify(
                 title: L10n.text(
-                    "OpenWhisper Skill Switcher shortcut unavailable"
+                    "VibeWhisper Skill Switcher shortcut unavailable"
+                ),
+                body: L10n.format(
+                    "%@ could not be registered and was disabled. %@",
+                    requested.displayName,
+                    error.localizedDescription
+                )
+            )
+        }
+    }
+
+    private func configureResultPreviewHotkeyAtStartup() {
+        resultPreviewHotkeyRegistrationService.stop()
+        guard let requested = config.resultPreviewHotkey else {
+            return
+        }
+        do {
+            try VibeWhisperShortcutSetValidator.validate(
+                dictation: config.transcription.dictationHotkey,
+                skillSwitcher: config.skillSwitcherHotkey,
+                resultPreview: requested
+            )
+            try resultPreviewHotkeyRegistrationService.replace(
+                with: requested,
+                onPress: resultPreviewHotkeyPressHandler()
+            ) {}
+        } catch {
+            logger.error(
+                "Result Preview shortcut registration failed: \(error.localizedDescription, privacy: .public)"
+            )
+            config.resultPreviewHotkey = nil
+            try? configStore.save(config)
+            notifier.notify(
+                title: L10n.text(
+                    "VibeWhisper Result Preview shortcut unavailable"
                 ),
                 body: L10n.format(
                     "%@ could not be registered and was disabled. %@",
@@ -823,12 +886,14 @@ final class AppCoordinator {
             }
             hotkeyRegistrationService.suspend()
             skillSwitcherHotkeyRegistrationService.suspend()
+            resultPreviewHotkeyRegistrationService.suspend()
             return
         }
 
         do {
             try hotkeyRegistrationService.resume()
             try skillSwitcherHotkeyRegistrationService.resume()
+            try resultPreviewHotkeyRegistrationService.resume()
             if let activeBinding =
                 hotkeyRegistrationService
                     .activeBinding
@@ -843,6 +908,7 @@ final class AppCoordinator {
             )
             configureDictationHotkeyAtStartup()
             configureSkillSwitcherHotkeyAtStartup()
+            configureResultPreviewHotkeyAtStartup()
             refreshReadyState()
         }
     }
@@ -851,6 +917,11 @@ final class AppCoordinator {
         logger.info(
             "Dictation trigger received shortcut=\(self.activeDictationHotkey.displayName, privacy: .public) state=\(String(describing: self.state), privacy: .public)"
         )
+        // First-run tutorial is mandatory: block dictation until Finish Setup.
+        if requiresOnboardingCompletion() {
+            presentRequiredOnboarding()
+            return
+        }
         switch state {
         case .idle:
             cancelVisualFeedbackPreview()
@@ -988,6 +1059,7 @@ final class AppCoordinator {
     func shutdown() {
         hotkeyRegistrationService.stop()
         skillSwitcherHotkeyRegistrationService.stop()
+        resultPreviewHotkeyRegistrationService.stop()
         expireUndoAvailability()
         try? skillTestSampleRecorder?.cancelRecording()
         skillTestSampleRecorder = nil
@@ -1070,7 +1142,7 @@ final class AppCoordinator {
         )
         if outcome != .restored {
             notifier.notify(
-                title: L10n.text("OpenWhisper Safe Undo"),
+                title: L10n.text("VibeWhisper Safe Undo"),
                 body: outcome.statusDetail
             )
         }
@@ -1090,6 +1162,10 @@ final class AppCoordinator {
 
     private func startRecording() {
         guard let recorder else { return }
+        if requiresOnboardingCompletion() {
+            presentRequiredOnboarding()
+            return
+        }
 
         expireUndoAvailability()
         clearPendingRetry()
@@ -1168,7 +1244,7 @@ final class AppCoordinator {
                         PreparedSkillContext()
                     self.statusMenu?.update(state: .setupRequired, detail: message)
                     self.overlay.showError(message)
-                    self.notifier.notify(title: L10n.text("OpenWhisper setup required"), body: message)
+                    self.notifier.notify(title: L10n.text("VibeWhisper setup required"), body: message)
                     self.recordProductMetric(
                         event: .dictationFailed,
                         provider: self.config.transcription.provider,
@@ -1207,6 +1283,9 @@ final class AppCoordinator {
                 else {
                     return
                 }
+                self.logger.info(
+                    "Skill Context prepared skillID=\(resolvedPlan.skill.id, privacy: .public) reason=\(preparedContext.reason.rawValue, privacy: .public) selectedCharacters=\(preparedContext.selectedCharacterCount, privacy: .public) grantedCapabilities=\(preparedContext.grantedCapabilities.count, privacy: .public) blocksExecution=\(preparedContext.blocksExecution, privacy: .public)"
+                )
                 if preparedContext.shouldCancel {
                     self.cancelCurrentSession()
                     return
@@ -1483,7 +1562,7 @@ final class AppCoordinator {
                 self.overlay.updateSkillPresentation(nil)
                 self.refreshReadyState(detailOverride: error.localizedDescription, state: .error)
                 self.overlay.showError(error.localizedDescription)
-                self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+                self.notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
                 self.launchAppContext = nil
                 self.recordProductMetric(
                     event: .dictationFailed,
@@ -1559,7 +1638,7 @@ final class AppCoordinator {
             overlay.updateSkillPresentation(nil)
             statusMenu?.update(state: .error, detail: error.localizedDescription)
             overlay.showError(error.localizedDescription)
-            notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+            notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
             recordProductMetric(
                 event: .dictationFailed,
                 provider: config.transcription.provider,
@@ -1676,6 +1755,10 @@ final class AppCoordinator {
                                 .skills,
                         launchAppContext: nil
                     )
+                let skipPreviewWhenSafe =
+                    await MainActor.run {
+                        self.config.injection.skipResultPreviewWhenSafe
+                    }
                 let baseRoute =
                     await MainActor.run {
                         self.outputRouter.route(
@@ -1689,7 +1772,9 @@ final class AppCoordinator {
                                     != nil,
                             additionalRisk:
                                 transcriptionConfig
-                                    .resolvedTerminologyRisk
+                                    .resolvedTerminologyRisk,
+                            skipPreviewWhenSafe:
+                                skipPreviewWhenSafe
                         )
                     }
                 let hasSkillFallback =
@@ -1740,6 +1825,28 @@ final class AppCoordinator {
                                 "Waiting for preview"
                             )
                         )
+                        // Cache before Preview so in-panel skill switch can
+                        // regenerate without leaving the current surface.
+                        self.rememberLastDictationSession(
+                            originalTranscript: prepared.rawText,
+                            resultText: prepared.finalText,
+                            skillPlan: executionPlan,
+                            skillPromptContext:
+                                preparedSkillContext.promptContext,
+                            contextCapabilities:
+                                preparedSkillContext.grantedCapabilities,
+                            terminologyEntries:
+                                transcriptionConfig.activeDictionaryEntries,
+                            allowsPasteToTarget: automaticPasteAllowed,
+                            allowsSelectionReplacement:
+                                preparedSkillContext.selectionSnapshot
+                                    != nil
+                                    && automaticPasteAllowed
+                        )
+                        self.refreshSkillMenu()
+                    }
+                    let skillChoices = await MainActor.run {
+                        self.previewSkillChoices()
                     }
                     let decision =
                         await self.previewPresenter
@@ -1782,12 +1889,27 @@ final class AppCoordinator {
                                     allowsPasteToTarget:
                                         automaticPasteAllowed,
                                     executionPlan:
-                                        executionPlan
-                                )
+                                        executionPlan,
+                                    skillChoices: skillChoices,
+                                    currentSkillInstallationID:
+                                        executionPlan.installation.id
+                                ),
+                                regenerate: { [weak self] installationID, edited in
+                                    guard let self else {
+                                        return .failure(
+                                            PreviewRegenerateError.unavailable
+                                        )
+                                    }
+                                    return await self.regeneratePreviewRequest(
+                                        skillInstallationID: installationID,
+                                        sourceOverride: edited
+                                    )
+                                }
                             )
                     guard !Task.isCancelled else {
                         return
                     }
+                    // Session already remembered before present; update draft after decisions.
                     switch decision {
                     case let .replaceSelection(text):
                         deliveredText = text
@@ -1804,6 +1926,9 @@ final class AppCoordinator {
                             ? preparedSkillContext
                                 .selectionSnapshot
                             : nil
+                        await MainActor.run {
+                            self.updateLastDictationResult(text)
+                        }
                     case let .pasteToTarget(text):
                         deliveredText = text
                         deliveryAction =
@@ -1814,6 +1939,9 @@ final class AppCoordinator {
                             text != prepared.finalText
                         deliveryAllowsAutomaticPaste =
                             automaticPasteAllowed
+                        await MainActor.run {
+                            self.updateLastDictationResult(text)
+                        }
                     case let .copy(text):
                         deliveredText = text
                         deliveryAction =
@@ -1825,6 +1953,24 @@ final class AppCoordinator {
                             false
                         automaticFallbackReason =
                             .deliveryRequiresManualPaste
+                        await MainActor.run {
+                            self.updateLastDictationResult(text)
+                        }
+                    case let .changeSkill(editedSource):
+                        // Preserve session + open switcher; do not mark as cancelled.
+                        await MainActor.run {
+                            self.updateLastDictationResult(editedSource)
+                            self.state = .idle
+                            self.activeSessionID = nil
+                            self.activeSkillRun = nil
+                            self.processingTask = nil
+                            self.overlay.hide()
+                            self.launchAppContext = nil
+                            self.beginSkillChangeFromPreview(
+                                editedSource: editedSource
+                            )
+                        }
+                        return
                     case .cancel:
                         await MainActor.run {
                             guard
@@ -1880,10 +2026,50 @@ final class AppCoordinator {
                                 nil
                         }
                         return
+                    case let .reprocess(
+                        skillInstallationID,
+                        editedSource
+                    ):
+                        await MainActor.run {
+                            self.state = .idle
+                            self.activeSessionID = nil
+                            self.activeSkillRun = nil
+                            self.overlay.hide()
+                            self.launchAppContext = nil
+                            self.reprocessLastSession(
+                                skillInstallationID:
+                                    skillInstallationID,
+                                sourceOverride: editedSource
+                            )
+                        }
+                        return
                     }
                 } else if route == .copyOnly {
                     deliveryAllowsAutomaticPaste =
                         false
+                }
+
+                // Cache every successful prepare so reopen / re-skill works even
+                // when the route skipped the Preview panel (automatic paste).
+                if route != .preview {
+                    await MainActor.run {
+                        self.rememberLastDictationSession(
+                            originalTranscript: prepared.rawText,
+                            resultText: deliveredText,
+                            skillPlan: executionPlan,
+                            skillPromptContext:
+                                preparedSkillContext.promptContext,
+                            contextCapabilities:
+                                preparedSkillContext.grantedCapabilities,
+                            terminologyEntries:
+                                transcriptionConfig.activeDictionaryEntries,
+                            allowsPasteToTarget: automaticPasteAllowed,
+                            allowsSelectionReplacement:
+                                preparedSkillContext.selectionSnapshot
+                                    != nil
+                                    && automaticPasteAllowed
+                        )
+                    }
                 }
 
                 let injectStarted = DispatchTime.now().uptimeNanoseconds
@@ -1932,7 +2118,7 @@ final class AppCoordinator {
                         self.activeSessionID = nil
                         self.statusMenu?.update(state: .error, detail: error.localizedDescription)
                         self.overlay.showError(error.localizedDescription)
-                        self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+                        self.notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
                         self.launchAppContext = nil
                     }
                     return
@@ -2011,7 +2197,7 @@ final class AppCoordinator {
                     {
                         self.notifier.notify(
                             title: L10n.text(
-                                "OpenWhisper dictation complete"
+                                "VibeWhisper dictation complete"
                             ),
                             body: self.statusDetail(
                                 for: outcome
@@ -2070,7 +2256,7 @@ final class AppCoordinator {
                             self.activeSessionID = nil
                             self.statusMenu?.update(state: .error, detail: error.localizedDescription)
                             self.overlay.showRetryableError(error.localizedDescription)
-                            self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+                            self.notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
                             self.launchAppContext = nil
                         } catch {
                             self.clearPendingRetry()
@@ -2078,7 +2264,7 @@ final class AppCoordinator {
                             self.activeSessionID = nil
                             self.statusMenu?.update(state: .error, detail: error.localizedDescription)
                             self.overlay.showError(error.localizedDescription)
-                            self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+                            self.notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
                             self.launchAppContext = nil
                         }
                     } else {
@@ -2087,7 +2273,7 @@ final class AppCoordinator {
                         self.activeSessionID = nil
                         self.statusMenu?.update(state: .error, detail: error.localizedDescription)
                         self.overlay.showError(error.localizedDescription)
-                        self.notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+                        self.notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
                         self.launchAppContext = nil
                     }
                 }
@@ -2100,10 +2286,26 @@ final class AppCoordinator {
         skillLibraryInitialSection:
             SkillLibrarySection = .discover
     ) {
-        if focusPane != nil {
-            preferencesWindowController = nil
+        // Settings from the menu (or recovery paths) stay blocked until the
+        // mandatory first-run tutorial finishes. Snapshot / launch-mode
+        // surfaces still open for acceptance capture.
+        if requiresOnboardingCompletion(),
+           AppLaunchMode.resolve(
+               environment: ProcessInfo.processInfo.environment,
+               arguments: ProcessInfo.processInfo.arguments
+           ) == .normal
+        {
+            presentRequiredOnboarding()
+            return
         }
-
+        // Reuse the existing Settings window whenever possible. Only build a
+        // fresh controller when none is open — never tear down a live window
+        // just to change panes (that felt like "opening a new surface").
+        //
+        // When the shell is already open and the caller did not request a
+        // specific pane, only bring the window forward — do not re-navigate.
+        // That preserves the user's current sidebar page after Skill Switcher,
+        // Result Preview, sheets, and other transient surfaces dismiss.
         if preferencesWindowController == nil {
             let presentationConfig = snapshotPrivacyMode.presentationConfig(
                 liveConfig: config
@@ -2124,10 +2326,10 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Preferences",
+                                domain: "VibeWhisper.Preferences",
                                 code: 2,
                                 userInfo: [
-                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper settings are no longer available."),
+                                    NSLocalizedDescriptionKey: L10n.text("VibeWhisper settings are no longer available."),
                                 ]
                             )
                         )
@@ -2144,10 +2346,10 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Preferences",
+                                domain: "VibeWhisper.Preferences",
                                 code: 1,
                                 userInfo: [
-                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper settings are no longer available."),
+                                    NSLocalizedDescriptionKey: L10n.text("VibeWhisper settings are no longer available."),
                                 ]
                             )
                         )
@@ -2220,11 +2422,11 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Preferences",
+                                domain: "VibeWhisper.Preferences",
                                 code: 3,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper settings are no longer available."
+                                        "VibeWhisper settings are no longer available."
                                     ),
                                 ]
                             )
@@ -2258,11 +2460,11 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Diagnostics",
+                                domain: "VibeWhisper.Diagnostics",
                                 code: 1,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper settings are no longer available."
+                                        "VibeWhisper settings are no longer available."
                                     ),
                                 ]
                             )
@@ -2271,11 +2473,11 @@ final class AppCoordinator {
                     if self.snapshotPrivacyMode.isEnabled {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Diagnostics",
+                                domain: "VibeWhisper.Diagnostics",
                                 code: 2,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper settings are no longer available."
+                                        "VibeWhisper settings are no longer available."
                                     ),
                                 ]
                             )
@@ -2299,11 +2501,11 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.ProductMetrics",
+                                domain: "VibeWhisper.ProductMetrics",
                                 code: 1,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper settings are no longer available."
+                                        "VibeWhisper settings are no longer available."
                                     ),
                                 ]
                             )
@@ -2312,11 +2514,11 @@ final class AppCoordinator {
                     if self.snapshotPrivacyMode.isEnabled {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.ProductMetrics",
+                                domain: "VibeWhisper.ProductMetrics",
                                 code: 2,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper settings are no longer available."
+                                        "VibeWhisper settings are no longer available."
                                     ),
                                 ]
                             )
@@ -2342,7 +2544,7 @@ final class AppCoordinator {
                         return .failure(
                             .unavailable(
                                 L10n.text(
-                                    "OpenWhisper settings are no longer available."
+                                    "VibeWhisper settings are no longer available."
                                 )
                             )
                         )
@@ -2351,7 +2553,7 @@ final class AppCoordinator {
                         return .failure(
                             .unavailable(
                                 L10n.text(
-                                    "OpenWhisper settings are no longer available."
+                                    "VibeWhisper settings are no longer available."
                                 )
                             )
                         )
@@ -2363,7 +2565,7 @@ final class AppCoordinator {
                         return .failure(
                             .unavailable(
                                 L10n.text(
-                                    "OpenWhisper settings are no longer available."
+                                    "VibeWhisper settings are no longer available."
                                 )
                             )
                         )
@@ -2378,10 +2580,10 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Privacy",
+                                domain: "VibeWhisper.Privacy",
                                 code: 1,
                                 userInfo: [
-                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper settings are no longer available."),
+                                    NSLocalizedDescriptionKey: L10n.text("VibeWhisper settings are no longer available."),
                                 ]
                             )
                         )
@@ -2433,11 +2635,11 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.History",
+                                domain: "VibeWhisper.History",
                                 code: 1,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper history is no longer available."
+                                        "VibeWhisper history is no longer available."
                                     ),
                                 ]
                             )
@@ -2454,11 +2656,11 @@ final class AppCoordinator {
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.History",
+                                domain: "VibeWhisper.History",
                                 code: 2,
                                 userInfo: [
                                     NSLocalizedDescriptionKey: L10n.text(
-                                        "OpenWhisper history is no longer available."
+                                        "VibeWhisper history is no longer available."
                                     ),
                                 ]
                             )
@@ -2470,9 +2672,6 @@ final class AppCoordinator {
                     return Result {
                         try self.recoveryRecorder.delete(id: id)
                     }
-                },
-                onUseNextSkill: { [weak self] id in
-                    self?.handleSkillMenuAction(.useNext(id))
                 },
                 onRunSkillTest: { [weak self] request in
                     guard let self else {
@@ -2512,10 +2711,13 @@ final class AppCoordinator {
                     skillLibraryInitialSection
             )
         } else if let focusPane {
+            // Explicit deep link / product destination only.
             preferencesWindowController?.navigate(to: focusPane)
+            preferencesWindowController?.show()
             return
         }
 
+        // focusPane == nil: reopen without resetting the current page.
         preferencesWindowController?.show()
     }
 
@@ -2553,6 +2755,7 @@ final class AppCoordinator {
                 skillPromptContext: request.context,
                 chatGPTAuthProvider: authManager,
                 chatGPTAuthAvailable: true,
+                recoveryCredentialStore: recoveryCredentialStore,
                 providerCapabilityPolicy:
                     providerCapabilityPolicy,
                 providerHealthMonitor:
@@ -2617,11 +2820,14 @@ final class AppCoordinator {
             }
             let validation = SkillValidatorEngine().validate(
                 output: finalText,
-                originalText: [
-                    execution.inputText,
-                    request.context.selection,
-                ].compactMap { $0 }
-                    .joined(separator: "\n"),
+                originalText: request.plan.skill
+                    .validationSourceText(
+                        transcript:
+                            execution.inputText,
+                        selection:
+                            request.context
+                                .selection
+                    ),
                 plan: request.plan
             )
             return .success(
@@ -2659,6 +2865,7 @@ final class AppCoordinator {
                 sampleRecorder.configure(maxDurationSeconds: 30)
                 hotkeyRegistrationService.suspend()
                 skillSwitcherHotkeyRegistrationService.suspend()
+                resultPreviewHotkeyRegistrationService.suspend()
                 do {
                     try await sampleRecorder.ensureRecordingPermission()
                     try await sampleRecorder.startRecording()
@@ -2724,16 +2931,22 @@ final class AppCoordinator {
         do {
             try hotkeyRegistrationService.resume()
             try skillSwitcherHotkeyRegistrationService.resume()
+            try resultPreviewHotkeyRegistrationService.resume()
         } catch {
             logger.error(
                 "Restoring global shortcuts after a Skill voice sample failed: \(error.localizedDescription, privacy: .public)"
             )
             configureDictationHotkeyAtStartup()
             configureSkillSwitcherHotkeyAtStartup()
+            configureResultPreviewHotkeyAtStartup()
         }
     }
 
     private func openSkillSwitcher() {
+        if requiresOnboardingCompletion() {
+            presentRequiredOnboarding()
+            return
+        }
         refreshSkillMenu()
         guard let snapshot = latestSkillMenuSnapshot else {
             NSSound.beep()
@@ -2747,11 +2960,18 @@ final class AppCoordinator {
                     snapshot: snapshot,
                     onAction: { [weak self] action in
                         guard let self else { return }
-                        self.handleSkillMenuAction(action)
+                        // Close the switcher first and never reopen Settings —
+                        // selection is confirmed with a capsule toast instead.
                         self.skillSwitcherWindowController?.close()
                         self.skillSwitcherWindowController = nil
+                        self.handleSkillSwitcherSelection(action)
                     },
                     onOpenLibrary: { [weak self] in
+                        // Library navigation stays explicit (footer / menu),
+                        // not an automatic return after picking a Skill.
+                        // Skip host-app restore so openSettings can become key.
+                        self?.skillSwitcherWindowController?
+                            .prepareForExplicitSettingsNavigation()
                         self?.skillSwitcherWindowController?.close()
                         self?.skillSwitcherWindowController = nil
                         self?.openSettings(focusPane: .skills)
@@ -2761,11 +2981,93 @@ final class AppCoordinator {
         skillSwitcherWindowController?.show()
     }
 
+    /// Applies a Skill Switcher pick and shows a capsule confirmation.
+    /// Does not navigate back to Settings.
+    private func handleSkillSwitcherSelection(
+        _ action: SkillMenuAction
+    ) {
+        let confirmationTitle: String?
+        switch action {
+        case .useNext(let installationID):
+            if let name = skillDisplayName(
+                forInstallationID: installationID
+            ) {
+                confirmationTitle = L10n.format(
+                    "Next: %@",
+                    name
+                )
+            } else {
+                confirmationTitle = nil
+            }
+        case .setGlobalDefault(let installationID):
+            if let name = skillDisplayName(
+                forInstallationID: installationID
+            ) {
+                confirmationTitle = L10n.format(
+                    "Default: %@",
+                    name
+                )
+            } else {
+                confirmationTitle = nil
+            }
+        default:
+            confirmationTitle = nil
+        }
+        handleSkillMenuAction(action)
+        if let confirmationTitle, state == .idle {
+            presentSkillSelectionConfirmation(
+                confirmationTitle
+            )
+        }
+    }
+
+    private func skillDisplayName(
+        forInstallationID installationID: UUID
+    ) -> String? {
+        if let entry = latestSkillMenuSnapshot?.installed
+            .first(where: { $0.installationID == installationID })
+        {
+            return entry.displayName
+        }
+        if latestSkillMenuSnapshot?.current.installationID
+            == installationID
+        {
+            return latestSkillMenuSnapshot?.current.displayName
+        }
+        let inventory = skillPackageStore.loadInventory(
+            config: config.communitySkills
+        )
+        return inventory.executionPlan(
+            installationID: installationID,
+            source: .globalDefault
+        )?.skill.localizedName
+    }
+
+    private func presentSkillSelectionConfirmation(
+        _ skillDisplayName: String
+    ) {
+        let trimmed = skillDisplayName.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !trimmed.isEmpty else { return }
+        // Capsule title is the selected Skill name so the user can verify
+        // the switch without reopening Settings or the switcher.
+        overlay.showConfirmation(title: trimmed)
+    }
+
     private func openHistory() {
+        if requiresOnboardingCompletion() {
+            presentRequiredOnboarding()
+            return
+        }
         openSettings(focusPane: .history)
     }
 
     private func openQuickAdd() {
+        if requiresOnboardingCompletion() {
+            presentRequiredOnboarding()
+            return
+        }
         terminologyQuickAddWindowController?.close()
         terminologyQuickAddWindowController = TerminologyQuickAddWindowController(
             existingEntries: snapshotPrivacyMode.isEnabled
@@ -2775,11 +3077,11 @@ final class AppCoordinator {
                 guard let self else {
                     return .failure(
                         NSError(
-                            domain: "OpenWhisper.Terminology",
+                            domain: "VibeWhisper.Terminology",
                             code: 2,
                             userInfo: [
                                 NSLocalizedDescriptionKey: L10n.text(
-                                    "OpenWhisper terminology is no longer available."
+                                    "VibeWhisper terminology is no longer available."
                                 ),
                             ]
                         )
@@ -2823,20 +3125,31 @@ final class AppCoordinator {
     ) -> Result<Void, any Error> {
         do {
             let previousConfig = config
-            try OpenWhisperShortcutSetValidator.validate(
+            try VibeWhisperShortcutSetValidator.validate(
                 dictation: newConfig.transcription.dictationHotkey,
-                skillSwitcher: newConfig.skillSwitcherHotkey
+                skillSwitcher: newConfig.skillSwitcherHotkey,
+                resultPreview: newConfig.resultPreviewHotkey
             )
             let skillSwitcherChanged =
                 previousConfig.skillSwitcherHotkey
                     != newConfig.skillSwitcherHotkey
+            let resultPreviewChanged =
+                previousConfig.resultPreviewHotkey
+                    != newConfig.resultPreviewHotkey
             var didReplaceSkillSwitcher = false
+            var didReplaceResultPreview = false
             do {
                 if skillSwitcherChanged {
                     try replaceSkillSwitcherHotkey(
                         with: newConfig.skillSwitcherHotkey
                     )
                     didReplaceSkillSwitcher = true
+                }
+                if resultPreviewChanged {
+                    try replaceResultPreviewHotkey(
+                        with: newConfig.resultPreviewHotkey
+                    )
+                    didReplaceResultPreview = true
                 }
                 if previousConfig.transcription.dictationHotkey
                     != newConfig.transcription.dictationHotkey
@@ -2857,6 +3170,11 @@ final class AppCoordinator {
                 if didReplaceSkillSwitcher {
                     try? replaceSkillSwitcherHotkey(
                         with: previousConfig.skillSwitcherHotkey
+                    )
+                }
+                if didReplaceResultPreview {
+                    try? replaceResultPreviewHotkey(
+                        with: previousConfig.resultPreviewHotkey
                     )
                 }
                 throw error
@@ -2898,7 +3216,7 @@ final class AppCoordinator {
             return .success(())
         } catch {
             overlay.showError(error.localizedDescription)
-            notifier.notify(title: "OpenWhisper", body: error.localizedDescription)
+            notifier.notify(title: "VibeWhisper", body: error.localizedDescription)
             return .failure(error)
         }
     }
@@ -2918,6 +3236,42 @@ final class AppCoordinator {
         statusMenu?.updateSkillSwitcherHotkey(binding)
     }
 
+    private func replaceResultPreviewHotkey(
+        with binding: HotkeyBinding?
+    ) throws {
+        guard let binding else {
+            resultPreviewHotkeyRegistrationService.stop()
+            return
+        }
+        try resultPreviewHotkeyRegistrationService.replace(
+            with: binding,
+            onPress: resultPreviewHotkeyPressHandler()
+        ) {}
+    }
+
+    /// First-run tutorial must finish before dictation and product surfaces.
+    private func requiresOnboardingCompletion() -> Bool {
+        // Snapshot / visual-acceptance sessions own the surface; do not block.
+        if snapshotPrivacyMode.isEnabled {
+            return false
+        }
+        return OnboardingStateStore().shouldPresent()
+    }
+
+    private func presentRequiredOnboarding(
+        initialStep: OnboardingStep = .welcome
+    ) {
+        NSSound.beep()
+        // Hide any statusBar HUD first — even a short error pill can sit above
+        // the wizard and steal the first click from solid CTAs.
+        overlay.hide()
+        openOnboarding(initialStep: initialStep)
+        statusMenu?.update(
+            state: .setupRequired,
+            detail: L10n.text("Finish setup to start dictating")
+        )
+    }
+
     private func openOnboarding(
         initialStep: OnboardingStep = .welcome
     ) {
@@ -2925,19 +3279,25 @@ final class AppCoordinator {
             let authManager = snapshotPrivacyMode.presentationAuthManager(
                 liveAuthManager: self.authManager
             )
+            // Snapshot / private-acceptance runs may dismiss the window freely;
+            // the real first-run flow blocks until Finish Setup.
+            let blocksUntilCompleted =
+                !snapshotPrivacyMode.isEnabled
+                && OnboardingStateStore().shouldPresent()
             onboardingWindowController = OnboardingWindowController(
                 authManager: authManager,
                 hotkeyBinding: activeDictationHotkey,
                 initialStep: initialStep,
                 persistCompletion: !snapshotPrivacyMode.isEnabled,
+                blocksUntilCompleted: blocksUntilCompleted,
                 onRequestMicrophoneAccess: { [weak self] in
                     guard let self else {
                         return .failure(
                             NSError(
-                                domain: "OpenWhisper.Onboarding",
+                                domain: "VibeWhisper.Onboarding",
                                 code: 1,
                                 userInfo: [
-                                    NSLocalizedDescriptionKey: L10n.text("OpenWhisper setup is no longer available."),
+                                    NSLocalizedDescriptionKey: L10n.text("VibeWhisper setup is no longer available."),
                                 ]
                             )
                         )
@@ -2960,7 +3320,9 @@ final class AppCoordinator {
                     )
                 },
                 onCompleted: { [weak self] in
-                    self?.refreshReadyState()
+                    guard let self else { return }
+                    self.onboardingWindowController = nil
+                    self.refreshReadyState()
                 }
             )
         }
@@ -2993,7 +3355,7 @@ final class AppCoordinator {
                 try preferencesWindowController.writeSnapshot(to: outputURL)
                 NSApplication.shared.terminate(nil)
             } catch {
-                print("OpenWhisper Settings self-capture failed: \(error.localizedDescription)")
+                print("VibeWhisper Settings self-capture failed: \(error.localizedDescription)")
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
@@ -3020,7 +3382,7 @@ final class AppCoordinator {
                 try onboardingWindowController.writeSnapshot(to: outputURL)
                 NSApplication.shared.terminate(nil)
             } catch {
-                print("OpenWhisper Onboarding self-capture failed: \(error.localizedDescription)")
+                print("VibeWhisper Onboarding self-capture failed: \(error.localizedDescription)")
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
@@ -3118,7 +3480,7 @@ final class AppCoordinator {
                 try writer()
                 NSApplication.shared.terminate(nil)
             } catch {
-                print("OpenWhisper product surface self-capture failed: \(error.localizedDescription)")
+                print("VibeWhisper product surface self-capture failed: \(error.localizedDescription)")
             }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
@@ -3147,7 +3509,7 @@ final class AppCoordinator {
                 NSApplication.shared.terminate(nil)
             } catch {
                 print(
-                    "OpenWhisper accessibility audit failed: \(error.localizedDescription)"
+                    "VibeWhisper accessibility audit failed: \(error.localizedDescription)"
                 )
             }
         }
@@ -3211,7 +3573,7 @@ final class AppCoordinator {
         }
 
         statusMenu?.update(state: .setupRequired, detail: snapshot.detail)
-        notifier.notify(title: L10n.text("OpenWhisper setup required"), body: snapshot.detail)
+        notifier.notify(title: L10n.text("VibeWhisper setup required"), body: snapshot.detail)
     }
 
     private static func mergedTerminologyEntries(
@@ -3224,7 +3586,7 @@ final class AppCoordinator {
     private func showInstallRequiredAlert(message: String) {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = L10n.text("Install OpenWhisper to /Applications first")
+        alert.messageText = L10n.text("Install VibeWhisper to /Applications first")
         alert.informativeText = message
         alert.addButton(withTitle: L10n.text("OK"))
         NSApp.activate(ignoringOtherApps: true)
@@ -3350,7 +3712,7 @@ final class AppCoordinator {
             skillID:
                 SkillRegistry
                     .contextRewriteSkillID,
-            skillVersion: "1.0.0",
+            skillVersion: "1.1.0",
             skillName: L10n.text(
                 "Context Rewrite"
             ),
@@ -3396,7 +3758,7 @@ final class AppCoordinator {
                     NSApplication.shared.terminate(nil)
                 } catch {
                     print(
-                        "OpenWhisper Preview self-capture failed: "
+                        "VibeWhisper Preview self-capture failed: "
                             + error.localizedDescription
                     )
                 }
@@ -3420,7 +3782,7 @@ final class AppCoordinator {
                     NSApplication.shared.terminate(nil)
                 } catch {
                     print(
-                        "OpenWhisper Preview accessibility audit failed: "
+                        "VibeWhisper Preview accessibility audit failed: "
                             + error.localizedDescription
                     )
                 }
@@ -3557,7 +3919,7 @@ final class AppCoordinator {
                     }
                 } catch {
                     print(
-                        "OpenWhisper feedback debug capture failed: "
+                        "VibeWhisper feedback debug capture failed: "
                             + error.localizedDescription
                     )
                 }
@@ -3575,7 +3937,7 @@ final class AppCoordinator {
                         return
                     }
                 } catch {
-                    print("OpenWhisper HUD self-capture failed: \(error.localizedDescription)")
+                    print("VibeWhisper HUD self-capture failed: \(error.localizedDescription)")
                 }
             }
         }
@@ -3590,7 +3952,7 @@ final class AppCoordinator {
                     return
                 } catch {
                     print(
-                        "OpenWhisper HUD follow-up self-capture failed: "
+                        "VibeWhisper HUD follow-up self-capture failed: "
                             + error.localizedDescription
                     )
                 }
@@ -4116,6 +4478,7 @@ final class AppCoordinator {
         } else {
             clearPendingRetry()
         }
+        clearLastDictationSession()
 
         var firstError: (any Error)?
         do {
@@ -4144,6 +4507,7 @@ final class AppCoordinator {
         do {
             skillSwitcherHotkeyRegistrationService.stop()
             statusMenu?.updateSkillSwitcherHotkey(nil)
+            resultPreviewHotkeyRegistrationService.stop()
             try hotkeyRegistrationService.replace(
                 with:
                     freshConfig.transcription
@@ -4165,7 +4529,7 @@ final class AppCoordinator {
             )
             recorder?.configure(maxDurationSeconds: freshConfig.transcription.maxDurationSeconds)
             refreshReadyState(
-                detailOverride: L10n.text("All OpenWhisper data was deleted. Connect ChatGPT again to continue."),
+                detailOverride: L10n.text("All VibeWhisper data was deleted. Connect ChatGPT again to continue."),
                 state: .setupRequired
             )
         } catch {
@@ -4201,6 +4565,15 @@ final class AppCoordinator {
     }
 
     private func refreshReadyState(detailOverride: String? = nil, state: StatusMenuVisualState = .ready) {
+        if requiresOnboardingCompletion() {
+            statusMenu?.update(
+                state: .setupRequired,
+                detail: detailOverride
+                    ?? L10n.text("Finish setup to start dictating")
+            )
+            refreshSkillMenu()
+            return
+        }
         let issues = RuntimePreflight.issues(
             for: config,
             authSnapshotProvider: { self.authManager.authSnapshot() },
@@ -4349,5 +4722,696 @@ final class AppCoordinator {
             try? configStore.save(config)
         }
         refreshSkillMenu()
+    }
+
+    // MARK: - Last result Preview reopen / re-skill
+
+    /// Skills available for in-panel switch on Result Preview (Recent first,
+    /// then remaining installed, deduped). Empty when the menu is not ready.
+    private func previewSkillChoices() -> [SkillMenuEntry] {
+        refreshSkillMenu()
+        guard let snapshot = latestSkillMenuSnapshot else {
+            return []
+        }
+        var seen = Set<UUID>()
+        var ordered: [SkillMenuEntry] = []
+        for entry in snapshot.recent + snapshot.installed {
+            if seen.insert(entry.installationID).inserted {
+                ordered.append(entry)
+            }
+        }
+        return ordered
+    }
+
+    /// Rebuild a `PreviewRequest` after in-panel skill switch. Keeps the
+    /// Preview surface open — never presents Skill Switcher or HUD.
+    private func regeneratePreviewRequest(
+        skillInstallationID: UUID,
+        sourceOverride: String?
+    ) async -> Result<PreviewRequest, any Error> {
+        guard
+            var session = lastDictationSession,
+            !session.isExpired
+        else {
+            return .failure(
+                NSError(
+                    domain: "VibeWhisper.Preview",
+                    code: 1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: L10n.text(
+                            "No recent result to regenerate."
+                        ),
+                    ]
+                )
+            )
+        }
+        if let sourceOverride {
+            let trimmed = sourceOverride.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            if !trimmed.isEmpty {
+                session = session.withResultText(trimmed)
+                lastDictationSession = session
+            }
+        }
+        let inventory = skillPackageStore.loadInventory(
+            config: config.communitySkills
+        )
+        guard let plan = inventory.executionPlan(
+            installationID: skillInstallationID,
+            source: .nextRun
+        ) else {
+            return .failure(
+                NSError(
+                    domain: "VibeWhisper.Preview",
+                    code: 2,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: L10n.text(
+                            "That skill is no longer installed."
+                        ),
+                    ]
+                )
+            )
+        }
+        do {
+            guard authManager.authSnapshot().state == .ready else {
+                throw SkillTestRunError.chatGPTConnectionRequired
+            }
+            var polishConfig = config.transcription.textPolish
+            polishConfig.mode = .always
+            polishConfig.chatGPTAuthEnabled = true
+            let polisher = OpenAICompatibleTextPolisher(
+                config: polishConfig,
+                dictationMode: plan.legacyMode,
+                skillPlan: plan,
+                skillPromptContext: session.skillPromptContext,
+                chatGPTAuthProvider: authManager,
+                chatGPTAuthAvailable: true,
+                recoveryCredentialStore: recoveryCredentialStore,
+                providerCapabilityPolicy: providerCapabilityPolicy,
+                providerHealthMonitor: ProviderHealthMonitor.shared
+            )
+            let inputText = session.originalTranscript
+            let execution = try await SkillTestEngine().execute(
+                SkillTestRunRequest(
+                    plan: plan,
+                    inputText: inputText,
+                    context: session.skillPromptContext,
+                    terminologyEntries: session.terminologyEntries
+                ),
+                using: polisher
+            )
+            let resultText: String
+            let issueCodes: [String]
+            if execution.validation.isValid {
+                resultText = execution.generatedText
+                issueCodes = []
+            } else {
+                resultText = inputText
+                issueCodes = execution.validation.issues.map {
+                    $0.code.rawValue
+                }
+            }
+            let updatedSession = session.withSkillPlan(
+                plan,
+                resultText: resultText
+            )
+            lastDictationSession = updatedSession
+            // Align global default with the skill just applied on this panel
+            // without going through handleSkillMenuAction (which requires idle).
+            config.transcription.skills.setDefault(
+                skillID: plan.skill.id,
+                installationID: plan.installation.id,
+                registry: inventory.registry
+            )
+            if !snapshotPrivacyMode.isEnabled {
+                try? configStore.save(config)
+            }
+            refreshSkillMenu()
+            let choices = previewSkillChoices()
+            return .success(
+                updatedSession.makePreviewRequest(
+                    resultText: resultText,
+                    plan: plan,
+                    validationIssueCodes: issueCodes,
+                    skillChoices: choices,
+                    currentSkillInstallationID: plan.installation.id
+                )
+            )
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func rememberLastDictationSession(
+        originalTranscript: String,
+        resultText: String,
+        skillPlan: ResolvedSkillExecutionPlan,
+        skillPromptContext: SkillPromptContext,
+        contextCapabilities: [SkillCapability],
+        terminologyEntries: [TerminologyEntry],
+        allowsPasteToTarget: Bool,
+        allowsSelectionReplacement: Bool
+    ) {
+        guard !snapshotPrivacyMode.isEnabled else {
+            lastDictationSession = nil
+            return
+        }
+        let trimmed = originalTranscript.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !trimmed.isEmpty else { return }
+        lastDictationSession = LastDictationSession(
+            originalTranscript: trimmed,
+            lastResultText: resultText,
+            skillPlan: skillPlan,
+            skillPromptContext: skillPromptContext,
+            contextCapabilities: contextCapabilities,
+            terminologyEntries: terminologyEntries,
+            allowsPasteToTarget: allowsPasteToTarget,
+            allowsSelectionReplacement: allowsSelectionReplacement
+        )
+    }
+
+    private func updateLastDictationResult(_ text: String) {
+        guard let session = lastDictationSession, !session.isExpired else {
+            return
+        }
+        lastDictationSession = session.withResultText(text)
+    }
+
+    private func clearLastDictationSession() {
+        lastDictationSession = nil
+    }
+
+    /// Global hotkey / menu: reopen the last Preview at any time.
+    /// Interrupts an in-flight session (recording / processing / open Preview)
+    /// so the last result is always one shortcut away.
+    private func reopenLastResultPreview() {
+        guard
+            let session = lastDictationSession,
+            !session.isExpired
+        else {
+            notifier.notify(
+                title: L10n.text("No recent result"),
+                body: L10n.text(
+                    "Dictate once to build a Result Preview you can reopen and re-skill."
+                )
+            )
+            return
+        }
+
+        // Tear down whatever is currently running so Preview can come to front.
+        if state != .idle
+            || processingTask != nil
+            || startRecordingTask != nil
+            || activeSessionID != nil
+        {
+            cancelCurrentSession()
+        }
+        // Dismiss any leftover Preview panel from a previous await.
+        previewPresenter.dismiss()
+        skillSwitcherWindowController?.close()
+        skillSwitcherWindowController = nil
+
+        presentCachedPreview(session: session)
+    }
+
+    /// Preview header "Change Skill" — open switcher, then reprocess.
+    /// Does not treat the Preview session as cancelled: dismissing the switcher
+    /// without a pick reopens the last Preview so the flow stays continuous.
+    private func beginSkillChangeFromPreview(editedSource: String) {
+        // Capture current edited text onto the session before opening switcher.
+        if let session = lastDictationSession, !session.isExpired {
+            lastDictationSession = session.withResultText(editedSource)
+        } else {
+            // No cached session to re-skill; nothing to switch.
+            return
+        }
+        // Panel may already be closed by the changeSkill decision path.
+        previewPresenter.dismiss()
+        openSkillSwitcherForReprocess(sourceOverride: editedSource)
+    }
+
+    private func openSkillSwitcherForReprocess(sourceOverride: String?) {
+        refreshSkillMenu()
+        guard let snapshot = latestSkillMenuSnapshot else {
+            NSSound.beep()
+            reopenPreviewAfterSkillChangeAbort()
+            return
+        }
+        skillSwitcherWindowController?.close()
+
+        // Shared flag so action + dismiss closures agree on whether a Skill was
+        // committed. Esc without a pick reopens Preview instead of dropping the flow.
+        final class CommitFlag: @unchecked Sendable {
+            var didCommit = false
+        }
+        let commit = CommitFlag()
+
+        skillSwitcherWindowController =
+            SkillSwitcherWindowController(
+                snapshot: snapshot,
+                onAction: { [weak self] action in
+                    guard let self else { return }
+                    switch action {
+                    case .setGlobalDefault(let installationID):
+                        commit.didCommit = true
+                        self.skillSwitcherWindowController?.close()
+                        self.skillSwitcherWindowController = nil
+                        // Skill Switcher pick from Preview re-skill regenerates.
+                        self.reprocessLastSession(
+                            skillInstallationID: installationID,
+                            sourceOverride: sourceOverride
+                        )
+                    case .useNext, .toggleFavorite, .clearNextRun,
+                         .setApplicationDefault:
+                        // useNext / favorites removed from product chrome.
+                        // App defaults still apply for next recording.
+                        commit.didCommit = true
+                        self.skillSwitcherWindowController?.close()
+                        self.skillSwitcherWindowController = nil
+                        self.handleSkillMenuAction(action)
+                        self.reopenPreviewAfterSkillChangeAbort()
+                    }
+                },
+                onOpenLibrary: { [weak self] in
+                    commit.didCommit = true
+                    // Skip host-app restore so openSettings can become key.
+                    self?.skillSwitcherWindowController?
+                        .prepareForExplicitSettingsNavigation()
+                    self?.skillSwitcherWindowController?.close()
+                    self?.skillSwitcherWindowController = nil
+                    self?.openSettings(focusPane: .skills)
+                    // Library navigation ends the re-skill flow; keep session.
+                },
+                onDismiss: { [weak self] in
+                    guard let self else { return }
+                    self.skillSwitcherWindowController = nil
+                    // Esc / click-away without a Skill pick → return to Preview.
+                    // Switcher already restored the host app; Preview will
+                    // re-activate and re-capture that host for its own dismiss.
+                    if !commit.didCommit {
+                        self.reopenPreviewAfterSkillChangeAbort()
+                    }
+                }
+            )
+        skillSwitcherWindowController?.show()
+    }
+
+    /// Restore Preview after the user aborts Skill Switcher without regenerating.
+    private func reopenPreviewAfterSkillChangeAbort() {
+        guard
+            let session = lastDictationSession,
+            !session.isExpired
+        else {
+            return
+        }
+        presentCachedPreview(session: session)
+    }
+
+    private func reprocessLastSession(
+        skillInstallationID: UUID,
+        sourceOverride: String?
+    ) {
+        guard state == .idle, processingTask == nil else {
+            NSSound.beep()
+            return
+        }
+        guard
+            var session = lastDictationSession,
+            !session.isExpired
+        else {
+            notifier.notify(
+                title: L10n.text("No recent result"),
+                body: L10n.text(
+                    "Dictate once to build a Result Preview you can reopen and re-skill."
+                )
+            )
+            return
+        }
+        if let sourceOverride {
+            let trimmed = sourceOverride.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            if !trimmed.isEmpty {
+                // Keep edited draft as the last result until generation lands.
+                session = session.withResultText(trimmed)
+                lastDictationSession = session
+            }
+        }
+        let inventory = skillPackageStore.loadInventory(
+            config: config.communitySkills
+        )
+        guard let plan = inventory.executionPlan(
+            installationID: skillInstallationID,
+            source: .nextRun
+        ) else {
+            NSSound.beep()
+            return
+        }
+
+        state = .processing
+        let sessionID = UUID()
+        activeSessionID = sessionID
+        overlay.showProcessing()
+        statusMenu?.update(
+            state: .processing,
+            detail: L10n.format(
+                "Regenerating with %@",
+                plan.skill.localizedName
+            )
+        )
+        // macOS-level springy processing presentation: fade HUD in via existing
+        // OverlayController animation path; we only orchestrate show/hide.
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if self.activeSessionID == sessionID {
+                        self.processingTask = nil
+                    }
+                }
+            }
+            do {
+                guard self.authManager.authSnapshot().state == .ready else {
+                    throw SkillTestRunError.chatGPTConnectionRequired
+                }
+                var polishConfig = self.config.transcription.textPolish
+                polishConfig.mode = .always
+                polishConfig.chatGPTAuthEnabled = true
+                let polisher = OpenAICompatibleTextPolisher(
+                    config: polishConfig,
+                    dictationMode: plan.legacyMode,
+                    skillPlan: plan,
+                    skillPromptContext: session.skillPromptContext,
+                    chatGPTAuthProvider: self.authManager,
+                    chatGPTAuthAvailable: true,
+                    recoveryCredentialStore: self.recoveryCredentialStore,
+                    providerCapabilityPolicy:
+                        self.providerCapabilityPolicy,
+                    providerHealthMonitor:
+                        ProviderHealthMonitor.shared
+                )
+                let inputText = session.originalTranscript
+                let execution = try await SkillTestEngine().execute(
+                    SkillTestRunRequest(
+                        plan: plan,
+                        inputText: inputText,
+                        context: session.skillPromptContext,
+                        terminologyEntries: session.terminologyEntries
+                    ),
+                    using: polisher
+                )
+                guard !Task.isCancelled,
+                      self.shouldContinue(sessionID: sessionID)
+                else { return }
+
+                let resultText: String
+                if execution.validation.isValid {
+                    resultText = execution.generatedText
+                } else {
+                    // Fall back to source transcript when the new Skill fails checks.
+                    resultText = inputText
+                }
+                let updatedSession = session.withSkillPlan(
+                    plan,
+                    resultText: resultText
+                )
+                await MainActor.run {
+                    self.lastDictationSession = updatedSession
+                }
+                await MainActor.run {
+                    self.overlay.hide()
+                    self.statusMenu?.update(
+                        state: .processing,
+                        detail: L10n.text("Waiting for preview")
+                    )
+                }
+                let choices = await MainActor.run {
+                    self.previewSkillChoices()
+                }
+                let decision = await self.previewPresenter.present(
+                    updatedSession.makePreviewRequest(
+                        resultText: resultText,
+                        plan: plan,
+                        validationIssueCodes: execution.validation.isValid
+                            ? []
+                            : execution.validation.issues.map {
+                                $0.code.rawValue
+                            },
+                        skillChoices: choices,
+                        currentSkillInstallationID: plan.installation.id
+                    ),
+                    regenerate: { [weak self] installationID, edited in
+                        guard let self else {
+                            return .failure(PreviewRegenerateError.unavailable)
+                        }
+                        return await self.regeneratePreviewRequest(
+                            skillInstallationID: installationID,
+                            sourceOverride: edited
+                        )
+                    }
+                )
+                guard !Task.isCancelled,
+                      self.shouldContinue(sessionID: sessionID)
+                else { return }
+
+                await self.finishReprocessPreview(
+                    decision: decision,
+                    session: updatedSession,
+                    sessionID: sessionID
+                )
+            } catch {
+                await MainActor.run {
+                    guard self.shouldContinue(sessionID: sessionID) else {
+                        return
+                    }
+                    self.state = .idle
+                    self.activeSessionID = nil
+                    self.overlay.showError(error.localizedDescription)
+                    self.statusMenu?.update(
+                        state: .error,
+                        detail: error.localizedDescription
+                    )
+                    self.notifier.notify(
+                        title: "VibeWhisper",
+                        body: error.localizedDescription
+                    )
+                }
+            }
+        }
+    }
+
+    private func presentCachedPreview(session: LastDictationSession) {
+        state = .processing
+        let sessionID = UUID()
+        activeSessionID = sessionID
+        statusMenu?.update(
+            state: .processing,
+            detail: L10n.text("Waiting for preview")
+        )
+        processingTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                Task { @MainActor [weak self] in
+                    if self?.activeSessionID == sessionID {
+                        self?.processingTask = nil
+                    }
+                }
+            }
+            let choices = await MainActor.run {
+                self.previewSkillChoices()
+            }
+            let decision = await self.previewPresenter.present(
+                session.makePreviewRequest(
+                    skillChoices: choices,
+                    currentSkillInstallationID:
+                        session.skillPlan.installation.id
+                ),
+                regenerate: { [weak self] installationID, edited in
+                    guard let self else {
+                        return .failure(PreviewRegenerateError.unavailable)
+                    }
+                    return await self.regeneratePreviewRequest(
+                        skillInstallationID: installationID,
+                        sourceOverride: edited
+                    )
+                }
+            )
+            guard !Task.isCancelled,
+                  self.shouldContinue(sessionID: sessionID)
+            else { return }
+            let latestSession =
+                await MainActor.run { self.lastDictationSession }
+                ?? session
+            await self.finishReprocessPreview(
+                decision: decision,
+                session: latestSession,
+                sessionID: sessionID
+            )
+        }
+    }
+
+    private func finishReprocessPreview(
+        decision: PreviewDecision,
+        session: LastDictationSession,
+        sessionID: UUID
+    ) async {
+        switch decision {
+        case let .replaceSelection(text),
+             let .pasteToTarget(text):
+            await MainActor.run {
+                self.updateLastDictationResult(text)
+            }
+            // Reuse the injector with paste-to-target semantics for reopen flows.
+            // Selection replacement is only attempted when the original session
+            // had a verified selection snapshot capability.
+            let allowsPaste = session.allowsPasteToTarget
+            if allowsPaste {
+                do {
+                    let outcome = try await injector.inject(
+                        text: text,
+                        preserveClipboard: config.injection.preserveClipboard,
+                        restoreDelayMilliseconds:
+                            config.injection.restoreDelayMilliseconds,
+                        launchAppContext: launchAppContextProvider(),
+                        automaticPasteAllowed: true,
+                        automaticPasteFallbackReason:
+                            .deliveryRequiresManualPaste,
+                        expectedSelectionContext: nil
+                    )
+                    await MainActor.run {
+                        guard self.shouldContinue(sessionID: sessionID) else {
+                            return
+                        }
+                        self.state = .idle
+                        self.activeSessionID = nil
+                        self.overlay.showResult(
+                            text: text,
+                            outcome: outcome
+                        )
+                        self.statusMenu?.update(
+                            state: .ready,
+                            detail: L10n.format(
+                                "Ready. Press %@ to dictate",
+                                self.activeDictationHotkey.displayName
+                            )
+                        )
+                    }
+                } catch {
+                    await MainActor.run {
+                        guard self.shouldContinue(sessionID: sessionID) else {
+                            return
+                        }
+                        // Fallback: leave text on the clipboard.
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(
+                            text,
+                            forType: .string
+                        )
+                        self.state = .idle
+                        self.activeSessionID = nil
+                        self.overlay.showResult(
+                            text: text,
+                            outcome: .copiedToClipboard(
+                                reason: .deliveryRequiresManualPaste
+                            )
+                        )
+                        self.statusMenu?.update(
+                            state: .ready,
+                            detail: L10n.text(
+                                "Copied — paste with Command-V"
+                            )
+                        )
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        text,
+                        forType: .string
+                    )
+                    guard self.shouldContinue(sessionID: sessionID) else {
+                        return
+                    }
+                    self.state = .idle
+                    self.activeSessionID = nil
+                    self.overlay.showResult(
+                        text: text,
+                        outcome: .copiedToClipboard(
+                            reason: .deliveryRequiresManualPaste
+                        )
+                    )
+                    self.statusMenu?.update(
+                        state: .ready,
+                        detail: L10n.text(
+                            "Copied — paste with Command-V"
+                        )
+                    )
+                }
+            }
+        case let .copy(text):
+            await MainActor.run {
+                self.updateLastDictationResult(text)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(
+                    text,
+                    forType: .string
+                )
+                guard self.shouldContinue(sessionID: sessionID) else {
+                    return
+                }
+                self.state = .idle
+                self.activeSessionID = nil
+                self.overlay.showResult(
+                    text: text,
+                    outcome: .copiedToClipboard(
+                        reason: .deliveryRequiresManualPaste
+                    )
+                )
+                self.statusMenu?.update(
+                    state: .ready,
+                    detail: L10n.text(
+                        "Copied — paste with Command-V"
+                    )
+                )
+            }
+        case .cancel:
+            await MainActor.run {
+                guard self.shouldContinue(sessionID: sessionID) else {
+                    return
+                }
+                self.state = .idle
+                self.activeSessionID = nil
+                self.overlay.hide()
+                self.statusMenu?.update(
+                    state: .ready,
+                    detail: L10n.text("Preview cancelled")
+                )
+            }
+        case let .reprocess(skillInstallationID, editedSource):
+            await MainActor.run {
+                self.state = .idle
+                self.activeSessionID = nil
+                self.overlay.hide()
+                self.reprocessLastSession(
+                    skillInstallationID: skillInstallationID,
+                    sourceOverride: editedSource
+                )
+            }
+        case let .changeSkill(editedSource):
+            // Re-open switcher without dropping the cached session.
+            await MainActor.run {
+                self.updateLastDictationResult(editedSource)
+                self.state = .idle
+                self.activeSessionID = nil
+                self.processingTask = nil
+                self.overlay.hide()
+                self.beginSkillChangeFromPreview(editedSource: editedSource)
+            }
+        }
     }
 }

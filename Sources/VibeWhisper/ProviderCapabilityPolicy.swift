@@ -148,7 +148,7 @@ enum ProviderCapabilityPolicyError: Error, Equatable, LocalizedError {
         switch self {
         case .disabled(let capability, let incidentID, _):
             return L10n.format(
-                "%@ is temporarily disabled by a signed OpenWhisper safety policy (incident %@). No audio or transcript was sent. Use the OpenAI-Compatible Recovery route or try again later.",
+                "%@ is temporarily disabled by a signed VibeWhisper safety policy (incident %@). No audio or transcript was sent. Use the OpenAI-Compatible Recovery route or try again later.",
                 capability.title,
                 incidentID
             )

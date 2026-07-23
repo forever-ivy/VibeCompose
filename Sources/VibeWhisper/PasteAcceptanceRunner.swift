@@ -51,13 +51,13 @@ enum PasteAcceptanceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessibilityPermissionRequired:
-            return "Installed OpenWhisper does not currently have Accessibility permission."
+            return "Installed VibeWhisper does not currently have Accessibility permission."
         case .targetDidNotLaunch(let target):
             return "\(target.applicationName) did not launch as an isolated acceptance process."
         case .editableTargetDidNotAppear(let target):
             return "The isolated \(target.applicationName) process did not expose a focused editable target."
         case .keyEventFailed:
-            return "OpenWhisper could not create the Terminal acceptance key event."
+            return "VibeWhisper could not create the Terminal acceptance key event."
         }
     }
 }
@@ -165,7 +165,7 @@ enum PasteAcceptanceRunner {
             let injectedText: String
             switch target {
             case .textEdit:
-                injectedText = "OpenWhisper acceptance \(marker)"
+                injectedText = "VibeWhisper acceptance \(marker)"
             case .terminal:
                 guard let proofFileURL = session.proofFileURL else {
                     throw PasteAcceptanceError.targetDidNotLaunch(target)
@@ -178,7 +178,7 @@ enum PasteAcceptanceRunner {
                 ].joined()
             }
 
-            let clipboardSentinel = "OpenWhisper clipboard sentinel "
+            let clipboardSentinel = "VibeWhisper clipboard sentinel "
                 + UUID().uuidString
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(
@@ -335,7 +335,7 @@ enum PasteAcceptanceRunner {
         case .textEdit:
             let fileURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
-                    "openwhisper-paste-acceptance-"
+                    "vibewhisper-paste-acceptance-"
                         + UUID().uuidString
                         + ".txt"
                 )
@@ -347,7 +347,7 @@ enum PasteAcceptanceRunner {
         case .terminal:
             let homeURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
-                    "openwhisper-terminal-acceptance-"
+                    "vibewhisper-terminal-acceptance-"
                         + UUID().uuidString,
                     isDirectory: true
                 )
@@ -369,7 +369,7 @@ enum PasteAcceptanceRunner {
             temporaryFileURL = nil
             proofFileURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(
-                    "openwhisper-terminal-proof-"
+                    "vibewhisper-terminal-proof-"
                         + UUID().uuidString
                 )
             isolatedHomeURL = homeURL

@@ -72,7 +72,7 @@ final class TerminologyWindowController: NSWindowController {
             initialConfig: config,
             onSave: onSave
         )
-        .applyingOpenWhisperBrandTint()
+        .applyingVibeWhisperBrandTint()
         .applyingAccessibilityDisplayOptionsOverride(
             .currentVisualAcceptance
         )
@@ -83,16 +83,16 @@ final class TerminologyWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = L10n.text("OpenWhisper Terminology")
+        window.title = L10n.text("VibeWhisper Terminology")
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.TerminologyWindow")
+        window.identifier = NSUserInterfaceItemIdentifier("VibeWhisper.TerminologyWindow")
         window.collectionBehavior.remove(.fullScreenPrimary)
         window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.minSize = NSSize(width: 760, height: 500)
         window.tabbingMode = .disallowed
-        let restored = window.setFrameUsingName("OpenWhisper.TerminologyWindow")
-        window.setFrameAutosaveName("OpenWhisper.TerminologyWindow")
+        let restored = window.setFrameUsingName("VibeWhisper.TerminologyWindow")
+        window.setFrameAutosaveName("VibeWhisper.TerminologyWindow")
         if !restored {
             window.center()
         }
@@ -160,8 +160,8 @@ private struct TerminologyToolbarView: View {
     }
 
     private var regularLayout: some View {
-        VStack(spacing: OpenWhisperMetrics.space10) {
-            HStack(spacing: OpenWhisperMetrics.space12) {
+        VStack(spacing: VibeWhisperMetrics.space10) {
+            HStack(spacing: VibeWhisperMetrics.space12) {
                 searchField
                     .frame(minWidth: 190, maxWidth: .infinity)
                 if showsControls {
@@ -170,7 +170,7 @@ private struct TerminologyToolbarView: View {
                 }
             }
 
-            HStack(spacing: OpenWhisperMetrics.space12) {
+            HStack(spacing: VibeWhisperMetrics.space10) {
                 filterPicker
                 Spacer(minLength: 0)
                 sortMenu
@@ -180,17 +180,17 @@ private struct TerminologyToolbarView: View {
     }
 
     private var compactLayout: some View {
-        VStack(spacing: OpenWhisperMetrics.space10) {
+        VStack(spacing: VibeWhisperMetrics.space10) {
             searchField
                 .frame(maxWidth: .infinity)
             if showsControls {
-                HStack(spacing: OpenWhisperMetrics.space10) {
+                HStack(spacing: VibeWhisperMetrics.space10) {
                     enabledToggle
                     Spacer(minLength: 0)
                     addButton
                 }
             }
-            HStack(spacing: OpenWhisperMetrics.space10) {
+            HStack(spacing: VibeWhisperMetrics.space10) {
                 filterPicker
                     .frame(maxWidth: .infinity)
                 sortMenu
@@ -200,18 +200,21 @@ private struct TerminologyToolbarView: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-                .font(.system(size: 12, weight: .medium))
-            TextField(L10n.text("Search terminology"), text: $query)
-                .textFieldStyle(.plain)
+            TextField(
+                L10n.text("Search"),
+                text: $query,
+                prompt: Text(L10n.text("Search"))
+            )
+            .textFieldStyle(.plain)
         }
         .openWhisperSearchField()
     }
 
     private var enabledToggle: some View {
-        Toggle(L10n.text("Terminology enabled"), isOn: $isEnabled)
+        Toggle(L10n.text("Enabled"), isOn: $isEnabled)
             .toggleStyle(.switch)
             .fixedSize()
     }
@@ -225,7 +228,7 @@ private struct TerminologyToolbarView: View {
         }
         .labelsHidden()
         .pickerStyle(.segmented)
-        .frame(maxWidth: 300)
+        .frame(maxWidth: 280)
     }
 
     /// Sort collapses into a menu so the toolbar never truncates at min width.
@@ -237,30 +240,32 @@ private struct TerminologyToolbarView: View {
                 }
             }
         } label: {
-            Label(L10n.text(sort.rawValue), systemImage: "arrow.up.arrow.down.circle")
+            Label(L10n.text(sort.rawValue), systemImage: "arrow.up.arrow.down")
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .help(L10n.text("Sort"))
     }
 
     private var addButton: some View {
         Button(action: onAdd) {
-            Label(L10n.text("Add Entry"), systemImage: "plus")
+            Label(L10n.text("Add"), systemImage: "plus")
         }
-        .buttonStyle(OpenWhisperPrimaryButtonStyle())
+        .buttonStyle(.borderedProminent)
     }
 
     private var importExportMenu: some View {
         Menu {
-            Button(L10n.text("Import Dictionary…"), action: onImport)
-            Button(L10n.text("Export Dictionary…"), action: onExport)
+            Button(L10n.text("Import…"), action: onImport)
+            Button(L10n.text("Export…"), action: onExport)
                 .disabled(!canExport)
         } label: {
             Label(
                 L10n.text("Import / Export"),
-                systemImage: "square.and.arrow.down"
+                systemImage: "square.and.arrow.up"
             )
         }
+        .help(L10n.text("Import / Export"))
     }
 }
 
@@ -310,9 +315,9 @@ struct TerminologyManagerView: View {
     var body: some View {
         VStack(spacing: 0) {
             if isEmbedded {
-                OpenWhisperPaneHeader(title: L10n.text("Terminology")) {
+                VibeWhisperPaneHeader(title: L10n.text("Terminology")) {
                     Toggle(
-                        L10n.text("Terminology enabled"),
+                        L10n.text("Enabled"),
                         isOn: terminologyEnabledBinding
                     )
                     .toggleStyle(.switch)
@@ -407,123 +412,121 @@ struct TerminologyManagerView: View {
 
     private var addEntryButton: some View {
         Button(action: addEntry) {
-            Label(L10n.text("Add Entry"), systemImage: "plus")
+            Label(L10n.text("Add"), systemImage: "plus")
         }
-        .buttonStyle(OpenWhisperPrimaryButtonStyle())
+        .buttonStyle(.borderedProminent)
     }
 
     private var entryList: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(
-                    L10n.format(
-                        "%ld matching entries",
-                        filteredEntries.count
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                Spacer()
-                Text(
-                    L10n.format(
-                        "%ld total entries",
-                        config.transcription.terminology.entries.count
-                    )
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
-
-            List(filteredEntries, selection: $selectedEntryID) { entry in
-                entryRow(entry)
-                    .tag(entry.id)
-                    .contextMenu {
-                        Button(L10n.text("Edit")) {
-                            selectedEntryID = entry.id
-                        }
-                        Button(
-                            L10n.text(entry.isEnabled ? "Disable" : "Enable")
-                        ) {
-                            setEnabled(!entry.isEnabled, for: entry.id)
-                        }
-                        Divider()
-                        Button(L10n.text("Delete"), role: .destructive) {
-                            pendingDeletionID = entry.id
-                        }
+        List(filteredEntries, selection: $selectedEntryID) { entry in
+            entryRow(entry)
+                .tag(entry.id)
+                .contextMenu {
+                    Button(L10n.text("Edit")) {
+                        selectedEntryID = entry.id
                     }
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .background(
-                Color(nsColor: OpenWhisperPalette.insetSurface)
-            )
-            .overlay {
-                if filteredEntries.isEmpty {
-                    OpenWhisperEmptyState(
-                        systemImage: "text.book.closed",
-                        title: L10n.text("No matching terminology"),
-                        detail: L10n.text("Add a term, import a dictionary, or change the search and filters.")
-                    )
+                    Button(
+                        L10n.text(entry.isEnabled ? "Disable" : "Enable")
+                    ) {
+                        setEnabled(!entry.isEnabled, for: entry.id)
+                    }
+                    Divider()
+                    Button(L10n.text("Delete"), role: .destructive) {
+                        pendingDeletionID = entry.id
+                    }
                 }
+        }
+        .listStyle(.inset)
+        .listRowSeparator(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !filteredEntries.isEmpty {
+                Text(listCountLabel)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+            }
+        }
+        .overlay {
+            if filteredEntries.isEmpty {
+                VibeWhisperEmptyState(
+                    systemImage: "text.book.closed",
+                    title: L10n.text("No matching terminology"),
+                    detail: L10n.text(
+                        "Add a term, import a dictionary, or change the search and filters."
+                    )
+                )
             }
         }
     }
 
+    private var listCountLabel: String {
+        let matching = filteredEntries.count
+        let total = config.transcription.terminology.entries.count
+        if matching == total {
+            return L10n.format("%ld entries", total)
+        }
+        return L10n.format("%ld of %ld", matching, total)
+    }
+
     private func entryRow(_ entry: TerminologyEntry) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 12) {
             Image(
                 systemName: entry.type == .correction
                     ? "arrow.left.arrow.right"
                     : "textformat"
             )
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color(nsColor: OpenWhisperPalette.brandBlue))
+            .foregroundStyle(Color(nsColor: VibeWhisperPalette.brandBlue))
             .frame(width: 32, height: 32)
             .background(
-                Color(nsColor: OpenWhisperPalette.brandBlue).opacity(0.09),
+                Color(nsColor: VibeWhisperPalette.brandBlue).opacity(0.09),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(
                     entry.type == .correction
                         ? "\(entry.original) → \(entry.replacement ?? "")"
                         : entry.original
                 )
-                .font(.system(size: 12, weight: .semibold))
+                .font(VibeWhisperTypography.callout(.semibold))
                 .lineLimit(1)
 
-                HStack(spacing: 6) {
-                    Text(L10n.text(entry.type == .correction ? "Correction" : "Term"))
-                    Text("•")
-                    Text(entry.source)
-                    if !entry.aliases.isEmpty {
-                        Text("•")
-                        Text(L10n.format("%ld aliases", entry.aliases.count))
-                    }
-                }
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                Text(entryRowSubtitle(entry))
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            Image(systemName: entry.isEnabled ? "checkmark.circle.fill" : "pause.circle")
-                .foregroundStyle(
-                    entry.isEnabled
-                        ? Color(nsColor: OpenWhisperPalette.success)
-                        : Color.secondary
-                )
-                .accessibilityLabel(L10n.text(entry.isEnabled ? "enabled" : "disabled"))
+            if !entry.isEnabled {
+                Text(L10n.text("Off"))
+                    .font(VibeWhisperTypography.micro(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+                    .accessibilityLabel(L10n.text("disabled"))
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .opacity(entry.isEnabled ? 1 : 0.65)
         .accessibilityElement(children: .combine)
+    }
+
+    private func entryRowSubtitle(_ entry: TerminologyEntry) -> String {
+        var parts = [
+            L10n.text(entry.type == .correction ? "Correction" : "Term"),
+        ]
+        if !entry.aliases.isEmpty {
+            parts.append(L10n.format("%ld other spellings", entry.aliases.count))
+        }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -548,10 +551,10 @@ struct TerminologyManagerView: View {
                 onRequestDelete: { pendingDeletionID = $0 }
             )
         } else {
-            OpenWhisperEmptyState(
+            VibeWhisperEmptyState(
                 systemImage: "text.book.closed",
-                title: L10n.text("Select or add an entry"),
-                detail: L10n.text("Terms guide recognition. Corrections replace predictable mistakes after transcription.")
+                title: L10n.text("Select an entry"),
+                detail: L10n.text("Or add a new term or correction.")
             )
         }
     }
@@ -783,7 +786,7 @@ struct TerminologyManagerView: View {
     private func exportDictionary() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.nameFieldStringValue = "OpenWhisper-Terminology.csv"
+        panel.nameFieldStringValue = "VibeWhisper-Terminology.csv"
         panel.canCreateDirectories = true
 
         guard panel.runModal() == .OK, let url = panel.url else {
@@ -840,7 +843,7 @@ private struct TerminologyImportPreviewView: View {
                 HStack {
                     Text(L10n.text(entry.type == .correction ? "Correction" : "Term"))
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Color(nsColor: OpenWhisperPalette.brandBlue))
+                        .foregroundStyle(Color(nsColor: VibeWhisperPalette.brandBlue))
                         .frame(width: 78, alignment: .leading)
                     Text(
                         entry.type == .correction
@@ -905,88 +908,152 @@ private struct TerminologyEditorDetailView: View {
     var onRequestDelete: (UUID?) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(
-                    L10n.text(draft.id == nil ? "Add Entry" : "Edit Entry")
-                )
-                .font(OpenWhisperTypography.title())
-                .tracking(-0.18)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(L10n.text(draft.id == nil ? "New Entry" : "Edit Entry"))
+                        .font(VibeWhisperTypography.title())
+                        .tracking(-0.18)
 
-                Form {
-                    Picker(
-                        L10n.text("Type"),
-                        selection: Binding(
-                            get: { draft.type },
-                            set: { var d = draft; d.type = $0; onDraftChange(d) }
-                        )
-                    ) {
-                        Text(L10n.text("Term")).tag(TerminologyEntryType.term)
-                        Text(L10n.text("Correction")).tag(TerminologyEntryType.correction)
-                    }
-                    .pickerStyle(.segmented)
+                    VStack(alignment: .leading, spacing: 16) {
+                        editorField(title: "Type") {
+                            Picker(
+                                L10n.text("Type"),
+                                selection: Binding(
+                                    get: { draft.type },
+                                    set: { var d = draft; d.type = $0; onDraftChange(d) }
+                                )
+                            ) {
+                                Text(L10n.text("Term")).tag(TerminologyEntryType.term)
+                                Text(L10n.text("Correction")).tag(
+                                    TerminologyEntryType.correction
+                                )
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                        }
 
-                    TextField(
-                        L10n.text(draft.type == .correction ? "Wrong text" : "Term"),
-                        text: Binding(
-                            get: { draft.original },
-                            set: { var d = draft; d.original = $0; onDraftChange(d) }
-                        )
-                    )
-
-                    if draft.type == .correction {
-                        TextField(
-                            L10n.text("Correct text"),
-                            text: Binding(
-                                get: { draft.replacement },
-                                set: { var d = draft; d.replacement = $0; onDraftChange(d) }
+                        editorField(
+                            title: draft.type == .correction ? "Wrong text" : "Term"
+                        ) {
+                            TextField(
+                                L10n.text(
+                                    draft.type == .correction ? "Wrong text" : "Term"
+                                ),
+                                text: Binding(
+                                    get: { draft.original },
+                                    set: { var d = draft; d.original = $0; onDraftChange(d) }
+                                )
                             )
-                        )
-                    }
+                            .textFieldStyle(.roundedBorder)
+                        }
 
-                    TextField(
-                        L10n.text("Aliases separated by commas"),
-                        text: Binding(
-                            get: { draft.aliases },
-                            set: { var d = draft; d.aliases = $0; onDraftChange(d) }
-                        )
-                    )
+                        if draft.type == .correction {
+                            editorField(title: "Correct text") {
+                                TextField(
+                                    L10n.text("Correct text"),
+                                    text: Binding(
+                                        get: { draft.replacement },
+                                        set: {
+                                            var d = draft
+                                            d.replacement = $0
+                                            onDraftChange(d)
+                                        }
+                                    )
+                                )
+                                .textFieldStyle(.roundedBorder)
+                            }
+                        }
 
-                    Toggle(
-                        L10n.text("Enabled"),
-                        isOn: Binding(
-                            get: { draft.isEnabled },
-                            set: { var d = draft; d.isEnabled = $0; onDraftChange(d) }
-                        )
-                    )
-                }
-                .formStyle(.grouped)
+                        editorField(title: "Also match") {
+                            TextField(
+                                L10n.text("Also match"),
+                                text: Binding(
+                                    get: { draft.aliases },
+                                    set: { var d = draft; d.aliases = $0; onDraftChange(d) }
+                                ),
+                                prompt: Text(L10n.text("e.g. vibewhisper, vibe whisper"))
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
 
-                if let message {
-                    Text(message)
-                        .font(.system(size: 11))
-                        .foregroundStyle(messageIsError ? .red : .secondary)
-                }
-
-                HStack {
-                    if draft.id != nil {
-                        Button(L10n.text("Delete"), role: .destructive) {
-                            onRequestDelete(draft.id)
+                        HStack {
+                            Text(L10n.text("Enabled"))
+                                .font(VibeWhisperTypography.body())
+                            Spacer(minLength: 12)
+                            Toggle(
+                                L10n.text("Enabled"),
+                                isOn: Binding(
+                                    get: { draft.isEnabled },
+                                    set: {
+                                        var d = draft
+                                        d.isEnabled = $0
+                                        onDraftChange(d)
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .toggleStyle(.switch)
                         }
                     }
-                    Spacer()
-                    Button(L10n.text("Cancel"), action: onCancel)
-                    Button(L10n.text("Save Entry")) {
-                        onSave(draft)
+                    .openWhisperInset(padding: 16)
+
+                    if let message {
+                        Text(message)
+                            .font(VibeWhisperTypography.caption())
+                            .foregroundStyle(
+                                messageIsError
+                                    ? Color(nsColor: VibeWhisperPalette.error)
+                                    : Color.secondary
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!canSave(draft))
-                    .keyboardShortcut(.defaultAction)
                 }
+                .padding(28)
+                .frame(maxWidth: 620, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
-            .padding(24)
-            .frame(maxWidth: 620, alignment: .topLeading)
-            .frame(maxWidth: .infinity, alignment: .top)
+
+            Divider().opacity(0.45)
+
+            // Match History / Settings footers: destructive left, actions right.
+            HStack(spacing: 10) {
+                if draft.id != nil {
+                    Button(role: .destructive) {
+                        onRequestDelete(draft.id)
+                    } label: {
+                        Label(L10n.text("Delete"), systemImage: "trash")
+                    }
+                    .buttonStyle(VibeWhisperSecondaryButtonStyle())
+                }
+                Spacer(minLength: 12)
+                Button(L10n.text("Cancel"), action: onCancel)
+                    .buttonStyle(VibeWhisperSecondaryButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+                Button(L10n.text("Save")) {
+                    onSave(draft)
+                }
+                .buttonStyle(VibeWhisperPrimaryButtonStyle())
+                .disabled(!canSave(draft))
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(.bar)
+        }
+    }
+
+    private func editorField<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.text(title))
+                .font(VibeWhisperTypography.micro(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.3)
+            content()
         }
     }
 }

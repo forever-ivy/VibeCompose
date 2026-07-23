@@ -36,6 +36,8 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
     let retryAfterSeconds: Int?
     let attempts: Int
     let circuitOpen: Bool
+    /// Short upstream detail (e.g. model-not-found) when available from the response body.
+    let detail: String?
 
     init(
         route: ProviderRoute,
@@ -43,7 +45,8 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
         statusCode: Int? = nil,
         retryAfterSeconds: Int? = nil,
         attempts: Int = 1,
-        circuitOpen: Bool = false
+        circuitOpen: Bool = false,
+        detail: String? = nil
     ) {
         self.route = route
         self.category = category
@@ -53,6 +56,9 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
         }
         self.attempts = max(1, attempts)
         self.circuitOpen = circuitOpen
+        self.detail = detail.map {
+            String($0.prefix(280)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     var shouldRefreshAuthentication: Bool {
@@ -88,7 +94,8 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
             statusCode: statusCode,
             retryAfterSeconds: retryAfterSeconds,
             attempts: attempts,
-            circuitOpen: circuitOpen
+            circuitOpen: circuitOpen,
+            detail: detail
         )
     }
 
@@ -103,7 +110,7 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
         case .challenge:
             if route == .textPolish {
                 return L10n.format(
-                    "%@ hit an upstream challenge. OpenWhisper kept the normalized transcript.",
+                    "%@ hit an upstream challenge. VibeWhisper kept the normalized transcript.",
                     name
                 )
             }
@@ -115,7 +122,7 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
             let seconds = retryAfterSeconds ?? 60
             if route == .textPolish {
                 return L10n.format(
-                    "%@ is rate limited. OpenWhisper kept the normalized transcript; try again in about %ld seconds.",
+                    "%@ is rate limited. VibeWhisper kept the normalized transcript; try again in about %ld seconds.",
                     name,
                     seconds
                 )
@@ -126,19 +133,33 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
                 seconds
             )
         case .requestRejected:
+            if let detail, Self.detailLooksLikeModelIssue(detail) {
+                return L10n.format(
+                    "%@ rejected the selected model. %@",
+                    name,
+                    detail
+                )
+            }
+            if let detail {
+                return L10n.format(
+                    "%@ rejected the request: %@",
+                    name,
+                    detail
+                )
+            }
             return L10n.format(
                 "%@ rejected the request format.",
                 name
             )
         case .contractChanged:
             return L10n.format(
-                "%@ contract changed. Update OpenWhisper before retrying this provider.",
+                "%@ contract changed. Update VibeWhisper before retrying this provider.",
                 name
             )
         case .serviceUnavailable:
             if route == .textPolish {
                 return L10n.format(
-                    "%@ is temporarily unavailable after %ld attempts. OpenWhisper kept the normalized transcript.",
+                    "%@ is temporarily unavailable after %ld attempts. VibeWhisper kept the normalized transcript.",
                     name,
                     attempts
                 )
@@ -151,7 +172,7 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
         case .network:
             if route == .textPolish {
                 return L10n.format(
-                    "%@ could not reach the network after %ld attempts. OpenWhisper kept the normalized transcript.",
+                    "%@ could not reach the network after %ld attempts. VibeWhisper kept the normalized transcript.",
                     name,
                     attempts
                 )
@@ -176,6 +197,21 @@ struct ProviderRequestFailure: Error, LocalizedError, Equatable, Sendable {
             }
             return L10n.format("%@ failed unexpectedly.", name)
         }
+    }
+
+    private static func detailLooksLikeModelIssue(_ detail: String) -> Bool {
+        let lower = detail.lowercased()
+        return lower.contains("model")
+            && (
+                lower.contains("not found")
+                    || lower.contains("does not exist")
+                    || lower.contains("unsupported")
+                    || lower.contains("not available")
+                    || lower.contains("invalid")
+                    || lower.contains("unknown")
+                    || lower.contains("access")
+                    || lower.contains("permission")
+            )
     }
 }
 
@@ -220,14 +256,36 @@ enum ProviderFailureClassifier {
             }
         }
 
+        let detail = sanitizeBodyDetail(bodyPrefix)
         return ProviderRequestFailure(
             route: route,
             category: category,
             statusCode: statusCode,
             retryAfterSeconds: category == .rateLimited
                 ? retryAfterSeconds(response: response, now: now)
-                : nil
+                : nil,
+            detail: detail
         )
+    }
+
+    private static func sanitizeBodyDetail(_ bodyPrefix: String?) -> String? {
+        guard let raw = bodyPrefix?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !raw.isEmpty
+        else {
+            return nil
+        }
+        if let data = raw.data(using: .utf8),
+           let message = ChatGPTAccountModelCatalog.extractErrorMessage(from: data),
+           !message.isEmpty
+        {
+            return message
+        }
+        // Avoid dumping HTML challenge pages into the UI.
+        if raw.lowercased().contains("<html") || raw.lowercased().contains("<!doctype") {
+            return nil
+        }
+        return String(raw.prefix(240))
     }
 
     static func network(

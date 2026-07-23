@@ -265,7 +265,7 @@ struct TranscriptionHistoryRecord: Codable, Sendable, Equatable, Identifiable {
             forKey: .skillRunReceipt
         )
         id = decodedID ?? StableIdentifier.uuid(
-            namespace: "OpenWhisper.TranscriptionHistoryRecord",
+            namespace: "VibeWhisper.TranscriptionHistoryRecord",
             components: [
                 String(timestamp.timeIntervalSince1970.bitPattern, radix: 16),
                 rawText,

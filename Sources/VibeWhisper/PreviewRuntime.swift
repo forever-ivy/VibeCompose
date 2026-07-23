@@ -20,25 +20,29 @@ struct OutputRouter:
         automaticPasteAllowed: Bool,
         hasSelectionContext: Bool,
         additionalRisk:
-            SkillRiskLevel = .low
+            SkillRiskLevel = .low,
+        skipPreviewWhenSafe: Bool = false
     ) -> OutputRoute {
         guard automaticPasteAllowed else {
             return .copyOnly
         }
-        if
-            plan.skill.output.risk
-                == .high
+        let isHighRisk =
+            plan.skill.output.risk == .high
                 || additionalRisk == .high
-        {
+        // High-risk and selection replacement always stay in Preview —
+        // they rewrite existing text and need an explicit human gate.
+        if isHighRisk || hasSelectionContext {
             return .preview
         }
         switch plan.skill.output.delivery {
         case .automaticPasteWhenVerified:
-            return hasSelectionContext
-                ? .preview
-                : .automatic
+            return .automatic
         case .previewThenPaste:
-            return .preview
+            // User preference: skip the review panel for ordinary insert-only
+            // dictation. Validation fallbacks still force Preview upstream.
+            return skipPreviewWhenSafe
+                ? .automatic
+                : .preview
         case .copyOnly:
             return .copyOnly
         }
@@ -63,6 +67,12 @@ enum PreviewDecision:
     case pasteToTarget(text: String)
     case copy(text: String)
     case cancel
+    /// User wants a different Skill applied to the same source transcript.
+    /// `editedSource` is the current editable field (may equal the original).
+    case reprocess(skillInstallationID: UUID, editedSource: String)
+    /// User opened Skill Switcher from Preview. Host should open the switcher
+    /// without treating the session as cancelled.
+    case changeSkill(editedSource: String)
 
     var action: PreviewAction? {
         switch self {
@@ -72,7 +82,7 @@ enum PreviewDecision:
             return .pasteToTarget
         case .copy:
             return .copy
-        case .cancel:
+        case .cancel, .reprocess, .changeSkill:
             return nil
         }
     }
@@ -83,7 +93,7 @@ enum PreviewDecision:
              let .pasteToTarget(text),
              let .copy(text):
             return text
-        case .cancel:
+        case .cancel, .reprocess, .changeSkill:
             return nil
         }
     }
@@ -111,6 +121,10 @@ struct PreviewRequest:
     let allowsPasteToTarget: Bool
     let executionPlan:
         ResolvedSkillExecutionPlan
+    /// Installed skills the panel can switch to without leaving Preview.
+    /// Empty means the Change Skill control is hidden.
+    let skillChoices: [SkillMenuEntry]
+    let currentSkillInstallationID: UUID?
 
     init(
         id: UUID = UUID(),
@@ -129,8 +143,17 @@ struct PreviewRequest:
             Bool,
         allowsPasteToTarget: Bool = true,
         executionPlan:
-            ResolvedSkillExecutionPlan? = nil
+            ResolvedSkillExecutionPlan? = nil,
+        skillChoices: [SkillMenuEntry] = [],
+        currentSkillInstallationID: UUID? = nil
     ) {
+        let resolvedExecutionPlan =
+            executionPlan
+            ?? SkillResolver().resolve(
+                manualSkillID: skillID,
+                config: SkillsConfig(),
+                launchAppContext: nil
+            )
         self.id = id
         self.skillID = skillID
         self.skillVersion = skillVersion
@@ -156,32 +179,36 @@ struct PreviewRequest:
         self.allowsSelectionReplacement =
             allowsSelectionReplacement
                 && allowsPasteToTarget
+                && resolvedExecutionPlan
+                    .skill
+                    .usesSelectionAsPrimaryInput
         self.allowsPasteToTarget =
             allowsPasteToTarget
         self.executionPlan =
-            executionPlan
-            ?? SkillResolver().resolve(
-                manualSkillID: skillID,
-                config: SkillsConfig(),
-                launchAppContext: nil
-            )
+            resolvedExecutionPlan
+        self.skillChoices = skillChoices
+        self.currentSkillInstallationID =
+            currentSkillInstallationID
+            ?? resolvedExecutionPlan.installation.id
     }
 
     var comparisonSource: String {
-        selectedText
-            ?? originalTranscript
-    }
-
-    var validationSourceText: String {
         guard
-            let selectedText,
-            !selectedText.isEmpty
+            executionPlan.skill
+                .usesSelectionAsPrimaryInput
         else {
             return originalTranscript
         }
-        return originalTranscript
-            + "\n"
-            + selectedText
+        return selectedText ?? originalTranscript
+    }
+
+    var validationSourceText: String {
+        executionPlan.skill
+            .validationSourceText(
+                transcript:
+                    originalTranscript,
+                selection: selectedText
+            )
     }
 
     var sourceLabel: String {
@@ -225,11 +252,41 @@ struct PreviewRequest:
 protocol PreviewPresenting:
     AnyObject
 {
+    /// Present Result Preview and wait for a terminal decision (apply / copy /
+    /// cancel). Skill re-runs stay on this panel via `regenerate` — they must
+    /// not dismiss the surface or open another window.
     func present(
-        _ request: PreviewRequest
+        _ request: PreviewRequest,
+        regenerate: @escaping @MainActor (
+            _ skillInstallationID: UUID,
+            _ editedSource: String
+        ) async -> Result<PreviewRequest, any Error>
     ) async -> PreviewDecision
 
     func dismiss()
+}
+
+extension PreviewPresenting {
+    /// Convenience for call sites that never offer in-panel skill switch
+    /// (tests, skill-test preview without a session cache).
+    func present(
+        _ request: PreviewRequest
+    ) async -> PreviewDecision {
+        await present(request) { _, _ in
+            .failure(PreviewRegenerateError.unavailable)
+        }
+    }
+}
+
+enum PreviewRegenerateError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable:
+            return L10n.text("Skill regeneration is unavailable.")
+        }
+    }
 }
 
 @MainActor
@@ -501,86 +558,177 @@ final class PreviewWindowController:
     PreviewAccessibilityAuditing,
     NSWindowDelegate
 {
-    private var window: NSWindow?
+    private var window: NSPanel?
+    private var hostingController:
+        NSHostingController<AnyView>?
     private var continuation:
         CheckedContinuation<
             PreviewDecision,
             Never
         >?
     private var isFinishing = false
+    /// Host app frontmost before Preview activated VibeWhisper. Restored on
+    /// dismiss so AppKit does not promote a still-open Settings window.
+    private var priorExternalFrontmost: LaunchAppContext?
+    private var regenerate:
+        (
+            @MainActor (
+                _ skillInstallationID: UUID,
+                _ editedSource: String
+            ) async -> Result<PreviewRequest, any Error>
+        )?
 
     func present(
-        _ request: PreviewRequest
+        _ request: PreviewRequest,
+        regenerate: @escaping @MainActor (
+            _ skillInstallationID: UUID,
+            _ editedSource: String
+        ) async -> Result<PreviewRequest, any Error>
     ) async -> PreviewDecision {
         finish(.cancel)
+        self.regenerate = regenerate
         return await withCheckedContinuation {
             continuation in
             self.continuation =
                 continuation
-            let view = PreviewView(
-                request: request
-            ) { [weak self] decision in
-                self?.finish(decision)
-            }
-            .applyingOpenWhisperBrandTint()
-            .applyingAccessibilityDisplayOptionsOverride(
-                .currentVisualAcceptance
+            install(
+                request: request,
+                createWindow: true
             )
-            let controller =
-                NSHostingController(
-                    rootView: view
-                )
-            let window = NSWindow(
-                contentRect: NSRect(
-                    x: 0,
-                    y: 0,
-                    width: 760,
-                    height: 560
-                ),
-                styleMask: [
-                    .titled,
-                    .closable,
-                    .resizable,
-                    .miniaturizable,
-                ],
-                backing: .buffered,
-                defer: false
-            )
-            window.title =
-                L10n.text(
-                    "OpenWhisper Preview"
-                )
-            window.isReleasedWhenClosed = false
-            window.isRestorable = false
-            window.identifier = NSUserInterfaceItemIdentifier(
-                "OpenWhisper.PreviewWindow"
-            )
-            window.collectionBehavior.remove(.fullScreenPrimary)
-            window.standardWindowButton(.zoomButton)?.isEnabled = false
-            window.contentViewController =
-                controller
-            window.delegate = self
-            window.setFrameAutosaveName(
-                "OpenWhisper.PreviewWindow"
-            )
-            window.minSize = NSSize(
-                width: 640,
-                height: 440
-            )
-            window.center()
-            AccessibilityDisplayOptionsOverride
-                .currentVisualAcceptance
-                .applyAppearance(to: window)
-            self.window = window
-            NSApplication.shared.activate(
-                ignoringOtherApps: true
-            )
-            window.makeKeyAndOrderFront(nil)
         }
     }
 
     func dismiss() {
         finish(.cancel)
+    }
+
+    private func install(
+        request: PreviewRequest,
+        createWindow: Bool
+    ) {
+        let view = PreviewView(
+            request: request,
+            onDecision: { [weak self] decision in
+                self?.finish(decision)
+            },
+            onRegenerate: { [weak self] installationID, edited in
+                await self?.runRegenerate(
+                    skillInstallationID: installationID,
+                    editedSource: edited
+                ) ?? .failure(PreviewRegenerateError.unavailable)
+            }
+        )
+        .applyingVibeWhisperBrandTint()
+        .applyingAccessibilityDisplayOptionsOverride(
+            .currentVisualAcceptance
+        )
+        let anyView = AnyView(view)
+
+        if let hostingController {
+            hostingController.rootView = anyView
+            return
+        }
+
+        guard createWindow else { return }
+
+        let controller = NSHostingController(rootView: anyView)
+        // Movable floating glass panel built with the macOS 26 AppKit
+        // NSGlassEffectView surface (same native glass the HUD uses).
+        // Wider + taller so Result stays primary and Comparison can expand.
+        let panel = PreviewPanel(
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: PreviewLayout.width,
+                height: PreviewLayout.height
+            ),
+            styleMask: [
+                .borderless,
+                .nonactivatingPanel,
+                .fullSizeContentView,
+            ],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.level = .floating
+        panel.backgroundColor = .clear
+        // Glass draws its own soft elevation; avoid a second window shadow.
+        panel.hasShadow = false
+        panel.isOpaque = false
+        panel.hidesOnDeactivate = false
+        panel.isMovable = true
+        panel.isMovableByWindowBackground = true
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+        ]
+        panel.isReleasedWhenClosed = false
+        panel.isRestorable = false
+        panel.identifier = NSUserInterfaceItemIdentifier(
+            "VibeWhisper.PreviewPanel"
+        )
+        panel.tabbingMode = .disallowed
+
+        let surface = makePreviewSurface(
+            cornerRadius: VibeWhisperFloatingChrome.panelCornerRadius
+        )
+        controller.view.translatesAutoresizingMaskIntoConstraints = false
+        surface.contentView.addSubview(controller.view)
+        NSLayoutConstraint.activate([
+            controller.view.leadingAnchor.constraint(
+                equalTo: surface.contentView.leadingAnchor
+            ),
+            controller.view.trailingAnchor.constraint(
+                equalTo: surface.contentView.trailingAnchor
+            ),
+            controller.view.topAnchor.constraint(
+                equalTo: surface.contentView.topAnchor
+            ),
+            controller.view.bottomAnchor.constraint(
+                equalTo: surface.contentView.bottomAnchor
+            ),
+            surface.rootView.widthAnchor.constraint(
+                equalToConstant: PreviewLayout.width
+            ),
+            surface.rootView.heightAnchor.constraint(
+                equalToConstant: PreviewLayout.height
+            ),
+        ])
+        panel.contentView = surface.rootView
+        panel.delegate = self
+        AccessibilityDisplayOptionsOverride
+            .currentVisualAcceptance
+            .applyAppearance(to: panel)
+        self.window = panel
+        self.hostingController = controller
+        Self.centerOnActiveScreen(panel)
+        panel.alphaValue = 0
+        // Capture host before we steal activation so dismiss can return focus
+        // instead of falling through to a still-open Settings window.
+        if priorExternalFrontmost == nil {
+            priorExternalFrontmost =
+                LaunchAppContext.externalFrontmostForTransientRestore()
+        }
+        NSApplication.shared.activate(
+            ignoringOtherApps: true
+        )
+        panel.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = VibeWhisperMotion.panelAppear
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
+    }
+
+    private func runRegenerate(
+        skillInstallationID: UUID,
+        editedSource: String
+    ) async -> Result<PreviewRequest, any Error> {
+        guard let regenerate else {
+            return .failure(PreviewRegenerateError.unavailable)
+        }
+        return await regenerate(skillInstallationID, editedSource)
     }
 
     func writePreviewSnapshot(
@@ -631,16 +779,193 @@ final class PreviewWindowController:
         self.continuation = nil
         let window = self.window
         self.window = nil
+        self.hostingController = nil
+        self.regenerate = nil
+        let restoreTarget = priorExternalFrontmost
+        priorExternalFrontmost = nil
         if closeWindow {
             window?.orderOut(nil)
             window?.close()
         }
+        // After the panel leaves key status, hand focus back to the host app
+        // that was frontmost before Preview. Without this, AppKit often keys a
+        // still-open Settings window — which feels like a forced jump.
+        LaunchAppContext.restoreFrontmostIfNeeded(restoreTarget)
         isFinishing = false
         continuation?.resume(
             returning: decision
         )
     }
+
+    private static func centerOnActiveScreen(_ panel: NSPanel) {
+        let screen = NSScreen.screens.first(where: {
+            $0.frame.contains(NSEvent.mouseLocation)
+        }) ?? NSScreen.main ?? NSScreen.screens[0]
+        let visibleFrame = screen.visibleFrame
+        let size = panel.frame.size
+        let origin = NSPoint(
+            x: visibleFrame.midX - size.width / 2,
+            y: visibleFrame.midY - size.height / 2 + visibleFrame.height * 0.06
+        )
+        panel.setFrameOrigin(origin)
+    }
 }
+
+/// Borderless floating panel that can become key (for TextEditor focus),
+/// is draggable by its glass background, and dismisses on Esc.
+private final class PreviewPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if event.type == .keyDown,
+           modifiers.isEmpty,
+           event.keyCode == 53
+        {
+            // Esc → cancel via window close so the controller finishes cleanly.
+            close()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
+// MARK: - Native macOS 26 glass surface for Preview
+
+private struct PreviewSurfaceComponents {
+    let rootView: NSView
+    let contentView: NSView
+}
+
+/// Builds a panel shell with NSGlassEffectView on macOS 26 (same API as the
+/// Compact HUD) and a hudWindow material fallback earlier.
+@MainActor
+private func makePreviewSurface(
+    cornerRadius: CGFloat
+) -> PreviewSurfaceComponents {
+    let contentView = NSView()
+    contentView.wantsLayer = false
+    contentView.translatesAutoresizingMaskIntoConstraints = false
+
+    let root = NSView(frame: .zero)
+    root.wantsLayer = true
+    root.layer?.backgroundColor = NSColor.clear.cgColor
+    root.translatesAutoresizingMaskIntoConstraints = false
+
+    let shell: NSView
+    if #available(macOS 26, *) {
+        // Near-opaque plate first so wallpaper cannot punch through; glass is
+        // layered for the optical edge only (Spotlight / Applications pattern).
+        let plate = NSView()
+        plate.translatesAutoresizingMaskIntoConstraints = false
+        plate.wantsLayer = true
+        plate.layer?.backgroundColor =
+            VibeWhisperFloatingChrome.panelPlateNSColor.cgColor
+        plate.layer?.cornerRadius = cornerRadius
+        plate.layer?.cornerCurve = .continuous
+        plate.layer?.masksToBounds = true
+
+        let glass = NSGlassEffectView()
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        glass.style = .regular
+        glass.cornerRadius = cornerRadius
+        glass.tintColor = VibeWhisperFloatingChrome.panelGlassTintNSColor
+        glass.contentView = contentView
+
+        let stack = NSView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.wantsLayer = true
+        stack.layer?.backgroundColor = NSColor.clear.cgColor
+        stack.addSubview(plate)
+        stack.addSubview(glass)
+        NSLayoutConstraint.activate([
+            plate.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+            plate.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            plate.topAnchor.constraint(equalTo: stack.topAnchor),
+            plate.bottomAnchor.constraint(equalTo: stack.bottomAnchor),
+            glass.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            glass.topAnchor.constraint(equalTo: stack.topAnchor),
+            glass.bottomAnchor.constraint(equalTo: stack.bottomAnchor),
+        ])
+        shell = stack
+    } else {
+        let material = NSVisualEffectView()
+        material.translatesAutoresizingMaskIntoConstraints = false
+        material.material = .hudWindow
+        material.blendingMode = .behindWindow
+        material.state = .active
+        material.wantsLayer = true
+        material.layer?.cornerRadius = cornerRadius
+        material.layer?.cornerCurve = .continuous
+        material.layer?.masksToBounds = true
+        // Near-opaque plate under the classic material.
+        let density = NSView()
+        density.translatesAutoresizingMaskIntoConstraints = false
+        density.wantsLayer = true
+        density.layer?.backgroundColor =
+            VibeWhisperFloatingChrome.panelPlateNSColor.cgColor
+        density.layer?.cornerRadius = cornerRadius
+        density.layer?.cornerCurve = .continuous
+        material.addSubview(density)
+        material.addSubview(contentView)
+        NSLayoutConstraint.activate([
+            density.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            density.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            density.topAnchor.constraint(equalTo: material.topAnchor),
+            density.bottomAnchor.constraint(equalTo: material.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            contentView.topAnchor.constraint(equalTo: material.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: material.bottomAnchor),
+        ])
+        // Soft elevation under the classic material shell.
+        material.layer?.shadowColor = NSColor.black.cgColor
+        material.layer?.shadowOpacity = Float(
+            VibeWhisperFloatingChrome.panelShadowOpacity
+        )
+        material.layer?.shadowRadius =
+            VibeWhisperFloatingChrome.panelShadowRadius
+        material.layer?.shadowOffset = CGSize(
+            width: 0,
+            height: -VibeWhisperFloatingChrome.panelShadowY / 2
+        )
+        shell = material
+    }
+
+    root.addSubview(shell)
+    NSLayoutConstraint.activate([
+        shell.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+        shell.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+        shell.topAnchor.constraint(equalTo: root.topAnchor),
+        shell.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+    ])
+
+    return PreviewSurfaceComponents(
+        rootView: root,
+        contentView: contentView
+    )
+}
+
+// MARK: - Layout
+
+/// Floating Result Preview size — compact Spotlight-scale shell.
+/// Skill-switch mode reuses the same frame so the panel never jumps.
+private enum PreviewLayout {
+    static let width: CGFloat = 560
+    static let height: CGFloat = 480
+    static let resultMinHeight: CGFloat = 148
+    static let comparisonMinHeight: CGFloat = 72
+    static let comparisonMaxHeight: CGFloat = 140
+    static let modePickerWidth: CGFloat = 148
+    /// Skill-switch grid: large square tiles, 3-across so most catalogs fit
+    /// without vertical scrolling inside the fixed panel.
+    static let skillGridColumns = 3
+    static let skillCardSpacing: CGFloat = 10
+}
+
+// MARK: - Preview content
 
 private struct PreviewView: View {
     enum ComparisonMode:
@@ -655,485 +980,1071 @@ private struct PreviewView: View {
     }
 
     let request: PreviewRequest
-    let onDecision:
-        (PreviewDecision) -> Void
+    let onDecision: (PreviewDecision) -> Void
+    let onRegenerate: @MainActor (UUID, String) async -> Result<
+        PreviewRequest,
+        any Error
+    >
 
-    @State private var mode:
-        ComparisonMode = .diff
+    @State private var mode: ComparisonMode = .diff
     @State private var editedText: String
+    @State private var activeRequest: PreviewRequest
+    /// Comparison starts collapsed to keep Result primary; expand for Diff.
+    @State private var comparisonExpanded = false
+    /// Full-panel skill replacement mode (same frame / position as result).
+    @State private var isChoosingSkill = false
+    @State private var skillQuery = ""
+    @State private var isRegenerating = false
+    @State private var regeneratingSkillName: String?
+    @State private var regenerateError: String?
+    @State private var appeared = false
+    @FocusState private var isResultFocused: Bool
+    @FocusState private var isSkillSearchFocused: Bool
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
 
     init(
         request: PreviewRequest,
-        onDecision:
-            @escaping (PreviewDecision) -> Void
+        onDecision: @escaping (PreviewDecision) -> Void,
+        onRegenerate: @escaping @MainActor (UUID, String) async -> Result<
+            PreviewRequest,
+            any Error
+        >
     ) {
         self.request = request
         self.onDecision = onDecision
-        _editedText = State(
-            initialValue: request.resultText
-        )
+        self.onRegenerate = onRegenerate
+        _activeRequest = State(initialValue: request)
+        _editedText = State(initialValue: request.resultText)
     }
 
     private var diff: TextDiff {
         TextDiffEngine.diff(
-            original: request.comparisonSource,
+            original: activeRequest.comparisonSource,
             revised: editedText
         )
     }
 
-    private var validation:
-        SkillValidationReport
-    {
+    private var validation: SkillValidationReport {
         SkillValidatorEngine().validate(
             output: editedText,
-            originalText:
-                request.validationSourceText,
-            plan: request.executionPlan
+            originalText: activeRequest.validationSourceText,
+            plan: activeRequest.executionPlan
         )
     }
 
     private var isEdited: Bool {
-        editedText != request.resultText
+        editedText != activeRequest.resultText
     }
 
     private var isUnreviewedFallback: Bool {
-        request.hasValidatorFallback
-            && !isEdited
+        activeRequest.hasValidatorFallback && !isEdited
     }
 
     private var hasText: Bool {
-        !editedText.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ).isEmpty
+        !editedText
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
     }
 
     private var canApply: Bool {
         hasText
             && validation.isValid
             && !isUnreviewedFallback
+            && !isRegenerating
+    }
+
+    private var changeSummary: String {
+        L10n.format(
+            "%ld additions · %ld removals",
+            diff.addedCount,
+            diff.removedCount
+        )
+    }
+
+    private var filteredSkills: [SkillMenuEntry] {
+        let choices = activeRequest.skillChoices
+        let query = skillQuery.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        if query.isEmpty {
+            return choices
+        }
+        return SkillMenuSearch.results(in: choices, matching: query)
     }
 
     var body: some View {
+        Group {
+            if isChoosingSkill {
+                skillReplacementPanel
+                    .transition(.opacity)
+            } else {
+                resultPanel
+                    .transition(.opacity)
+            }
+        }
+        .animation(VibeWhisperMotion.panelContent, value: isChoosingSkill)
+        .frame(
+            width: PreviewLayout.width,
+            height: PreviewLayout.height
+        )
+        // Glass is applied by the AppKit NSGlassEffectView shell so the panel
+        // is natively movable by its background. Content stays un-glassed.
+        .background(Color.clear)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: VibeWhisperFloatingChrome.panelCornerRadius,
+                style: .continuous
+            )
+        )
+        // Spotlight materialize: tiny scale + fade, not a bouncy card.
+        .scaleEffect(
+            appeared
+                ? 1.0
+                : (reduceMotion ? 1.0 : VibeWhisperMotion.panelEntranceScale),
+            anchor: .center
+        )
+        .opacity(appeared ? 1.0 : (reduceMotion ? 1.0 : 0.0))
+        .animation(VibeWhisperMotion.panelSpring, value: appeared)
+        .onAppear {
+            appeared = true
+            // Prefer focus on the editable result so the user can refine immediately.
+            isResultFocused = true
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            isChoosingSkill
+                ? L10n.text("Change Skill")
+                : L10n.text("VibeWhisper Preview")
+        )
+    }
+
+    // MARK: - Result surface
+
+    private var resultPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
+            resultHeader
+            softDivider
             ScrollView {
                 VStack(
                     alignment: .leading,
-                    spacing: 16
+                    spacing: VibeWhisperMetrics.space14
                 ) {
-                    if request.hasValidatorFallback {
+                    if let regenerateError {
+                        regenerateErrorBanner(regenerateError)
+                    } else if activeRequest.hasValidatorFallback, !isRegenerating {
                         fallbackNotice
                     }
-                    runSummary
-                    comparison
-                    editableResult
-                    validationStatus
+                    if isRegenerating {
+                        regeneratingResultBody
+                    } else {
+                        resultSection
+                        comparisonSection
+                    }
                 }
-                .padding(20)
+                .padding(.horizontal, VibeWhisperMetrics.space20)
+                .padding(.vertical, VibeWhisperMetrics.space14)
             }
-            Divider()
+            softDivider
             actions
         }
-        .frame(
-            minWidth: 680,
-            minHeight: 560
-        )
-        .background(
-            Color(nsColor: .windowBackgroundColor)
-        )
     }
 
-    private var header: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "text.badge.checkmark")
-                .font(.system(size: 26))
-                .foregroundStyle(.blue)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(request.skillName)
-                    .font(.system(size: 20, weight: .semibold))
+    // MARK: - Full-panel skill replacement (same frame)
+
+    private var skillReplacementPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            skillReplacementHeader
+            softDivider
+            skillSearchField
+                .padding(.horizontal, VibeWhisperMetrics.space20)
+                .padding(.top, VibeWhisperMetrics.space14)
+                .padding(.bottom, VibeWhisperMetrics.space10)
+
+            if filteredSkills.isEmpty {
+                VStack(spacing: VibeWhisperMetrics.space8) {
+                    Spacer(minLength: 0)
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                    Text(L10n.text("No matching skills"))
+                        .font(VibeWhisperTypography.callout(.medium))
+                        .foregroundStyle(
+                            Color(nsColor: VibeWhisperPalette.floatingSecondaryText)
+                        )
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, VibeWhisperMetrics.space20)
+            } else {
+                skillCardGrid
+                    .padding(.horizontal, VibeWhisperMetrics.space20)
+                    .padding(.bottom, VibeWhisperMetrics.space16)
+            }
+        }
+        .onAppear {
+            isSkillSearchFocused = true
+        }
+    }
+
+    private var skillReplacementHeader: some View {
+        HStack(alignment: .center, spacing: VibeWhisperMetrics.space12) {
+            headerIconButton(
+                systemName: "chevron.left",
+                tint: .secondary,
+                help: L10n.text("Back")
+            ) {
+                exitSkillChooser()
+            }
+            .disabled(isRegenerating)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.text("Change Skill"))
+                    .font(VibeWhisperTypography.title2())
+                    .foregroundStyle(
+                        Color(nsColor: VibeWhisperPalette.floatingPrimaryText)
+                    )
                 Text(
                     L10n.format(
-                        "%@ · %@ · %@",
-                        request.sourceLabel,
-                        request.resolutionLabel,
-                        request.skillVersion
+                        "Current: %@",
+                        activeRequest.skillName
                     )
                 )
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .font(VibeWhisperTypography.caption())
+                .foregroundStyle(
+                    Color(nsColor: VibeWhisperPalette.floatingSecondaryText)
+                )
+                .lineLimit(1)
             }
-            Spacer()
-            Label(
-                editStateLabel,
-                systemImage: isEdited
-                    ? "pencil.line"
-                    : (request.hasValidatorFallback
-                        ? "arrow.uturn.backward.circle"
-                        : "sparkles")
-            )
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(
-                request.hasValidatorFallback && !isEdited
-                    ? .orange
-                    : .secondary
-            )
+
+            Spacer(minLength: VibeWhisperMetrics.space8)
+
+            headerIconButton(
+                systemName: "xmark",
+                tint: .secondary,
+                help: L10n.text("Cancel")
+            ) {
+                if isRegenerating { return }
+                onDecision(.cancel)
+            }
+            .disabled(isRegenerating)
         }
-        .padding(20)
+        .padding(.horizontal, VibeWhisperMetrics.space20)
+        .padding(.vertical, VibeWhisperMetrics.space14)
+    }
+
+    private var skillSearchField: some View {
+        HStack(spacing: VibeWhisperMetrics.space8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+            TextField(
+                L10n.text("Search Skills…"),
+                text: $skillQuery
+            )
+            .textFieldStyle(.plain)
+            .font(VibeWhisperTypography.callout())
+            .focused($isSkillSearchFocused)
+            .disabled(isRegenerating)
+            if !skillQuery.isEmpty {
+                Button {
+                    skillQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("Clear search"))
+            }
+        }
+        .padding(.horizontal, VibeWhisperMetrics.space12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusL,
+                style: .continuous
+            )
+            .fill(
+                Color(nsColor: VibeWhisperPalette.floatingContentSurface)
+            )
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusL,
+                style: .continuous
+            )
+            .stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
+        }
+    }
+
+    private var skillCardGrid: some View {
+        let columns = Array(
+            repeating: GridItem(
+                .flexible(),
+                spacing: PreviewLayout.skillCardSpacing
+            ),
+            count: PreviewLayout.skillGridColumns
+        )
+        // Prefer fitting the catalog in the fixed panel: measure remaining
+        // height loosely and let each tile become a square box. Scroll only
+        // when there are more skills than one screen of large cards.
+        return GeometryReader { geo in
+            let spacing = PreviewLayout.skillCardSpacing
+            let columnsCount = CGFloat(PreviewLayout.skillGridColumns)
+            let cardSide = max(
+                96,
+                floor(
+                    (geo.size.width - spacing * (columnsCount - 1))
+                        / columnsCount
+                )
+            )
+            let rows = ceil(
+                Double(filteredSkills.count) / Double(PreviewLayout.skillGridColumns)
+            )
+            let contentHeight =
+                CGFloat(rows) * cardSide
+                + CGFloat(max(rows - 1, 0)) * spacing
+            let needsScroll = contentHeight > geo.size.height + 1
+
+            Group {
+                if needsScroll {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: spacing) {
+                            ForEach(filteredSkills) { entry in
+                                skillCard(entry, side: cardSide)
+                            }
+                        }
+                    }
+                } else {
+                    LazyVGrid(columns: columns, spacing: spacing) {
+                        ForEach(filteredSkills) { entry in
+                            skillCard(entry, side: cardSide)
+                        }
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func skillCard(
+        _ entry: SkillMenuEntry,
+        side: CGFloat
+    ) -> some View {
+        let isCurrent =
+            entry.installationID == activeRequest.currentSkillInstallationID
+        let accent = Color(
+            nsColor: entry.requiresSelection
+                ? VibeWhisperPalette.amber
+                : VibeWhisperPalette.brandBlue
+        )
+        return Button {
+            Task { @MainActor in
+                await pickSkill(entry)
+            }
+        } label: {
+            VStack(spacing: VibeWhisperMetrics.space10) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: VibeWhisperMetrics.radiusM,
+                        style: .continuous
+                    )
+                    .fill(accent.opacity(isCurrent ? 0.20 : 0.12))
+                    .frame(width: 44, height: 44)
+                    Image(
+                        systemName: entry.requiresSelection
+                            ? "text.cursor"
+                            : "wand.and.stars"
+                    )
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(accent)
+                }
+
+                VStack(spacing: 3) {
+                    Text(entry.displayName)
+                        .font(
+                            VibeWhisperTypography.callout(
+                                isCurrent ? .semibold : .medium
+                            )
+                        )
+                        .foregroundStyle(
+                            Color(nsColor: VibeWhisperPalette.floatingPrimaryText)
+                        )
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+
+                    if isCurrent {
+                        Text(L10n.text("Current"))
+                            .font(VibeWhisperTypography.micro(.semibold))
+                            .foregroundStyle(accent)
+                    } else if !entry.summary.isEmpty {
+                        Text(entry.summary)
+                            .font(VibeWhisperTypography.micro())
+                            .foregroundStyle(
+                                Color(
+                                    nsColor: VibeWhisperPalette
+                                        .floatingSecondaryText
+                                )
+                            )
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(VibeWhisperMetrics.space12)
+            .frame(width: side, height: side, alignment: .top)
+            .contentShape(
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusL,
+                    style: .continuous
+                )
+            )
+            .background {
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusL,
+                    style: .continuous
+                )
+                .fill(
+                    Color(nsColor: VibeWhisperPalette.floatingContentSurface)
+                )
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusL,
+                    style: .continuous
+                )
+                .stroke(
+                    isCurrent
+                        ? accent.opacity(0.55)
+                        : Color.primary.opacity(0.10),
+                    lineWidth: isCurrent ? 1.5 : 0.5
+                )
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isCurrent || isRegenerating)
+        .accessibilityLabel(entry.displayName)
+        .accessibilityHint(
+            isCurrent
+                ? L10n.text("Current skill")
+                : L10n.text("Regenerate with this skill")
+        )
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    private func enterSkillChooser() {
+        skillQuery = ""
+        isResultFocused = false
+        withAnimation(VibeWhisperMotion.panelContent) {
+            isChoosingSkill = true
+        }
+    }
+
+    private func exitSkillChooser() {
+        skillQuery = ""
+        isSkillSearchFocused = false
+        withAnimation(VibeWhisperMotion.panelContent) {
+            isChoosingSkill = false
+        }
+        isResultFocused = true
+    }
+
+    private var softDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.10))
+            .frame(height: 0.5)
+    }
+
+    // MARK: - Result header
+
+    private var resultHeader: some View {
+        HStack(alignment: .center, spacing: VibeWhisperMetrics.space12) {
+            VibeWhisperIconWell(
+                systemName: "wand.and.stars",
+                size: VibeWhisperMetrics.iconWellSize,
+                symbolSize: 14
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(activeRequest.skillName)
+                    .font(VibeWhisperTypography.title2())
+                    .foregroundStyle(
+                        Color(nsColor: VibeWhisperPalette.floatingPrimaryText)
+                    )
+                    .lineLimit(1)
+                Text(
+                    L10n.format(
+                        "%@ · %@",
+                        activeRequest.sourceLabel,
+                        activeRequest.resolutionLabel
+                    )
+                )
+                .font(VibeWhisperTypography.caption())
+                .foregroundStyle(
+                    Color(nsColor: VibeWhisperPalette.floatingSecondaryText)
+                )
+                .lineLimit(1)
+            }
+
+            Spacer(minLength: VibeWhisperMetrics.space8)
+
+            generationBadge
+
+            if !activeRequest.skillChoices.isEmpty {
+                headerIconButton(
+                    systemName: "arrow.triangle.2.circlepath",
+                    tint: Color(nsColor: VibeWhisperPalette.brandBlue),
+                    help: L10n.text("Change Skill")
+                ) {
+                    enterSkillChooser()
+                }
+                .disabled(isRegenerating)
+            }
+
+            headerIconButton(
+                systemName: "xmark",
+                tint: .secondary,
+                help: L10n.text("Cancel")
+            ) {
+                onDecision(.cancel)
+            }
+        }
+        .padding(.horizontal, VibeWhisperMetrics.space20)
+        .padding(.vertical, VibeWhisperMetrics.space14)
+    }
+
+    @MainActor
+    private func pickSkill(_ entry: SkillMenuEntry) async {
+        guard !isRegenerating else { return }
+        if entry.installationID == activeRequest.currentSkillInstallationID {
+            exitSkillChooser()
+            return
+        }
+        isResultFocused = false
+        isSkillSearchFocused = false
+        regenerateError = nil
+        regeneratingSkillName = entry.displayName
+        // Apple-style: leave the chooser and show a quiet loading state on
+        // the result panel (the parent surface), not a modal overlay.
+        withAnimation(VibeWhisperMotion.panelContent) {
+            isChoosingSkill = false
+            isRegenerating = true
+        }
+        let result = await onRegenerate(
+            entry.installationID,
+            editedText
+        )
+        isRegenerating = false
+        regeneratingSkillName = nil
+        switch result {
+        case .success(let next):
+            applyRegenerated(next)
+        case .failure(let error):
+            regenerateError = error.localizedDescription
+            // Stay on the result panel with the error banner; user can
+            // reopen Change Skill to try again.
+            NSSound.beep()
+            isResultFocused = true
+        }
+    }
+
+    private func applyRegenerated(_ next: PreviewRequest) {
+        activeRequest = next
+        editedText = next.resultText
+        comparisonExpanded = false
+        mode = .diff
+        skillQuery = ""
+        regenerateError = nil
+        isChoosingSkill = false
+        isResultFocused = true
+    }
+
+    private var generationBadge: some View {
+        Text(editStateLabel)
+            .font(VibeWhisperTypography.micro(.semibold))
+            .foregroundStyle(editStateForeground)
+            .padding(.horizontal, VibeWhisperMetrics.space8)
+            .padding(.vertical, VibeWhisperMetrics.space4)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(editStateForeground.opacity(0.12))
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .stroke(editStateForeground.opacity(0.16), lineWidth: 0.5)
+            }
     }
 
     private var editStateLabel: String {
+        if isRegenerating {
+            return L10n.text("Regenerating…")
+        }
         if isEdited {
             return L10n.text("Edited by you")
         }
-        if request.hasValidatorFallback {
+        if activeRequest.hasValidatorFallback {
             return L10n.text("Fallback transcript")
         }
         return L10n.text("AI generated")
     }
 
-    private var fallbackNotice: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(
-                L10n.text(
-                    "Skill output did not pass its checks."
-                ),
-                systemImage:
-                    "exclamationmark.triangle.fill"
+    private var editStateForeground: Color {
+        if isRegenerating {
+            return Color(nsColor: VibeWhisperPalette.brandBlue)
+        }
+        if activeRequest.hasValidatorFallback && !isEdited {
+            return Color(nsColor: VibeWhisperPalette.amber)
+        }
+        if isEdited {
+            return Color(nsColor: VibeWhisperPalette.brandBlue)
+        }
+        return .secondary
+    }
+
+    private func headerIconButton(
+        systemName: String,
+        tint: Color,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(
+                            Color(
+                                nsColor: VibeWhisperPalette.floatingContentSurfaceQuiet
+                            )
+                        )
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    // MARK: - Regenerating (inline on result panel)
+
+    /// Quiet, Apple-style loading: same Result chrome, content replaced by a
+    /// centered ProgressView + short caption. No modal card, blur, or halo.
+    private var regeneratingResultBody: some View {
+        VStack(spacing: VibeWhisperMetrics.space14) {
+            Spacer(minLength: VibeWhisperMetrics.space28)
+            ProgressView()
+                .controlSize(.small)
+            Text(L10n.text("Regenerating…"))
+                .font(VibeWhisperTypography.callout(.medium))
+                .foregroundStyle(
+                    Color(nsColor: VibeWhisperPalette.floatingPrimaryText)
+                )
+            Text(
+                L10n.format(
+                    "Applying %@",
+                    regeneratingSkillName ?? activeRequest.skillName
+                )
             )
-            .font(.system(size: 12, weight: .semibold))
+            .font(VibeWhisperTypography.caption())
+            .foregroundStyle(
+                Color(nsColor: VibeWhisperPalette.floatingSecondaryText)
+            )
+            .lineLimit(1)
+            Spacer(minLength: VibeWhisperMetrics.space28)
+        }
+        .frame(maxWidth: .infinity, minHeight: PreviewLayout.resultMinHeight + 80)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(L10n.text("Regenerating…"))
+        .accessibilityValue(
+            L10n.format(
+                "Applying %@",
+                regeneratingSkillName ?? activeRequest.skillName
+            )
+        )
+    }
+
+    private func regenerateErrorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: VibeWhisperMetrics.space10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(nsColor: VibeWhisperPalette.amber))
+                .padding(.top, 1)
+            Text(message)
+                .font(VibeWhisperTypography.caption())
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button {
+                regenerateError = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("Dismiss"))
+        }
+        .padding(VibeWhisperMetrics.space12)
+        .background(
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusL,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.amber).opacity(0.10))
+        )
+    }
+
+    // MARK: - Notices
+
+    private var fallbackNotice: some View {
+        HStack(alignment: .top, spacing: VibeWhisperMetrics.space10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(nsColor: VibeWhisperPalette.amber))
+                .padding(.top, 1)
             Text(
                 L10n.text(
-                    "Showing the original normalized transcript instead. Review and edit it, or copy it without changing the target."
+                    "Skill checks failed — review the transcript, then paste or copy."
                 )
             )
-            .font(.system(size: 11))
-            if !request.initialValidationIssueCodes.isEmpty {
-                Text(
-                    L10n.format(
-                        "Reason: %@",
-                        request.initialValidationIssueCodes
-                            .joined(separator: ", ")
-                    )
-                )
-                .font(.system(size: 10, design: .monospaced))
-            }
-            if let fallbackMessage = request.fallbackMessage,
-               !fallbackMessage.isEmpty
-            {
-                Text(fallbackMessage)
-                    .font(.system(size: 10))
-            }
+            .font(VibeWhisperTypography.caption())
+            .foregroundStyle(.primary)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .foregroundStyle(.orange)
-        .padding(.vertical, 4)
+        .padding(VibeWhisperMetrics.space12)
+        .background(
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusL,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.amber).opacity(0.10))
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusL,
+                style: .continuous
+            )
+            .stroke(
+                Color(nsColor: VibeWhisperPalette.amber).opacity(0.18),
+                lineWidth: 0.5
+            )
+        }
         .accessibilityElement(children: .combine)
     }
 
-    private var runSummary: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 18) {
-            Label(
-                contextSummary,
-                systemImage: "checkmark.shield"
-            )
-            Label(
-                validationSummary,
-                systemImage: validation.isValid
-                    && !isUnreviewedFallback
-                    ? "checkmark.circle.fill"
-                    : "exclamationmark.circle.fill"
-            )
-            .foregroundStyle(
-                validation.isValid
-                    && !isUnreviewedFallback
-                    ? .green
-                    : .orange
-            )
-            Spacer()
+    // MARK: - Result (primary)
+
+    private var resultSection: some View {
+        VStack(alignment: .leading, spacing: VibeWhisperMetrics.space8) {
+            HStack(alignment: .center, spacing: VibeWhisperMetrics.space8) {
+                Text(L10n.text("Result"))
+                    .font(VibeWhisperTypography.caption(.semibold))
+                    .foregroundStyle(
+                        Color(nsColor: VibeWhisperPalette.floatingSecondaryText)
+                    )
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+
+                Spacer(minLength: 0)
+
+                if isEdited, !isRegenerating {
+                    Button(L10n.text("Reset")) {
+                        editedText = activeRequest.resultText
+                    }
+                    .buttonStyle(.plain)
+                    .font(VibeWhisperTypography.micro(.semibold))
+                    .foregroundStyle(
+                        Color(nsColor: VibeWhisperPalette.brandBlue)
+                    )
+                }
+
+                Text(
+                    L10n.format("%ld characters", editedText.count)
+                )
+                .font(VibeWhisperTypography.micro())
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+            }
+
+            TextEditor(text: $editedText)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(
+                    Color(nsColor: VibeWhisperPalette.floatingPrimaryText)
+                )
+                .scrollContentBackground(.hidden)
+                .focused($isResultFocused)
+                .frame(
+                    minHeight: PreviewLayout.resultMinHeight,
+                    idealHeight: 188
+                )
+                .padding(VibeWhisperMetrics.space12)
+                .background(
+                    RoundedRectangle(
+                        cornerRadius: VibeWhisperMetrics.radiusL,
+                        style: .continuous
+                    )
+                    .fill(
+                        Color(
+                            nsColor: VibeWhisperPalette.floatingContentSurface
+                        )
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: VibeWhisperMetrics.radiusL,
+                        style: .continuous
+                    )
+                    .stroke(
+                        isResultFocused
+                            ? Color(nsColor: VibeWhisperPalette.brandBlue)
+                                .opacity(0.55)
+                            : Color.primary.opacity(0.12),
+                        lineWidth: isResultFocused ? 1.0 : 0.5
+                    )
+                }
+                .animation(
+                    VibeWhisperMotion.panelContent,
+                    value: isResultFocused
+                )
+                .accessibilityLabel(L10n.text("Result"))
+                .disabled(isRegenerating)
+
+            if !validation.isValid {
+                Text(
+                    L10n.format(
+                        "Fix before paste: %@",
+                        validation.issues
+                            .map(\.code.rawValue)
+                            .joined(separator: ", ")
+                    )
+                )
+                .font(VibeWhisperTypography.micro())
+                .foregroundStyle(Color(nsColor: VibeWhisperPalette.amber))
+            }
         }
-        .font(.system(size: 11, weight: .medium))
     }
 
-    private var contextSummary: String {
-        let labels = request.contextCapabilities
-            .map(capabilityLabel)
-            .joined(separator: " + ")
-        return L10n.format(
-            "Used: %@",
-            labels
-        )
-    }
+    // MARK: - Comparison (secondary, collapsible)
 
-    private var validationSummary: String {
-        if isUnreviewedFallback {
-            return L10n.text(
-                "Validator: fallback needs review"
-            )
-        }
-        if validation.isValid {
-            return L10n.text("Validator: passed")
-        }
-        return L10n.format(
-            "Validator: %@",
-            validation.issues
-                .map { $0.code.rawValue }
-                .joined(separator: ", ")
-        )
-    }
+    private var comparisonSection: some View {
+        VStack(alignment: .leading, spacing: VibeWhisperMetrics.space8) {
+            HStack(spacing: VibeWhisperMetrics.space8) {
+                Button {
+                    withAnimation(VibeWhisperMotion.panelContent) {
+                        comparisonExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(
+                            systemName: comparisonExpanded
+                                ? "chevron.down"
+                                : "chevron.right"
+                        )
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
 
-    private var comparison: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L10n.text("Changes"))
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Picker(
-                    L10n.text("Preview content"),
-                    selection: $mode
-                ) {
-                    ForEach(ComparisonMode.allCases) { mode in
-                        Text(L10n.text(mode.rawValue))
-                            .tag(mode)
+                        Text(L10n.text("Comparison"))
+                            .font(VibeWhisperTypography.caption(.semibold))
+                            .foregroundStyle(
+                                Color(
+                                    nsColor: VibeWhisperPalette
+                                        .floatingSecondaryText
+                                )
+                            )
+                            .textCase(.uppercase)
+                            .tracking(0.4)
+
+                        Text(changeSummary)
+                            .font(VibeWhisperTypography.micro())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    L10n.format(
+                        "%@ — %@",
+                        L10n.text("Comparison"),
+                        changeSummary
+                    )
+                )
+
+                Spacer(minLength: 0)
+
+                if comparisonExpanded {
+                    Picker(
+                        L10n.text("Preview content"),
+                        selection: $mode
+                    ) {
+                        ForEach(ComparisonMode.allCases) { mode in
+                            Text(L10n.text(mode.rawValue)).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(width: PreviewLayout.modePickerWidth)
+                }
+            }
+
+            if comparisonExpanded {
+                Group {
+                    switch mode {
+                    case .diff:
+                        diffView
+                    case .source:
+                        readOnlyText(activeRequest.comparisonSource)
                     }
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 180)
+                .frame(
+                    minHeight: PreviewLayout.comparisonMinHeight,
+                    maxHeight: PreviewLayout.comparisonMaxHeight
+                )
+                .transition(.opacity)
             }
-            Group {
-                switch mode {
-                case .diff:
-                    diffView
-                case .source:
-                    readOnlyText(request.comparisonSource)
-                }
-            }
-            .frame(minHeight: 120, maxHeight: 200)
         }
     }
 
     private var diffView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(
-                    L10n.format(
-                        "%ld additions · %ld removals",
-                        diff.addedCount,
-                        diff.removedCount
-                    )
+            Text(diffAttributed)
+                .font(.system(size: 12.5))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .padding(VibeWhisperMetrics.space12)
+        }
+        .background(surfaceBackground)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(changeSummary)
+    }
+
+    private var diffAttributed: AttributedString {
+        var result = AttributedString()
+        for (index, segment) in diff.segments.enumerated() {
+            var piece = AttributedString(segment.text)
+            switch segment.kind {
+            case .unchanged:
+                piece.foregroundColor = .primary
+            case .added:
+                piece.foregroundColor = Color(
+                    nsColor: VibeWhisperPalette.success
                 )
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                ForEach(diff.segments) { segment in
-                    Text(segment.text)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(foreground(for: segment.kind))
-                        .strikethrough(segment.kind == .removed)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .frame(
-                            maxWidth: .infinity,
-                            alignment: .leading
-                        )
-                        .background(background(for: segment.kind))
-                        .clipShape(
-                            RoundedRectangle(cornerRadius: 6)
-                        )
-                        .accessibilityLabel(
-                            diffAccessibilityLabel(segment)
-                        )
-                }
+                piece.backgroundColor = Color(
+                    nsColor: VibeWhisperPalette.success
+                ).opacity(0.12)
+            case .removed:
+                piece.foregroundColor = Color(
+                    nsColor: VibeWhisperPalette.error
+                )
+                piece.strikethroughStyle = .single
+                piece.backgroundColor = Color(
+                    nsColor: VibeWhisperPalette.error
+                ).opacity(0.10)
             }
-            .padding(10)
-            .textSelection(.enabled)
-        }
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var editableResult: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L10n.text("Editable result"))
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Text(
-                    L10n.format(
-                        "%ld characters",
-                        editedText.count
-                    )
-                )
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+            result.append(piece)
+            if index < diff.segments.count - 1 {
+                result.append(AttributedString(" "))
             }
-            TextEditor(text: $editedText)
-                .font(.system(size: 13, design: .monospaced))
-                .frame(minHeight: 130, idealHeight: 170)
-                .scrollContentBackground(.hidden)
-                .padding(8)
-                .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(
-                            Color(nsColor: .separatorColor)
-                                .opacity(0.6),
-                            lineWidth: 0.5
-                        )
-                }
-                .accessibilityLabel(
-                    L10n.text("Editable result")
-                )
         }
+        return result
     }
 
-    @ViewBuilder
-    private var validationStatus: some View {
-        if !validation.isValid {
-            Label(
-                L10n.format(
-                    "Fix these checks before replacing or pasting: %@",
-                    validation.issues
-                        .map { $0.code.rawValue }
-                        .joined(separator: ", ")
-                ),
-                systemImage: "exclamationmark.shield.fill"
-            )
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.orange)
-        } else if isUnreviewedFallback {
-            Text(
-                L10n.text(
-                    "This is a fallback transcript. Copy it, or edit it into a valid Skill result before applying."
-                )
-            )
-            .font(.system(size: 11))
-            .foregroundStyle(.orange)
-        }
-    }
-
-    private func readOnlyText(
-        _ value: String
-    ) -> some View {
+    private func readOnlyText(_ value: String) -> some View {
         ScrollView {
             Text(value)
-                .font(.system(size: 13, design: .monospaced))
+                .font(.system(size: 12.5))
                 .textSelection(.enabled)
-                .frame(
-                    maxWidth: .infinity,
-                    alignment: .topLeading
-                )
-                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(VibeWhisperMetrics.space12)
         }
-        .background(Color(nsColor: .textBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(surfaceBackground)
     }
 
+    private var surfaceBackground: some View {
+        RoundedRectangle(
+            cornerRadius: VibeWhisperMetrics.radiusL,
+            style: .continuous
+        )
+        .fill(
+            Color(nsColor: VibeWhisperPalette.floatingContentSurface)
+        )
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusL,
+                style: .continuous
+            )
+            .stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
+        }
+    }
+
+    // MARK: - Actions
+
     private var actions: some View {
-        HStack(spacing: 10) {
-            Button(L10n.text("Reset to generated result")) {
-                editedText = request.resultText
-            }
-            .disabled(!isEdited)
-            Spacer()
+        HStack(spacing: VibeWhisperMetrics.space10) {
             Button(L10n.text("Cancel")) {
                 onDecision(.cancel)
             }
+            .buttonStyle(.plain)
+            .font(VibeWhisperTypography.callout(.medium))
+            .foregroundStyle(.secondary)
             .keyboardShortcut(.cancelAction)
+            .padding(.horizontal, VibeWhisperMetrics.space10)
+            .padding(.vertical, VibeWhisperMetrics.space6)
+            .disabled(isRegenerating)
+
             Button(L10n.text("Copy")) {
                 onDecision(.copy(text: editedText))
             }
-            .disabled(!hasText)
-            if request.allowsSelectionReplacement {
-                Button(L10n.text("Replace Selection")) {
-                    onDecision(
-                        .replaceSelection(
-                            text: editedText
+            .buttonStyle(.plain)
+            .font(VibeWhisperTypography.callout(.medium))
+            .foregroundStyle(.primary)
+            .disabled(!hasText || isRegenerating)
+            .padding(.horizontal, VibeWhisperMetrics.space12)
+            .padding(.vertical, VibeWhisperMetrics.space6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(
+                        Color(
+                            nsColor: VibeWhisperPalette.floatingContentSurfaceQuiet
                         )
+                        .opacity(hasText && !isRegenerating ? 1.0 : 0.55)
                     )
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canApply)
-            } else if request.allowsPasteToTarget {
-                Button(L10n.text("Paste to Target")) {
-                    onDecision(
-                        .pasteToTarget(
-                            text: editedText
-                        )
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canApply)
+            )
+
+            Spacer(minLength: 0)
+
+            primaryAction
+        }
+        .padding(.horizontal, VibeWhisperMetrics.space20)
+        .padding(.vertical, VibeWhisperMetrics.space14)
+    }
+
+    @ViewBuilder
+    private var primaryAction: some View {
+        if activeRequest.allowsSelectionReplacement {
+            Button(L10n.text("Replace Selection")) {
+                onDecision(.replaceSelection(text: editedText))
             }
-        }
-        .padding(16)
-    }
-
-    private func capabilityLabel(
-        _ capability: SkillCapability
-    ) -> String {
-        switch capability {
-        case .voice:
-            return L10n.text("Voice")
-        case .selection:
-            return L10n.text("Selected text")
-        case .focusedParagraph:
-            return L10n.text("Focused paragraph")
-        case .conversationWindow:
-            return L10n.text("Conversation window")
-        case .clipboard:
-            return L10n.text("Clipboard")
-        case .styleCapsule:
-            return L10n.text("Style Capsule")
-        case .externalAction:
-            return L10n.text("Unsupported action")
-        }
-    }
-
-    private func diffAccessibilityLabel(
-        _ segment: TextDiffSegment
-    ) -> String {
-        let status: String
-        switch segment.kind {
-        case .unchanged:
-            status = L10n.text("Unchanged")
-        case .added:
-            status = L10n.text("Added")
-        case .removed:
-            status = L10n.text("Removed")
-        }
-        return "\(status): \(segment.text)"
-    }
-
-    private func foreground(
-        for kind: TextDiffKind
-    ) -> Color {
-        switch kind {
-        case .unchanged:
-            return .primary
-        case .added:
-            return .green
-        case .removed:
-            return .red
-        }
-    }
-
-    private func background(
-        for kind: TextDiffKind
-    ) -> Color {
-        switch kind {
-        case .unchanged:
-            return Color.clear
-        case .added:
-            return Color.green.opacity(
-                0.10
-            )
-        case .removed:
-            return Color.red.opacity(
-                0.10
-            )
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+            .disabled(!canApply)
+        } else if activeRequest.allowsPasteToTarget {
+            Button(L10n.text("Paste to Target")) {
+                onDecision(.pasteToTarget(text: editedText))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+            .disabled(!canApply)
         }
     }
 }

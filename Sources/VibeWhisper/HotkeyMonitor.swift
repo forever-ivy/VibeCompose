@@ -1,7 +1,7 @@
 import Carbon
 import Foundation
 
-enum OpenWhisperHotkeys {
+enum VibeWhisperHotkeys {
     static let quickAddKeyCode = UInt32(kVK_Space)
     static let quickAddModifiers = UInt32(controlKey | optionKey)
 }

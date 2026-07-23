@@ -11,13 +11,13 @@ enum ProductSurfaceSnapshotError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingContentView:
-            return "The OpenWhisper product window has no content view to capture."
+            return "The VibeWhisper product window has no content view to capture."
         case .bitmapUnavailable:
-            return "The OpenWhisper product window could not create a bitmap snapshot."
+            return "The VibeWhisper product window could not create a bitmap snapshot."
         case .visuallyEmptyWindowCapture:
-            return "The OpenWhisper window capture was visually empty."
+            return "The VibeWhisper window capture was visually empty."
         case .pngEncodingFailed:
-            return "The OpenWhisper product window could not encode its snapshot as PNG."
+            return "The VibeWhisper product window could not encode its snapshot as PNG."
         }
     }
 }

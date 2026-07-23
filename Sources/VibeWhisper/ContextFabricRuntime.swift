@@ -38,7 +38,7 @@ enum ContextSourceKind:
         case .activeApp:
             return L10n.text("Active application")
         case .styleCapsule:
-            return L10n.text("Style Capsule")
+            return L10n.text("Writing Style")
         case .terminology:
             return L10n.text("Terminology")
         case .focusedParagraph:

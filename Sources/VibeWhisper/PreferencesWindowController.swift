@@ -11,30 +11,47 @@ enum PreferencesSnapshotError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingContentView:
-            return "The OpenWhisper Settings window has no content view to capture."
+            return "The VibeWhisper Settings window has no content view to capture."
         case .bitmapUnavailable:
-            return "The OpenWhisper Settings window could not create a bitmap snapshot."
+            return "The VibeWhisper Settings window could not create a bitmap snapshot."
         case .pngEncodingFailed:
-            return "The OpenWhisper Settings window could not encode its snapshot as PNG."
+            return "The VibeWhisper Settings window could not encode its snapshot as PNG."
         }
     }
 }
 
 private enum SettingsLayoutMetrics {
+    /// Outer width of the source-list glass rail (content + row padding).
     static let sidebarWidth: CGFloat = 236
-    static let sidebarTopPadding: CGFloat = 52
+    /// Music / App Store floating rail: equal float gutters around the glass
+    /// card. Transparent titlebar + `ignoresSafeArea(.top)` lets the system
+    /// traffic lights rest on the top-leading of this card in their standard
+    /// slot — never re-centered over the rail width.
+    static let sidebarInsetLeading: CGFloat = 10
+    static let sidebarInsetTop: CGFloat = 10
+    static let sidebarInsetBottom: CGFloat = 10
+    /// Gap between the glass rail and the detail column.
+    static let sidebarToDetailGap: CGFloat = 10
+    /// Interior top pad so the first section header clears the system traffic
+    /// lights that rest on the glass card (14pt widgets + titlebar chrome).
+    static let sidebarContentTopPadding: CGFloat = 44
     static let sidebarRowVerticalPadding: CGFloat = 5
-    static let sidebarRowOuterPadding: CGFloat = 8
-    static let sidebarRowInnerPadding: CGFloat = 8
+    static let sidebarRowOuterPadding: CGFloat = 10
+    static let sidebarRowInnerPadding: CGFloat = 10
     static let sidebarRowSpacing: CGFloat = 2
     static let sidebarRowCornerRadius: CGFloat = 8
-    static let sidebarSectionSpacing: CGFloat = 20
-    static let sidebarHeaderRowSpacing: CGFloat = 5
+    static let sidebarSectionSpacing: CGFloat = 18
+    static let sidebarHeaderRowSpacing: CGFloat = 6
     static let detailHorizontalPadding: CGFloat = 40
     static let detailTopPadding: CGFloat = 32
     /// Embedded library destinations render their own in-content header
-    /// (`OpenWhisperPaneHeader`), so the shell only clears the traffic lights.
+    /// (`VibeWhisperPaneHeader`), so the shell only clears the traffic lights.
     static let embeddedTopPadding: CGFloat = 6
+
+    /// Leading column reserved for the glass rail + gutters.
+    static var sidebarColumnWidth: CGFloat {
+        sidebarInsetLeading + sidebarWidth + sidebarToDetailGap
+    }
 }
 
 @MainActor
@@ -73,7 +90,6 @@ final class PreferencesWindowController: NSWindowController {
         onUndoTranscriptionRecord: @escaping (UUID) async -> SafeUndoOutcome = { _ in .unavailable },
         onDeleteTranscriptionRecord: @escaping (UUID) -> Result<Void, any Error> = { _ in .success(()) },
         onDeleteRecoveryRecord: @escaping (UUID) -> Result<Void, any Error> = { _ in .success(()) },
-        onUseNextSkill: @escaping (UUID) -> Void = { _ in },
         onRunSkillTest: @escaping (SkillTestRunRequest) async -> Result<SkillTestRunResult, any Error> = { _ in
             .failure(SkillTestRunError.appBusy)
         },
@@ -134,7 +150,6 @@ final class PreferencesWindowController: NSWindowController {
                 onDeleteTranscriptionRecord,
             onDeleteRecoveryRecord:
                 onDeleteRecoveryRecord,
-            onUseNextSkill: onUseNextSkill,
             onRunSkillTest: onRunSkillTest,
             onVoiceSampleAction: onVoiceSampleAction,
             onHotkeyCaptureChanged:
@@ -155,6 +170,14 @@ final class PreferencesWindowController: NSWindowController {
             .currentVisualAcceptance
         )
         let hostingController = NSHostingController(rootView: view)
+        // Keep the hosting plate fully transparent so Liquid Glass corners are
+        // not backfilled by a rectangular NSView layer (the source of the
+        // light square nubs at the floating sidebar corners).
+        hostingController.view.wantsLayer = true
+        hostingController.view.layer?.backgroundColor = NSColor.clear.cgColor
+        if #available(macOS 11, *) {
+            hostingController.view.layerContentsRedrawPolicy = .onSetNeedsDisplay
+        }
 
         let window = CommandClosingWindow(
             contentRect: NSRect(x: 0, y: 0, width: 980, height: 680),
@@ -172,23 +195,31 @@ final class PreferencesWindowController: NSWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
+        // Empty unified toolbar reserves the system titlebar strip and keeps
+        // traffic lights in the standard slot so the floating glass sidebar
+        // can extend under them (Music / App Store treatment).
         window.toolbarStyle = .unified
         window.hasShadow = true
+        // Transparent content so the floating glass rail's continuous corners
+        // are not backfilled by a solid window plate.
+        window.isOpaque = false
+        window.backgroundColor = .clear
         // The Settings shell never enters full screen (its fixed sidebar
         // layout is not designed for it), so the zoom control stays disabled.
         window.collectionBehavior.remove(.fullScreenPrimary)
         window.collectionBehavior.formUnion([.managed, .fullScreenDisallowsTiling])
         window.standardWindowButton(.zoomButton)?.isEnabled = false
         let settingsToolbar = NSToolbar(
-            identifier: "OpenWhisper.SettingsToolbar"
+            identifier: "VibeWhisper.SettingsToolbar"
         )
         settingsToolbar.displayMode = .iconOnly
         settingsToolbar.allowsUserCustomization = false
         settingsToolbar.autosavesConfiguration = false
+        settingsToolbar.showsBaselineSeparator = false
         window.toolbar = settingsToolbar
         window.isReleasedWhenClosed = false
         window.isRestorable = false
-        window.identifier = NSUserInterfaceItemIdentifier("OpenWhisper.SettingsWindow")
+        window.identifier = NSUserInterfaceItemIdentifier("VibeWhisper.SettingsWindow")
         window.minSize = NSSize(width: 900, height: 620)
         window.tabbingMode = .disallowed
         let restoredFrame = window.setFrameUsingName(SettingsWindowStateStore.frameAutosaveName)
@@ -201,6 +232,22 @@ final class PreferencesWindowController: NSWindowController {
             .applyAppearance(to: window)
 
         super.init(window: window)
+
+        // Keep traffic lights in the system leading slot (Apple HIG). Never
+        // re-center them over the rail — that pushes them mid/right and
+        // accumulates on every show. Re-assert after first layout in case a
+        // prior session left the titlebar container shifted.
+        DispatchQueue.main.async { [weak window] in
+            guard let window else { return }
+            Self.restoreSystemTrafficLightPlacement(in: window)
+        }
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsWindowDidResize(_:)),
+            name: NSWindow.didResizeNotification,
+            object: window
+        )
 
         sidebarArrowKeyMonitor = NSEvent.addLocalMonitorForEvents(
             matching: .keyDown
@@ -216,6 +263,7 @@ final class PreferencesWindowController: NSWindowController {
         if let sidebarArrowKeyMonitor {
             NSEvent.removeMonitor(sidebarArrowKeyMonitor)
         }
+        NotificationCenter.default.removeObserver(self)
     }
 
     @available(*, unavailable)
@@ -228,9 +276,41 @@ final class PreferencesWindowController: NSWindowController {
             return
         }
         DispatchQueue.main.async {
+            Self.restoreSystemTrafficLightPlacement(in: window)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
+    }
+
+    @objc
+    private func settingsWindowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        Self.restoreSystemTrafficLightPlacement(in: window)
+    }
+
+    /// Pins the titlebar container to the system leading edge so close /
+    /// miniaturize / zoom stay in their standard HIG slot (≈19pt from the
+    /// window leading edge, 14×14, ~9pt gaps). Music / App Store float the
+    /// glass rail *under* these widgets — they never center the widgets on
+    /// the rail. Uses absolute origin so repeated calls never accumulate.
+    private static func restoreSystemTrafficLightPlacement(in window: NSWindow) {
+        guard let closeButton = window.standardWindowButton(.closeButton),
+              let titlebarContainer = closeButton.superview?.superview
+        else {
+            return
+        }
+        // Absolute reset — previous builds used `+= delta` which walked the
+        // lights toward the trailing edge on every show / layout pass.
+        if abs(titlebarContainer.frame.origin.x) > 0.5 {
+            var frame = titlebarContainer.frame
+            frame.origin.x = 0
+            titlebarContainer.frame = frame
+        }
+        // Keep the three system widgets enabled/visible in standard order.
+        // Zoom stays disabled (fixed-layout Settings shell) but remains in slot.
+        window.standardWindowButton(.closeButton)?.isHidden = false
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = false
+        window.standardWindowButton(.zoomButton)?.isHidden = false
     }
 
     func navigate(to pane: SettingsPane) {
@@ -323,28 +403,163 @@ private final class CommandClosingWindow: NSWindow {
     }
 }
 
-/// The macOS 26 source-list backdrop: AppKit's `.sidebar` material renders as
-/// Liquid Glass on macOS 26 and as the classic source-list material on earlier
-/// releases, sampling the desktop behind the window like System Settings.
-private struct SettingsSidebarMaterialView: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .followsWindowActiveState
-        view.isEmphasized = true
+/// Tracks key / deminiaturize state for the Settings shell. SwiftUI's
+/// `controlActiveState` / `appearsActive` do not always update for menu-bar-app
+/// settings windows, so source-list inactive styling and Liquid Glass remount
+/// are driven from AppKit notifications instead.
+@MainActor
+private struct SettingsWindowKeyTracker: NSViewRepresentable {
+    @Binding var isKeyWindow: Bool
+    var onNeedsGlassRematerialize: () -> Void = {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            isKeyWindow: $isKeyWindow,
+            onNeedsGlassRematerialize: onNeedsGlassRematerialize
+        )
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.attach(to: view)
         return view
     }
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onNeedsGlassRematerialize = onNeedsGlassRematerialize
+        context.coordinator.attach(to: nsView)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
+    @MainActor
+    final class Coordinator {
+        @Binding var isKeyWindow: Bool
+        var onNeedsGlassRematerialize: () -> Void
+        private weak var trackedWindow: NSWindow?
+        private var becomeKeyObserver: NSObjectProtocol?
+        private var resignKeyObserver: NSObjectProtocol?
+        private var deminiaturizeObserver: NSObjectProtocol?
+        private var attachAttempts = 0
+        /// Skip the first become-key after attach — that is initial open, not a restore.
+        private var hasSyncedOnce = false
+
+        init(
+            isKeyWindow: Binding<Bool>,
+            onNeedsGlassRematerialize: @escaping () -> Void
+        ) {
+            _isKeyWindow = isKeyWindow
+            self.onNeedsGlassRematerialize = onNeedsGlassRematerialize
+        }
+
+        func attach(to view: NSView) {
+            if let window = view.window {
+                track(window)
+                return
+            }
+            guard attachAttempts < 8 else { return }
+            attachAttempts += 1
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.attach(to: view)
+            }
+        }
+
+        private func track(_ window: NSWindow) {
+            guard trackedWindow !== window else {
+                sync(from: window)
+                return
+            }
+            detachObservers()
+            trackedWindow = window
+            let center = NotificationCenter.default
+            becomeKeyObserver = center.addObserver(
+                forName: NSWindow.didBecomeKeyNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let wasKey = self.isKeyWindow
+                    self.isKeyWindow = true
+                    // Rematerialize glass when key is restored after resign —
+                    // miniaturize resigns key and can leave a stale sample.
+                    if self.hasSyncedOnce, !wasKey {
+                        self.requestGlassRematerialize()
+                    }
+                }
+            }
+            resignKeyObserver = center.addObserver(
+                forName: NSWindow.didResignKeyNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.isKeyWindow = false
+                }
+            }
+            deminiaturizeObserver = center.addObserver(
+                forName: NSWindow.didDeminiaturizeNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.requestGlassRematerialize()
+                }
+            }
+            sync(from: window)
+            hasSyncedOnce = true
+        }
+
+        private func requestGlassRematerialize() {
+            // Defer one turn so AppKit finishes layout after deminiaturize
+            // before SwiftUI remounts the glass layer.
+            DispatchQueue.main.async { [weak self] in
+                self?.onNeedsGlassRematerialize()
+            }
+        }
+
+        private func sync(from window: NSWindow) {
+            let key = window.isKeyWindow
+            if isKeyWindow != key {
+                isKeyWindow = key
+            }
+        }
+
+        func detach() {
+            detachObservers()
+            trackedWindow = nil
+        }
+
+        private func detachObservers() {
+            let center = NotificationCenter.default
+            if let becomeKeyObserver {
+                center.removeObserver(becomeKeyObserver)
+                self.becomeKeyObserver = nil
+            }
+            if let resignKeyObserver {
+                center.removeObserver(resignKeyObserver)
+                self.resignKeyObserver = nil
+            }
+            if let deminiaturizeObserver {
+                center.removeObserver(deminiaturizeObserver)
+                self.deminiaturizeObserver = nil
+            }
+        }
+    }
 }
 
-/// macOS 26 source-list row: the selection is a translucent gray glass pill
-/// (the product-owner approved `sidebarSelectionBackground`) with the symbol
-/// and label tinted in the accent color, matching the Music source list.
+/// macOS 26 source-list row: the selection is a translucent glass pill.
+/// Brand-blue only while the sidebar itself holds focus *and* the window is
+/// key; click the detail pane (or resign key) and the row falls back to gray —
+/// same inactive source-list treatment as Finder and System Settings.
 private struct SettingsSidebarRowButton: View {
     let pane: SettingsPane
     let isSelected: Bool
+    /// True only while the sidebar owns focus inside a key Settings window.
+    let selectionIsActive: Bool
     let reduceMotion: Bool
     let action: () -> Void
 
@@ -353,17 +568,13 @@ private struct SettingsSidebarRowButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                OpenWhisperSidebarSymbol(systemName: pane.icon)
+                VibeWhisperSidebarSymbol(systemName: pane.icon)
                 Text(pane.displayTitle)
                     .font(.system(size: 13))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(
-                isSelected
-                    ? Color(nsColor: OpenWhisperPalette.sidebarSelectionForeground)
-                    : .primary
-            )
+            .foregroundStyle(rowForeground)
             .padding(
                 .horizontal,
                 SettingsLayoutMetrics.sidebarRowInnerPadding
@@ -378,6 +589,7 @@ private struct SettingsSidebarRowButton: View {
             SettingsSidebarRowButtonStyle(
                 isSelected: isSelected,
                 isHovered: isHovered,
+                selectionIsActive: selectionIsActive,
                 reduceMotion: reduceMotion
             )
         )
@@ -386,11 +598,23 @@ private struct SettingsSidebarRowButton: View {
         }
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
+
+    private var rowForeground: Color {
+        if isSelected {
+            return Color(
+                nsColor: selectionIsActive
+                    ? VibeWhisperPalette.sidebarSelectionForeground
+                    : VibeWhisperPalette.sidebarSelectionForegroundInactive
+            )
+        }
+        return .primary
+    }
 }
 
 private struct SettingsSidebarRowButtonStyle: ButtonStyle {
     let isSelected: Bool
     let isHovered: Bool
+    let selectionIsActive: Bool
     let reduceMotion: Bool
 
     private var rowShape: RoundedRectangle {
@@ -402,7 +626,6 @@ private struct SettingsSidebarRowButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.primary)
             .background {
                 ZStack {
                     rowShape.fill(baseFill)
@@ -423,11 +646,19 @@ private struct SettingsSidebarRowButtonStyle: ButtonStyle {
                 reduceMotion ? nil : .easeOut(duration: 0.1),
                 value: configuration.isPressed
             )
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.14),
+                value: selectionIsActive
+            )
     }
 
     private var baseFill: Color {
         if isSelected {
-            return Color(nsColor: OpenWhisperPalette.sidebarSelectionBackground)
+            return Color(
+                nsColor: selectionIsActive
+                    ? VibeWhisperPalette.sidebarSelectionBackground
+                    : VibeWhisperPalette.sidebarSelectionBackgroundInactive
+            )
         }
         return Color.primary.opacity(isHovered ? 0.05 : 0)
     }
@@ -439,6 +670,7 @@ private enum SettingsSaveStatus: Equatable {
 }
 
 private extension SettingsPane {
+    /// One monochrome outline SF Symbol family for the settings source list.
     var icon: String {
         switch self {
         case .general:
@@ -448,23 +680,27 @@ private extension SettingsPane {
         case .dictation:
             return "mic"
         case .appearance:
-            return "paintbrush"
+            return "paintpalette"
         case .polish:
-            return "wand.and.stars"
+            return "sparkles"
         case .context:
-            return "hand.raised"
+            return "lock.shield"
         case .terminology:
+            return "book.closed"
+        case .styleCapsules:
             return "text.book.closed"
         case .paste:
             return "doc.on.clipboard"
         case .privacy:
-            return "hand.raised"
+            return "lock.shield"
         case .advanced:
             return "slider.horizontal.3"
         case .skills:
-            return "wand.and.stars"
+            return "sparkles"
+        case .rules:
+            return "list.bullet.rectangle"
         case .history:
-            return "clock.arrow.circlepath"
+            return "clock"
         }
     }
 }
@@ -535,9 +771,9 @@ private struct ThirdPartyLicensesView: View {
                                 .font(.system(size: 24, weight: .semibold))
                                 .tracking(-0.3)
                             Text(selectedDocument.entry.pinnedDescription)
-                                .font(OpenWhisperTypography.callout())
+                                .font(VibeWhisperTypography.callout())
                                 .foregroundStyle(.secondary)
-                            OpenWhisperStatusChip(
+                            VibeWhisperStatusChip(
                                 text: selectedDocument.entry.licenseName,
                                 kind: .neutral
                             )
@@ -559,9 +795,9 @@ private struct ThirdPartyLicensesView: View {
                             )
                             .padding(14)
                             .background(
-                                Color(nsColor: OpenWhisperPalette.insetSurface),
+                                Color(nsColor: VibeWhisperPalette.insetSurface),
                                 in: RoundedRectangle(
-                                    cornerRadius: OpenWhisperMetrics.radiusM,
+                                    cornerRadius: VibeWhisperMetrics.radiusM,
                                     style: .continuous
                                 )
                             )
@@ -569,7 +805,7 @@ private struct ThirdPartyLicensesView: View {
                     .padding(24)
                 }
             } else {
-                OpenWhisperEmptyState(
+                VibeWhisperEmptyState(
                     systemImage: "doc.text",
                     title: L10n.text("No license selected")
                 )
@@ -609,6 +845,22 @@ private struct PreferencesView: View {
     @State private var config: AppConfig
     @State private var persistedConfig: AppConfig
     @State private var showsAdvancedRecovery: Bool
+    @State private var showsOwnAPIConfigurationSheet = false
+    @State private var availableDictationModels: [String] = ProductModelCatalog.dictationPresets
+    @State private var availablePolishModels: [String] = ProductModelCatalog.rewritePresets
+    /// Account (ChatGPT Auth) polish models from `codex/models`, not Own API `/v1/models`.
+    @State private var availableAccountPolishModels: [String] = ProductModelCatalog.rewritePresets
+    @State private var accountPolishModelsMessage: String?
+    @State private var accountPolishModelsMessageIsError = false
+    @State private var isLoadingAccountPolishModels = false
+    @State private var isDetectingModels = false
+    @State private var ownAPIConfigurationTab: OwnAPIConfigurationTab = .recognition
+    @State private var polishEndpointDraft: String = ""
+    @State private var polishAPIKeyInput = ""
+    @State private var polishAPIKeyStored = false
+    @State private var polishMessage: String?
+    @State private var polishMessageIsError = false
+    @State private var isTestingPolishConnection = false
     @StateObject private var permissionStatusMonitor: PermissionStatusMonitor
     @State private var terminologyImportMessage: String?
     @State private var terminologyImportIsError = false
@@ -624,18 +876,12 @@ private struct PreferencesView: View {
     @State private var isRequestingMicrophoneAccess = false
     @State private var permissionMessage: String?
     @State private var permissionMessageIsError = false
-    @State private var selectedSection: SettingsPane?
+    @State private var selectedSection: SettingsPane
     @State private var saveStatus: SettingsSaveStatus = .saved
     @State private var textPolishUsage: [TextPolishProviderID: TextPolishUsage] = [:]
     @State private var textPolishMessage: String?
     @State private var textPolishMessageIsError = false
-    @State private var editingSkillRuleID: UUID?
-    @State private var editingSkillAppName = ""
-    @State private var editingSkillBundleIdentifier = ""
-    @State private var editingSkillID =
-        SkillRegistry.replySkillID
-    @State private var skillMessage: String?
-    @State private var skillMessageIsError = false
+    @StateObject private var sonnerToasts = SonnerToastCenter()
     @State private var recentHistoryRecords: [TranscriptionHistoryRecord] = []
     @State private var recentRecoveryRecords: [RecoveryRecord] = []
     @State private var selectedRecoveryKind: RecoveryHistoryKind = .audio
@@ -669,6 +915,13 @@ private struct PreferencesView: View {
     @State private var thirdPartyLicenseMessageIsError = false
     @State private var communitySkillInventory:
         CommunitySkillInventory
+    /// AppKit-tracked key-window state for source-list active/inactive tint.
+    @State private var isSettingsWindowKey = true
+    /// True while primary interaction is in the source list (row click / ↑↓).
+    /// Clicking the detail pane clears this so the selection goes gray in-app.
+    @State private var isSidebarFocused = true
+    /// Bumped on deminiaturize / key restore so Liquid Glass remounts cleanly.
+    @State private var sidebarGlassMaterializationID = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -686,6 +939,10 @@ private struct PreferencesView: View {
     let onExportProductMetrics: (URL) -> Result<URL, any Error>
     let providerCapabilityPolicy: any ProviderCapabilityChecking
     let recoveryCredentialStore: any OpenAICompatibleCredentialPersisting
+    let polishCredentialStore: any OpenAICompatibleCredentialPersisting = KeychainOpenAICompatibleCredentialStore(
+        service: ProductIdentity.polishAPIKeychainService,
+        account: "polish"
+    )
     let textPolishUsageDirectoryURL: URL?
     let onCheckForUpdates: () -> Result<Void, SoftwareUpdateError>
     let onSetAutomaticallyChecksForUpdates: (Bool) -> Result<SoftwareUpdateSnapshot, SoftwareUpdateError>
@@ -699,7 +956,6 @@ private struct PreferencesView: View {
     let onUndoTranscriptionRecord: (UUID) async -> SafeUndoOutcome
     let onDeleteTranscriptionRecord: (UUID) -> Result<Void, any Error>
     let onDeleteRecoveryRecord: (UUID) -> Result<Void, any Error>
-    let onUseNextSkill: (UUID) -> Void
     let onRunSkillTest: (SkillTestRunRequest) async -> Result<SkillTestRunResult, any Error>
     let onVoiceSampleAction: (SkillVoiceSampleAction) async -> Result<SkillVoiceSampleResult, any Error>
     let onHotkeyCaptureChanged: (Bool) -> Void
@@ -747,7 +1003,6 @@ private struct PreferencesView: View {
         onUndoTranscriptionRecord: @escaping (UUID) async -> SafeUndoOutcome,
         onDeleteTranscriptionRecord: @escaping (UUID) -> Result<Void, any Error>,
         onDeleteRecoveryRecord: @escaping (UUID) -> Result<Void, any Error>,
-        onUseNextSkill: @escaping (UUID) -> Void,
         onRunSkillTest: @escaping (SkillTestRunRequest) async -> Result<SkillTestRunResult, any Error>,
         onVoiceSampleAction: @escaping (SkillVoiceSampleAction) async -> Result<SkillVoiceSampleResult, any Error>,
         onHotkeyCaptureChanged:
@@ -768,6 +1023,15 @@ private struct PreferencesView: View {
             SkillLibrarySection = .discover
     ) {
         let windowStateStore = SettingsWindowStateStore()
+        // Seed the library segment store once when Settings is created with an
+        // explicit deep link (Installed / Created). Later Skills remounts read
+        // from the store instead of re-applying this constructor argument, so
+        // users who switch to Discover keep that choice after popups dismiss.
+        if skillLibraryInitialSection != .discover {
+            windowStateStore.saveSkillLibrarySection(
+                skillLibraryInitialSection
+            )
+        }
         _config = State(initialValue: initialConfig)
         _persistedConfig = State(
             initialValue: initialConfig
@@ -782,6 +1046,23 @@ private struct PreferencesView: View {
             initialValue: CommunitySkillInventory(packages: [], rejected: [])
         )
         _showsAdvancedRecovery = State(initialValue: false)
+        _showsOwnAPIConfigurationSheet = State(initialValue: false)
+        _availableDictationModels = State(initialValue: ProductModelCatalog.dictationPresets)
+        _availablePolishModels = State(initialValue: ProductModelCatalog.rewritePresets)
+        _availableAccountPolishModels = State(initialValue: ProductModelCatalog.rewritePresets)
+        _accountPolishModelsMessage = State(initialValue: nil)
+        _accountPolishModelsMessageIsError = State(initialValue: false)
+        _isLoadingAccountPolishModels = State(initialValue: false)
+        _isDetectingModels = State(initialValue: false)
+        _ownAPIConfigurationTab = State(initialValue: .recognition)
+        _polishEndpointDraft = State(
+            initialValue: initialConfig.transcription.textPolish.openAICompatibleURL
+        )
+        _polishAPIKeyInput = State(initialValue: "")
+        _polishAPIKeyStored = State(initialValue: false)
+        _polishMessage = State(initialValue: nil)
+        _polishMessageIsError = State(initialValue: false)
+        _isTestingPolishConnection = State(initialValue: false)
         _permissionStatusMonitor = StateObject(wrappedValue: PermissionStatusMonitor())
         _terminologyImportMessage = State(initialValue: Self.terminologyStatusMessage(for: initialConfig))
         _authSnapshot = State(initialValue: authManager.authSnapshot())
@@ -831,7 +1112,6 @@ private struct PreferencesView: View {
             onDeleteTranscriptionRecord
         self.onDeleteRecoveryRecord =
             onDeleteRecoveryRecord
-        self.onUseNextSkill = onUseNextSkill
         self.onRunSkillTest = onRunSkillTest
         self.onVoiceSampleAction = onVoiceSampleAction
         self.onHotkeyCaptureChanged =
@@ -911,25 +1191,20 @@ private struct PreferencesView: View {
     }
 
     private var accessibilityStatus: SetupStatus {
-        let guidance = AccessibilityPermission.repairGuidance()
-
-        if permissionStatusMonitor.snapshot.accessibilityTrusted {
+        let trusted = permissionStatusMonitor.snapshot.accessibilityTrusted
+        if trusted {
             return SetupStatus(
-                title: L10n.text("Granted"),
+                title: AccessibilityPermission.statusTitle(isTrusted: true),
                 subtitle: L10n.text("Auto-paste is ready.")
             )
         }
 
-        let title: String
-        switch AccessibilityPermission.signatureState() {
-        case .adHocOrUnsigned:
-            title = L10n.text("Re-add required")
-        case .stable, .unavailable:
-            title = L10n.text("Optional but recommended")
-        }
-
+        let guidance = AccessibilityPermission.repairGuidance()
         return SetupStatus(
-            title: title,
+            title: AccessibilityPermission.statusTitle(
+                isTrusted: false,
+                signatureState: AccessibilityPermission.signatureState()
+            ),
             subtitle: guidance.subtitle,
             isReady: false
         )
@@ -955,15 +1230,35 @@ private struct PreferencesView: View {
     }
 
     var body: some View {
-        settingsSplitView
+        ZStack {
+            settingsSplitView
+            SonnerToastHost(
+                center: sonnerToasts,
+                reduceMotion: reduceMotion
+            )
+        }
         .frame(minWidth: 900, minHeight: 620)
+        .background {
+            // Zero-size AppKit probe that observes didBecomeKey / didResignKey.
+            SettingsWindowKeyTracker(
+                isKeyWindow: $isSettingsWindowKey,
+                onNeedsGlassRematerialize: {
+                    sidebarGlassMaterializationID &+= 1
+                }
+            )
+            .frame(width: 0, height: 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        // Selection chrome animates only on the source-list row style.
+        // Root-level animation here previously slid the floating sidebar when
+        // focus or key-window state changed (safe-area / layout inheritance).
         .onChange(of: selectedSection) { pane in
-            guard let pane else {
-                selectedSection = .general
-                return
-            }
             let normalized = pane.normalizedVisiblePane
             if normalized != pane {
+                // Collapsed legacy panes (Account → General, Polish/Paste →
+                // Dictation, Privacy → Context) rewrite once without falling
+                // through to a hard General reset.
                 selectedSection = normalized
                 return
             }
@@ -997,12 +1292,23 @@ private struct PreferencesView: View {
             else {
                 return
             }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86)) {
-                selectedSection = pane.normalizedVisiblePane
-            }
+            // Do not wrap in withAnimation: detail already animates via
+            // settingsDetail's activeSection transaction. Animating here also
+            // drove the floating sidebar's safe-area frame (slide-down glitch).
+            isSidebarFocused = true
+            selectedSection = pane.normalizedVisiblePane
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // User may have flipped Accessibility in System Settings while we
+            // were inactive — re-read TCC immediately, then poll briefly in case
+            // the grant lands a moment after activation.
             permissionStatusMonitor.refresh()
+            Task { @MainActor in
+                _ = await permissionStatusMonitor.refreshAccessibilityUntilTrusted(
+                    maximumRefreshAttempts: 8,
+                    refreshDelay: .milliseconds(200)
+                )
+            }
             authSnapshot = authManager.authSnapshot()
             browserBridgeSnapshot = authManager.browserBridgeSnapshot()
             refreshTextPolishStatus()
@@ -1011,10 +1317,23 @@ private struct PreferencesView: View {
             refreshRecoveryCredentialState()
             refreshCommunitySkillInventory()
         }
+        .onChange(of: isSettingsWindowKey) { isKey in
+            guard isKey else {
+                return
+            }
+            permissionStatusMonitor.refresh()
+            Task { @MainActor in
+                _ = await permissionStatusMonitor.refreshAccessibilityUntilTrusted(
+                    maximumRefreshAttempts: 6,
+                    refreshDelay: .milliseconds(200)
+                )
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .chatGPTAuthStateDidChange)) { _ in
             authSnapshot = authManager.authSnapshot()
             browserBridgeSnapshot = authManager.browserBridgeSnapshot()
             refreshTextPolishStatus()
+            refreshAccountPolishModels(force: true)
         }
         .onAppear {
             permissionStatusMonitor.refresh()
@@ -1023,6 +1342,7 @@ private struct PreferencesView: View {
             refreshRecoveryHistory()
             refreshRecoveryCredentialState()
             refreshCommunitySkillInventory()
+            refreshAccountPolishModels(force: false)
         }
         .task {
             providerPolicySnapshot = await providerCapabilityPolicy.refresh(
@@ -1037,7 +1357,7 @@ private struct PreferencesView: View {
             }
         }
         .alert(
-            L10n.text("Delete all OpenWhisper data?"),
+            L10n.text("Delete all VibeWhisper data?"),
             isPresented: $showsDeleteAllDataConfirmation
         ) {
             Button(L10n.text("Cancel"), role: .cancel) {}
@@ -1047,22 +1367,22 @@ private struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Style Capsules, installed Community Skills, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
+                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Writing Styles, installed Community Skills, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
                 )
             )
         }
         .alert(
-            L10n.text("Use OpenAI-Compatible Recovery?"),
+            L10n.text("Import Your Own API?"),
             isPresented: $showsAdvancedRecovery
         ) {
             Button(L10n.text("Cancel"), role: .cancel) {}
-            Button(L10n.text("Use Recovery API")) {
-                activateAdvancedRecovery()
+            Button(L10n.text("Use My API")) {
+                activateImportOwnAPI()
             }
         } message: {
             Text(
                 L10n.text(
-                    "Future dictation audio will be sent to the configured endpoint with the API key stored in Keychain. Your API provider may charge for transcription. AI Polish will still use your ChatGPT account."
+                    "Future dictation audio will be sent to the configured endpoint with your Keychain API key. Your API provider may charge for transcription."
                 )
             )
         }
@@ -1071,44 +1391,93 @@ private struct PreferencesView: View {
                 documents: thirdPartyLicenseDocuments
             )
         }
+        .sheet(isPresented: $showsOwnAPIConfigurationSheet) {
+            ownAPIConfigurationSheet
+        }
     }
 
     private var settingsSplitView: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                settingsSidebar
-                Divider()
-                    .ignoresSafeArea(.container, edges: .top)
-                settingsDetail
-                    .frame(
-                        width: max(
-                            0,
-                            geometry.size.width
-                                - SettingsLayoutMetrics.sidebarWidth
-                                - 1
-                        ),
-                        height: geometry.size.height
-                    )
-            }
+        // App Store / Music–style source list: glass rail that extends under
+        // the transparent titlebar so the traffic lights sit *on* the sidebar
+        // material (official treatment), not floating below a white chrome band.
+        ZStack(alignment: .topLeading) {
+            // Solid canvas lives under the floating rail, not under the glass
+            // material itself — keeps continuous glass corners clean.
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
+
+            settingsDetail
+                // Clicking anywhere in the detail pane demotes the
+                // source-list selection to its inactive (gray) style.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            if isSidebarFocused {
+                                isSidebarFocused = false
+                            }
+                        }
+                )
+                .padding(
+                    .leading,
+                    SettingsLayoutMetrics.sidebarColumnWidth
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            settingsSidebar
+                .padding(.leading, SettingsLayoutMetrics.sidebarInsetLeading)
+                .padding(.top, SettingsLayoutMetrics.sidebarInsetTop)
+                .padding(.bottom, SettingsLayoutMetrics.sidebarInsetBottom)
+                .frame(maxHeight: .infinity, alignment: .top)
+                // Reach under the transparent unified titlebar so the glass
+                // wraps the traffic lights instead of sitting below them.
+                .ignoresSafeArea(.container, edges: .top)
+                // Detail page / focus transactions must not interpolate this
+                // rail's frame (reads as a slide-down). Row chrome still uses
+                // its own local `.animation` modifiers.
+                .animation(nil, value: activeSection)
+                .animation(nil, value: isSidebarFocused)
+                .animation(nil, value: isSettingsWindowKey)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var settingsSidebar: some View {
-        ZStack(alignment: .top) {
-            SettingsSidebarMaterialView()
-                .ignoresSafeArea(.container, edges: .top)
-            settingsSidebarList
-                .padding(.top, SettingsLayoutMetrics.sidebarTopPadding)
-        }
-        .frame(width: SettingsLayoutMetrics.sidebarWidth)
+        // Continuous rounded rect so the floating glass rail reads as a card
+        // that the traffic lights sit *on* (Music / App Store). Top is kept
+        // under the transparent titlebar via `ignoresSafeArea` + zero top
+        // inset; leading/bottom gutters come from the outer padding.
+        let shape = RoundedRectangle(
+            cornerRadius: VibeWhisperFloatingChrome.sidebarCornerRadius,
+            style: .continuous
+        )
+        return settingsSidebarList
+            .padding(.top, SettingsLayoutMetrics.sidebarContentTopPadding)
+            .frame(width: SettingsLayoutMetrics.sidebarWidth)
+            .frame(maxHeight: .infinity, alignment: .top)
+            // No opaque fill under glass — solid row pills are fine, a full-
+            // bleed rectangle is what pokes square corners through Liquid Glass.
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
+            .openWhisperFloatingSidebarGlass(
+                in: shape,
+                materializationID: sidebarGlassMaterializationID
+            )
+            // Clicking the source list re-emphasizes the selection (blue).
+            .contentShape(shape)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !isSidebarFocused {
+                            isSidebarFocused = true
+                        }
+                    }
+            )
     }
 
     @ViewBuilder
     private var settingsDetail: some View {
         ZStack {
             switch activeSection {
-            case .skills, .history, .terminology:
+            case .skills, .rules, .history, .terminology, .styleCapsules:
                 embeddedDestination
                     .padding(.top, SettingsLayoutMetrics.embeddedTopPadding)
                     .id(activeSection)
@@ -1142,7 +1511,7 @@ private struct PreferencesView: View {
                     .padding(.bottom, 44)
                     .frame(
                         maxWidth:
-                            OpenWhisperMetrics
+                            VibeWhisperMetrics
                                 .contentMaxWidth,
                         alignment: .leading
                     )
@@ -1158,8 +1527,10 @@ private struct PreferencesView: View {
                 )
             }
         }
+        // Scope page animation to the detail column only so the floating
+        // sidebar never inherits opacity/scale transitions.
         .animation(
-            reduceMotion ? .linear(duration: 0) : .easeOut(duration: OpenWhisperMotion.pageTransition),
+            reduceMotion ? .linear(duration: 0) : .easeOut(duration: VibeWhisperMotion.pageTransition),
             value: activeSection
         )
         .background(
@@ -1168,7 +1539,9 @@ private struct PreferencesView: View {
     }
 
     private var settingsPageTransition: AnyTransition {
-        .opacity.combined(with: .scale(scale: 0.995))
+        // Opacity only — combined scale previously shifted sibling layout and
+        // made the floating sidebar appear to slide down on pane switches.
+        .opacity
     }
 
     private var settingsSidebarList: some View {
@@ -1184,7 +1557,7 @@ private struct PreferencesView: View {
                         spacing: SettingsLayoutMetrics.sidebarHeaderRowSpacing
                     ) {
                         Text(group.title)
-                            .font(OpenWhisperTypography.caption(.semibold))
+                            .font(VibeWhisperTypography.caption(.semibold))
                             .foregroundStyle(.secondary)
                             .padding(
                                 .leading,
@@ -1220,14 +1593,24 @@ private struct PreferencesView: View {
                 initialConfig: config,
                 store: skillPackageStore,
                 localAssetAccessEnabled: localAssetAccessEnabled,
-                initialSection: skillLibraryInitialSection,
+                // Always restore Discover/Install from SettingsWindowStateStore.
+                // Deep links seed the store once at PreferencesView init, so
+                // remounts after popup dismiss never re-force the original tab.
+                initialSection: .discover,
                 isEmbedded: true,
+                windowStateStore: windowStateStore,
                 onSave: { updated in
                     persistEmbeddedConfig(updated)
                 },
-                onUseNext: onUseNextSkill,
                 onRunTest: onRunSkillTest,
                 onVoiceSampleAction: onVoiceSampleAction
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
+        case .rules:
+            SkillRulesSettingsView(
+                config: $config,
+                inventory: communitySkillInventory
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -1256,14 +1639,22 @@ private struct PreferencesView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
+        case .styleCapsules:
+            StyleCapsuleLibraryView(
+                config: $config,
+                registry: availableSkillRegistry,
+                store: styleCapsuleStore,
+                localAssetAccessEnabled: localAssetAccessEnabled
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
         default:
             EmptyView()
         }
     }
 
     private var activeSection: SettingsPane {
-        (selectedSection ?? .general)
-            .normalizedVisiblePane
+        selectedSection.normalizedVisiblePane
     }
 
     @ViewBuilder
@@ -1274,8 +1665,10 @@ private struct PreferencesView: View {
             SettingsSidebarRowButton(
                 pane: pane,
                 isSelected: activeSection == pane,
+                selectionIsActive: isSettingsWindowKey && isSidebarFocused,
                 reduceMotion: reduceMotion
             ) {
+                isSidebarFocused = true
                 selectedSection = pane
             }
         }
@@ -1289,7 +1682,7 @@ private struct PreferencesView: View {
 
     private var sectionHeader: some View {
         Text(activeSection.displayTitle)
-            .font(OpenWhisperTypography.display())
+            .font(VibeWhisperTypography.display())
             .tracking(-0.25)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -1301,12 +1694,12 @@ private struct PreferencesView: View {
             EmptyView()
         case .failed(let message):
             Label(L10n.text("Save failed"), systemImage: "exclamationmark.triangle.fill")
-                .font(OpenWhisperTypography.caption(.semibold))
-                .foregroundStyle(Color(nsColor: OpenWhisperPalette.error))
+                .font(VibeWhisperTypography.caption(.semibold))
+                .foregroundStyle(Color(nsColor: VibeWhisperPalette.error))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(
-                    Color(nsColor: OpenWhisperPalette.error).opacity(0.12),
+                    Color(nsColor: VibeWhisperPalette.error).opacity(0.12),
                     in: Capsule(style: .continuous)
                 )
                 .help(message)
@@ -1318,12 +1711,12 @@ private struct PreferencesView: View {
     private var selectedSectionView: some View {
         switch activeSection {
         case .general, .account:
-            VStack(spacing: 18) {
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space20) {
                 generalCard
                 accountOverviewCard
             }
         case .dictation, .polish, .paste:
-            VStack(spacing: 18) {
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space20) {
                 dictationCard
                 pasteAndClipboardCard
                 aiPolishCard
@@ -1331,25 +1724,28 @@ private struct PreferencesView: View {
         case .appearance:
             appearanceAndFeedbackCard
         case .context, .privacy:
-            VStack(spacing: 18) {
-                contextCard
-                privacyCard
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space20) {
+                contextSourcesCard
+                skillPermissionsCard
+                contextReceiptsCard
+                localDataCard
+                privacyActionsCard
             }
-        case .terminology, .skills, .history:
+        case .terminology, .styleCapsules, .skills, .rules, .history:
             EmptyView()
         case .advanced:
-            advancedRecoveryCard
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space20) {
+                advancedRecognitionCard
+                advancedPolishCard
+                advancedAPIAccessRow
+            }
         }
     }
 
     private var generalCard: some View {
-        settingsCard(title: nil, style: .hero) {
-            SettingsRow(
-                title: L10n.text("App Language"),
-                detail: L10n.text(
-                    "Applies to Settings, the menu bar, feedback, and new windows."
-                )
-            ) {
+        // System Settings Form: label left, controls right-aligned on a shared edge.
+        settingsCard(title: nil, style: .grouped) {
+            SettingsRow(title: L10n.text("App Language")) {
                 Picker(
                     L10n.text("App Language"),
                     selection: $config.appLanguage
@@ -1361,85 +1757,175 @@ private struct PreferencesView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(
-                    minWidth: 150,
-                    idealWidth: 190,
-                    maxWidth: 240
+                    width: GeneralSettingsChrome.controlClusterWidth,
+                    alignment: .trailing
                 )
             }
 
-            Divider()
+            Divider().opacity(0.55)
 
-            SettingsRow(
-                title: L10n.text("Default Skill"),
-                detail:
-                    currentGlobalDefaultSkill?
-                        .localizedSummary
-                    ?? L10n.text(
-                        "Saved Skill unavailable. OpenWhisper will fall back to Direct."
-                    )
-            ) {
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(
-                        currentGlobalDefaultSkill?
-                            .localizedName
-                        ?? L10n.text("Direct")
-                    )
-                    .font(.system(size: 12, weight: .semibold))
-                    Button(L10n.text("Open Skill Library…")) {
-                        withAnimation(
-                            .spring(response: 0.32, dampingFraction: 0.86)
-                        ) {
-                            selectedSection = .skills
+            SettingsRow(title: L10n.text("Default Skill")) {
+                // Show only the active Skill. Tap navigates to Rules inside
+                // this Settings window — never spawns a second surface.
+                Button {
+                    selectedSection = .rules
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(
+                            currentGlobalDefaultSkill?.localizedName
+                                ?? L10n.text("Direct")
+                        )
+                        .font(VibeWhisperTypography.callout(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(
+                    width: GeneralSettingsChrome.controlClusterWidth,
+                    alignment: .trailing
+                )
+                .help(L10n.text("Open Rules…"))
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Dictation shortcut")) {
+                HStack(spacing: VibeWhisperMetrics.space8) {
+                    Spacer(minLength: 0)
+                    HotkeyRecorderView(
+                        binding: config.transcription.dictationHotkey,
+                        onCandidate: { candidate in
+                            applyHotkeyCandidate(candidate)
+                        },
+                        onCaptureChanged: { capturing in
+                            isCapturingHotkey = capturing
+                            onHotkeyCaptureChanged(capturing)
+                            if capturing {
+                                // Capture UX is self-evident on the recorder button.
+                            } else if !hotkeyMessageIsError {
+                                hotkeyMessage = nil
+                            }
                         }
-                        onOpenSkillLibrary()
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-
-            Divider()
-
-            SettingsRow(
-                title: L10n.text("Dictation shortcut"),
-                detail: L10n.format(
-                    "%@ starts and stops dictation everywhere on this Mac.",
-                    config.transcription.dictationHotkey.displayName
-                )
-            ) {
-                Text(config.transcription.dictationHotkey.displayName)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
-            }
-
-            Divider()
-
-            SettingsRow(
-                title: L10n.text("Skill Switcher shortcut"),
-                detail: L10n.text(
-                    "Optional. Opens the Skill Switcher without starting dictation."
-                )
-            ) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        skillSwitcherShortcutControls
-                    }
-                    VStack(alignment: .trailing, spacing: 7) {
-                        skillSwitcherShortcutControls
-                    }
-                }
-            }
-
-            if let hotkeyMessage {
-                Text(hotkeyMessage)
-                    .font(.system(size: 11))
-                    .foregroundStyle(
-                        hotkeyMessageIsError ? .red : .secondary
                     )
+                    .frame(
+                        width: GeneralSettingsChrome.recorderWidth,
+                        height: GeneralSettingsChrome.controlHeight
+                    )
+                }
+                .frame(
+                    width: GeneralSettingsChrome.controlClusterWidth,
+                    alignment: .trailing
+                )
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Skill Switcher shortcut")) {
+                optionalHotkeyControls(
+                    isEnabled: skillSwitcherHotkeyEnabledBinding,
+                    accessibilityLabel: L10n.text("Skill Switcher shortcut"),
+                    binding: config.skillSwitcherHotkey,
+                    onCandidate: { candidate in
+                        applySkillSwitcherHotkeyCandidate(candidate)
+                    }
+                )
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Result Preview shortcut")) {
+                optionalHotkeyControls(
+                    isEnabled: resultPreviewHotkeyEnabledBinding,
+                    accessibilityLabel: L10n.text("Result Preview shortcut"),
+                    binding: config.resultPreviewHotkey,
+                    onCandidate: { candidate in
+                        applyResultPreviewHotkeyCandidate(candidate)
+                    }
+                )
+            }
+
+            // Hard errors only (conflicts / registration failures). Capture
+            // guidance lives on the recorder control itself — no secondary line.
+            if let hotkeyMessage, hotkeyMessageIsError {
+                Text(hotkeyMessage)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(Color(nsColor: VibeWhisperPalette.error))
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, VibeWhisperMetrics.space4)
             }
         }
+    }
+
+    /// Shared trailing control cluster for optional shortcuts (toggle + recorder).
+    @ViewBuilder
+    private func optionalHotkeyControls(
+        isEnabled: Binding<Bool>,
+        accessibilityLabel: String,
+        binding: HotkeyBinding?,
+        onCandidate: @escaping @MainActor (HotkeyBinding) -> Void
+    ) -> some View {
+        HStack(spacing: VibeWhisperMetrics.space10) {
+            Spacer(minLength: 0)
+            Toggle(L10n.text("Enabled"), isOn: isEnabled)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                .accessibilityLabel(accessibilityLabel)
+            if let binding {
+                HotkeyRecorderView(
+                    binding: binding,
+                    onCandidate: onCandidate,
+                    onCaptureChanged: { capturing in
+                        isCapturingHotkey = capturing
+                        onHotkeyCaptureChanged(capturing)
+                        if capturing {
+                            // Capture UX is self-evident on the recorder button.
+                        } else if !hotkeyMessageIsError {
+                            hotkeyMessage = nil
+                        }
+                    }
+                )
+                .frame(
+                    width: GeneralSettingsChrome.recorderWidth,
+                    height: GeneralSettingsChrome.controlHeight
+                )
+            } else {
+                // Same footprint as the live recorder so the row never jumps
+                // and the trailing edge stays aligned with other controls.
+                disabledHotkeyPlaceholder
+            }
+        }
+        .frame(
+            width: GeneralSettingsChrome.controlClusterWidth,
+            alignment: .trailing
+        )
+    }
+
+    /// Dimmed capsule matching `HotkeyRecorderView` size — used when an
+    /// optional shortcut is toggled off so the control column stays stable.
+    private var disabledHotkeyPlaceholder: some View {
+        RoundedRectangle(
+            cornerRadius: VibeWhisperMetrics.radiusS,
+            style: .continuous
+        )
+        .fill(Color.primary.opacity(0.06))
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusS,
+                style: .continuous
+            )
+            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .frame(
+            width: GeneralSettingsChrome.recorderWidth,
+            height: GeneralSettingsChrome.controlHeight
+        )
+        .accessibilityHidden(true)
     }
 
     private var currentGlobalDefaultSkill:
@@ -1451,54 +1937,33 @@ private struct PreferencesView: View {
         )
     }
 
-    @ViewBuilder
-    private var skillSwitcherShortcutControls: some View {
-        Toggle(
-            L10n.text("Enabled"),
-            isOn: skillSwitcherHotkeyEnabledBinding
-        )
-        .toggleStyle(.switch)
-        .controlSize(.small)
-
-        if let binding = config.skillSwitcherHotkey {
-            HotkeyRecorderView(
-                binding: binding,
-                onCandidate: { candidate in
-                    applySkillSwitcherHotkeyCandidate(candidate)
-                },
-                onCaptureChanged: { capturing in
-                    isCapturingHotkey = capturing
-                    onHotkeyCaptureChanged(capturing)
-                    if capturing {
-                        hotkeyMessage = L10n.text(
-                            "Press the shortcut you want to use. Esc cancels without changing the current shortcut."
-                        )
-                        hotkeyMessageIsError = false
-                    }
-                }
-            )
-            .frame(
-                minWidth: 150,
-                idealWidth: 176,
-                maxWidth: 220,
-                minHeight: 30,
-                idealHeight: 30,
-                maxHeight: 30
-            )
-        }
-    }
-
     private var pasteAndClipboardCard: some View {
-        settingsCard(title: "Paste & Clipboard") {
-            Toggle(
-                L10n.text("Restore clipboard after verified insertion"),
-                isOn: $config.injection.preserveClipboard
-            )
-            .accessibilityHint(
-                L10n.text(
-                    "OpenWhisper restores the previous clipboard only after Accessibility confirms the expected text change. If the target or insertion cannot be verified, the transcript stays in the clipboard for manual Cmd+V."
+        settingsCard(title: "Paste & Clipboard", style: .grouped) {
+            SettingsRow(
+                title: L10n.text("Skip result preview when safe")
+            ) {
+                Toggle(
+                    L10n.text("Skip result preview when safe"),
+                    isOn: $config.injection.skipResultPreviewWhenSafe
                 )
-            )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(
+                title: L10n.text("Restore clipboard after verified insertion")
+            ) {
+                Toggle(
+                    L10n.text("Restore clipboard after verified insertion"),
+                    isOn: $config.injection.preserveClipboard
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
         }
     }
 
@@ -1515,27 +1980,23 @@ private struct PreferencesView: View {
         case .success:
             persistedConfig = config
             saveStatus = .saved
+            // Shortcut enable/disable is self-evident from the toggle + recorder
+            // row; only keep messages for real errors (handled in the catch path).
             if previousHotkey != requestedHotkey {
-                hotkeyMessage = L10n.format(
-                    "Dictation shortcut changed to %@.",
-                    requestedHotkey.displayName
-                )
+                hotkeyMessage = nil
                 hotkeyMessageIsError = false
             } else if previousSkillSwitcherHotkey
                 != requestedSkillSwitcherHotkey
             {
-                hotkeyMessage = requestedSkillSwitcherHotkey.map {
-                    L10n.format(
-                        "Skill Switcher shortcut changed to %@.",
-                        $0.displayName
-                    )
-                } ?? L10n.text(
-                    "Skill Switcher shortcut disabled."
-                )
+                hotkeyMessage = nil
                 hotkeyMessageIsError = false
             }
         case .failure(let error):
             saveStatus = .failed(error.localizedDescription)
+            sonnerToasts.error(
+                L10n.text("Save failed"),
+                detail: error.localizedDescription
+            )
             if previousHotkey != requestedHotkey
                 || previousSkillSwitcherHotkey
                     != requestedSkillSwitcherHotkey
@@ -1591,9 +2052,10 @@ private struct PreferencesView: View {
     ) {
         do {
             let validated = try candidate.validated()
-            try OpenWhisperShortcutSetValidator.validate(
+            try VibeWhisperShortcutSetValidator.validate(
                 dictation: validated,
-                skillSwitcher: config.skillSwitcherHotkey
+                skillSwitcher: config.skillSwitcherHotkey,
+                resultPreview: config.resultPreviewHotkey
             )
             if validated
                 == config.transcription
@@ -1631,6 +2093,30 @@ private struct PreferencesView: View {
                     )
                 } else {
                     config.skillSwitcherHotkey = nil
+                    // Clear any leftover capture/status copy; no "disabled" banner.
+                    if !hotkeyMessageIsError {
+                        hotkeyMessage = nil
+                    }
+                }
+            }
+        )
+    }
+
+    private var resultPreviewHotkeyEnabledBinding:
+        Binding<Bool>
+    {
+        Binding(
+            get: { config.resultPreviewHotkey != nil },
+            set: { enabled in
+                if enabled {
+                    applyResultPreviewHotkeyCandidate(
+                        .resultPreview
+                    )
+                } else {
+                    config.resultPreviewHotkey = nil
+                    if !hotkeyMessageIsError {
+                        hotkeyMessage = nil
+                    }
                 }
             }
         )
@@ -1641,10 +2127,11 @@ private struct PreferencesView: View {
     ) {
         do {
             let validated = try candidate.validated()
-            try OpenWhisperShortcutSetValidator.validate(
+            try VibeWhisperShortcutSetValidator.validate(
                 dictation:
                     config.transcription.dictationHotkey,
-                skillSwitcher: validated
+                skillSwitcher: validated,
+                resultPreview: config.resultPreviewHotkey
             )
             if validated == config.skillSwitcherHotkey {
                 hotkeyMessage = L10n.format(
@@ -1660,6 +2147,37 @@ private struct PreferencesView: View {
             )
             hotkeyMessageIsError = false
             config.skillSwitcherHotkey = validated
+        } catch {
+            hotkeyMessage = error.localizedDescription
+            hotkeyMessageIsError = true
+        }
+    }
+
+    private func applyResultPreviewHotkeyCandidate(
+        _ candidate: HotkeyBinding
+    ) {
+        do {
+            let validated = try candidate.validated()
+            try VibeWhisperShortcutSetValidator.validate(
+                dictation:
+                    config.transcription.dictationHotkey,
+                skillSwitcher: config.skillSwitcherHotkey,
+                resultPreview: validated
+            )
+            if validated == config.resultPreviewHotkey {
+                hotkeyMessage = L10n.format(
+                    "%@ is already the Result Preview shortcut.",
+                    validated.displayName
+                )
+                hotkeyMessageIsError = false
+                return
+            }
+            hotkeyMessage = L10n.format(
+                "Testing %@…",
+                validated.displayName
+            )
+            hotkeyMessageIsError = false
+            config.resultPreviewHotkey = validated
         } catch {
             hotkeyMessage = error.localizedDescription
             hotkeyMessageIsError = true
@@ -1835,561 +2353,791 @@ private struct PreferencesView: View {
     }
 
     private var accountOverviewCard: some View {
-        settingsCard(title: nil, style: .hero) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 0) {
-                    compactSetupTile(title: "ChatGPT", status: chatGPTAccountStatus)
-                    Divider()
-                        .frame(height: 36)
-                        .padding(.horizontal, 14)
-                    compactSetupTile(title: "Microphone", status: microphoneStatus)
-                    Divider()
-                        .frame(height: 36)
-                        .padding(.horizontal, 14)
-                    compactSetupTile(title: "Accessibility", status: accessibilityStatus)
-                }
+        // Account & permissions — status first, then identity/actions.
+        settingsCard(title: "Account & Permissions", style: .grouped) {
+            HStack(alignment: .top, spacing: 0) {
+                compactSetupTile(title: "ChatGPT", status: chatGPTAccountStatus)
+                Divider()
+                    .frame(height: 40)
+                    .padding(.horizontal, VibeWhisperMetrics.space12)
+                compactSetupTile(title: "Microphone", status: microphoneStatus)
+                Divider()
+                    .frame(height: 40)
+                    .padding(.horizontal, VibeWhisperMetrics.space12)
+                compactSetupTile(title: "Accessibility", status: accessibilityStatus)
+            }
+            .padding(.vertical, VibeWhisperMetrics.space4)
 
-                HStack(alignment: .center, spacing: 10) {
+            Divider().opacity(0.55)
+
+            HStack(alignment: .center, spacing: VibeWhisperMetrics.space12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.text("ChatGPT Account"))
+                        .font(VibeWhisperTypography.body(.medium))
                     if let userEmail = authSnapshot.userEmail {
                         Text(userEmail)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(VibeWhisperTypography.caption())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .textSelection(.enabled)
+                    } else {
+                        Text(chatGPTAccountStatus.title)
+                            .font(VibeWhisperTypography.caption())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-
-                    Spacer()
-
-                    chatGPTSetupActions
                 }
+                Spacer(minLength: VibeWhisperMetrics.space12)
+                chatGPTSetupActions
+            }
+            .padding(.vertical, VibeWhisperMetrics.space8)
 
-                HStack {
-                    Spacer()
-                    Button(L10n.text("Open Setup Guide"), action: onOpenOnboarding)
-                        .buttonStyle(.bordered)
-                }
-
-                if permissionStatusMonitor.snapshot.microphone != .granted
-                    || !permissionStatusMonitor.snapshot.accessibilityTrusted {
-                    Divider()
-                    HStack(spacing: 10) {
-                        ForEach(permissionRepairActions) { action in
-                            repairActionButton(action)
-                        }
+            // Repair actions only when something still needs attention — no
+            // setup-guide link or "ready" caption clutter under the tiles.
+            if permissionStatusMonitor.snapshot.microphone != .granted
+                || !permissionStatusMonitor.snapshot.accessibilityTrusted
+            {
+                Divider().opacity(0.55)
+                    .padding(.top, VibeWhisperMetrics.space8)
+                HStack(spacing: VibeWhisperMetrics.space10) {
+                    ForEach(permissionRepairActions) { action in
+                        repairActionButton(action)
                     }
-
-                    if isRequestingMicrophoneAccess {
-                        Label(
-                            L10n.text("Requesting microphone"),
-                            systemImage: "mic.badge.plus"
-                        )
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    }
-
+                    Spacer(minLength: 0)
                 }
+                .padding(.top, VibeWhisperMetrics.space8)
 
-                if let permissionMessage {
-                    Text(permissionMessage)
-                        .font(.system(size: 11))
-                        .foregroundStyle(
-                            permissionMessageIsError ? .red : .secondary
-                        )
-                        .fixedSize(horizontal: false, vertical: true)
+                if isRequestingMicrophoneAccess {
+                    Label(
+                        L10n.text("Requesting microphone"),
+                        systemImage: "mic.badge.plus"
+                    )
+                    .font(VibeWhisperTypography.caption(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, VibeWhisperMetrics.space6)
                 }
+            }
 
+            // Only surface real errors — never a success tip like
+            // "Microphone access is ready."
+            if let permissionMessage, permissionMessageIsError {
+                Text(permissionMessage)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(Color(nsColor: VibeWhisperPalette.error))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, VibeWhisperMetrics.space6)
             }
         }
     }
 
     private var dictationCard: some View {
-        settingsCard(title: "Dictation / ASR") {
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 7) {
-                    LabeledContent(
-                        L10n.text("Dictation shortcut")
-                    ) {
-                        HStack(spacing: 8) {
-                            HotkeyRecorderView(
-                                binding:
-                                    config.transcription
-                                        .dictationHotkey,
-                                onCandidate: {
-                                    candidate in
-                                    applyHotkeyCandidate(
-                                        candidate
-                                    )
-                                },
-                                onCaptureChanged: {
-                                    capturing in
-                                    isCapturingHotkey =
-                                        capturing
-                                    onHotkeyCaptureChanged(
-                                        capturing
-                                    )
-                                    if capturing {
-                                        hotkeyMessage =
-                                            L10n.text(
-                                                "Press the shortcut you want to use. Esc cancels without changing the current shortcut."
-                                            )
-                                        hotkeyMessageIsError =
-                                            false
-                                    }
-                                }
-                            )
-                            .frame(
-                                minWidth: 150,
-                                idealWidth: 176,
-                                maxWidth: 220,
-                                minHeight: 30,
-                                idealHeight: 30,
-                                maxHeight: 30
-                            )
-
-                            Button(
-                                L10n.text("Restore F5")
-                            ) {
-                                applyHotkeyCandidate(.f5)
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(
-                                config.transcription
-                                    .dictationHotkey == .f5
-                                    || isCapturingHotkey
-                            )
-                        }
-                    }
-
-                    if let hotkeyMessage {
-                        Text(hotkeyMessage)
-                            .font(.system(size: 11))
-                            .foregroundStyle(
-                                hotkeyMessageIsError
-                                    ? .red
-                                    : .secondary
-                            )
-                            .fixedSize(
-                                horizontal: false,
-                                vertical: true
-                            )
-                    }
-                }
-
-                Toggle(L10n.text("Feedback sounds"), isOn: $config.transcription.feedbackSoundsEnabled)
-                Toggle(L10n.text("ASR prompt cleanup"), isOn: $config.transcription.speechCleanupEnabled)
-
-                Divider()
-
-                LabeledContent(L10n.text("Chinese output")) {
-                    Picker(
-                        L10n.text("Chinese output"),
-                        selection: $config.transcription.languagePreference
-                    ) {
-                        ForEach(TranscriptLanguagePreference.allCases) { preference in
-                            Text(preference.title).tag(preference)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(
-                        minWidth: 170,
-                        idealWidth: 230,
-                        maxWidth: 280
-                    )
-                }
-
-                LabeledContent(L10n.text("Punctuation")) {
-                    Picker(
-                        L10n.text("Punctuation"),
-                        selection: $config.transcription.punctuationPreference
-                    ) {
-                        ForEach(TranscriptPunctuationPreference.allCases) { preference in
-                            Text(preference.title).tag(preference)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(
-                        minWidth: 170,
-                        idealWidth: 230,
-                        maxWidth: 280
-                    )
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.text("Default ASR route"))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Text(L10n.text("ChatGPT Account"))
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                historySection(
-                    title: "Recent Dictation History",
-                    textSource: .dictation
+        // Lean Form: only controls that change dictation behavior. History
+        // and account routing live on their own destinations.
+        settingsCard(title: "Dictation / ASR", style: .grouped) {
+            SettingsRow(title: L10n.text("Feedback sounds")) {
+                Toggle(
+                    L10n.text("Feedback sounds"),
+                    isOn: $config.transcription.feedbackSoundsEnabled
                 )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("ASR prompt cleanup")) {
+                Toggle(
+                    L10n.text("ASR prompt cleanup"),
+                    isOn: $config.transcription.speechCleanupEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Punctuation")) {
+                Picker(
+                    L10n.text("Punctuation"),
+                    selection: $config.transcription.punctuationPreference
+                ) {
+                    ForEach(TranscriptPunctuationPreference.allCases) { preference in
+                        Text(preference.title).tag(preference)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: GeneralSettingsChrome.controlClusterWidth, alignment: .trailing)
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Recent records")) {
+                Button(L10n.text("Open History…")) {
+                    selectedSection = .history
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
     }
 
-    private var appearanceAndFeedbackCard:
-        some View
-    {
-        settingsCard(
-            title: nil,
-            style: .hero
-        ) {
-            VStack(
-                alignment: .leading,
-                spacing: 14
-            ) {
-                VStack(
-                    alignment: .leading,
-                    spacing: 7
+    private var appearanceAndFeedbackCard: some View {
+        // System Settings form: left labels, trailing controls, mode-specific
+        // options only. No preview chrome — live dictation is the preview.
+        settingsCard(title: nil, style: .grouped) {
+            SettingsRow(title: L10n.text("Visual feedback")) {
+                Picker(
+                    L10n.text("Visual feedback"),
+                    selection: $config.visualFeedback.mode
                 ) {
-                    Text(
-                        L10n.text(
-                            "Visual feedback"
-                        )
-                    )
-                    .font(
-                        .system(
-                            size: 12,
-                            weight: .medium
-                        )
-                    )
+                    ForEach(VisualFeedbackMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(
+                    width: GeneralSettingsChrome.controlClusterWidth,
+                    alignment: .trailing
+                )
+            }
 
+            if config.visualFeedback.mode == .refinedHUD {
+                Divider().opacity(0.55)
+
+                SettingsRow(title: L10n.text("Status Bar position")) {
                     Picker(
-                        L10n.text(
-                            "Visual feedback"
-                        ),
-                        selection:
-                            $config.visualFeedback
-                                .mode
+                        L10n.text("Status Bar position"),
+                        selection: $config.visualFeedback.hudPlacement
                     ) {
-                        ForEach(
-                            VisualFeedbackMode
-                                .allCases
-                        ) { mode in
-                            Text(mode.title)
-                                .tag(mode)
+                        ForEach(HUDPlacement.allCases) { placement in
+                            Text(placement.title).tag(placement)
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.menu)
+                    .pickerStyle(.segmented)
                     .frame(
-                        minWidth: 190,
-                        idealWidth: 240,
-                        maxWidth: 300,
-                        alignment: .leading
+                        width: GeneralSettingsChrome.controlClusterWidth,
+                        alignment: .trailing
                     )
-
                 }
+            }
 
-                Divider()
+            if config.visualFeedback.mode == .aiActivityGlow {
+                Divider().opacity(0.55)
 
-                LabeledContent(
-                    L10n.text("Intensity")
-                ) {
+                SettingsRow(title: L10n.text("Intensity")) {
                     Picker(
                         L10n.text("Intensity"),
-                        selection:
-                            $config.visualFeedback
-                                .intensity
+                        selection: $config.visualFeedback.intensity
                     ) {
-                        ForEach(
-                            VisualFeedbackIntensity
-                                .allCases
-                        ) { intensity in
-                            Text(intensity.title)
-                                .tag(intensity)
+                        ForEach(VisualFeedbackIntensity.allCases) { intensity in
+                            Text(intensity.title).tag(intensity)
                         }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .frame(
-                        minWidth: 150,
-                        idealWidth: 180,
-                        maxWidth: 240
+                        width: GeneralSettingsChrome.controlClusterWidth,
+                        alignment: .trailing
                     )
                 }
 
-                if config.visualFeedback.mode
-                    == .aiActivityGlow
-                {
-                    LabeledContent(
-                        L10n.text("Frame target")
+                Divider().opacity(0.55)
+
+                SettingsRow(title: L10n.text("Frame target")) {
+                    Picker(
+                        L10n.text("Frame target"),
+                        selection: $config.visualFeedback.frameTarget
                     ) {
+                        ForEach(BlueSignalFrameTarget.allCases) { target in
+                            Text(target.title).tag(target)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(
+                        width: GeneralSettingsChrome.controlClusterWidth,
+                        alignment: .trailing
+                    )
+                }
+            }
+
+            if config.visualFeedback.mode != .hidden {
+                Divider().opacity(0.55)
+
+                SettingsRow(
+                    title: L10n.text(
+                        "Show status text when an action needs explanation"
+                    )
+                ) {
+                    Toggle(
+                        L10n.text(
+                            "Show status text when an action needs explanation"
+                        ),
+                        isOn: $config.visualFeedback.showStatusText
+                    )
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                }
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Feedback sounds")) {
+                Toggle(
+                    L10n.text("Feedback sounds"),
+                    isOn: $config.transcription.feedbackSoundsEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Completion notification")) {
+                Toggle(
+                    L10n.text("Completion notification"),
+                    isOn: $config.visualFeedback
+                        .completionNotificationEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Always reduce motion")) {
+                Toggle(
+                    L10n.text("Always reduce motion"),
+                    isOn: $config.visualFeedback.alwaysReduceMotion
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+        }
+    }
+
+    // MARK: - Context & Privacy
+
+    /// What Skills may read during dictation / rewrite.
+    private var contextSourcesCard: some View {
+        settingsCard(title: "Context", style: .grouped) {
+            ForEach(
+                Array(
+                    ContextSourceKind.userVisibleSettingsSources.enumerated()
+                ),
+                id: \.element.id
+            ) { index, source in
+                if index > 0 {
+                    Divider().opacity(0.55)
+                }
+                contextSourceRow(source)
+            }
+
+            if config.context.selectionEnabled {
+                Divider().opacity(0.55)
+                SettingsRow(
+                    title: L10n.text("Maximum selected text")
+                ) {
+                    Picker(
+                        L10n.text("Maximum selected text"),
+                        selection: $config.context.maximumSelectionCharacters
+                    ) {
+                        Text(L10n.text("2,000 characters")).tag(2_000)
+                        Text(L10n.text("6,000 characters")).tag(6_000)
+                        Text(L10n.text("12,000 characters")).tag(12_000)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(
+                        width: GeneralSettingsChrome.controlClusterWidth,
+                        alignment: .trailing
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func contextSourceRow(_ source: ContextSourceKind) -> some View {
+        let available = source.isAvailableInCurrentRuntime
+        let isVoice = source == .voice
+        SettingsRow(title: source.title) {
+            if available, !isVoice {
+                Toggle(
+                    L10n.text("Enabled"),
+                    isOn: Binding(
+                        get: {
+                            config.context.setting(for: source).isEnabled
+                        },
+                        set: { enabled in
+                            config.context.setSourceEnabled(
+                                enabled,
+                                source: source
+                            )
+                        }
+                    )
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            } else if isVoice {
+                Text(L10n.text("Required"))
+                    .font(VibeWhisperTypography.callout(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(
+                        width: GeneralSettingsChrome.controlClusterWidth,
+                        alignment: .trailing
+                    )
+            } else {
+                Text(L10n.text("Coming soon"))
+                    .font(VibeWhisperTypography.callout(.medium))
+                    .foregroundStyle(.tertiary)
+                    .frame(
+                        width: GeneralSettingsChrome.controlClusterWidth,
+                        alignment: .trailing
+                    )
+            }
+        }
+    }
+
+    /// Per-Skill selection access. Hidden when no Skill requests selection.
+    @ViewBuilder
+    private var skillPermissionsCard: some View {
+        let skills = availableSkillRegistry.orderedDefinitions.filter {
+            $0.allCapabilities.contains(.selection)
+        }
+        if !skills.isEmpty {
+            settingsCard(title: "Skill Permissions", style: .grouped) {
+                ForEach(Array(skills.enumerated()), id: \.element.id) { index, skill in
+                    if index > 0 {
+                        Divider().opacity(0.55)
+                    }
+                    SettingsRow(title: skill.localizedName) {
                         Picker(
-                            L10n.text(
-                                "Frame target"
-                            ),
-                            selection:
-                                $config
-                                    .visualFeedback
-                                    .frameTarget
+                            skill.localizedName,
+                            selection: Binding(
+                                get: {
+                                    config.context.scope(
+                                        skillID: skill.id,
+                                        capability: .selection
+                                    )
+                                },
+                                set: { scope in
+                                    config.context.setScope(
+                                        scope,
+                                        skillID: skill.id,
+                                        capability: .selection
+                                    )
+                                }
+                            )
                         ) {
-                            ForEach(
-                                BlueSignalFrameTarget
-                                    .allCases
-                            ) { target in
-                                Text(target.title)
-                                    .tag(target)
+                            ForEach(SkillPermissionScope.allCases) { scope in
+                                Text(scope.title).tag(scope)
                             }
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .frame(
-                            minWidth: 180,
-                            idealWidth: 230,
-                            maxWidth: 290
+                            width: GeneralSettingsChrome.controlClusterWidth,
+                            alignment: .trailing
                         )
+                        .disabled(!config.context.selectionEnabled)
                     }
                 }
 
-                Toggle(
-                    L10n.text(
-                        "Show status text when an action needs explanation"
-                    ),
-                    isOn:
-                        $config.visualFeedback
-                            .showStatusText
-                )
-                .disabled(
-                    config.visualFeedback.mode
-                        == .hidden
-                )
-
-                Toggle(
-                    L10n.text("Feedback sounds"),
-                    isOn:
-                        $config.transcription
-                            .feedbackSoundsEnabled
-                )
-
-                Toggle(
-                    L10n.text(
-                        "Completion notification"
-                    ),
-                    isOn:
-                        $config.visualFeedback
-                            .completionNotificationEnabled
-                )
-
-                Toggle(
-                    L10n.text(
-                        "Always reduce motion"
-                    ),
-                    isOn:
-                        $config.visualFeedback
-                            .alwaysReduceMotion
-                )
-
-                Divider()
-
-                VStack(
-                    alignment: .leading,
-                    spacing: 8
-                ) {
-                    Text(
-                        L10n.text(
-                            "Preview feedback"
+                if !config.context.permissionGrants.isEmpty {
+                    Divider().opacity(0.55)
+                    SettingsRow(
+                        title: L10n.text("Reset Permissions"),
+                        detail: L10n.text(
+                            "Clear saved Skill access for selected text."
                         )
-                    )
-                    .font(
-                        .system(
-                            size: 12,
-                            weight: .medium
-                        )
-                    )
-
-                    HStack(spacing: 8) {
-                        ForEach(
-                            VisualFeedbackPreview
-                                .allCases
-                        ) { preview in
-                            Button(preview.title) {
-                                onPreviewVisualFeedback(
-                                    preview,
-                                    config.visualFeedback
-                                )
-                            }
-                            .buttonStyle(.bordered)
+                    ) {
+                        Button(L10n.text("Reset")) {
+                            config.context.revokeAll()
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-
                 }
             }
         }
     }
 
-    private var privacyCard: some View {
-        settingsCard(title: nil, style: .hero) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(
-                        L10n.text("Keep local transcript history"),
-                        isOn: $config.privacy.historyEnabled
-                    )
-
-                    if config.privacy.historyEnabled {
-                        Toggle(
-                            L10n.text("Also keep the raw ASR transcript"),
-                            isOn: $config.privacy.storeRawTranscripts
-                        )
-                        Stepper(
-                            L10n.format(
-                                "Keep transcript history for %ld days",
-                                config.privacy.historyRetentionDays
-                            ),
-                            value: $config.privacy.historyRetentionDays,
-                            in: 1...3_650
-                        )
-                        Stepper(
-                            L10n.format(
-                                "Keep at most %ld transcript records",
-                                config.privacy.historyRecordLimit
-                            ),
-                            value: $config.privacy.historyRecordLimit,
-                            in: 10...10_000,
-                            step: 50
-                        )
-                    }
+    private var contextReceiptsCard: some View {
+        settingsCard(title: "Receipts", style: .grouped) {
+            SettingsRow(
+                title: L10n.text("Context Receipts")
+            ) {
+                Picker(
+                    L10n.text("Context Receipts"),
+                    selection: $config.context.retentionPolicy
+                ) {
+                    Text(L10n.text("Session only"))
+                        .tag(ContextRetentionPolicy.sessionOnly)
+                    Text(L10n.text("Keep redacted receipts"))
+                        .tag(ContextRetentionPolicy.redactedReceipts)
                 }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(
-                        L10n.text("Keep failed recordings for retry"),
-                        isOn: $config.privacy.failedAudioRecoveryEnabled
-                    )
-                    if config.privacy.failedAudioRecoveryEnabled {
-                        Stepper(
-                            L10n.format(
-                                "Delete failed recordings after %ld hours",
-                                config.privacy.failedAudioRetentionHours
-                            ),
-                            value: $config.privacy.failedAudioRetentionHours,
-                            in: 1...168
-                        )
-                        Stepper(
-                            L10n.format(
-                                "Keep at most %ld failed recordings",
-                                config.privacy.failedAudioRecordLimit
-                            ),
-                            value: $config.privacy.failedAudioRecordLimit,
-                            in: 1...100
-                        )
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(
-                        L10n.text("Keep local performance diagnostics"),
-                        isOn: $config.privacy.diagnosticsEnabled
-                    )
-                    if config.privacy.diagnosticsEnabled {
-                        Stepper(
-                            L10n.format(
-                                "Keep diagnostics for %ld days",
-                                config.privacy.diagnosticsRetentionDays
-                            ),
-                            value: $config.privacy.diagnosticsRetentionDays,
-                            in: 1...365
-                        )
-                        Stepper(
-                            L10n.format(
-                                "Keep at most %ld diagnostic records",
-                                config.privacy.diagnosticsRecordLimit
-                            ),
-                            value: $config.privacy.diagnosticsRecordLimit,
-                            in: 100...20_000,
-                            step: 100
-                        )
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(
-                        L10n.text("Keep local anonymous product metrics"),
-                        isOn: $config.privacy.productMetricsEnabled
-                    )
-                    if config.privacy.productMetricsEnabled {
-                        Stepper(
-                            L10n.format(
-                                "Keep product metrics for %ld days",
-                                config.privacy
-                                    .productMetricsRetentionDays
-                            ),
-                            value: $config.privacy
-                                .productMetricsRetentionDays,
-                            in: 1...365
-                        )
-                        Stepper(
-                            L10n.format(
-                                "Keep at most %ld product metric events",
-                                config.privacy.productMetricsRecordLimit
-                            ),
-                            value: $config.privacy
-                                .productMetricsRecordLimit,
-                            in: 100...50_000,
-                            step: 100
-                        )
-                    }
-
-                    HStack(spacing: 10) {
-                        Button(
-                            L10n.text(
-                                "Export Product Metrics…"
-                            )
-                        ) {
-                            exportProductMetrics()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(!config.privacy.productMetricsEnabled)
-
-                    }
-
-                    if let productMetricsExportMessage {
-                        Text(productMetricsExportMessage)
-                            .font(.system(size: 11))
-                            .foregroundStyle(
-                                productMetricsExportMessageIsError
-                                    ? .red
-                                    : .secondary
-                            )
-                    }
-                }
-
-                Divider()
-
-                Toggle(
-                    L10n.text("Do not save history or recovery audio for sensitive apps"),
-                    isOn: $config.privacy.excludeSensitiveApps
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(
+                    width: GeneralSettingsChrome.controlClusterWidth,
+                    alignment: .trailing
                 )
-                Divider()
+            }
 
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(L10n.text("Delete all local data"))
-                            .font(.system(size: 12, weight: .semibold))
+            if config.context.retentionPolicy == .redactedReceipts,
+               !config.context.recentReceipts.isEmpty
+            {
+                Divider().opacity(0.55)
+                VStack(alignment: .leading, spacing: VibeWhisperMetrics.space8) {
+                    Text(L10n.text("Recent"))
+                        .font(VibeWhisperTypography.caption(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(
+                        config.context.recentReceipts.suffix(5).reversed()
+                    ) { receipt in
+                        HStack(spacing: VibeWhisperMetrics.space8) {
+                            Image(systemName: "checkmark.shield")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text(
+                                receipt.grantedSources
+                                    .map(\.title)
+                                    .joined(separator: ", ")
+                            )
+                            .font(VibeWhisperTypography.caption())
+                            .lineLimit(1)
+                            Spacer(minLength: 8)
+                            Text(
+                                receipt.createdAt.formatted(
+                                    date: .omitted,
+                                    time: .shortened
+                                )
+                            )
+                            .font(VibeWhisperTypography.caption())
+                            .foregroundStyle(.tertiary)
+                        }
                     }
-                    Spacer()
-                    Button(L10n.text("Delete All Data")) {
-                        showsDeleteAllDataConfirmation = true
+                }
+                .padding(.vertical, VibeWhisperMetrics.space4)
+            }
+        }
+    }
+
+    /// What VibeWhisper stores on this Mac.
+    private var localDataCard: some View {
+        settingsCard(title: "On This Mac", style: .grouped) {
+            SettingsRow(
+                title: L10n.text("Transcript history"),
+                detail: L10n.text("Keep recent dictations for History.")
+            ) {
+                Toggle(
+                    L10n.text("Transcript history"),
+                    isOn: $config.privacy.historyEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            if config.privacy.historyEnabled {
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Raw ASR transcript")) {
+                    Toggle(
+                        L10n.text("Raw ASR transcript"),
+                        isOn: $config.privacy.storeRawTranscripts
+                    )
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                }
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("History retention")) {
+                    Stepper(
+                        value: $config.privacy.historyRetentionDays,
+                        in: 1...3_650
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld days",
+                                config.privacy.historyRetentionDays
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("History limit")) {
+                    Stepper(
+                        value: $config.privacy.historyRecordLimit,
+                        in: 10...10_000,
+                        step: 50
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld records",
+                                config.privacy.historyRecordLimit
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(
+                title: L10n.text("Failed recordings"),
+                detail: L10n.text("Keep audio briefly so failed dictations can retry.")
+            ) {
+                Toggle(
+                    L10n.text("Failed recordings"),
+                    isOn: $config.privacy.failedAudioRecoveryEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            if config.privacy.failedAudioRecoveryEnabled {
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Recording retention")) {
+                    Stepper(
+                        value: $config.privacy.failedAudioRetentionHours,
+                        in: 1...168
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld hours",
+                                config.privacy.failedAudioRetentionHours
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Recording limit")) {
+                    Stepper(
+                        value: $config.privacy.failedAudioRecordLimit,
+                        in: 1...100
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld recordings",
+                                config.privacy.failedAudioRecordLimit
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(
+                title: L10n.text("Diagnostics"),
+                detail: L10n.text("Local performance traces for troubleshooting.")
+            ) {
+                Toggle(
+                    L10n.text("Diagnostics"),
+                    isOn: $config.privacy.diagnosticsEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            if config.privacy.diagnosticsEnabled {
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Diagnostics retention")) {
+                    Stepper(
+                        value: $config.privacy.diagnosticsRetentionDays,
+                        in: 1...365
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld days",
+                                config.privacy.diagnosticsRetentionDays
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Diagnostics limit")) {
+                    Stepper(
+                        value: $config.privacy.diagnosticsRecordLimit,
+                        in: 100...20_000,
+                        step: 100
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld records",
+                                config.privacy.diagnosticsRecordLimit
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(
+                title: L10n.text("Product metrics"),
+                detail: L10n.text(
+                    "Anonymous local counters. Never includes transcript text."
+                )
+            ) {
+                Toggle(
+                    L10n.text("Product metrics"),
+                    isOn: $config.privacy.productMetricsEnabled
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            if config.privacy.productMetricsEnabled {
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Metrics retention")) {
+                    Stepper(
+                        value: $config.privacy.productMetricsRetentionDays,
+                        in: 1...365
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld days",
+                                config.privacy.productMetricsRetentionDays
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Metrics limit")) {
+                    Stepper(
+                        value: $config.privacy.productMetricsRecordLimit,
+                        in: 100...50_000,
+                        step: 100
+                    ) {
+                        Text(
+                            L10n.format(
+                                "%ld events",
+                                config.privacy.productMetricsRecordLimit
+                            )
+                        )
+                        .font(VibeWhisperTypography.callout())
+                        .frame(
+                            width: GeneralSettingsChrome.controlClusterWidth - 44,
+                            alignment: .trailing
+                        )
+                    }
+                }
+                Divider().opacity(0.55)
+                SettingsRow(title: L10n.text("Export")) {
+                    Button(L10n.text("Export…")) {
+                        exportProductMetrics()
                     }
                     .buttonStyle(.bordered)
-                    .tint(.red)
+                    .controlSize(.small)
                 }
+                if let productMetricsExportMessage {
+                    Text(productMetricsExportMessage)
+                        .font(VibeWhisperTypography.caption())
+                        .foregroundStyle(
+                            productMetricsExportMessageIsError
+                                ? Color(nsColor: VibeWhisperPalette.error)
+                                : .secondary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
 
-                if let privacyMessage {
-                    Text(privacyMessage)
-                        .font(.system(size: 11))
-                        .foregroundStyle(privacyMessageIsError ? .red : .secondary)
+    private var privacyActionsCard: some View {
+        settingsCard(title: "Privacy", style: .grouped) {
+            SettingsRow(
+                title: L10n.text("Sensitive apps"),
+                detail: L10n.text(
+                    "Do not save history or recovery audio for sensitive apps"
+                )
+            ) {
+                Toggle(
+                    L10n.text("Sensitive apps"),
+                    isOn: $config.privacy.excludeSensitiveApps
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(
+                title: L10n.text("Delete all local data"),
+                detail: L10n.text(
+                    "Removes history, recovery audio, diagnostics, and metrics on this Mac."
+                )
+            ) {
+                Button(L10n.text("Delete All Data")) {
+                    showsDeleteAllDataConfirmation = true
                 }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.small)
+            }
+
+            if let privacyMessage {
+                Text(privacyMessage)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(
+                        privacyMessageIsError
+                            ? Color(nsColor: VibeWhisperPalette.error)
+                            : .secondary
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, VibeWhisperMetrics.space4)
             }
         }
     }
@@ -2409,7 +3157,7 @@ private struct PreferencesView: View {
             authSnapshot = authManager.authSnapshot()
             browserBridgeSnapshot = authManager.browserBridgeSnapshot()
             refreshCommunitySkillInventory()
-            privacyMessage = L10n.text("All OpenWhisper data was deleted from this Mac.")
+            privacyMessage = L10n.text("All VibeWhisper data was deleted from this Mac.")
             privacyMessageIsError = false
         case .failure(let error):
             privacyMessage = error.localizedDescription
@@ -2417,317 +3165,954 @@ private struct PreferencesView: View {
         }
     }
 
-    private var advancedRecoveryCard: some View {
-        settingsCard(title: "Current Product Route") {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    routeRow(
-                        title: "Dictation",
-                        value: config.transcription.provider.title,
-                        detail: config.transcription.provider == .openAICompatible
-                            ? config.transcription.openAITranscriptionURL
-                            : ManagedEndpointPolicy.transcriptionURL.absoluteString
-                    )
-                    routeRow(
-                        title: "AI Polish",
-                        value: "ChatGPT Auth",
-                        detail: L10n.format(
-                            "%@ via %@",
-                            config.transcription.textPolish.chatGPTResponseModel,
-                            ManagedEndpointPolicy.responsesURL.absoluteString
-                        )
-                    )
-                }
+    private var usesOwnDictationAPI: Bool {
+        config.transcription.provider == .openAICompatible
+    }
 
-                Divider()
+    private var usesOwnPolishAPI: Bool {
+        config.transcription.textPolish.openAICompatibleEnabled
+    }
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.text("OpenAI-Compatible Recovery"))
-                        .font(.system(size: 13, weight: .semibold))
+    private var accountDictationModelLabel: String {
+        L10n.text("Managed")
+    }
 
-                    LabeledContent(L10n.text("Endpoint")) {
-                        TextField(
-                            "",
-                            text: $recoveryEndpointDraft,
-                            prompt: Text(
-                                "https://api.example.com/v1/audio/transcriptions"
-                            )
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(
-                            minWidth: 180,
-                            idealWidth: 360,
-                            maxWidth: .infinity
-                        )
-                        .onSubmit {
-                            commitRecoveryEndpointDraft()
-                        }
-                        .onDisappear {
-                            commitRecoveryEndpointDraft()
-                        }
-                        .task(id: recoveryEndpointDraft) {
-                            try? await Task.sleep(for: .milliseconds(450))
-                            guard !Task.isCancelled else {
-                                return
-                            }
-                            commitRecoveryEndpointDraft()
-                        }
-                    }
-
-                    LabeledContent(L10n.text("Model")) {
-                        TextField(
-                            "",
-                            text: $recoveryModelDraft,
-                            prompt: Text("gpt-4o-mini-transcribe")
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(
-                            minWidth: 180,
-                            idealWidth: 260,
-                            maxWidth: .infinity
-                        )
-                        .onSubmit {
-                            commitRecoveryModelDraft()
-                        }
-                        .onDisappear {
-                            commitRecoveryModelDraft()
-                        }
-                        .task(id: recoveryModelDraft) {
-                            try? await Task.sleep(for: .milliseconds(450))
-                            guard !Task.isCancelled else {
-                                return
-                            }
-                            commitRecoveryModelDraft()
-                        }
-                    }
-
-                    LabeledContent(L10n.text("API Key")) {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 8) {
-                                recoveryAPIKeyField
-                                recoveryAPIKeyActions
-                            }
-                            VStack(alignment: .trailing, spacing: 8) {
-                                recoveryAPIKeyField
-                                recoveryAPIKeyActions
-                            }
-                        }
-                    }
-
-                    Label(
-                        L10n.text(
-                            recoveryAPIKeyStored
-                                ? "API key stored in Keychain"
-                                : "API key not configured"
-                        ),
-                        systemImage: recoveryAPIKeyStored
-                            ? "checkmark.shield.fill"
-                            : "exclamationmark.triangle.fill"
-                    )
-                    .foregroundStyle(
-                        recoveryAPIKeyStored ? .green : .orange
-                    )
-                    .font(.system(size: 11, weight: .medium))
-
-                    HStack(spacing: 10) {
-                        Button(
-                            L10n.text(
-                                isTestingRecoveryConnection
-                                    ? "Testing Connection…"
-                                    : "Test Connection"
-                            )
-                        ) {
-                            testRecoveryConnection()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(
-                            isTestingRecoveryConnection
-                                || !recoveryAPIKeyStored
-                        )
-
-                        if config.transcription.provider
-                            == .openAICompatible
-                        {
-                            Button(
-                                L10n.text("Switch Back to ChatGPT Account")
-                            ) {
-                                switchBackToChatGPT()
-                            }
-                            .buttonStyle(.borderedProminent)
-                        } else {
-                            Button(
-                                L10n.text(
-                                    "Use OpenAI-Compatible Recovery…"
-                                )
-                            ) {
-                                showsAdvancedRecovery = true
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(
-                                !recoveryAPIKeyStored
-                                    || config.transcription
-                                        .openAITranscriptionURL
-                                        .trimmingCharacters(
-                                            in: .whitespacesAndNewlines
-                                        )
-                                        .isEmpty
-                                    || config.transcription.openAIModel
-                                        .trimmingCharacters(
-                                            in: .whitespacesAndNewlines
-                                        )
-                                        .isEmpty
-                            )
-                        }
-                    }
-
-                    if let recoveryMessage {
-                        Text(recoveryMessage)
-                            .font(.system(size: 11))
-                            .foregroundStyle(
-                                recoveryMessageIsError ? .red : .secondary
-                            )
-                            .textSelection(.enabled)
-                    }
-                }
-
-                Divider()
-
-                LabeledContent(L10n.text("Configuration")) {
-                    Button(L10n.text("Open Config Folder"), action: onOpenConfigFolder)
-                        .buttonStyle(.bordered)
-                }
-                Divider()
-
-                LabeledContent(L10n.text("Open Source Licenses")) {
-                    Button(L10n.text("View Third-Party Licenses…")) {
-                        showThirdPartyLicenses()
-                    }
-                    .buttonStyle(.bordered)
-                }
-                if let thirdPartyLicenseMessage {
-                    Text(thirdPartyLicenseMessage)
-                        .font(.system(size: 11))
-                        .foregroundStyle(
-                            thirdPartyLicenseMessageIsError
-                                ? .red
-                                : .secondary
-                        )
-                }
-
-                if providerPolicySnapshot.isConfigured {
-                    Divider()
-
-                    LabeledContent(L10n.text("Provider Safety")) {
-                    Button(L10n.text("Refresh Safety Policy")) {
-                        Task {
-                            providerPolicySnapshot =
-                                await providerCapabilityPolicy.refresh(force: true)
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    }
-
-                    Text(providerPolicySnapshot.detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(providerPolicyStatusColor)
-
-                    if !providerPolicySnapshot.disabledCapabilities.isEmpty {
-                        Text(
-                        providerPolicySnapshot.disabledCapabilities
-                            .map(\.title)
-                            .joined(separator: " · ")
-                    )
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.red)
-                    }
-
-                    if let expiresAt = providerPolicySnapshot.expiresAt {
-                        Text(
-                        L10n.format(
-                            "Safety policy expires: %@",
-                            expiresAt.formatted(
-                                date: .abbreviated,
-                                time: .shortened
-                            )
-                        )
-                    )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    }
-                }
-
-                if softwareUpdateSnapshot.isConfigured {
-                    Divider()
-
-                    LabeledContent(L10n.text("Software Updates")) {
-                    Button(L10n.text("Check for Updates…")) {
-                        checkForSoftwareUpdates()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(
-                        !softwareUpdateSnapshot.isConfigured
-                            || !softwareUpdateSnapshot.canCheckForUpdates
-                    )
-                    }
-
-                    Toggle(
-                    L10n.text("Automatically check for updates"),
-                    isOn: Binding(
-                        get: {
-                            softwareUpdateSnapshot.automaticallyChecksForUpdates
-                        },
-                        set: { enabled in
-                            setAutomaticUpdateChecks(enabled)
-                        }
-                    )
+    private var advancedRecognitionCard: some View {
+        settingsCard(title: "Recognition", style: .grouped) {
+            advancedSourceTabBar(
+                selection: Binding(
+                    get: {
+                        usesOwnDictationAPI
+                            ? AdvancedAPISource.ownAPI
+                            : AdvancedAPISource.account
+                    },
+                    set: { selectDictationSource($0) }
                 )
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsRow(title: L10n.text("Model")) {
+                    if usesOwnDictationAPI {
+                        modelPicker(
+                            selection: Binding(
+                                get: { config.transcription.openAIModel },
+                                set: { newValue in
+                                    config.transcription.openAIModel = newValue
+                                    recoveryModelDraft = newValue
+                                }
+                            ),
+                            presets: availableDictationModels,
+                            isEnabled: true
+                        )
+                    } else {
+                        // Account ASR is managed by ChatGPT — model is not selectable.
+                        modelPicker(
+                            selection: .constant(accountDictationModelLabel),
+                            presets: [accountDictationModelLabel],
+                            isEnabled: false
+                        )
+                    }
+                }
 
-                    Text(softwareUpdateSnapshot.detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                Divider().opacity(0.55)
 
-                    if let lastCheckDate = softwareUpdateSnapshot.lastUpdateCheckDate {
-                        Text(
-                        L10n.format(
-                            "Last checked: %@",
-                            lastCheckDate.formatted(
-                                date: .abbreviated,
-                                time: .shortened
-                            )
+                SettingsRow(title: L10n.text("Compatible Fallback")) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: {
+                                config.transcription.openAIFallbackEnabled
+                            },
+                            set: { setCompatibleFallback($0) }
                         )
                     )
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    }
-
-                    if let softwareUpdateMessage {
-                        Text(softwareUpdateMessage)
-                        .font(.system(size: 11))
-                        .foregroundStyle(
-                            softwareUpdateMessageIsError ? .red : .secondary
-                        )
-                    }
-                }
-
-                Divider()
-
-                LabeledContent(L10n.text("Support Diagnostics")) {
-                    Button(L10n.text("Export Diagnostics…")) {
-                        exportSupportDiagnostics()
-                    }
-                    .buttonStyle(.bordered)
-                }
-                if let diagnosticsExportMessage {
-                    Text(diagnosticsExportMessage)
-                        .font(.system(size: 11))
-                        .foregroundStyle(
-                            diagnosticsExportMessageIsError ? .red : .secondary
-                        )
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                    .disabled(usesOwnDictationAPI)
                 }
             }
         }
+    }
+
+    private var advancedPolishCard: some View {
+        settingsCard(title: "Polish", style: .grouped) {
+            advancedSourceTabBar(
+                selection: Binding(
+                    get: {
+                        usesOwnPolishAPI
+                            ? AdvancedAPISource.ownAPI
+                            : AdvancedAPISource.account
+                    },
+                    set: { selectPolishSource($0) }
+                )
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsRow(title: L10n.text("Model")) {
+                    if usesOwnPolishAPI {
+                        modelPicker(
+                            selection: Binding(
+                                get: {
+                                    config.transcription.textPolish
+                                        .openAICompatibleModel
+                                },
+                                set: { newValue in
+                                    config.transcription.textPolish
+                                        .openAICompatibleModel = newValue
+                                }
+                            ),
+                            presets: availablePolishModels,
+                            isEnabled: true
+                        )
+                    } else {
+                        HStack(spacing: 8) {
+                            modelPicker(
+                                selection: Binding(
+                                    get: {
+                                        config.transcription.textPolish
+                                            .chatGPTResponseModel
+                                    },
+                                    set: { newValue in
+                                        config.transcription.textPolish
+                                            .chatGPTResponseModel = newValue
+                                    }
+                                ),
+                                presets: availableAccountPolishModels,
+                                isEnabled: !isLoadingAccountPolishModels
+                            )
+                            if isLoadingAccountPolishModels {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                }
+
+                // Errors/fallback reasons only — never “Loaded N account models.”
+                if !usesOwnPolishAPI,
+                   accountPolishModelsMessageIsError,
+                   let accountPolishModelsMessage
+                {
+                    Text(accountPolishModelsMessage)
+                        .font(VibeWhisperTypography.caption())
+                        .foregroundStyle(Color(nsColor: VibeWhisperPalette.error))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.top, 6)
+                }
+
+                Divider().opacity(0.55)
+
+                SettingsRow(title: L10n.text("Compatible Fallback")) {
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: {
+                                config.transcription.textPolish
+                                    .openAIFallbackEnabled
+                            },
+                            set: { setPolishCompatibleFallback($0) }
+                        )
+                    )
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                    .disabled(usesOwnPolishAPI)
+                }
+            }
+        }
+    }
+
+    private var advancedAPIAccessRow: some View {
+        settingsCard(title: nil, style: .grouped) {
+            SettingsRow(title: L10n.text("Own API")) {
+                Button(L10n.text("Configure…")) {
+                    showsOwnAPIConfigurationSheet = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func advancedSourceTabBar(
+        selection: Binding<AdvancedAPISource>
+    ) -> some View {
+        Picker(L10n.text("Source"), selection: selection) {
+            Text(L10n.text("Account"))
+                .tag(AdvancedAPISource.account)
+            Text(L10n.text("Own API"))
+                .tag(AdvancedAPISource.ownAPI)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.regular)
+        .frame(maxWidth: 220, alignment: .trailing)
+        .accessibilityLabel(L10n.text("Source"))
+    }
+
+    @ViewBuilder
+    private func modelPicker(
+        selection: Binding<String>,
+        presets: [String],
+        isEnabled: Bool = true
+    ) -> some View {
+        let effectivePresets = presets.isEmpty
+            ? [selection.wrappedValue].filter { !$0.isEmpty }
+            : presets
+        let resolvedSelection: String = {
+            if effectivePresets.contains(selection.wrappedValue) {
+                return selection.wrappedValue
+            }
+            return effectivePresets.first ?? selection.wrappedValue
+        }()
+        return Picker("", selection: Binding(
+            get: { resolvedSelection },
+            set: { newValue in
+                guard isEnabled else { return }
+                selection.wrappedValue = newValue
+            }
+        )) {
+            ForEach(effectivePresets, id: \.self) { model in
+                Text(model).tag(model)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .frame(minWidth: 200, alignment: .trailing)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .onAppear {
+            if !effectivePresets.contains(selection.wrappedValue),
+               let first = effectivePresets.first
+            {
+                selection.wrappedValue = first
+            }
+        }
+    }
+
+    private var ownAPIConfigurationSheet: some View {
+        VStack(alignment: .leading, spacing: VibeWhisperMetrics.space16) {
+            HStack {
+                Text(L10n.text("Own API"))
+                    .font(VibeWhisperTypography.title2(.semibold))
+                Spacer()
+                if isDetectingModels {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            Picker("", selection: $ownAPIConfigurationTab) {
+                Text(L10n.text("Recognition"))
+                    .tag(OwnAPIConfigurationTab.recognition)
+                Text(L10n.text("Polish"))
+                    .tag(OwnAPIConfigurationTab.polish)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Group {
+                switch ownAPIConfigurationTab {
+                case .recognition:
+                    ownAPIRecognitionPane
+                case .polish:
+                    ownAPIPolishPane
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button(
+                    L10n.text(
+                        isDetectingModels
+                            ? "Detecting…"
+                            : "Detect Models"
+                    )
+                ) {
+                    detectAvailableModels(for: ownAPIConfigurationTab)
+                }
+                .buttonStyle(.bordered)
+                .disabled(
+                    isDetectingModels
+                        || !(
+                            ownAPIConfigurationTab == .recognition
+                                ? recoveryAPIKeyStored
+                                : polishAPIKeyStored
+                        )
+                )
+
+                if ownAPIConfigurationTab == .recognition {
+                    Button(
+                        L10n.text(
+                            isTestingRecoveryConnection
+                                ? "Testing…"
+                                : "Test Connection"
+                        )
+                    ) {
+                        testRecoveryConnection()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        isTestingRecoveryConnection || !recoveryAPIKeyStored
+                    )
+                } else {
+                    Button(
+                        L10n.text(
+                            isTestingPolishConnection
+                                ? "Testing…"
+                                : "Test Connection"
+                        )
+                    ) {
+                        testPolishConnection()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        isTestingPolishConnection || !polishAPIKeyStored
+                    )
+                }
+
+                Spacer(minLength: 0)
+
+                Button(L10n.text("Done")) {
+                    commitRecoveryEndpointDraft()
+                    commitPolishEndpointDraft()
+                    showsOwnAPIConfigurationSheet = false
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(VibeWhisperMetrics.space20)
+        .frame(minWidth: 540, minHeight: 400)
+        .onAppear {
+            polishEndpointDraft =
+                config.transcription.textPolish.openAICompatibleURL
+            refreshPolishCredentialState()
+            if ownAPIConfigurationTab == .recognition, recoveryAPIKeyStored {
+                detectAvailableModels(for: .recognition)
+            } else if ownAPIConfigurationTab == .polish, polishAPIKeyStored {
+                detectAvailableModels(for: .polish)
+            }
+        }
+    }
+
+    private var ownAPIRecognitionPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsRow(title: L10n.text("Endpoint")) {
+                TextField(
+                    "",
+                    text: $recoveryEndpointDraft,
+                    prompt: Text(
+                        "https://api.openai.com/v1/audio/transcriptions"
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .frame(minWidth: 260, maxWidth: 420)
+                .onSubmit {
+                    commitRecoveryEndpointDraft()
+                }
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("API Key")) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        SecureField(
+                            "",
+                            text: $recoveryAPIKeyInput,
+                            prompt: Text(L10n.text("Enter a replacement API key"))
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .frame(minWidth: 160, idealWidth: 240, maxWidth: .infinity)
+
+                        Button(L10n.text("Save API Key")) {
+                            saveRecoveryAPIKey()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(
+                            recoveryAPIKeyInput
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                        )
+
+                        Button(L10n.text("Remove API Key"), role: .destructive) {
+                            removeRecoveryAPIKey()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!recoveryAPIKeyStored)
+                    }
+                    VStack(alignment: .trailing, spacing: 8) {
+                        SecureField(
+                            "",
+                            text: $recoveryAPIKeyInput,
+                            prompt: Text(L10n.text("Enter a replacement API key"))
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button(L10n.text("Save API Key")) {
+                                saveRecoveryAPIKey()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button(L10n.text("Remove API Key"), role: .destructive) {
+                                removeRecoveryAPIKey()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+
+            if let recoveryMessage {
+                Text(recoveryMessage)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(
+                        recoveryMessageIsError
+                            ? Color(nsColor: VibeWhisperPalette.error)
+                            : .secondary
+                    )
+                    .textSelection(.enabled)
+                    .padding(.top, VibeWhisperMetrics.space8)
+            }
+        }
+        .padding(VibeWhisperMetrics.space12)
+        .background(
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.insetSurface))
+        )
+    }
+
+    private var ownAPIPolishPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsRow(title: L10n.text("Endpoint")) {
+                TextField(
+                    "",
+                    text: $polishEndpointDraft,
+                    prompt: Text(
+                        "https://api.openai.com/v1/chat/completions"
+                    )
+                )
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .frame(minWidth: 260, maxWidth: 420)
+                .onSubmit {
+                    commitPolishEndpointDraft()
+                }
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("API Key")) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        SecureField(
+                            "",
+                            text: $polishAPIKeyInput,
+                            prompt: Text(L10n.text("Enter a replacement API key"))
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .frame(minWidth: 160, idealWidth: 240, maxWidth: .infinity)
+
+                        Button(L10n.text("Save API Key")) {
+                            savePolishAPIKey()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(
+                            polishAPIKeyInput
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                        )
+
+                        Button(L10n.text("Remove API Key"), role: .destructive) {
+                            removePolishAPIKey()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!polishAPIKeyStored)
+                    }
+                    VStack(alignment: .trailing, spacing: 8) {
+                        SecureField(
+                            "",
+                            text: $polishAPIKeyInput,
+                            prompt: Text(L10n.text("Enter a replacement API key"))
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button(L10n.text("Save API Key")) {
+                                savePolishAPIKey()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            Button(L10n.text("Remove API Key"), role: .destructive) {
+                                removePolishAPIKey()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+
+            if let polishMessage {
+                Text(polishMessage)
+                    .font(VibeWhisperTypography.caption())
+                    .foregroundStyle(
+                        polishMessageIsError
+                            ? Color(nsColor: VibeWhisperPalette.error)
+                            : .secondary
+                    )
+                    .textSelection(.enabled)
+                    .padding(.top, VibeWhisperMetrics.space8)
+            }
+        }
+        .padding(VibeWhisperMetrics.space12)
+        .background(
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusM,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.insetSurface))
+        )
+    }
+
+    private enum OwnAPIConfigurationTab: String, Hashable {
+        case recognition
+        case polish
+    }
+
+    private enum AdvancedAPISource: String, Hashable {
+        case account
+        case ownAPI
+    }
+
+    private var canEnableUserOwnedAPI: Bool {
+        recoveryAPIKeyStored
+            && !config.transcription.openAITranscriptionURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+            && !config.transcription.openAIModel
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+    }
+
+    private func selectDictationSource(_ source: AdvancedAPISource) {
+        switch source {
+        case .account:
+            config.transcription.provider = .chatGPTManagedAuth
+            recoveryMessage = nil
+            recoveryMessageIsError = false
+        case .ownAPI:
+            if !canEnableUserOwnedAPI {
+                ownAPIConfigurationTab = .recognition
+                showsOwnAPIConfigurationSheet = true
+                recoveryMessage = L10n.text(
+                    "Save an API key, endpoint, and dictation model before importing your own API."
+                )
+                recoveryMessageIsError = true
+                return
+            }
+            showsAdvancedRecovery = true
+        }
+    }
+
+    private func selectPolishSource(_ source: AdvancedAPISource) {
+        switch source {
+        case .account:
+            config.transcription.textPolish.chatGPTAuthEnabled = true
+            config.transcription.textPolish.openAICompatibleEnabled = false
+            refreshAccountPolishModels(force: true)
+        case .ownAPI:
+            guard polishAPIKeyStored else {
+                ownAPIConfigurationTab = .polish
+                showsOwnAPIConfigurationSheet = true
+                polishMessage = L10n.text(
+                    "Save an API key before using Own API for polish."
+                )
+                polishMessageIsError = true
+                return
+            }
+            let url = config.transcription.textPolish.openAICompatibleURL
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = config.transcription.textPolish.openAICompatibleModel
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !url.isEmpty, !model.isEmpty else {
+                ownAPIConfigurationTab = .polish
+                showsOwnAPIConfigurationSheet = true
+                polishMessage = L10n.text(
+                    "Save an endpoint and model before using Own API for polish."
+                )
+                polishMessageIsError = true
+                return
+            }
+            config.transcription.textPolish.chatGPTAuthEnabled = false
+            config.transcription.textPolish.openAICompatibleEnabled = true
+            config.transcription.textPolish.openAIFallbackEnabled = false
+            polishMessage = nil
+            polishMessageIsError = false
+        }
+    }
+
+    /// Load ChatGPT account models from the managed Codex catalog for the Account polish picker.
+    private func refreshAccountPolishModels(force: Bool) {
+        guard !usesOwnPolishAPI else { return }
+        if isLoadingAccountPolishModels, !force { return }
+
+        isLoadingAccountPolishModels = true
+        Task { @MainActor in
+            defer { isLoadingAccountPolishModels = false }
+
+            let token: String?
+            if authSnapshot.state == .ready || authSnapshot.state == .expired {
+                token = try? await authManager.bestAvailableAccessToken()
+            } else {
+                token = nil
+            }
+
+            let snapshot = await ChatGPTAccountModelCatalog.shared.resolveForPicker(
+                accessToken: token,
+                forceRefresh: force
+            )
+
+            applyAccountPolishModelSnapshot(snapshot)
+        }
+    }
+
+    private func applyAccountPolishModelSnapshot(
+        _ snapshot: ChatGPTAccountModelCatalogSnapshot
+    ) {
+        let slugs = snapshot.pickerSlugs
+        availableAccountPolishModels = slugs.isEmpty
+            ? ProductModelCatalog.rewritePresets
+            : slugs
+
+        // Keep the user's selection when still available; otherwise pick catalog default.
+        let current = config.transcription.textPolish.chatGPTResponseModel
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !availableAccountPolishModels.contains(current) {
+            if let preferred = snapshot.defaultSlug,
+               availableAccountPolishModels.contains(preferred)
+            {
+                config.transcription.textPolish.chatGPTResponseModel = preferred
+            } else if let first = availableAccountPolishModels.first {
+                config.transcription.textPolish.chatGPTResponseModel = first
+            }
+        }
+
+        if snapshot.usedFallbackPresets {
+            accountPolishModelsMessage = snapshot.message
+                ?? L10n.text(
+                    "Account model list unavailable. Showing built-in presets."
+                )
+            accountPolishModelsMessageIsError = true
+        } else {
+            // Live catalog loaded — keep the card quiet (no “Loaded N models” caption).
+            accountPolishModelsMessage = nil
+            accountPolishModelsMessageIsError = false
+        }
+    }
+
+    private func setPolishCompatibleFallback(_ enabled: Bool) {
+        if enabled {
+            if usesOwnPolishAPI {
+                return
+            }
+            guard polishAPIKeyStored else {
+                ownAPIConfigurationTab = .polish
+                showsOwnAPIConfigurationSheet = true
+                polishMessage = L10n.text(
+                    "Save a polish API key before enabling Compatible Fallback."
+                )
+                polishMessageIsError = true
+                return
+            }
+            config.transcription.textPolish.chatGPTAuthEnabled = true
+            config.transcription.textPolish.openAICompatibleEnabled = false
+            config.transcription.textPolish.openAIFallbackEnabled = true
+            polishMessage = nil
+            polishMessageIsError = false
+        } else {
+            config.transcription.textPolish.openAIFallbackEnabled = false
+        }
+    }
+
+    private func setCompatibleFallback(_ enabled: Bool) {
+        if enabled {
+            if usesOwnDictationAPI {
+                return
+            }
+            guard canEnableUserOwnedAPI else {
+                ownAPIConfigurationTab = .recognition
+                showsOwnAPIConfigurationSheet = true
+                recoveryMessage = L10n.text(
+                    "Save an API key, endpoint, and dictation model before enabling Compatible Fallback."
+                )
+                recoveryMessageIsError = true
+                return
+            }
+            config.transcription.provider = .chatGPTManagedAuth
+            config.transcription.openAIFallbackEnabled = true
+            recoveryMessage = nil
+            recoveryMessageIsError = false
+        } else {
+            config.transcription.openAIFallbackEnabled = false
+        }
+    }
+
+    private func activateImportOwnAPI() {
+        do {
+            try validateUserOwnedAPIConfiguration()
+            recoveryAPIKeyStored = true
+            config.transcription.provider = .openAICompatible
+            config.transcription.openAIFallbackEnabled = false
+            recoveryMessage = nil
+            recoveryMessageIsError = false
+            detectAvailableModels(for: .recognition)
+        } catch {
+            recoveryMessage = error.localizedDescription
+            recoveryMessageIsError = true
+            recoveryAPIKeyStored =
+                (try? recoveryCredentialStore.hasAPIKey()) ?? false
+            showsOwnAPIConfigurationSheet = true
+        }
+    }
+
+    private func validateUserOwnedAPIConfiguration() throws {
+        guard try recoveryCredentialStore.hasAPIKey() else {
+            throw OpenAICompatibleConnectionTestError.missingAPIKey
+        }
+        _ = try ManagedEndpointPolicy.validatedUserOwnedURL(
+            config.transcription.openAITranscriptionURL
+        )
+        guard
+            !config.transcription.openAIModel
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+        else {
+            throw OpenAICompatibleConnectionTestError.missingModel
+        }
+    }
+
+    private func detectAvailableModels(
+        for tab: OwnAPIConfigurationTab = .recognition
+    ) {
+        guard !isDetectingModels else { return }
+        isDetectingModels = true
+        if tab == .recognition {
+            recoveryMessage = nil
+            recoveryMessageIsError = false
+        } else {
+            polishMessage = nil
+            polishMessageIsError = false
+        }
+
+        let store: any OpenAICompatibleCredentialPersisting =
+            tab == .recognition
+            ? recoveryCredentialStore
+            : polishCredentialStore
+        let endpoint: String =
+            tab == .recognition
+            ? config.transcription.openAITranscriptionURL
+            : config.transcription.textPolish.openAICompatibleURL
+
+        Task { @MainActor in
+            defer { isDetectingModels = false }
+            do {
+                guard let apiKey = try store.loadAPIKey(), !apiKey.isEmpty else {
+                    let message = L10n.text(
+                        "Save an API key before detecting models."
+                    )
+                    if tab == .recognition {
+                        recoveryMessage = message
+                        recoveryMessageIsError = true
+                    } else {
+                        polishMessage = message
+                        polishMessageIsError = true
+                    }
+                    return
+                }
+
+                let modelsURL = try Self.modelsListURL(fromEndpoint: endpoint)
+                var request = URLRequest(url: modelsURL)
+                request.httpMethod = "GET"
+                request.setValue(
+                    "Bearer \(apiKey)",
+                    forHTTPHeaderField: "Authorization"
+                )
+                request.setValue(
+                    ProductIdentity.userAgent,
+                    forHTTPHeaderField: "User-Agent"
+                )
+
+                let (data, response) = try await SecureHTTPClient.data(for: request)
+                guard let http = response as? HTTPURLResponse,
+                      (200..<300).contains(http.statusCode)
+                else {
+                    throw TextPolishError.requestFailed(
+                        L10n.text("Model list request failed.")
+                    )
+                }
+
+                let ids = Self.parseModelIDs(from: data)
+                if ids.isEmpty {
+                    if tab == .recognition {
+                        availableDictationModels =
+                            ProductModelCatalog.dictationPresets
+                        recoveryMessage = L10n.text(
+                            "No models returned. Using built-in presets."
+                        )
+                        recoveryMessageIsError = false
+                    } else {
+                        availablePolishModels =
+                            ProductModelCatalog.rewritePresets
+                        polishMessage = L10n.text(
+                            "No models returned. Using built-in presets."
+                        )
+                        polishMessageIsError = false
+                    }
+                    return
+                }
+
+                if tab == .recognition {
+                    let dictation = ids.filter { id in
+                        let lower = id.lowercased()
+                        return lower.contains("transcribe")
+                            || lower.contains("whisper")
+                    }
+                    availableDictationModels = dictation.isEmpty
+                        ? ProductModelCatalog.dictationPresets
+                        : Self.mergePreservingOrder(
+                            preferred: ProductModelCatalog.dictationPresets,
+                            extra: dictation
+                        )
+                    if !availableDictationModels.contains(
+                        config.transcription.openAIModel
+                    ),
+                       let first = availableDictationModels.first
+                    {
+                        config.transcription.openAIModel = first
+                        recoveryModelDraft = first
+                    }
+                    recoveryMessage = L10n.format(
+                        "Detected %d models.",
+                        ids.count
+                    )
+                    recoveryMessageIsError = false
+                } else {
+                    let chat = ids.filter { id in
+                        let lower = id.lowercased()
+                        return !lower.contains("transcribe")
+                            && !lower.contains("whisper")
+                            && !lower.contains("embedding")
+                            && !lower.contains("tts")
+                            && !lower.contains("dall-e")
+                            && !lower.contains("moderation")
+                    }
+                    availablePolishModels = chat.isEmpty
+                        ? ProductModelCatalog.rewritePresets
+                        : Self.mergePreservingOrder(
+                            preferred: ProductModelCatalog.rewritePresets,
+                            extra: chat
+                        )
+                    if !availablePolishModels.contains(
+                        config.transcription.textPolish.openAICompatibleModel
+                    ),
+                       let first = availablePolishModels.first
+                    {
+                        config.transcription.textPolish
+                            .openAICompatibleModel = first
+                    }
+                    polishMessage = L10n.format(
+                        "Detected %d models.",
+                        ids.count
+                    )
+                    polishMessageIsError = false
+                }
+            } catch {
+                if tab == .recognition {
+                    recoveryMessage = error.localizedDescription
+                    recoveryMessageIsError = true
+                } else {
+                    polishMessage = error.localizedDescription
+                    polishMessageIsError = true
+                }
+            }
+        }
+    }
+
+    private static func modelsListURL(fromEndpoint endpoint: String) throws -> URL {
+        let url = try ManagedEndpointPolicy.validatedUserOwnedURL(endpoint)
+        guard var components = URLComponents(
+            url: url,
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw TextPolishError.providerUnavailable
+        }
+        var path = components.path
+        for suffix in [
+            "/audio/transcriptions",
+            "/chat/completions",
+            "/responses",
+            "/completions",
+        ] {
+            if path.hasSuffix(suffix) {
+                path = String(path.dropLast(suffix.count))
+                break
+            }
+        }
+        if path.hasSuffix("/") {
+            path = String(path.dropLast())
+        }
+        if path.hasSuffix("/v1") {
+            path += "/models"
+        } else if let range = path.range(of: "/v1") {
+            path = String(path[..<range.upperBound]) + "/models"
+        } else {
+            path += path.isEmpty ? "/v1/models" : "/models"
+        }
+        components.path = path
+        components.query = nil
+        components.fragment = nil
+        guard let result = components.url else {
+            throw TextPolishError.providerUnavailable
+        }
+        return result
+    }
+
+    private static func parseModelIDs(from data: Data) -> [String] {
+        guard
+            let object = try? JSONSerialization.jsonObject(with: data)
+                as? [String: Any],
+            let list = object["data"] as? [[String: Any]]
+        else {
+            return []
+        }
+        var seen = Set<String>()
+        var ids: [String] = []
+        for item in list {
+            guard let id = item["id"] as? String else { continue }
+            let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !seen.contains(trimmed) else { continue }
+            seen.insert(trimmed)
+            ids.append(trimmed)
+        }
+        return ids.sorted()
+    }
+
+    private static func mergePreservingOrder(
+        preferred: [String],
+        extra: [String]
+    ) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for id in preferred + extra {
+            if seen.insert(id).inserted {
+                result.append(id)
+            }
+        }
+        return result
     }
 
     private var recoveryAPIKeyField: some View {
@@ -2803,6 +4188,7 @@ private struct PreferencesView: View {
                 "OpenAI-Compatible API key saved in Keychain."
             )
             recoveryMessageIsError = false
+            detectAvailableModels(for: .recognition)
         } catch {
             recoveryMessage = error.localizedDescription
             recoveryMessageIsError = true
@@ -2815,10 +4201,13 @@ private struct PreferencesView: View {
             try recoveryCredentialStore.deleteAPIKey()
             recoveryAPIKeyInput = ""
             recoveryAPIKeyStored = false
-            if config.transcription.provider == .openAICompatible {
+            if config.transcription.provider == .openAICompatible
+                || config.transcription.openAIFallbackEnabled
+            {
                 config.transcription.provider = .chatGPTManagedAuth
+                config.transcription.openAIFallbackEnabled = false
                 recoveryMessage = L10n.text(
-                    "API key removed. Dictation switched back to the ChatGPT account route."
+                    "API key removed. Switched back to ChatGPT account."
                 )
             } else {
                 recoveryMessage = L10n.text(
@@ -2832,12 +4221,160 @@ private struct PreferencesView: View {
         }
     }
 
+    private func commitPolishEndpointDraft() {
+        let trimmed = polishEndpointDraft
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            config.transcription.textPolish.openAICompatibleURL = trimmed
+        }
+        polishEndpointDraft =
+            config.transcription.textPolish.openAICompatibleURL
+    }
+
+    private func refreshPolishCredentialState() {
+        let store = polishCredentialStore
+        Task {
+            let result: Result<Bool, any Error> = await Task.detached(
+                priority: .utility
+            ) {
+                Result { try store.hasAPIKey() }
+            }.value
+            guard !Task.isCancelled else { return }
+            switch result {
+            case .success(let isStored):
+                polishAPIKeyStored = isStored
+            case .failure:
+                polishAPIKeyStored = false
+            }
+        }
+    }
+
+    private func savePolishAPIKey() {
+        do {
+            try polishCredentialStore.saveAPIKey(polishAPIKeyInput)
+            polishAPIKeyInput = ""
+            polishAPIKeyStored = true
+            polishMessage = L10n.text(
+                "OpenAI-Compatible API key saved in Keychain."
+            )
+            polishMessageIsError = false
+            detectAvailableModels(for: .polish)
+        } catch {
+            polishMessage = error.localizedDescription
+            polishMessageIsError = true
+            refreshPolishCredentialState()
+        }
+    }
+
+    private func removePolishAPIKey() {
+        do {
+            try polishCredentialStore.deleteAPIKey()
+            polishAPIKeyInput = ""
+            polishAPIKeyStored = false
+            if config.transcription.textPolish.openAICompatibleEnabled
+                || config.transcription.textPolish.openAIFallbackEnabled
+            {
+                config.transcription.textPolish.chatGPTAuthEnabled = true
+                config.transcription.textPolish.openAICompatibleEnabled = false
+                config.transcription.textPolish.openAIFallbackEnabled = false
+                polishMessage = L10n.text(
+                    "API key removed. Switched back to ChatGPT account."
+                )
+            } else {
+                polishMessage = L10n.text(
+                    "OpenAI-Compatible API key removed from Keychain."
+                )
+            }
+            polishMessageIsError = false
+        } catch {
+            polishMessage = error.localizedDescription
+            polishMessageIsError = true
+        }
+    }
+
+    private func testPolishConnection() {
+        isTestingPolishConnection = true
+        polishMessage = L10n.text("Testing polish endpoint…")
+        polishMessageIsError = false
+        commitPolishEndpointDraft()
+
+        let store = polishCredentialStore
+        let endpoint = config.transcription.textPolish.openAICompatibleURL
+        let model = config.transcription.textPolish.openAICompatibleModel
+
+        Task { @MainActor in
+            defer { isTestingPolishConnection = false }
+            do {
+                guard let apiKey = try store.loadAPIKey(), !apiKey.isEmpty else {
+                    throw OpenAICompatibleConnectionTestError.missingAPIKey
+                }
+                let url = try ManagedEndpointPolicy.validatedUserOwnedURL(endpoint)
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue(
+                    "Bearer \(apiKey)",
+                    forHTTPHeaderField: "Authorization"
+                )
+                request.setValue(
+                    "application/json",
+                    forHTTPHeaderField: "Content-Type"
+                )
+                request.setValue(
+                    ProductIdentity.userAgent,
+                    forHTTPHeaderField: "User-Agent"
+                )
+                let body: [String: Any] = [
+                    "model": model,
+                    "messages": [
+                        ["role": "user", "content": "ping"],
+                    ],
+                    "max_tokens": 1,
+                    "stream": false,
+                ]
+                request.httpBody = try JSONSerialization.data(
+                    withJSONObject: body
+                )
+                let (data, response) = try await SecureHTTPClient.data(
+                    for: request
+                )
+                guard let http = response as? HTTPURLResponse else {
+                    throw TextPolishError.invalidResponse
+                }
+                guard (200..<300).contains(http.statusCode) else {
+                    let prefix = String(
+                        data: data.prefix(200),
+                        encoding: .utf8
+                    ) ?? ""
+                    throw TextPolishError.requestFailed(
+                        "HTTP \(http.statusCode) \(prefix)"
+                    )
+                }
+                polishAPIKeyStored = true
+                polishMessage = L10n.text(
+                    "Connection succeeded. The polish endpoint accepted the Keychain credential."
+                )
+                polishMessageIsError = false
+            } catch {
+                polishMessage = error.localizedDescription
+                polishMessageIsError = true
+                polishAPIKeyStored =
+                    (try? polishCredentialStore.hasAPIKey()) ?? false
+            }
+        }
+    }
+
     private func testRecoveryConnection() {
         isTestingRecoveryConnection = true
         recoveryMessage = L10n.text(
             "Testing the configured endpoint with generated silence…"
         )
         recoveryMessageIsError = false
+        sonnerToasts.loading(
+            L10n.text("Testing connection…"),
+            detail: L10n.text(
+                "Testing the configured endpoint with generated silence…"
+            )
+        )
         let tester = OpenAICompatibleConnectionTester(
             credentialStore: recoveryCredentialStore
         )
@@ -2847,55 +4384,37 @@ private struct PreferencesView: View {
             do {
                 try await tester.test(config: transcriptionConfig)
                 recoveryAPIKeyStored = true
-                recoveryMessage = L10n.text(
+                let title = L10n.text(
                     "Connection succeeded. The endpoint accepted the Keychain credential and synthetic audio."
                 )
+                recoveryMessage = title
                 recoveryMessageIsError = false
+                sonnerToasts.success(
+                    L10n.text("Connection succeeded"),
+                    detail: title
+                )
             } catch {
                 recoveryMessage = error.localizedDescription
                 recoveryMessageIsError = true
                 recoveryAPIKeyStored =
                     (try? recoveryCredentialStore.hasAPIKey()) ?? false
+                sonnerToasts.error(
+                    L10n.text("Connection failed"),
+                    detail: error.localizedDescription
+                )
             }
             isTestingRecoveryConnection = false
         }
     }
 
-    private func activateAdvancedRecovery() {
-        do {
-            guard try recoveryCredentialStore.hasAPIKey() else {
-                throw OpenAICompatibleConnectionTestError.missingAPIKey
-            }
-            _ = try ManagedEndpointPolicy.validatedUserOwnedURL(
-                config.transcription.openAITranscriptionURL
-            )
-            guard
-                !config.transcription.openAIModel
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .isEmpty
-            else {
-                throw OpenAICompatibleConnectionTestError.missingModel
-            }
 
-            recoveryAPIKeyStored = true
-            config.transcription.provider = .openAICompatible
-            recoveryMessage = L10n.text(
-                "OpenAI-Compatible Recovery is active for dictation ASR. AI Polish still uses ChatGPT Auth."
-            )
-            recoveryMessageIsError = false
-        } catch {
-            recoveryMessage = error.localizedDescription
-            recoveryMessageIsError = true
-            recoveryAPIKeyStored =
-                (try? recoveryCredentialStore.hasAPIKey()) ?? false
-        }
+    private func activateAdvancedRecovery() {
+        activateImportOwnAPI()
     }
 
     private func switchBackToChatGPT() {
         config.transcription.provider = .chatGPTManagedAuth
-        recoveryMessage = L10n.text(
-            "Dictation switched back to the ChatGPT account route. The Recovery API key remains stored in Keychain until you remove it."
-        )
+        recoveryMessage = nil
         recoveryMessageIsError = false
     }
 
@@ -2915,25 +4434,38 @@ private struct PreferencesView: View {
         case .success:
             softwareUpdateMessage = L10n.text("Checking for updates…")
             softwareUpdateMessageIsError = false
+            sonnerToasts.loading(L10n.text("Checking for updates…"))
         case .failure(let error):
             softwareUpdateMessage = error.localizedDescription
             softwareUpdateMessageIsError = true
+            sonnerToasts.error(
+                L10n.text("Update check failed"),
+                detail: error.localizedDescription
+            )
         }
     }
+
 
     private func setAutomaticUpdateChecks(_ enabled: Bool) {
         switch onSetAutomaticallyChecksForUpdates(enabled) {
         case .success(let snapshot):
             softwareUpdateSnapshot = snapshot
-            softwareUpdateMessage = enabled
+            let title = enabled
                 ? L10n.text("Automatic update checks are enabled.")
                 : L10n.text("Automatic update checks are disabled.")
+            softwareUpdateMessage = title
             softwareUpdateMessageIsError = false
+            sonnerToasts.success(title)
         case .failure(let error):
             softwareUpdateMessage = error.localizedDescription
             softwareUpdateMessageIsError = true
+            sonnerToasts.error(
+                L10n.text("Could not update settings"),
+                detail: error.localizedDescription
+            )
         }
     }
+
 
     private func exportProductMetrics() {
         let panel = NSSavePanel()
@@ -3009,14 +4541,14 @@ private struct PreferencesView: View {
     private func routeRow(title: String, value: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(L10n.text(title))
-                .font(OpenWhisperTypography.callout(.medium))
+                .font(VibeWhisperTypography.callout(.medium))
                 .frame(width: 90, alignment: .leading)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text(value))
-                    .font(OpenWhisperTypography.callout(.semibold))
+                    .font(VibeWhisperTypography.callout(.semibold))
                 Text(detail)
-                    .font(OpenWhisperTypography.caption())
+                    .font(VibeWhisperTypography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
@@ -3024,19 +4556,19 @@ private struct PreferencesView: View {
         }
         .padding(12)
         .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
+            Color(nsColor: VibeWhisperPalette.insetSurface),
             in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
         )
         .overlay {
             RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
             .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
+                Color(nsColor: VibeWhisperPalette.hairline),
                 lineWidth: 0.5
             )
         }
@@ -3061,698 +4593,81 @@ private struct PreferencesView: View {
         }
     }
 
-    private var contextCard: some View {
-        settingsCard(title: "Global Context") {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.text("Context Sources"))
-                        .font(.system(size: 12, weight: .semibold))
-                    ForEach(
-                        ContextSourceKind
-                            .userVisibleSettingsSources
-                    ) { source in
-                        HStack(spacing: 10) {
-                            Image(systemName: source.isAvailableInCurrentRuntime ? "checkmark.circle.fill" : "clock.badge")
-                                .foregroundStyle(
-                                    source.isAvailableInCurrentRuntime
-                                        ? Color(nsColor: OpenWhisperPalette.success)
-                                        : Color.secondary
-                                )
-                            Text(source.title)
-                                .font(.system(size: 12, weight: .medium))
-                            Spacer(minLength: 16)
-                            if source.isAvailableInCurrentRuntime,
-                               source != .voice
-                            {
-                                Toggle(
-                                    L10n.text("Enabled"),
-                                    isOn: Binding(
-                                        get: {
-                                            config.context.setting(for: source).isEnabled
-                                        },
-                                        set: { enabled in
-                                            config.context.setSourceEnabled(
-                                                enabled,
-                                                source: source
-                                            )
-                                        }
-                                    )
-                                )
-                                .labelsHidden()
-                                .toggleStyle(.switch)
-                            } else {
-                                Text(
-                                    L10n.text("Required")
-                                )
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-
-                Divider()
-
-                LabeledContent(
-                    L10n.text(
-                        "Maximum selected text"
-                    )
-                ) {
-                    Picker(
-                        L10n.text(
-                            "Maximum selected text"
-                        ),
-                        selection:
-                            $config.context
-                                .maximumSelectionCharacters
-                    ) {
-                        Text(
-                            L10n.text(
-                                "2,000 characters"
-                            )
-                        ).tag(2_000)
-                        Text(
-                            L10n.text(
-                                "6,000 characters"
-                            )
-                        ).tag(6_000)
-                        Text(
-                            L10n.text(
-                                "12,000 characters"
-                            )
-                        ).tag(12_000)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(
-                        minWidth: 150,
-                        idealWidth: 190,
-                        maxWidth: 240
-                    )
-                }
-                .disabled(
-                    !config.context
-                        .selectionEnabled
-                )
-
-                Divider()
-
-                Text(
-                    L10n.text(
-                        "Skill Permissions"
-                    )
-                )
-                .font(
-                    .system(
-                        size: 12,
-                        weight: .semibold
-                    )
-                )
-
-                ForEach(
-                    availableSkillRegistry
-                        .orderedDefinitions
-                        .filter {
-                            $0.allCapabilities
-                                .contains(
-                                    .selection
-                                )
-                        }
-                ) { skill in
-                    HStack(spacing: 12) {
-                        Text(skill.localizedName)
-                            .font(
-                                .system(
-                                    size: 12,
-                                    weight: .medium
-                                )
-                            )
-                        Spacer()
-                        Picker(
-                            skill.localizedName,
-                            selection: Binding(
-                                get: {
-                                    config.context
-                                        .scope(
-                                            skillID:
-                                                skill.id,
-                                            capability:
-                                                .selection
-                                        )
-                                },
-                                set: { scope in
-                                    config.context
-                                        .setScope(
-                                            scope,
-                                            skillID:
-                                                skill.id,
-                                            capability:
-                                                .selection
-                                        )
-                                }
-                            )
-                        ) {
-                            ForEach(
-                                SkillPermissionScope
-                                    .allCases
-                            ) { scope in
-                                Text(scope.title)
-                                    .tag(scope)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(
-                            minWidth: 130,
-                            idealWidth: 165,
-                            maxWidth: 220
-                        )
-                    }
-                    .padding(
-                        .vertical,
-                        4
-                    )
-                }
-                .disabled(
-                    !config.context
-                        .selectionEnabled
-                )
-
-                HStack(spacing: 10) {
-                    Spacer()
-                    Button(
-                        L10n.text(
-                            "Reset Permissions"
-                        )
-                    ) {
-                        config.context
-                            .revokeAll()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(
-                        config.context
-                            .permissionGrants
-                            .isEmpty
-                    )
-                }
-
-                Divider()
-
-                SettingsRow(
-                    title: L10n.text("Context Receipts"),
-                    detail: L10n.text(
-                        "Receipts contain only source names and character counts, never Context text."
-                    )
-                ) {
-                    Picker(
-                        L10n.text("Context Receipts"),
-                        selection: $config.context.retentionPolicy
-                    ) {
-                        Text(L10n.text("Session only"))
-                            .tag(ContextRetentionPolicy.sessionOnly)
-                        Text(L10n.text("Keep redacted receipts"))
-                            .tag(ContextRetentionPolicy.redactedReceipts)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .frame(
-                        minWidth: 160,
-                        idealWidth: 210,
-                        maxWidth: 260
-                    )
-                }
-
-                if !config.context.recentReceipts.isEmpty {
-                    ForEach(config.context.recentReceipts.suffix(5).reversed()) { receipt in
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.shield")
-                                .foregroundStyle(.secondary)
-                            Text(receipt.grantedSources.map(\.title).joined(separator: ", "))
-                                .lineLimit(1)
-                            Spacer()
-                            Text(receipt.createdAt.formatted(date: .omitted, time: .shortened))
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.system(size: 10))
-                    }
-                }
-
-                Divider()
-
-                StyleCapsuleSettingsView(
-                    config: $config,
-                    registry:
-                        availableSkillRegistry,
-                    store: styleCapsuleStore,
-                    localAssetAccessEnabled:
-                        localAssetAccessEnabled
-                )
-            }
-        }
-    }
-
     private var aiPolishCard: some View {
-        settingsCard(title: nil, style: .hero) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 14) {
-                    OpenWhisperIconWell(
-                        systemName: "wand.and.stars",
-                        size: OpenWhisperMetrics.iconWellSizeLarge,
-                        symbolSize: 18
-                    )
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(L10n.text("Skill Library"))
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    Spacer()
-                    Button(L10n.text("Open Skill Library…")) {
-                        withAnimation(
-                            .spring(response: 0.32, dampingFraction: 0.86)
-                        ) {
-                            selectedSection = .skills
-                        }
-                        onOpenSkillLibrary()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                Divider()
-
-                Picker(L10n.text("Mode"), selection: $config.transcription.textPolish.mode) {
+        settingsCard(title: "AI Polish", style: .grouped) {
+            SettingsRow(title: L10n.text("Mode")) {
+                Picker(
+                    L10n.text("Mode"),
+                    selection: $config.transcription.textPolish.mode
+                ) {
                     Text(L10n.text("Auto")).tag(TextPolishMode.automaticWhenKeyAvailable)
                     Text(L10n.text("Always rewrite")).tag(TextPolishMode.always)
                     Text(L10n.text("Off")).tag(TextPolishMode.disabled)
                 }
-                .pickerStyle(.segmented)
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: GeneralSettingsChrome.controlClusterWidth, alignment: .trailing)
+            }
 
-                HStack(spacing: 16) {
-                    Toggle(L10n.text("Show estimates"), isOn: $config.transcription.textPolish.showCostEstimates)
-                    if let textPolishMessage {
-                        Text(textPolishMessage)
-                            .font(.system(size: 11))
-                            .foregroundStyle(textPolishMessageIsError ? .red : .secondary)
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Show estimates")) {
+                Toggle(
+                    L10n.text("Show estimates"),
+                    isOn: $config.transcription.textPolish.showCostEstimates
+                )
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+            }
+
+            Divider().opacity(0.55)
+
+            SettingsRow(title: L10n.text("Connection")) {
+                HStack(spacing: VibeWhisperMetrics.space8) {
+                    if config.transcription.textPolish.openAICompatibleEnabled {
+                        if recoveryAPIKeyStored {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color(nsColor: VibeWhisperPalette.success))
+                            Text(
+                                config.transcription.textPolish
+                                    .openAICompatibleModel
+                            )
+                            .font(VibeWhisperTypography.callout(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        } else {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color(nsColor: VibeWhisperPalette.amber))
+                            Text(L10n.text("Own API"))
+                                .font(VibeWhisperTypography.caption())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    } else if authSnapshot.state == .ready {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color(nsColor: VibeWhisperPalette.success))
+                        Text(config.transcription.textPolish.chatGPTResponseModel)
+                            .font(VibeWhisperTypography.callout(.medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color(nsColor: VibeWhisperPalette.amber))
+                        Text(authSnapshot.detail)
+                            .font(VibeWhisperTypography.caption())
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    Spacer()
                     Button(L10n.text("Test Connection")) {
                         testTextPolishSelection()
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-
-                polishStatusSection
-                historySection(
-                    title: "Recent Polish History",
-                    textSource: .polish
-                )
             }
+
         }
-    }
-
-    private var skillSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(L10n.text("Skills"))
-                    .font(.system(size: 13, weight: .semibold))
-                Text(L10n.text("Community"))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        Color(nsColor: .controlBackgroundColor)
-                    )
-                    .clipShape(Capsule())
-                Spacer()
-            }
-
-            LabeledContent(L10n.text("Default Skill")) {
-                Picker(
-                    L10n.text("Default Skill"),
-                    selection:
-                        $config.transcription.skills.defaultSkillID
-                ) {
-                    ForEach(
-                        availableSkillRegistry.orderedDefinitions
-                    ) { skill in
-                        Text(skill.localizedName)
-                            .tag(skill.id)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 210)
-            }
-
-            if config.transcription.skills.requiresTextPolish,
-               config.transcription.textPolish.mode == .disabled
-            {
-                Label(
-                    L10n.text(
-                        "This Skill needs AI Polish. Turn rewrite mode to Auto or Always rewrite to apply it."
-                    ),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.orange)
-            } else if config.transcription.skills.requiresTextPolish,
-                      authSnapshot.state != .ready
-            {
-                Label(
-                    L10n.text(
-                        "Reply, Email, Backend Prompt, Code Prompt, and Translate need a connected ChatGPT account for AI Polish. Direct dictation and transcription recovery still work without it."
-                    ),
-                    systemImage: "person.crop.circle.badge.exclamationmark"
-                )
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.orange)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.text("Application Rules"))
-                    .font(.system(size: 12, weight: .semibold))
-
-                HStack(spacing: 8) {
-                    Button(L10n.text("Choose App…")) {
-                        chooseSkillApplication()
-                    }
-                    .buttonStyle(.bordered)
-
-                }
-
-                HStack(spacing: 8) {
-                    TextField(
-                        L10n.text("App name (optional)"),
-                        text: $editingSkillAppName
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 150)
-
-                    TextField(
-                        L10n.text("Bundle identifier"),
-                        text: $editingSkillBundleIdentifier,
-                        prompt: Text("com.apple.Notes")
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    .frame(minWidth: 220)
-                }
-
-                HStack(spacing: 8) {
-                    Picker(
-                        L10n.text("Skill"),
-                        selection: $editingSkillID
-                    ) {
-                        ForEach(
-                            availableSkillRegistry.orderedDefinitions
-                        ) { skill in
-                            Text(skill.localizedName)
-                                .tag(skill.id)
-                        }
-                    }
-                    .frame(width: 210)
-
-                    Button(
-                        L10n.text(
-                            editingSkillRuleID == nil
-                                ? "Add Rule"
-                                : "Save Rule"
-                        )
-                    ) {
-                        saveSkillRule()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(
-                        editingSkillBundleIdentifier
-                            .trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            )
-                            .isEmpty
-                    )
-
-                    if editingSkillRuleID != nil {
-                        Button(L10n.text("Cancel")) {
-                            resetSkillRuleEditor()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-
-                    Spacer()
-                }
-
-                if let skillMessage {
-                    Text(skillMessage)
-                        .font(.system(size: 11))
-                        .foregroundStyle(
-                            skillMessageIsError ? .red : .secondary
-                        )
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if !config.transcription.skills.applicationRules.isEmpty {
-                    VStack(spacing: 6) {
-                        ForEach(
-                            config.transcription.skills.applicationRules
-                        ) { rule in
-                            skillRuleRow(rule)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func skillRuleRow(
-        _ rule: AppSkillRule
-    ) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Toggle(
-                L10n.format(
-                    "Enable Skill rule for %@",
-                    rule.appName ?? rule.bundleIdentifier
-                ),
-                isOn: Binding(
-                    get: { rule.isEnabled },
-                    set: { isEnabled in
-                        updateSkillRule(rule.id) {
-                            $0.isEnabled = isEnabled
-                        }
-                    }
-                )
-            )
-            .labelsHidden()
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(rule.appName ?? rule.bundleIdentifier)
-                    .font(.system(size: 12, weight: .medium))
-                Text(rule.bundleIdentifier)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text(
-                availableSkillRegistry
-                    .definition(id: rule.skillID)?
-                    .localizedName
-                    ?? L10n.text("Direct")
-            )
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(rule.isEnabled ? .primary : .secondary)
-                .frame(width: 100, alignment: .trailing)
-
-            Button {
-                startEditingSkillRule(rule)
-            } label: {
-                Image(systemName: "pencil")
-                    .frame(width: 12, height: 12)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help(L10n.text("Edit"))
-            .accessibilityLabel(
-                L10n.format(
-                    "Edit Skill rule for %@",
-                    rule.appName ?? rule.bundleIdentifier
-                )
-            )
-
-            Button(role: .destructive) {
-                config.transcription.skills.remove(id: rule.id)
-                if editingSkillRuleID == rule.id {
-                    resetSkillRuleEditor()
-                }
-                skillMessage = L10n.text(
-                    "Application Skill rule removed."
-                )
-                skillMessageIsError = false
-            } label: {
-                Image(systemName: "trash")
-                    .frame(width: 12, height: 12)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .help(L10n.text("Delete"))
-            .accessibilityLabel(
-                L10n.format(
-                    "Delete Skill rule for %@",
-                    rule.appName ?? rule.bundleIdentifier
-                )
-            )
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
-            in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
-                style: .continuous
-            )
-        )
-        .overlay {
-            RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
-                style: .continuous
-            )
-            .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
-                lineWidth: 0.5
-            )
-        }
-    }
-
-    private func saveSkillRule() {
-        do {
-            let existingRule = editingSkillRuleID.flatMap { id in
-                config.transcription.skills.applicationRules.first {
-                    $0.id == id
-                }
-            }
-            let rule = try AppSkillRule.validated(
-                id: existingRule?.id ?? UUID(),
-                appName: editingSkillAppName,
-                bundleIdentifier: editingSkillBundleIdentifier,
-                skillID: editingSkillID,
-                skillInstallationID:
-                    communitySkillInventory.packages.first {
-                        $0.isActive
-                            && $0.definition.id == editingSkillID
-                    }?.installation.id
-                    ?? (existingRule?.skillID == editingSkillID
-                        ? existingRule?.skillInstallationID
-                        : nil),
-                isEnabled: existingRule?.isEnabled ?? true,
-                registry:
-                    availableSkillRegistry
-            )
-            config.transcription.skills.upsert(
-                rule,
-                registry:
-                    availableSkillRegistry
-            )
-            skillMessage = L10n.format(
-                "Skill rule saved for %@.",
-                rule.appName ?? rule.bundleIdentifier
-            )
-            skillMessageIsError = false
-            resetSkillRuleEditor(clearMessage: false)
-        } catch {
-            skillMessage = error.localizedDescription
-            skillMessageIsError = true
-            NSSound.beep()
-        }
-    }
-
-    private func chooseSkillApplication() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.treatsFilePackagesAsDirectories = false
-        panel.allowedContentTypes = [.application]
-        panel.directoryURL = URL(
-            fileURLWithPath: "/Applications",
-            isDirectory: true
-        )
-        panel.title = L10n.text("Choose an Application")
-        panel.message = L10n.text(
-            "OpenWhisper stores only the selected app name and bundle identifier for this Skill rule."
-        )
-        panel.prompt = L10n.text("Choose App")
-
-        guard
-            panel.runModal() == .OK,
-            let appURL = panel.url,
-            let bundle = Bundle(url: appURL),
-            let bundleIdentifier = bundle.bundleIdentifier,
-            AppModeRule.isValidBundleIdentifier(bundleIdentifier)
-        else {
-            if panel.url != nil {
-                skillMessage = L10n.text(
-                    "The selected application does not expose a valid bundle identifier."
-                )
-                skillMessageIsError = true
-                NSSound.beep()
-            }
-            return
-        }
-
-        editingSkillBundleIdentifier =
-            AppModeRule.normalizedBundleIdentifier(bundleIdentifier)
-        editingSkillAppName = (
-            bundle.object(
-                forInfoDictionaryKey: "CFBundleDisplayName"
-            ) as? String
-        ) ?? (
-            bundle.object(
-                forInfoDictionaryKey: "CFBundleName"
-            ) as? String
-        ) ?? appURL.deletingPathExtension().lastPathComponent
-        skillMessage = nil
-        skillMessageIsError = false
-    }
-
-    private func startEditingSkillRule(_ rule: AppSkillRule) {
-        editingSkillRuleID = rule.id
-        editingSkillAppName = rule.appName ?? ""
-        editingSkillBundleIdentifier = rule.bundleIdentifier
-        editingSkillID = rule.skillID
-        skillMessage = nil
-        skillMessageIsError = false
-    }
-
-    private func resetSkillRuleEditor(
-        clearMessage: Bool = true
-    ) {
-        editingSkillRuleID = nil
-        editingSkillAppName = ""
-        editingSkillBundleIdentifier = ""
-        editingSkillID =
-            SkillRegistry.replySkillID
-        if clearMessage {
-            skillMessage = nil
-            skillMessageIsError = false
-        }
-    }
-
-    private func updateSkillRule(
-        _ id: UUID,
-        update: (inout AppSkillRule) -> Void
-    ) {
-        guard
-            var rule = config.transcription.skills
-                .applicationRules.first(where: { $0.id == id })
-        else {
-            return
-        }
-        update(&rule)
-        config.transcription.skills.upsert(
-            rule,
-            registry:
-                availableSkillRegistry
-        )
     }
 
     private var recoveryHistoryCard: some View {
@@ -3851,19 +4766,19 @@ private struct PreferencesView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
+            Color(nsColor: VibeWhisperPalette.insetSurface),
             in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
         )
         .overlay {
             RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
             .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
+                Color(nsColor: VibeWhisperPalette.hairline),
                 lineWidth: 0.5
             )
         }
@@ -3951,19 +4866,19 @@ private struct PreferencesView: View {
         }
         .padding(12)
         .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
+            Color(nsColor: VibeWhisperPalette.insetSurface),
             in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
         )
         .overlay {
             RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
             .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
+                Color(nsColor: VibeWhisperPalette.hairline),
                 lineWidth: 0.5
             )
         }
@@ -4047,19 +4962,19 @@ private struct PreferencesView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
+            Color(nsColor: VibeWhisperPalette.insetSurface),
             in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
         )
         .overlay {
             RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
             .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
+                Color(nsColor: VibeWhisperPalette.hairline),
                 lineWidth: 0.5
             )
         }
@@ -4085,17 +5000,45 @@ private struct PreferencesView: View {
     }
 
     private func testTextPolishSelection() {
+        sonnerToasts.loading(L10n.text("Testing connection…"))
+        let openAIKeyAvailable =
+            (try? polishCredentialStore.hasAPIKey()) ?? false
+        let polish = config.transcription.textPolish
         let selected = TextPolishProviderSelector().selectProvider(
-            config: config.transcription.textPolish,
-            chatGPTAuthAvailable: authSnapshot.state == .ready
+            config: polish,
+            chatGPTAuthAvailable: authSnapshot.state == .ready,
+            openAICompatibleKeyAvailable: openAIKeyAvailable
         )
         if let selected {
-            let model = config.transcription.textPolish.chatGPTResponseModel
-            textPolishMessage = L10n.format("Ready: %@ / %@.", selected.id.title, model)
+            let model: String
+            switch selected.id {
+            case .chatGPTAuth:
+                model = polish.chatGPTResponseModel
+            case .openAICompatible:
+                model = polish.openAICompatibleModel
+            }
+            let title = L10n.format(
+                "Ready: %@ / %@.",
+                selected.id.title,
+                model
+            )
+            textPolishMessage = title
             textPolishMessageIsError = false
-        } else {
-            textPolishMessage = L10n.text("ChatGPT Auth is not ready. Connect ChatGPT first.")
+            sonnerToasts.success(title)
+        } else if polish.openAICompatibleEnabled {
+            let title = L10n.text(
+                "OpenAI-Compatible API key is not ready. Save a key first."
+            )
+            textPolishMessage = title
             textPolishMessageIsError = true
+            sonnerToasts.error(title)
+        } else {
+            let title = L10n.text(
+                "ChatGPT Auth is not ready. Connect ChatGPT first."
+            )
+            textPolishMessage = title
+            textPolishMessageIsError = true
+            sonnerToasts.error(title)
         }
     }
 
@@ -4135,11 +5078,7 @@ private struct PreferencesView: View {
             detail: terminologyLibrarySummaryText
         ) {
             Button(L10n.text("Open Terminologies…")) {
-                withAnimation(
-                    .spring(response: 0.32, dampingFraction: 0.86)
-                ) {
-                    selectedSection = .terminology
-                }
+                selectedSection = .terminology
                 onOpenTerminology()
             }
             .buttonStyle(.bordered)
@@ -4200,6 +5139,14 @@ private struct PreferencesView: View {
                     do {
                         try authManager.signOut()
                         authSnapshot = authManager.authSnapshot()
+                        Task {
+                            await ChatGPTAccountModelCatalog.shared.invalidate()
+                        }
+                        availableAccountPolishModels = ProductModelCatalog.rewritePresets
+                        accountPolishModelsMessage = L10n.text(
+                            "Connect ChatGPT before loading account models."
+                        )
+                        accountPolishModelsMessageIsError = true
                     } catch {
                         terminologyImportMessage = error.localizedDescription
                         terminologyImportIsError = true
@@ -4222,9 +5169,10 @@ private struct PreferencesView: View {
                     browserBridgeSnapshot = authManager.browserBridgeSnapshot()
                     isConnectingBrowserLogin = false
                     terminologyImportMessage = L10n.text(
-                        "Browser login connected. OpenWhisper saved the ChatGPT session locally."
+                        "Browser login connected. VibeWhisper saved the ChatGPT session locally."
                     )
                     terminologyImportIsError = false
+                    refreshAccountPolishModels(force: true)
                 }
             } catch {
                 await MainActor.run {
@@ -4257,7 +5205,7 @@ private struct PreferencesView: View {
         }
 
         return Text(label)
-            .font(OpenWhisperTypography.micro(.semibold))
+            .font(VibeWhisperTypography.micro(.semibold))
             .foregroundStyle(color)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
@@ -4277,17 +5225,17 @@ private struct PreferencesView: View {
             color = .secondary
         case .waiting:
             label = L10n.text("Waiting")
-            color = Color(nsColor: OpenWhisperPalette.amber)
+            color = Color(nsColor: VibeWhisperPalette.amber)
         case .connected:
             label = L10n.text("Connected")
-            color = Color(nsColor: OpenWhisperPalette.success)
+            color = Color(nsColor: VibeWhisperPalette.success)
         case .failed:
             label = L10n.text("Failed")
-            color = Color(nsColor: OpenWhisperPalette.error)
+            color = Color(nsColor: VibeWhisperPalette.error)
         }
 
         return Text(label)
-            .font(OpenWhisperTypography.micro(.semibold))
+            .font(VibeWhisperTypography.micro(.semibold))
             .foregroundStyle(color)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
@@ -4395,19 +5343,19 @@ private struct PreferencesView: View {
         }
         .padding(12)
         .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
+            Color(nsColor: VibeWhisperPalette.insetSurface),
             in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
         )
         .overlay {
             RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
             .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
+                Color(nsColor: VibeWhisperPalette.hairline),
                 lineWidth: 0.5
             )
         }
@@ -4492,19 +5440,19 @@ private struct PreferencesView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            Color(nsColor: OpenWhisperPalette.insetSurface),
+            Color(nsColor: VibeWhisperPalette.insetSurface),
             in: RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
         )
         .overlay {
             RoundedRectangle(
-                cornerRadius: OpenWhisperMetrics.radiusM,
+                cornerRadius: VibeWhisperMetrics.radiusM,
                 style: .continuous
             )
             .stroke(
-                Color(nsColor: OpenWhisperPalette.hairline),
+                Color(nsColor: VibeWhisperPalette.hairline),
                 lineWidth: 0.5
             )
         }
@@ -4633,12 +5581,26 @@ private struct PreferencesView: View {
 
     private func settingsCard<Content: View>(
         title: String?,
-        style: SettingsCardContainer<Content>.Style = .grouped,
+        style: SettingsCardContainer<Content, EmptyView>.Style = .grouped,
         @ViewBuilder content: () -> Content
     ) -> some View {
         SettingsCardContainer(title: title, style: style) {
             content()
         }
+    }
+
+    private func settingsCard<Content: View, HeaderAccessory: View>(
+        title: String?,
+        style: SettingsCardContainer<Content, HeaderAccessory>.Style = .grouped,
+        @ViewBuilder headerAccessory: () -> HeaderAccessory,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        SettingsCardContainer(
+            title: title,
+            style: style,
+            headerAccessory: headerAccessory,
+            content: content
+        )
     }
 
     private func setupRow(title: String, status: SetupStatus) -> some View {
@@ -4653,14 +5615,14 @@ private struct PreferencesView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(
                     status.isReady
-                        ? Color(nsColor: OpenWhisperPalette.success)
-                        : Color(nsColor: OpenWhisperPalette.amber)
+                        ? Color(nsColor: VibeWhisperPalette.success)
+                        : Color(nsColor: VibeWhisperPalette.amber)
                 )
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text(title))
-                    .font(OpenWhisperTypography.callout(.semibold))
+                    .font(VibeWhisperTypography.callout(.semibold))
                 Text(status.title)
-                    .font(OpenWhisperTypography.caption())
+                    .font(VibeWhisperTypography.caption())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -4722,6 +5684,14 @@ private struct PreferencesView: View {
                     do {
                         try authManager.signOut()
                         authSnapshot = authManager.authSnapshot()
+                        Task {
+                            await ChatGPTAccountModelCatalog.shared.invalidate()
+                        }
+                        availableAccountPolishModels = ProductModelCatalog.rewritePresets
+                        accountPolishModelsMessage = L10n.text(
+                            "Connect ChatGPT before loading account models."
+                        )
+                        accountPolishModelsMessageIsError = true
                     } catch {
                         terminologyImportMessage = error.localizedDescription
                         terminologyImportIsError = true
@@ -4767,11 +5737,25 @@ private struct PreferencesView: View {
             requestMicrophoneAccess()
         case .guidedAccessibilityAccess:
             AccessibilityPermission.guideAccess()
+            // Guided flow opens System Settings; poll so the tile flips to
+            // Granted as soon as TCC trusts this process.
+            Task { @MainActor in
+                _ = await permissionStatusMonitor.refreshAccessibilityUntilTrusted()
+            }
         case .openSettings(let destination):
             _ = destination.open()
+            Task { @MainActor in
+                _ = await permissionStatusMonitor.refreshAccessibilityUntilTrusted()
+            }
         case .refreshStatus:
             permissionMessage = nil
             permissionStatusMonitor.refresh()
+            Task { @MainActor in
+                _ = await permissionStatusMonitor.refreshAccessibilityUntilTrusted(
+                    maximumRefreshAttempts: 8,
+                    refreshDelay: .milliseconds(150)
+                )
+            }
         }
     }
 
@@ -4794,13 +5778,12 @@ private struct PreferencesView: View {
             case .success:
                 switch permissionStatusMonitor.snapshot.microphone {
                 case .granted:
-                    permissionMessage = L10n.text(
-                        "Microphone access is ready."
-                    )
+                    // Status tiles already show "Granted" — no tip caption.
+                    permissionMessage = nil
                     permissionMessageIsError = false
                 case .undetermined:
                     permissionMessage = L10n.text(
-                        "OpenWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
+                        "VibeWhisper still cannot confirm microphone access. Click Refresh Status or reopen the app."
                     )
                     permissionMessageIsError = true
                 case .denied:

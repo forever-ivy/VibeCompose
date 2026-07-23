@@ -142,12 +142,12 @@ enum CommunitySkillPackageError:
             )
         case .symbolicLink(let path):
             return L10n.format(
-                "OpenWhisper blocked a symbolic link in the Skill package: %@",
+                "VibeWhisper blocked a symbolic link in the Skill package: %@",
                 path
             )
         case .pathTraversal(let path):
             return L10n.format(
-                "OpenWhisper blocked an unsafe Skill package path: %@",
+                "VibeWhisper blocked an unsafe Skill package path: %@",
                 path
             )
         case .unknownFile(let path):
@@ -195,7 +195,7 @@ enum CommunitySkillPackageError:
             )
         case .incompatibleVersion(let version):
             return L10n.format(
-                "This Skill requires OpenWhisper %@ or later.",
+                "This Skill requires VibeWhisper %@ or later.",
                 version
             )
         case .alreadyInstalled(let version):
@@ -228,7 +228,7 @@ struct CommunitySkillPackage:
     let format: SkillPackageFormat
     let installation: InstalledSkillIdentity
     let agentPackage: AgentSkillPackage?
-    let profile: OpenWhisperSkillProfile
+    let profile: VibeWhisperSkillProfile
     let compatibility: SkillCompatibilityReport
     let resolvedResources: [ResolvedSkillResource]
 
@@ -238,10 +238,10 @@ struct CommunitySkillPackage:
         relativeFiles: [String],
         contentSHA256: String,
         isActive: Bool,
-        format: SkillPackageFormat = .legacyOpenWhisperV1,
+        format: SkillPackageFormat = .legacyVibeWhisperV1,
         installation: InstalledSkillIdentity? = nil,
         agentPackage: AgentSkillPackage? = nil,
-        profile: OpenWhisperSkillProfile? = nil,
+        profile: VibeWhisperSkillProfile? = nil,
         compatibility: SkillCompatibilityReport? = nil,
         resolvedResources: [ResolvedSkillResource] = []
     ) {
@@ -262,7 +262,7 @@ struct CommunitySkillPackage:
             )
         self.agentPackage = agentPackage
         self.profile = profile
-            ?? OpenWhisperSkillProfile(
+            ?? VibeWhisperSkillProfile(
                 contextRequest: ContextRequest(
                     required: [.voice],
                     optional: definition.optionalCapabilities
@@ -317,10 +317,10 @@ struct CommunitySkillPackage:
     }
 }
 
-/// Explicit compatibility boundary for the original OpenWhisper v1 package.
+/// Explicit compatibility boundary for the original VibeWhisper v1 package.
 /// Legacy files are normalized into the same in-memory package model used by
 /// standard Agent Skills; no legacy parser state reaches prompt compilation.
-struct LegacyOpenWhisperV1Adapter:
+struct LegacyVibeWhisperV1Adapter:
     Sendable
 {
     func normalize(
@@ -335,7 +335,7 @@ struct LegacyOpenWhisperV1Adapter:
             relativeFiles: relativeFiles,
             contentSHA256: contentSHA256,
             isActive: false,
-            format: .legacyOpenWhisperV1,
+            format: .legacyVibeWhisperV1,
             installation: InstalledSkillIdentity.normalized(
                 definition: definition,
                 sourceID: "local.legacy-v1",
@@ -722,7 +722,7 @@ struct SkillPackageStore:
                 )
         }
 
-        return LegacyOpenWhisperV1Adapter().normalize(
+        return LegacyVibeWhisperV1Adapter().normalize(
             definition: definition,
             packageURL: packageURL,
             relativeFiles:
@@ -744,7 +744,7 @@ struct SkillPackageStore:
             return try install(from: extraction.packageRootURL)
         }
         let isLegacyTransport = packageURL.pathExtension
-            .lowercased() == "openwhisperskill"
+            .lowercased() == "vibewhisperskill"
         let isStandardDirectory = fileManager.fileExists(
             atPath: packageURL.appendingPathComponent(
                 "SKILL.md"
@@ -753,7 +753,7 @@ struct SkillPackageStore:
         guard isLegacyTransport || isStandardDirectory else {
             throw CommunitySkillPackageError
                 .invalidPackage(
-                    "choose an Agent Skills directory or a .openwhisperskill directory"
+                    "choose an Agent Skills directory or a .vibewhisperskill directory"
                 )
         }
         let inspected =
@@ -936,7 +936,7 @@ struct SkillPackageStore:
         }
         let identity = InstalledSkillIdentity(
             id: StableIdentifier.uuid(
-                namespace: "OpenWhisper.RegistrySkillInstallation",
+                namespace: "VibeWhisper.RegistrySkillInstallation",
                 components: [
                     source.id.uuidString,
                     registryPackage.packageID,
@@ -1324,14 +1324,15 @@ struct SkillPackageStore:
                         output:
                             testCase
                                 .expectedOutput,
-                        originalText: [
-                            testCase.transcript,
-                            testCase.selectedText,
-                        ]
-                        .compactMap { $0 }
-                        .joined(
-                            separator: "\n"
-                        ),
+                        originalText: plan.skill
+                            .validationSourceText(
+                                transcript:
+                                    testCase
+                                        .transcript,
+                                selection:
+                                    testCase
+                                        .selectedText
+                            ),
                         plan: plan
                     )
             if
@@ -1385,7 +1386,7 @@ struct SkillPackageStore:
         }
         let pathExtension = url.pathExtension.lowercased()
         guard pathExtension == "zip"
-                || pathExtension == "openwhisperskill"
+                || pathExtension == "vibewhisperskill"
         else {
             return false
         }
@@ -1456,7 +1457,7 @@ struct SkillPackageStore:
 
         let container = fileManager.temporaryDirectory
             .appendingPathComponent(
-                "OpenWhisper-SkillArchive-\(UUID().uuidString)",
+                "VibeWhisper-SkillArchive-\(UUID().uuidString)",
                 isDirectory: true
             )
         try secureCreateDirectory(container)
@@ -1530,7 +1531,7 @@ struct SkillPackageStore:
         let process = Process()
         let captureRoot = fileManager.temporaryDirectory
             .appendingPathComponent(
-                "OpenWhisper-ArchiveTool-\(UUID().uuidString)",
+                "VibeWhisper-ArchiveTool-\(UUID().uuidString)",
                 isDirectory: true
             )
         try secureCreateDirectory(captureRoot)
@@ -1638,7 +1639,7 @@ struct SkillPackageStore:
         else {
             throw CommunitySkillPackageError
                 .invalidPackage(
-                    "choose a .openwhisperskill directory"
+                    "choose a .vibewhisperskill directory"
                 )
         }
         var enumerationError:
@@ -1978,12 +1979,12 @@ struct SkillPackageStore:
                     manifest.id
                 ),
             !manifest.id.hasPrefix(
-                "app.openwhisper.skill."
+                "app.vibewhisper.skill."
             )
         else {
             throw CommunitySkillPackageError
                 .invalidManifest(
-                    "use a reverse-domain ID that does not reserve OpenWhisper's built-in namespace"
+                    "use a reverse-domain ID that does not reserve VibeWhisper's built-in namespace"
                 )
         }
         guard
@@ -2049,7 +2050,7 @@ struct SkillPackageStore:
         {
             throw CommunitySkillPackageError
                 .invalidManifest(
-                    "selection and Style Capsule access must be optional and user-controlled"
+                    "selection and Writing Style access must be optional and user-controlled"
                 )
         }
         guard
@@ -2105,7 +2106,7 @@ struct SkillPackageStore:
                 entry.id =
                     StableIdentifier.uuid(
                         namespace:
-                            "OpenWhisper.CommunitySkillTerminology",
+                            "VibeWhisper.CommunitySkillTerminology",
                         components: [
                             skillID,
                             entry.type
@@ -2395,7 +2396,7 @@ struct SkillPackageStore:
         var hasher = SHA256()
         hasher.update(
             data: Data(
-                "OpenWhisperCommunitySkillV1\u{0}"
+                "VibeWhisperCommunitySkillV1\u{0}"
                     .utf8
             )
         )

@@ -43,7 +43,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String] = []
     ) -> AppLaunchMode {
-        let benchmarkValue = environment["OPENWHISPER_BENCHMARK"]?
+        let benchmarkValue = environment["VIBEWHISPER_BENCHMARK"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         switch benchmarkValue {
@@ -100,7 +100,7 @@ enum AppLaunchMode: Equatable {
 
         if arguments.contains("--preview-demo")
             || arguments.contains(
-                "--openwhisper-preview-demo"
+                "--vibewhisper-preview-demo"
             )
         {
             return .previewDemo
@@ -121,7 +121,7 @@ enum AppLaunchMode: Equatable {
             return .overlayDemoState(state)
         }
 
-        if arguments.contains("--overlay-demo") || arguments.contains("--openwhisper-overlay-demo") {
+        if arguments.contains("--overlay-demo") || arguments.contains("--vibewhisper-overlay-demo") {
             return .overlayDemo
         }
 
@@ -129,7 +129,7 @@ enum AppLaunchMode: Equatable {
             return .pasteAcceptance
         }
 
-        let rawValue = environment["OPENWHISPER_OVERLAY_DEMO"]?
+        let rawValue = environment["VIBEWHISPER_OVERLAY_DEMO"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
 
@@ -145,7 +145,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String] = []
     ) -> URL? {
-        if let value = environment["OPENWHISPER_VISUAL_ACCEPTANCE_OUTPUT"]?
+        if let value = environment["VIBEWHISPER_VISUAL_ACCEPTANCE_OUTPUT"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
         {
@@ -177,7 +177,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT",
+            environmentKey: "VIBEWHISPER_VISUAL_ACCEPTANCE_FOLLOWUP_OUTPUT",
             argumentName: "--visual-acceptance-followup-output"
         )
     }
@@ -190,7 +190,7 @@ enum AppLaunchMode: Equatable {
             environment: environment,
             arguments: arguments,
             environmentKey:
-                "OPENWHISPER_FEEDBACK_SURFACE_DEBUG_OUTPUT",
+                "VIBEWHISPER_FEEDBACK_SURFACE_DEBUG_OUTPUT",
             argumentName:
                 "--feedback-surface-debug-output"
         )
@@ -229,7 +229,7 @@ enum AppLaunchMode: Equatable {
 
         guard
             let rawValue = environment[
-                "OPENWHISPER_VISUAL_FEEDBACK_MODE"
+                "VIBEWHISPER_VISUAL_FEEDBACK_MODE"
             ]
         else {
             return nil
@@ -246,13 +246,13 @@ enum AppLaunchMode: Equatable {
             reduceMotion: optionalBooleanLaunchValue(
                 environment: environment,
                 arguments: arguments,
-                environmentKey: "OPENWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION",
+                environmentKey: "VIBEWHISPER_VISUAL_ACCEPTANCE_REDUCE_MOTION",
                 argumentName: "--visual-acceptance-reduce-motion"
             ),
             increaseContrast: optionalBooleanLaunchValue(
                 environment: environment,
                 arguments: arguments,
-                environmentKey: "OPENWHISPER_VISUAL_ACCEPTANCE_INCREASE_CONTRAST",
+                environmentKey: "VIBEWHISPER_VISUAL_ACCEPTANCE_INCREASE_CONTRAST",
                 argumentName: "--visual-acceptance-increase-contrast"
             )
         )
@@ -262,7 +262,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String] = []
     ) -> URL? {
-        if let value = environment["OPENWHISPER_PASTE_ACCEPTANCE_OUTPUT"]?
+        if let value = environment["VIBEWHISPER_PASTE_ACCEPTANCE_OUTPUT"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
         {
@@ -291,7 +291,7 @@ enum AppLaunchMode: Equatable {
         arguments: [String] = []
     ) -> PasteAcceptanceTarget? {
         if let value = environment[
-            "OPENWHISPER_PASTE_ACCEPTANCE_TARGET"
+            "VIBEWHISPER_PASTE_ACCEPTANCE_TARGET"
         ]?
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .lowercased(),
@@ -329,7 +329,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_ACCESSIBILITY_AUDIT_OUTPUT",
+            environmentKey: "VIBEWHISPER_ACCESSIBILITY_AUDIT_OUTPUT",
             argumentName: "--accessibility-audit-output"
         )
     }
@@ -368,7 +368,7 @@ enum AppLaunchMode: Equatable {
         arguments: [String] = []
     ) -> Bool {
         let environmentValue = environment[
-            "OPENWHISPER_INTERACTION_ACCEPTANCE"
+            "VIBEWHISPER_INTERACTION_ACCEPTANCE"
         ]?
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .lowercased()
@@ -396,7 +396,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String] = []
     ) -> URL? {
-        if let value = environment["OPENWHISPER_SETTINGS_SNAPSHOT_OUTPUT"]?
+        if let value = environment["VIBEWHISPER_SETTINGS_SNAPSHOT_OUTPUT"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
         {
@@ -425,7 +425,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String] = []
     ) -> URL? {
-        if let value = environment["OPENWHISPER_ONBOARDING_SNAPSHOT_OUTPUT"]?
+        if let value = environment["VIBEWHISPER_ONBOARDING_SNAPSHOT_OUTPUT"]?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
         {
@@ -457,7 +457,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_HISTORY_SNAPSHOT_OUTPUT",
+            environmentKey: "VIBEWHISPER_HISTORY_SNAPSHOT_OUTPUT",
             argumentName: "--history-snapshot-output"
         )
     }
@@ -469,7 +469,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT",
+            environmentKey: "VIBEWHISPER_TERMINOLOGY_SNAPSHOT_OUTPUT",
             argumentName: "--terminology-snapshot-output"
         )
     }
@@ -481,7 +481,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT",
+            environmentKey: "VIBEWHISPER_QUICK_ADD_SNAPSHOT_OUTPUT",
             argumentName: "--quick-add-snapshot-output"
         )
     }
@@ -493,7 +493,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_SKILL_LIBRARY_SNAPSHOT_OUTPUT",
+            environmentKey: "VIBEWHISPER_SKILL_LIBRARY_SNAPSHOT_OUTPUT",
             argumentName: "--skill-library-snapshot-output"
         )
     }
@@ -505,7 +505,7 @@ enum AppLaunchMode: Equatable {
         productSurfaceSnapshotOutputURL(
             environment: environment,
             arguments: arguments,
-            environmentKey: "OPENWHISPER_SKILL_SWITCHER_SNAPSHOT_OUTPUT",
+            environmentKey: "VIBEWHISPER_SKILL_SWITCHER_SNAPSHOT_OUTPUT",
             argumentName: "--skill-switcher-snapshot-output"
         )
     }
@@ -551,7 +551,7 @@ enum AppLaunchMode: Equatable {
             environment: environment,
             arguments: arguments,
             environmentKey:
-                "OPENWHISPER_PREVIEW_SNAPSHOT_OUTPUT",
+                "VIBEWHISPER_PREVIEW_SNAPSHOT_OUTPUT",
             argumentName:
                 "--preview-snapshot-output"
         )
@@ -561,7 +561,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String] = []
     ) -> SettingsSnapshotSize? {
-        if let value = environment["OPENWHISPER_SETTINGS_SNAPSHOT_SIZE"],
+        if let value = environment["VIBEWHISPER_SETTINGS_SNAPSHOT_SIZE"],
            let size = parseSettingsSnapshotSize(value) {
             return size
         }
@@ -586,7 +586,7 @@ enum AppLaunchMode: Equatable {
         arguments: [String] = []
     ) -> AppLanguage? {
         if let value = environment[
-            "OPENWHISPER_SETTINGS_SNAPSHOT_LANGUAGE"
+            "VIBEWHISPER_SETTINGS_SNAPSHOT_LANGUAGE"
         ], let language = snapshotLanguage(value) {
             return language
         }
@@ -744,7 +744,7 @@ enum AppLaunchMode: Equatable {
         environment: [String: String],
         arguments: [String]
     ) -> OverlayDemoState? {
-        if let rawState = environment["OPENWHISPER_OVERLAY_DEMO_STATE"],
+        if let rawState = environment["VIBEWHISPER_OVERLAY_DEMO_STATE"],
            let state = OverlayDemoState(rawValue: rawState.trimmingCharacters(in: .whitespacesAndNewlines)) {
             return state
         }

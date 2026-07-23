@@ -45,16 +45,13 @@ private extension Character {
 }
 
 struct TerminologyNormalizer: TranscriptNormalizing {
-    let languagePreference: TranscriptLanguagePreference
     let punctuationPreference: TranscriptPunctuationPreference
     private let literalTokenizer: TechnicalLiteralTokenizer
 
     init(
-        languagePreference: TranscriptLanguagePreference = .simplifiedChinese,
         punctuationPreference: TranscriptPunctuationPreference = .automatic,
         literalTokenizer: TechnicalLiteralTokenizer = .init()
     ) {
-        self.languagePreference = languagePreference
         self.punctuationPreference = punctuationPreference
         self.literalTokenizer = literalTokenizer
     }
@@ -83,10 +80,9 @@ struct TerminologyNormalizer: TranscriptNormalizing {
             protectedCanonicalKeys: protectedCorrectionReplacementKeys
         )
         let literalTokenization = literalTokenizer.tokenize(protectedTerminologyPass.text)
-        let languageAdjustedText = languageAdjustedText(
-            from: literalTokenization.maskedText
-        )
-        var output = languageAdjustedText
+        // Never force simplified/traditional conversion — output follows the
+        // speaker's transcript language and script as delivered by ASR.
+        var output = literalTokenization.maskedText
 
         let correctionPass = applyExactRules(
             to: output,
@@ -793,41 +789,6 @@ struct TerminologyNormalizer: TranscriptNormalizing {
         }
     }
 
-    private func languageAdjustedText(from text: String) -> String {
-        switch languagePreference {
-        case .simplifiedChinese:
-            return transformedChineseText(
-                from: text,
-                transform: "Traditional-Simplified"
-            )
-        case .traditionalChinese:
-            return transformedChineseText(
-                from: text,
-                transform: "Simplified-Traditional"
-            )
-        case .preserve:
-            return text
-        }
-    }
-
-    private func transformedChineseText(
-        from text: String,
-        transform: String
-    ) -> String {
-        let mutableText = NSMutableString(string: text)
-        let didTransform = CFStringTransform(
-            mutableText,
-            nil,
-            transform as CFString,
-            false
-        )
-
-        guard didTransform else {
-            return text
-        }
-
-        return mutableText as String
-    }
 
     private func stripKnownTrailingArtifacts(from text: String) -> String {
         let trailingBoundaryNoise = "[\\s\u{200B}\u{200C}\u{200D}\u{FEFF}\u{2060}]*"

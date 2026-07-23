@@ -26,7 +26,7 @@ enum OpenAICompatibleCredentialStoreError: Error, Equatable, LocalizedError {
             )
         case .unhandledStatus(let status):
             return L10n.format(
-                "OpenWhisper could not access the OpenAI-Compatible API key in Keychain (OSStatus %d).",
+                "VibeWhisper could not access the OpenAI-Compatible API key in Keychain (OSStatus %d).",
                 status
             )
         }

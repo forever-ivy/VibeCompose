@@ -9,7 +9,7 @@ enum SkillPackageFormat:
 {
     case builtIn
     case agentSkillsStandard
-    case legacyOpenWhisperV1
+    case legacyVibeWhisperV1
 }
 
 enum SkillResourceKind:
@@ -107,7 +107,7 @@ struct SkillResourceBindings:
     var goldenTests: [String] = []
 }
 
-struct OpenWhisperSkillProfile:
+struct VibeWhisperSkillProfile:
     Codable,
     Sendable,
     Equatable
@@ -118,7 +118,7 @@ struct OpenWhisperSkillProfile:
     var validators: SkillValidatorPolicy
     var risk: SkillRiskLevel
 
-    static let safeDefault = OpenWhisperSkillProfile(
+    static let safeDefault = VibeWhisperSkillProfile(
         contextRequest: ContextRequest(),
         resourceBindings: SkillResourceBindings(),
         output: SkillOutputContract(
@@ -154,14 +154,22 @@ struct InstalledSkillIdentity:
         publisher: String? = nil
     ) -> InstalledSkillIdentity {
         let resolvedRevision = revision ?? definition.version
+        // A bundled Skill is one logical installation across app updates.
+        // Keep the original v1 identity seed so favorites, app defaults, and
+        // next-run references survive a semantic-version upgrade; `version`
+        // and `revision` still freeze the exact declaration used by a run.
+        let identityRevision =
+            sourceID == "builtin"
+            ? "1.0.0"
+            : resolvedRevision
         return InstalledSkillIdentity(
             id: StableIdentifier.uuid(
-                namespace: "OpenWhisper.InstalledSkillIdentity",
+                namespace: "VibeWhisper.InstalledSkillIdentity",
                 components: [
                     sourceID,
                     packageID,
                     definition.id,
-                    resolvedRevision,
+                    identityRevision,
                 ]
             ),
             portableName: portableName ?? definition.name,
@@ -184,7 +192,7 @@ enum StandardFormatStatus:
     case invalid
 }
 
-enum OpenWhisperRuntimeStatus:
+enum VibeWhisperRuntimeStatus:
     String,
     Codable,
     Sendable,
@@ -214,7 +222,7 @@ struct SkillCompatibilityReport:
     Equatable
 {
     let standardFormatStatus: StandardFormatStatus
-    let runtimeStatus: OpenWhisperRuntimeStatus
+    let runtimeStatus: VibeWhisperRuntimeStatus
     let level: SkillCompatibilityLevel
     let issues: [String]
     let ignoredVendorFeatures: [String]
@@ -243,7 +251,7 @@ enum AgentSkillPackageError:
         case .invalidFrontmatter(let detail):
             return L10n.format("SKILL.md frontmatter is invalid: %@", detail)
         case .invalidProfile(let detail):
-            return L10n.format("openwhisper.yaml is invalid: %@", detail)
+            return L10n.format("vibewhisper.yaml is invalid: %@", detail)
         case .unsafePath(let path):
             return L10n.format("The Skill contains an unsafe path: %@", path)
         case .symbolicLink(let path):
@@ -257,7 +265,7 @@ enum AgentSkillPackageError:
         case .packageTooLarge:
             return L10n.text("The Skill directory is too large.")
         case .incompatible(let detail):
-            return L10n.format("The Skill is not compatible with OpenWhisper: %@", detail)
+            return L10n.format("The Skill is not compatible with VibeWhisper: %@", detail)
         }
     }
 }
@@ -567,10 +575,10 @@ struct AgentSkillFrontmatterParser:
     }
 }
 
-struct OpenWhisperProfileLoader:
+struct VibeWhisperProfileLoader:
     Sendable
 {
-    func load(from url: URL?) throws -> OpenWhisperSkillProfile {
+    func load(from url: URL?) throws -> VibeWhisperSkillProfile {
         guard let url else { return .safeDefault }
         let data = try Data(contentsOf: url, options: [.mappedIfSafe])
         guard data.count <= 64 * 1_024,
@@ -649,7 +657,7 @@ struct OpenWhisperProfileLoader:
             default: return fallback
             }
         }
-        return OpenWhisperSkillProfile(
+        return VibeWhisperSkillProfile(
             contextRequest: ContextRequest(
                 required: required.isEmpty ? [.voice] : required,
                 optional: optional
@@ -791,7 +799,7 @@ struct AgentSkillPackageLoader:
 
     private func kind(for path: String, prefix: Data.SubSequence) -> SkillResourceKind {
         if path == "SKILL.md" { return .instructions }
-        if path == "openwhisper.yaml" { return .profile }
+        if path == "vibewhisper.yaml" { return .profile }
         if path.hasPrefix("scripts/") || Self.isExecutable(path: path, prefix: prefix) { return .executable }
         if path.hasPrefix("references/") { return path.lowercased().contains("template") ? .template : .reference }
         if path.hasPrefix("assets/") { return .asset }
@@ -859,7 +867,7 @@ struct SkillCompatibilityAnalyzer:
 {
     func analyze(
         package: AgentSkillPackage,
-        profile: OpenWhisperSkillProfile
+        profile: VibeWhisperSkillProfile
     ) -> SkillCompatibilityReport {
         var issues: [String] = []
         var ignored: [String] = []
@@ -875,7 +883,7 @@ struct SkillCompatibilityAnalyzer:
                 || loweredInstructions.contains("execute the script")
         }
         if hasAllowedTools {
-            issues.append("allowed-tools requests tools that OpenWhisper does not expose")
+            issues.append("allowed-tools requests tools that VibeWhisper does not expose")
         }
         if dependsOnExecutable {
             issues.append("instructions require an executable resource")
@@ -903,7 +911,7 @@ struct SkillCompatibilityAnalyzer:
             level = .toolDependent
         } else if !package.vendorExtensions.isEmpty || !ignored.isEmpty || !quarantined.isEmpty {
             level = .vendorExtended
-        } else if package.resources.contains(where: { $0.relativePath == "openwhisper.yaml" }) {
+        } else if package.resources.contains(where: { $0.relativePath == "vibewhisper.yaml" }) {
             level = .openWhisperEnhanced
         } else {
             level = .portable
@@ -931,7 +939,7 @@ struct SkillResourceResolver:
 
     func resolve(
         package: AgentSkillPackage,
-        profile: OpenWhisperSkillProfile
+        profile: VibeWhisperSkillProfile
     ) throws -> [ResolvedSkillResource] {
         let explicitlyBound = Set(
             profile.resourceBindings.terminology
@@ -986,7 +994,7 @@ struct NormalizedSkillPackage:
     let definition: SkillDefinition
     let installation: InstalledSkillIdentity
     let package: AgentSkillPackage
-    let profile: OpenWhisperSkillProfile
+    let profile: VibeWhisperSkillProfile
     let compatibility: SkillCompatibilityReport
     let resources: [ResolvedSkillResource]
 }
@@ -998,15 +1006,15 @@ struct AgentSkillNormalizer:
         package: AgentSkillPackage
     ) throws -> NormalizedSkillPackage {
         let profileURL = package.resources.contains {
-            $0.relativePath == "openwhisper.yaml"
-        } ? package.rootURL.appendingPathComponent("openwhisper.yaml") : nil
-        let profile = try OpenWhisperProfileLoader().load(from: profileURL)
+            $0.relativePath == "vibewhisper.yaml"
+        } ? package.rootURL.appendingPathComponent("vibewhisper.yaml") : nil
+        let profile = try VibeWhisperProfileLoader().load(from: profileURL)
         let compatibility = SkillCompatibilityAnalyzer().analyze(
             package: package,
             profile: profile
         )
         let digestPrefix = String(package.contentSHA256.prefix(12))
-        let metadataID = package.metadata.metadata["openwhisper-id"]?.lowercased()
+        let metadataID = package.metadata.metadata["vibewhisper-id"]?.lowercased()
         let generatedID = Self.generatedIdentifier(
             portableName: package.metadata.name,
             digestPrefix: digestPrefix

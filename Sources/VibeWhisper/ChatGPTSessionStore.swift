@@ -103,9 +103,9 @@ enum ChatGPTSessionStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unexpectedData:
-            return "OpenWhisper 保存的 ChatGPT 会话无法解析。"
+            return "VibeWhisper 保存的 ChatGPT 会话无法解析。"
         case .unhandledStatus(let status):
-            return "OpenWhisper 无法访问本地 ChatGPT 会话存储（OSStatus \(status)）。"
+            return "VibeWhisper 无法访问本地 ChatGPT 会话存储（OSStatus \(status)）。"
         }
     }
 }

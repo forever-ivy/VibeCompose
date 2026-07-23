@@ -12,7 +12,7 @@ enum RuntimePreflightIssue: Equatable, Sendable {
         case .chatGPTLoginRequired:
             return L10n.text("Connect ChatGPT with the default browser OAuth flow before recording.")
         case .chatGPTSessionExpired:
-            return L10n.text("OpenWhisper saved a ChatGPT session, but it has expired. Refresh or sign in again.")
+            return L10n.text("VibeWhisper saved a ChatGPT session, but it has expired. Refresh or sign in again.")
         case .chatGPTSessionUnavailable(let detail):
             return detail
         case .missingOpenAICompatibleAPIKey:
@@ -21,7 +21,7 @@ enum RuntimePreflightIssue: Equatable, Sendable {
             )
         case .openAICompatibleCredentialUnavailable(let detail):
             return L10n.format(
-                "OpenWhisper could not access the OpenAI-Compatible API key in Keychain: %@",
+                "VibeWhisper could not access the OpenAI-Compatible API key in Keychain: %@",
                 detail
             )
         }

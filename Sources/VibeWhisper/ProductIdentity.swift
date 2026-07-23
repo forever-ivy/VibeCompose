@@ -1,12 +1,15 @@
 import Foundation
 
 enum ProductIdentity {
-    static let name = "OpenWhisper"
-    static let slug = "openwhisper"
-    static let defaultBundleIdentifier = "app.openwhisper.mac"
+    static let name = "VibeWhisper"
+    static let slug = "vibewhisper"
+    static let defaultBundleIdentifier = "app.vibewhisper.mac"
     static let keychainService = "\(defaultBundleIdentifier).ChatGPTSession"
     static let recoveryAPIKeychainService =
         "\(defaultBundleIdentifier).OpenAICompatibleAPIKey"
+    /// Separate Keychain account for polish Own-API credentials.
+    static let polishAPIKeychainService =
+        "\(defaultBundleIdentifier).OpenAICompatiblePolishAPIKey"
     static let oauthCallbackQueueLabel = "\(defaultBundleIdentifier).oauth-callback"
 
     static let installedAppURL = URL(fileURLWithPath: "/Applications/\(name).app")

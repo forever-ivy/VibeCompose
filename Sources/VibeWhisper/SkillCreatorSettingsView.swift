@@ -88,7 +88,7 @@ struct SkillCreatorSettingsView: View {
                         systemImage: "chevron.down"
                     )
                 }
-                .buttonStyle(OpenWhisperSecondaryButtonStyle())
+                .buttonStyle(VibeWhisperSecondaryButtonStyle())
                 .frame(minWidth: 160, idealWidth: 210, maxWidth: 260)
             }
 
@@ -149,7 +149,7 @@ struct SkillCreatorSettingsView: View {
             if let validationReport {
                 if validationReport.isValid {
                     InlineStatus(
-                        text: L10n.text("The draft passes standard format and OpenWhisper runtime validation."),
+                        text: L10n.text("The draft passes standard format and VibeWhisper runtime validation."),
                         kind: validationReport.warnings.isEmpty ? .success : .warning
                     )
                 }
@@ -207,7 +207,7 @@ struct SkillCreatorSettingsView: View {
                             editorMode == mode
                                 ? Color(
                                     nsColor:
-                                        OpenWhisperPalette.brandBlue
+                                        VibeWhisperPalette.brandBlue
                                 )
                                 : Color.clear,
                             in: RoundedRectangle(cornerRadius: 6)
@@ -242,7 +242,7 @@ struct SkillCreatorSettingsView: View {
                             : "mic.circle"
                     )
                 }
-                .buttonStyle(OpenWhisperSecondaryButtonStyle())
+                .buttonStyle(VibeWhisperSecondaryButtonStyle())
                 .disabled(
                     isTranscribingVoiceSample
                         || isRunningTest
@@ -353,7 +353,7 @@ struct SkillCreatorSettingsView: View {
                 value: draft.profile.output.format.localizedLabel
             )
         }
-        .buttonStyle(OpenWhisperSecondaryButtonStyle())
+        .buttonStyle(VibeWhisperSecondaryButtonStyle())
 
         Menu {
             Button(SkillDeliveryPolicy.previewThenPaste.localizedLabel) {
@@ -377,7 +377,7 @@ struct SkillCreatorSettingsView: View {
                 value: draft.profile.output.delivery.localizedLabel
             )
         }
-        .buttonStyle(OpenWhisperSecondaryButtonStyle())
+        .buttonStyle(VibeWhisperSecondaryButtonStyle())
 
         Menu {
             ForEach(
@@ -394,7 +394,7 @@ struct SkillCreatorSettingsView: View {
                 value: draft.profile.risk.localizedLabel
             )
         }
-        .buttonStyle(OpenWhisperSecondaryButtonStyle())
+        .buttonStyle(VibeWhisperSecondaryButtonStyle())
 
         Menu {
             ForEach(SelectionRequirement.allCases) {
@@ -412,7 +412,7 @@ struct SkillCreatorSettingsView: View {
                 )
             )
         }
-        .buttonStyle(OpenWhisperSecondaryButtonStyle())
+        .buttonStyle(VibeWhisperSecondaryButtonStyle())
 
         Toggle(L10n.text("Style"), isOn: contextBinding(.styleCapsule))
     }
@@ -462,7 +462,7 @@ struct SkillCreatorSettingsView: View {
                     ) {
                         runTestBench()
                     }
-                    .buttonStyle(OpenWhisperPrimaryButtonStyle())
+                    .buttonStyle(VibeWhisperPrimaryButtonStyle())
                     .disabled(
                         isRunningTest
                             || exampleInput
@@ -630,9 +630,9 @@ struct SkillCreatorSettingsView: View {
     @ViewBuilder
     private var resourceButtons: some View {
         Button(L10n.text("Add Reference…"), action: addReference)
-            .buttonStyle(OpenWhisperSecondaryButtonStyle())
+            .buttonStyle(VibeWhisperSecondaryButtonStyle())
         Button(L10n.text("Add Static Asset…"), action: addAsset)
-            .buttonStyle(OpenWhisperSecondaryButtonStyle())
+            .buttonStyle(VibeWhisperSecondaryButtonStyle())
         Text(L10n.format(
             "%ld references · %ld assets",
             draft.references.count,
@@ -664,9 +664,9 @@ struct SkillCreatorSettingsView: View {
             validationReport = SkillCreator()
                 .validate(preparedDraft)
         }
-        .buttonStyle(OpenWhisperSecondaryButtonStyle())
+        .buttonStyle(VibeWhisperSecondaryButtonStyle())
         Button(L10n.text("Export & Install…"), action: exportAndInstall)
-            .buttonStyle(OpenWhisperPrimaryButtonStyle())
+            .buttonStyle(VibeWhisperPrimaryButtonStyle())
             .disabled(!localAssetAccessEnabled)
         Spacer(minLength: 0)
     }
@@ -821,12 +821,15 @@ struct SkillCreatorSettingsView: View {
         let validation = SkillValidatorEngine()
             .validate(
                 output: candidateOutput,
-                originalText: [
-                    normalizedInput,
-                    selection,
-                ]
-                .filter { !$0.isEmpty }
-                .joined(separator: "\n"),
+                originalText: plan.skill
+                    .validationSourceText(
+                        transcript:
+                            normalizedInput,
+                        selection:
+                            selection.isEmpty
+                            ? nil
+                            : selection
+                    ),
                 plan: plan
             )
         var categories = [L10n.text("Voice")]
@@ -837,7 +840,7 @@ struct SkillCreatorSettingsView: View {
         }
         if !style.isEmpty {
             categories.append(
-                L10n.text("Style Capsule")
+                L10n.text("Writing Style")
             )
         }
         if !terminology.isEmpty {

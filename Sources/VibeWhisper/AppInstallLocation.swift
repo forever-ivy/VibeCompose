@@ -16,7 +16,7 @@ enum AppInstallLocation {
 
         return LaunchBlocker(
             message: L10n.format(
-                "OpenWhisper must be installed to /Applications/OpenWhisper.app before it runs. This copy is at %@. Rebuild, install the packaged app to /Applications, then launch that installed copy.",
+                "VibeWhisper must be installed to /Applications/VibeWhisper.app before it runs. This copy is at %@. Rebuild, install the packaged app to /Applications, then launch that installed copy.",
                 normalizedBundleURL.path
             )
         )

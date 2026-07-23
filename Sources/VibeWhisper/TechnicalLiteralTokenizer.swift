@@ -5,6 +5,16 @@ struct TechnicalLiteralTokenization: Sendable, Equatable {
     let literals: [String]
     fileprivate let replacements: [String: String]
 
+    static func passthrough(
+        _ text: String
+    ) -> TechnicalLiteralTokenization {
+        TechnicalLiteralTokenization(
+            maskedText: text,
+            literals: [],
+            replacements: [:]
+        )
+    }
+
     var isEmpty: Bool {
         replacements.isEmpty
     }

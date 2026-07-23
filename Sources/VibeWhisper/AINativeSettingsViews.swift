@@ -2,565 +2,778 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct StyleCapsuleSettingsView:
-    View
-{
+// MARK: - Writing Styles (product surface for StyleCapsule*)
+
+private struct WritingStylePresentation {
+    let symbolName: String
+    let accent: NSColor
+
+    static func forCapsule(_ capsule: StyleCapsule) -> WritingStylePresentation {
+        switch capsule.id {
+        case StyleCapsuleRegistry.workFormalID:
+            return WritingStylePresentation(
+                symbolName: "briefcase.fill",
+                accent: VibeWhisperPalette.brandBlue
+            )
+        case StyleCapsuleRegistry.teamChatID:
+            return WritingStylePresentation(
+                symbolName: "bubble.left.and.bubble.right.fill",
+                accent: VibeWhisperPalette.brandSpectrumCyan
+            )
+        case StyleCapsuleRegistry.technicalWritingID:
+            return WritingStylePresentation(
+                symbolName: "chevron.left.forwardslash.chevron.right",
+                accent: VibeWhisperPalette.brandSpectrumViolet
+            )
+        case StyleCapsuleRegistry.englishBusinessID:
+            return WritingStylePresentation(
+                symbolName: "globe.europe.africa.fill",
+                accent: VibeWhisperPalette.brandSpectrumSky
+            )
+        case StyleCapsuleRegistry.personalCasualID:
+            return WritingStylePresentation(
+                symbolName: "face.smiling.fill",
+                accent: VibeWhisperPalette.brandSpectrumCoral
+            )
+        default:
+            return WritingStylePresentation(
+                symbolName: "paintbrush.pointed.fill",
+                accent: VibeWhisperPalette.brandSpectrumAmber
+            )
+        }
+    }
+}
+
+struct StyleCapsuleLibraryView: View {
     @Binding var config: AppConfig
     let registry: SkillRegistry
     let store: StyleCapsuleStore
     let localAssetAccessEnabled: Bool
 
-    @State private var capsules:
-        [StyleCapsule] =
-            StyleCapsuleRegistry.builtIn
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VibeWhisperPaneHeader(
+                title: L10n.text("Writing Styles")
+            ) {
+                Toggle(
+                    L10n.text("Enabled"),
+                    isOn: $config.styleCapsules.enabled
+                )
+                .toggleStyle(.switch)
+            }
+
+            StyleCapsuleSettingsView(
+                config: $config,
+                registry: registry,
+                store: store,
+                localAssetAccessEnabled: localAssetAccessEnabled,
+                showsSectionTitle: false,
+                showsEnabledToggle: false
+            )
+            .padding(.horizontal, VibeWhisperMetrics.space20)
+            .padding(.bottom, VibeWhisperMetrics.space24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct StyleCapsuleSettingsView: View {
+    @Binding var config: AppConfig
+    let registry: SkillRegistry
+    let store: StyleCapsuleStore
+    let localAssetAccessEnabled: Bool
+    var showsSectionTitle = true
+    var showsEnabledToggle = true
+
+    @State private var capsules: [StyleCapsule] = StyleCapsuleRegistry.builtIn
     @State private var selectedID: String?
     @State private var editingName = ""
     @State private var editingSummary = ""
     @State private var approvedExample = ""
     @State private var sourceSamples = ""
     @State private var message: String?
-    @State private var messageIsError =
-        false
+    @State private var messageIsError = false
+    @State private var showsSamples = false
+    @State private var showsSkillAssignments = false
+
+    private let galleryColumns = [
+        GridItem(.adaptive(minimum: 148, maximum: 200), spacing: VibeWhisperMetrics.space12)
+    ]
 
     var body: some View {
-        VStack(
-            alignment: .leading,
-            spacing: 12
-        ) {
-            HStack {
-                VStack(
-                    alignment: .leading,
-                    spacing: 3
-                ) {
-                    Text(
-                        L10n.text(
-                            "Style Capsules"
-                        )
-                    )
-                    .font(
-                        .system(
-                            size: 12,
-                            weight: .semibold
-                        )
-                    )
-                }
-                Spacer()
-                Toggle(
-                    L10n.text("Enabled"),
-                    isOn:
-                        $config.styleCapsules
-                            .enabled
-                )
-                .toggleStyle(.switch)
-            }
-
-            LabeledContent(
-                L10n.text(
-                    "Default Capsule"
-                )
-            ) {
-                Picker(
-                    L10n.text(
-                        "Default Capsule"
-                    ),
-                    selection:
-                        $config.styleCapsules
-                            .defaultCapsuleID
-                ) {
-                    Text(
-                        L10n.text("None")
-                    )
-                    .tag(String?.none)
-                    ForEach(capsules) {
-                        capsule in
-                        Text(
-                            L10n.text(
-                                capsule.name
-                            )
-                        )
-                        .tag(
-                            Optional(capsule.id)
-                        )
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 230)
-            }
-            .disabled(
-                !config.styleCapsules
-                    .enabled
-            )
-
-            if !styleAwareSkills.isEmpty {
-                DisclosureGroup(
-                    L10n.text(
-                        "Per-Skill Style"
-                    )
-                ) {
-                    VStack(
-                        alignment: .leading,
-                        spacing: 8
-                    ) {
-                        ForEach(
-                            styleAwareSkills
-                        ) { skill in
-                            HStack {
-                                Text(
-                                    skill.localizedName
-                                )
-                                .font(
-                                    .system(
-                                        size: 11,
-                                        weight:
-                                            .medium
-                                    )
-                                )
-                                Spacer()
-                                Picker(
-                                    skill.localizedName,
-                                    selection:
-                                        Binding<
-                                            String?
-                                        >(
-                                            get: {
-                                                config
-                                                    .styleCapsules
-                                                    .assignedCapsuleID(
-                                                        for:
-                                                            skill.id
-                                                    )
-                                            },
-                                            set: {
-                                                value in
-                                                config
-                                                    .styleCapsules
-                                                    .setCapsuleID(
-                                                        value,
-                                                        for:
-                                                            skill.id
-                                                    )
-                                            }
-                                        )
-                                ) {
-                                    Text(
-                                        L10n.text(
-                                            "Use Default"
-                                        )
-                                    )
-                                    .tag(String?.none)
-                                    ForEach(
-                                        capsules
-                                    ) { capsule in
-                                        Text(
-                                            L10n.text(
-                                                capsule
-                                                    .name
-                                            )
-                                        )
-                                        .tag(
-                                            Optional(
-                                                capsule
-                                                    .id
-                                            )
-                                        )
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 210)
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-                }
-                .disabled(
-                    !config.styleCapsules
-                        .enabled
-                )
-            }
-
-            Divider()
-
-            HStack(
-                alignment: .top,
-                spacing: 12
-            ) {
-                VStack(
-                    alignment: .leading,
-                    spacing: 6
-                ) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space20) {
+                if showsSectionTitle || showsEnabledToggle {
                     HStack {
-                        Text(
-                            L10n.text(
-                                "Capsule Library"
-                            )
-                        )
-                        .font(
-                            .system(
-                                size: 11,
-                                weight:
-                                    .semibold
-                            )
-                        )
+                        if showsSectionTitle {
+                            Text(L10n.text("Writing Styles"))
+                                .font(VibeWhisperTypography.title2())
+                        }
                         Spacer()
-                        Button(
-                            L10n.text("New")
-                        ) {
-                            beginNew()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(
-                            !localAssetAccessEnabled
-                        )
-                    }
-
-                    ScrollView {
-                        LazyVStack(
-                            spacing: 5
-                        ) {
-                            ForEach(
-                                capsules
-                            ) { capsule in
-                                Button {
-                                    select(capsule)
-                                } label: {
-                                    HStack {
-                                        VStack(
-                                            alignment:
-                                                .leading,
-                                            spacing: 2
-                                        ) {
-                                            Text(
-                                                L10n.text(
-                                                    capsule
-                                                        .name
-                                                )
-                                            )
-                                            .font(
-                                                .system(
-                                                    size:
-                                                        11,
-                                                    weight:
-                                                        .medium
-                                                )
-                                            )
-                                            Text(
-                                                capsule
-                                                    .isBuiltIn
-                                                ? L10n
-                                                    .text(
-                                                        "Built-in"
-                                                    )
-                                                : L10n
-                                                    .text(
-                                                        "Custom"
-                                                    )
-                                            )
-                                            .font(
-                                                .system(
-                                                    size:
-                                                        9
-                                                )
-                                            )
-                                            .foregroundStyle(
-                                                .secondary
-                                            )
-                                        }
-                                        Spacer()
-                                        if
-                                            selectedID
-                                                == capsule
-                                                    .id
-                                        {
-                                            Image(
-                                                systemName:
-                                                    "checkmark"
-                                            )
-                                        }
-                                    }
-                                    .padding(7)
-                                    .background(
-                                        selectedID
-                                            == capsule
-                                                .id
-                                        ? Color
-                                            .accentColor
-                                            .opacity(
-                                                0.12
-                                            )
-                                        : Color(
-                                            nsColor:
-                                                .textBackgroundColor
-                                        )
-                                    )
-                                    .clipShape(
-                                        RoundedRectangle(
-                                            cornerRadius:
-                                                7
-                                        )
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .frame(
-                        width: 180,
-                        height: 220
-                    )
-                }
-
-                VStack(
-                    alignment: .leading,
-                    spacing: 8
-                ) {
-                    TextField(
-                        L10n.text(
-                            "Capsule name"
-                        ),
-                        text: $editingName
-                    )
-                    .textFieldStyle(
-                        .roundedBorder
-                    )
-                    .disabled(
-                        selectedCapsule?
-                            .isBuiltIn == true
-                    )
-
-                    Text(
-                        L10n.text(
-                            "Readable style summary"
-                        )
-                    )
-                    .font(
-                        .system(
-                            size: 10,
-                            weight: .medium
-                        )
-                    )
-                    TextEditor(
-                        text: $editingSummary
-                    )
-                    .font(.system(size: 11))
-                    .accessibilityLabel(
-                        L10n.text(
-                            "Readable style summary"
-                        )
-                    )
-                    .frame(
-                        minHeight: 82,
-                        maxHeight: 110
-                    )
-                    .overlay(
-                        RoundedRectangle(
-                            cornerRadius: 6
-                        )
-                        .stroke(
-                            Color.secondary
-                                .opacity(0.22)
-                        )
-                    )
-                    .disabled(
-                        selectedCapsule?
-                            .isBuiltIn == true
-                    )
-
-                    TextField(
-                        L10n.text(
-                            "Optional approved example"
-                        ),
-                        text:
-                            $approvedExample
-                    )
-                    .textFieldStyle(
-                        .roundedBorder
-                    )
-                    .disabled(
-                        selectedCapsule?
-                            .isBuiltIn == true
-                    )
-
-                    DisclosureGroup(
-                        L10n.text(
-                            "Analyze My Samples Locally"
-                        )
-                    ) {
-                        VStack(
-                            alignment: .leading,
-                            spacing: 6
-                        ) {
-                            TextEditor(
-                                text:
-                                    $sourceSamples
+                        if showsEnabledToggle {
+                            Toggle(
+                                L10n.text("Enabled"),
+                                isOn: $config.styleCapsules.enabled
                             )
-                            .font(
-                                .system(
-                                    size: 11
-                                )
-                            )
-                            .frame(
-                                minHeight: 72
-                            )
-                            .accessibilityLabel(
-                                L10n.text(
-                                    "Style source samples"
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(
-                                    cornerRadius:
-                                        6
-                                )
-                                .stroke(
-                                    Color
-                                        .secondary
-                                        .opacity(
-                                            0.22
-                                        )
-                                )
-                            )
-                            Text(
-                                L10n.text(
-                                    "Analysis runs on this Mac. After the summary is generated, the source samples are cleared and are not saved."
-                                )
-                            )
-                            .font(
-                                .system(
-                                    size: 10
-                                )
-                            )
-                            .foregroundStyle(
-                                .secondary
-                            )
-                            Button(
-                                L10n.text(
-                                    "Generate Summary"
-                                )
-                            ) {
-                                analyzeSamples()
-                            }
-                            .buttonStyle(
-                                .bordered
-                            )
-                            .disabled(
-                                sourceSamples
-                                    .trimmingCharacters(
-                                        in:
-                                            .whitespacesAndNewlines
-                                    )
-                                    .isEmpty
-                                    || selectedCapsule?
-                                        .isBuiltIn
-                                        == true
-                            )
-                        }
-                        .padding(.top, 6)
-                    }
-
-                    HStack {
-                        Button(
-                            L10n.text("Save")
-                        ) {
-                            save()
-                        }
-                        .buttonStyle(
-                            .borderedProminent
-                        )
-                        .disabled(!canSave)
-
-                        Button(
-                            L10n.text("Export…")
-                        ) {
-                            exportSelected()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(
-                            selectedCapsule == nil
-                                || !localAssetAccessEnabled
-                        )
-
-                        if
-                            let selectedCapsule,
-                            !selectedCapsule
-                                .isBuiltIn
-                        {
-                            Button(
-                                L10n.text(
-                                    "Delete"
-                                ),
-                                role: .destructive
-                            ) {
-                                deleteSelected()
-                            }
-                            .buttonStyle(.bordered)
+                            .toggleStyle(.switch)
                         }
                     }
                 }
-                .frame(
-                    maxWidth: .infinity,
-                    alignment: .topLeading
-                )
-            }
 
-            if let message {
-                Text(message)
-                    .font(.system(size: 10))
-                    .foregroundStyle(
-                        messageIsError
-                            ? .red
-                            : .secondary
-                    )
+                defaultStrip
+                    .disabled(!config.styleCapsules.enabled)
+
+                gallerySection
+                    .opacity(config.styleCapsules.enabled ? 1 : 0.48)
+                    .allowsHitTesting(config.styleCapsules.enabled)
+
+                if selectedID != nil || isComposingNew {
+                    detailHero
+                        .opacity(config.styleCapsules.enabled ? 1 : 0.48)
+                        .allowsHitTesting(config.styleCapsules.enabled)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+
+                if let message {
+                    Text(message)
+                        .font(VibeWhisperTypography.body(.medium))
+                        .foregroundStyle(
+                            messageIsError
+                                ? Color(nsColor: VibeWhisperPalette.error)
+                                : .secondary
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.bottom, VibeWhisperMetrics.space12)
+            .animation(VibeWhisperMotion.standardSpring, value: selectedID)
         }
+        .scrollIndicators(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             reload()
-            if selectedID == nil,
-               let first = capsules.first
-            {
+            if selectedID == nil, let first = capsules.first {
                 select(first)
             }
         }
     }
 
-    private var selectedCapsule:
-        StyleCapsule?
-    {
-        capsules.first {
-            $0.id == selectedID
+    // MARK: Default strip
+
+    private var defaultStrip: some View {
+        VStack(alignment: .leading, spacing: VibeWhisperMetrics.space14) {
+            HStack(alignment: .center, spacing: VibeWhisperMetrics.space12) {
+                VibeWhisperIconWell(
+                    systemName: "star.circle.fill",
+                    size: VibeWhisperMetrics.iconWellSizeLarge,
+                    symbolSize: 18,
+                    tint: Color(nsColor: VibeWhisperPalette.brandBlue),
+                    fillOpacity: 0.14
+                )
+                Text(L10n.text("Default Style"))
+                    .font(VibeWhisperTypography.title2())
+                Spacer(minLength: 0)
+                if !styleAwareSkills.isEmpty {
+                    Button {
+                        withAnimation(VibeWhisperMotion.snappySpring) {
+                            showsSkillAssignments.toggle()
+                        }
+                    } label: {
+                        Label(
+                            L10n.text("By Skill"),
+                            systemImage: showsSkillAssignments
+                                ? "chevron.up"
+                                : "chevron.down"
+                        )
+                        .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: VibeWhisperMetrics.space10) {
+                    defaultChip(
+                        id: nil,
+                        title: L10n.text("None"),
+                        symbol: "circle.slash",
+                        accent: VibeWhisperPalette.mistMuted
+                    )
+                    ForEach(capsules) { capsule in
+                        let presentation = WritingStylePresentation.forCapsule(capsule)
+                        defaultChip(
+                            id: capsule.id,
+                            title: L10n.text(capsule.name),
+                            symbol: presentation.symbolName,
+                            accent: presentation.accent
+                        )
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            if showsSkillAssignments, !styleAwareSkills.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(styleAwareSkills) { skill in
+                        SettingsRow(title: skill.localizedName) {
+                            Picker(
+                                skill.localizedName,
+                                selection: Binding<String?>(
+                                    get: {
+                                        config.styleCapsules
+                                            .assignedCapsuleID(for: skill.id)
+                                    },
+                                    set: { value in
+                                        config.styleCapsules
+                                            .setCapsuleID(value, for: skill.id)
+                                    }
+                                )
+                            ) {
+                                Text(L10n.text("Use Default"))
+                                    .tag(String?.none)
+                                ForEach(capsules) { capsule in
+                                    Text(L10n.text(capsule.name))
+                                        .tag(Optional(capsule.id))
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: GeneralSettingsChrome.controlClusterWidth)
+                        }
+                    }
+                }
+                .padding(.top, VibeWhisperMetrics.space4)
+            }
+        }
+        .padding(VibeWhisperMetrics.space18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusXXL,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.elevatedSurface))
+        }
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusXXL,
+                style: .continuous
+            )
+            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.04), radius: 10, x: 0, y: 4)
+    }
+
+    private func defaultChip(
+        id: String?,
+        title: String,
+        symbol: String,
+        accent: NSColor
+    ) -> some View {
+        let isDefault = config.styleCapsules.defaultCapsuleID == id
+        let tint = Color(nsColor: accent)
+        return Button {
+            config.styleCapsules.defaultCapsuleID = id
+        } label: {
+            HStack(spacing: VibeWhisperMetrics.space8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isDefault ? .white : tint)
+                    .frame(width: 28, height: 28)
+                    .background {
+                        Circle()
+                            .fill(isDefault ? tint : tint.opacity(0.14))
+                    }
+                Text(title)
+                    .font(VibeWhisperTypography.body(.semibold))
+                    .foregroundStyle(isDefault ? .white : .primary)
+                    .lineLimit(1)
+            }
+            .padding(.leading, 6)
+            .padding(.trailing, 14)
+            .padding(.vertical, 6)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(isDefault ? tint : Color(nsColor: VibeWhisperPalette.insetSurface))
+            }
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(
+                        isDefault ? Color.clear : Color.primary.opacity(0.06),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(
+                color: isDefault ? tint.opacity(0.28) : .clear,
+                radius: 8,
+                x: 0,
+                y: 3
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isDefault ? .isSelected : [])
+        .accessibilityLabel("\(L10n.text("Default Style")): \(title)")
+    }
+
+    // MARK: Gallery
+
+    private var gallerySection: some View {
+        VStack(alignment: .leading, spacing: VibeWhisperMetrics.space14) {
+            HStack(alignment: .center, spacing: VibeWhisperMetrics.space10) {
+                Text(L10n.text("Library"))
+                    .font(VibeWhisperTypography.title2())
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation(VibeWhisperMotion.standardSpring) {
+                        beginNew()
+                    }
+                } label: {
+                    Label(L10n.text("New"), systemImage: "plus")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(!localAssetAccessEnabled || !config.styleCapsules.enabled)
+            }
+
+            LazyVGrid(columns: galleryColumns, spacing: VibeWhisperMetrics.space12) {
+                ForEach(capsules) { capsule in
+                    styleCard(capsule)
+                }
+                if isComposingNew {
+                    composingCard
+                }
+            }
         }
     }
 
-    private var styleAwareSkills:
-        [SkillDefinition]
-    {
-        registry.orderedDefinitions
-            .filter {
-                $0.allCapabilities
-                    .contains(
-                        .styleCapsule
-                    )
+    private func styleCard(_ capsule: StyleCapsule) -> some View {
+        let isSelected = selectedID == capsule.id && !isComposingNew
+        let isDefault = config.styleCapsules.defaultCapsuleID == capsule.id
+        let presentation = WritingStylePresentation.forCapsule(capsule)
+        let accent = Color(nsColor: presentation.accent)
+
+        return Button {
+            withAnimation(VibeWhisperMotion.snappySpring) {
+                select(capsule)
             }
+        } label: {
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space12) {
+                HStack(alignment: .top, spacing: VibeWhisperMetrics.space8) {
+                    VibeWhisperIconWell(
+                        systemName: presentation.symbolName,
+                        size: 44,
+                        symbolSize: 18,
+                        tint: accent,
+                        fillOpacity: isSelected ? 0.20 : 0.12
+                    )
+                    Spacer(minLength: 0)
+                    if isDefault {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(accent)
+                    } else if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(accent)
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.text(capsule.name))
+                        .font(VibeWhisperTypography.title2())
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(
+                        capsule.isBuiltIn
+                            ? L10n.text("Built-in")
+                            : L10n.text("Custom")
+                    )
+                    .font(VibeWhisperTypography.body(.medium))
+                    .foregroundStyle(accent.opacity(0.95))
+                    .lineLimit(1)
+                }
+            }
+            .padding(VibeWhisperMetrics.space16)
+            .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusXXL,
+                    style: .continuous
+                )
+                .fill(Color(nsColor: VibeWhisperPalette.elevatedSurface))
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusXXL,
+                    style: .continuous
+                )
+                .strokeBorder(
+                    isSelected ? accent.opacity(0.90) : Color.primary.opacity(0.06),
+                    lineWidth: isSelected ? 2 : 1
+                )
+            }
+            .shadow(
+                color: isSelected
+                    ? accent.opacity(0.18)
+                    : Color.black.opacity(0.04),
+                radius: isSelected ? 14 : 6,
+                x: 0,
+                y: isSelected ? 6 : 2
+            )
+            .contentShape(
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusXXL,
+                    style: .continuous
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(
+            "\(L10n.text(capsule.name)). \(capsule.isBuiltIn ? L10n.text("Built-in") : L10n.text("Custom"))"
+        )
+    }
+
+    private var composingCard: some View {
+        let accent = Color(nsColor: VibeWhisperPalette.brandSpectrumAmber)
+        return VStack(alignment: .leading, spacing: VibeWhisperMetrics.space12) {
+            HStack {
+                VibeWhisperIconWell(
+                    systemName: "plus.circle.fill",
+                    size: 44,
+                    symbolSize: 20,
+                    tint: accent,
+                    fillOpacity: 0.18
+                )
+                Spacer(minLength: 0)
+                Image(systemName: "pencil.line")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(accent)
+            }
+            Text(L10n.text("New"))
+                .font(VibeWhisperTypography.title2())
+                .foregroundStyle(.primary)
+            Text(L10n.text("Custom"))
+                .font(VibeWhisperTypography.body(.medium))
+                .foregroundStyle(accent)
+        }
+        .padding(VibeWhisperMetrics.space16)
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+        .background {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusXXL,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.elevatedSurface))
+        }
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusXXL,
+                style: .continuous
+            )
+            .strokeBorder(accent.opacity(0.90), lineWidth: 2)
+        }
+        .shadow(color: accent.opacity(0.16), radius: 12, x: 0, y: 5)
+    }
+
+    // MARK: Detail hero
+
+    private var detailHero: some View {
+        let presentation: WritingStylePresentation = {
+            if let selectedCapsule {
+                return WritingStylePresentation.forCapsule(selectedCapsule)
+            }
+            return WritingStylePresentation(
+                symbolName: "paintbrush.pointed.fill",
+                accent: VibeWhisperPalette.brandSpectrumAmber
+            )
+        }()
+        let accent = Color(nsColor: presentation.accent)
+        let isBuiltIn = selectedCapsule?.isBuiltIn == true
+
+        return VStack(alignment: .leading, spacing: VibeWhisperMetrics.space18) {
+            HStack(alignment: .top, spacing: VibeWhisperMetrics.space16) {
+                ZStack {
+                    RoundedRectangle(
+                        cornerRadius: 20,
+                        style: .continuous
+                    )
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                accent.opacity(0.22),
+                                accent.opacity(0.08),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 72, height: 72)
+                    Image(systemName: presentation.symbolName)
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundStyle(accent)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .shadow(color: accent.opacity(0.22), radius: 12, x: 0, y: 4)
+
+                VStack(alignment: .leading, spacing: VibeWhisperMetrics.space8) {
+                    HStack(spacing: VibeWhisperMetrics.space8) {
+                        if isBuiltIn {
+                            VibeWhisperStatusChip(
+                                text: L10n.text("Built-in"),
+                                kind: .accent
+                            )
+                        } else {
+                            VibeWhisperStatusChip(
+                                text: L10n.text("Custom"),
+                                kind: .warning
+                            )
+                        }
+                        if let selectedCapsule,
+                           config.styleCapsules.defaultCapsuleID == selectedCapsule.id
+                        {
+                            VibeWhisperStatusChip(
+                                text: L10n.text("Default Style"),
+                                kind: .success
+                            )
+                        }
+                    }
+
+                    if isBuiltIn {
+                        Text(editingName)
+                            .font(VibeWhisperTypography.display())
+                            .tracking(-0.4)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        TextField(
+                            L10n.text("Name"),
+                            text: $editingName
+                        )
+                        .textFieldStyle(.plain)
+                        .font(VibeWhisperTypography.display())
+                        .tracking(-0.4)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            // Summary as quote-like visual block
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space10) {
+                HStack(spacing: VibeWhisperMetrics.space8) {
+                    Image(systemName: "text.quote")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(accent)
+                    Text(L10n.text("Summary"))
+                        .font(VibeWhisperTypography.body(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                if isBuiltIn {
+                    Text(editingSummary)
+                        .font(VibeWhisperTypography.body())
+                        .foregroundStyle(.primary)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    TextEditor(text: $editingSummary)
+                        .font(VibeWhisperTypography.body())
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 110, maxHeight: 160)
+                        .accessibilityLabel(L10n.text("Summary"))
+                }
+            }
+            .padding(VibeWhisperMetrics.space16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusXL,
+                    style: .continuous
+                )
+                .fill(accent.opacity(0.07))
+            }
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: VibeWhisperMetrics.radiusXL,
+                    style: .continuous
+                )
+                .strokeBorder(accent.opacity(0.16), lineWidth: 1)
+            }
+
+            // Example
+            VStack(alignment: .leading, spacing: VibeWhisperMetrics.space8) {
+                HStack(spacing: VibeWhisperMetrics.space8) {
+                    Image(systemName: "text.badge.checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(accent)
+                    Text(L10n.text("Example"))
+                        .font(VibeWhisperTypography.body(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                if isBuiltIn {
+                    Text(
+                        approvedExample.isEmpty
+                            ? "—"
+                            : approvedExample
+                    )
+                    .font(VibeWhisperTypography.body())
+                    .foregroundStyle(approvedExample.isEmpty ? .tertiary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    TextField(
+                        L10n.text("Example"),
+                        text: $approvedExample
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .font(VibeWhisperTypography.body())
+                }
+            }
+
+            if !isBuiltIn {
+                DisclosureGroup(isExpanded: $showsSamples) {
+                    VStack(alignment: .leading, spacing: VibeWhisperMetrics.space10) {
+                        TextEditor(text: $sourceSamples)
+                            .font(VibeWhisperTypography.body())
+                            .scrollContentBackground(.hidden)
+                            .padding(VibeWhisperMetrics.space10)
+                            .frame(minHeight: 88)
+                            .background {
+                                RoundedRectangle(
+                                    cornerRadius: VibeWhisperMetrics.radiusM,
+                                    style: .continuous
+                                )
+                                .fill(Color(nsColor: .textBackgroundColor))
+                            }
+                            .overlay {
+                                RoundedRectangle(
+                                    cornerRadius: VibeWhisperMetrics.radiusM,
+                                    style: .continuous
+                                )
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                            }
+                            .accessibilityLabel(L10n.text("Samples"))
+
+                        Button(L10n.text("Generate")) {
+                            analyzeSamples()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(
+                            sourceSamples
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                        )
+                    }
+                    .padding(.top, VibeWhisperMetrics.space10)
+                } label: {
+                    Label(L10n.text("Samples"), systemImage: "doc.text.magnifyingglass")
+                        .font(VibeWhisperTypography.body(.semibold))
+                }
+            }
+
+            HStack(spacing: VibeWhisperMetrics.space10) {
+                if !isBuiltIn {
+                    Button(L10n.text("Save")) {
+                        save()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(accent)
+                    .disabled(!canSave)
+                }
+
+                Button(L10n.text("Export…")) {
+                    exportSelected()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(selectedCapsule == nil || !localAssetAccessEnabled)
+
+                if let selectedCapsule, !selectedCapsule.isBuiltIn {
+                    Button(L10n.text("Delete"), role: .destructive) {
+                        deleteSelected()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+
+                Spacer(minLength: 0)
+
+                if let selectedCapsule,
+                   config.styleCapsules.defaultCapsuleID != selectedCapsule.id
+                {
+                    Button {
+                        config.styleCapsules.defaultCapsuleID = selectedCapsule.id
+                    } label: {
+                        Label(L10n.text("Default Style"), systemImage: "star")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+            }
+        }
+        .padding(VibeWhisperMetrics.space20)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusXXL,
+                style: .continuous
+            )
+            .fill(Color(nsColor: VibeWhisperPalette.elevatedSurface))
+        }
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: VibeWhisperMetrics.radiusXXL,
+                style: .continuous
+            )
+            .strokeBorder(accent.opacity(0.18), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 6)
+    }
+
+    // MARK: Model helpers
+
+    private var selectedCapsule: StyleCapsule? {
+        capsules.first { $0.id == selectedID }
+    }
+
+    private var isComposingNew: Bool {
+        selectedID == nil
+            && (
+                !editingName.isEmpty
+                    || !editingSummary.isEmpty
+                    || showsSamples
+            )
+    }
+
+    private var styleAwareSkills: [SkillDefinition] {
+        registry.orderedDefinitions.filter {
+            $0.allCapabilities.contains(.styleCapsule)
+        }
     }
 
     private var canSave: Bool {
         localAssetAccessEnabled
-            && selectedCapsule?
-                .isBuiltIn != true
+            && selectedCapsule?.isBuiltIn != true
             && !editingName
-                .trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ).isEmpty
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
             && !editingSummary
-                .trimmingCharacters(
-                    in: .whitespacesAndNewlines
-                ).isEmpty
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
     }
 
     private func reload() {
-        guard localAssetAccessEnabled
-        else {
-            capsules =
-                StyleCapsuleRegistry.builtIn
+        guard localAssetAccessEnabled else {
+            capsules = StyleCapsuleRegistry.builtIn
             return
         }
         do {
@@ -568,26 +781,21 @@ struct StyleCapsuleSettingsView:
             message = nil
             messageIsError = false
         } catch {
-            capsules =
-                StyleCapsuleRegistry.builtIn
-            message =
-                error.localizedDescription
+            capsules = StyleCapsuleRegistry.builtIn
+            message = error.localizedDescription
             messageIsError = true
         }
     }
 
-    private func select(
-        _ capsule: StyleCapsule
-    ) {
+    private func select(_ capsule: StyleCapsule) {
         selectedID = capsule.id
-        editingName =
-            L10n.text(capsule.name)
-        editingSummary =
-            capsule.summary
-        approvedExample =
-            capsule.examples.first
-            ?? ""
+        editingName = L10n.text(capsule.name)
+        editingSummary = capsule.summary
+        approvedExample = capsule.examples.first ?? ""
         sourceSamples = ""
+        showsSamples = false
+        message = nil
+        messageIsError = false
     }
 
     private func beginNew() {
@@ -596,136 +804,82 @@ struct StyleCapsuleSettingsView:
         editingSummary = ""
         approvedExample = ""
         sourceSamples = ""
-        message = L10n.text(
-            "Paste only text you own or are authorized to use."
-        )
+        showsSamples = true
+        message = nil
         messageIsError = false
     }
 
     private func analyzeSamples() {
-        let summary =
-            StyleCapsuleAnalyzer
-                .summarize(
-                    samples:
-                        sourceSamples
-                )
-        guard !summary.isEmpty else {
-            return
-        }
+        let summary = StyleCapsuleAnalyzer.summarize(samples: sourceSamples)
+        guard !summary.isEmpty else { return }
         editingSummary = summary
         sourceSamples = ""
-        message = L10n.text(
-            "Style summary generated locally. Source samples were cleared and not saved."
-        )
+        message = L10n.text("Summary generated.")
         messageIsError = false
     }
 
     private func save() {
-        let now =
-            ISO8601DateFormatter()
-                .string(from: Date())
-        let existing =
-            selectedCapsule
-        let id =
-            existing?.id
-            ?? "user.\(UUID().uuidString.lowercased())"
+        let now = ISO8601DateFormatter().string(from: Date())
+        let existing = selectedCapsule
+        let id = existing?.id ?? "user.\(UUID().uuidString.lowercased())"
         let capsule = StyleCapsule(
             id: id,
             name: editingName,
             summary: editingSummary,
-            examples:
-                approvedExample
-                    .trimmingCharacters(
-                        in:
-                            .whitespacesAndNewlines
-                    ).isEmpty
+            examples: approvedExample
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
                 ? []
                 : [approvedExample],
-            createdAt:
-                existing?.createdAt
-                ?? now,
+            createdAt: existing?.createdAt ?? now,
             updatedAt: now,
             isBuiltIn: false
         )
         do {
             try store.save(capsule)
             reload()
-            if
-                let refreshed =
-                    capsules.first(
-                        where: {
-                            $0.id
-                                == capsule.id
-                        }
-                    )
-            {
+            if let refreshed = capsules.first(where: { $0.id == capsule.id }) {
                 select(refreshed)
             }
-            message = L10n.text(
-                "Style Capsule saved locally."
-            )
+            message = L10n.text("Writing Style saved.")
             messageIsError = false
         } catch {
-            message =
-                error.localizedDescription
+            message = error.localizedDescription
             messageIsError = true
         }
     }
 
     private func deleteSelected() {
-        guard
-            let selectedCapsule,
-            !selectedCapsule.isBuiltIn
-        else {
-            return
-        }
+        guard let selectedCapsule, !selectedCapsule.isBuiltIn else { return }
         do {
-            try store.delete(
-                id: selectedCapsule.id
-            )
-            if
-                config.styleCapsules
-                    .defaultCapsuleID
-                    == selectedCapsule.id
-            {
-                config.styleCapsules
-                    .defaultCapsuleID = nil
+            try store.delete(id: selectedCapsule.id)
+            if config.styleCapsules.defaultCapsuleID == selectedCapsule.id {
+                config.styleCapsules.defaultCapsuleID = nil
             }
-            config.styleCapsules
-                .skillAssignments
-                .removeAll {
-                    $0.capsuleID
-                        == selectedCapsule.id
-                }
+            config.styleCapsules.skillAssignments.removeAll {
+                $0.capsuleID == selectedCapsule.id
+            }
             reload()
             if let first = capsules.first {
                 select(first)
             } else {
                 beginNew()
             }
-            message = L10n.text(
-                "Style Capsule deleted."
-            )
+            message = L10n.text("Writing Style deleted.")
             messageIsError = false
         } catch {
-            message =
-                error.localizedDescription
+            message = error.localizedDescription
             messageIsError = true
         }
     }
 
     private func exportSelected() {
-        guard let selectedCapsule else {
-            return
-        }
+        guard let selectedCapsule else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue =
-            selectedCapsule.id + ".json"
-        panel.title = L10n.text(
-            "Export Style Capsule"
-        )
+        panel.nameFieldStringValue = selectedCapsule.id + ".json"
+        panel.title = L10n.text("Export Writing Style")
         panel.prompt = L10n.text("Export")
         guard
             panel.runModal() == .OK,
@@ -734,18 +888,11 @@ struct StyleCapsuleSettingsView:
             return
         }
         do {
-            try store.export(
-                selectedCapsule,
-                to: url
-            )
-            message = L10n.format(
-                "Exported %@.",
-                url.lastPathComponent
-            )
+            try store.export(selectedCapsule, to: url)
+            message = L10n.format("Exported %@.", url.lastPathComponent)
             messageIsError = false
         } catch {
-            message =
-                error.localizedDescription
+            message = error.localizedDescription
             messageIsError = true
         }
     }
@@ -1594,10 +1741,10 @@ struct CommunitySkillSettingsView:
         panel.treatsFilePackagesAsDirectories =
             true
         panel.title = L10n.text(
-            "Import OpenWhisper Skill"
+            "Import VibeWhisper Skill"
         )
         panel.message = L10n.text(
-            "Choose a standard Agent Skills directory containing SKILL.md, or a legacy .openwhisperskill v1 directory. Every file is scanned before it is copied into OpenWhisper's private Skills directory."
+            "Choose a standard Agent Skills directory containing SKILL.md, or a legacy .vibewhisperskill v1 directory. Every file is scanned before it is copied into VibeWhisper's private Skills directory."
         )
         panel.prompt = L10n.text("Review")
         guard
@@ -2005,7 +2152,7 @@ struct CommunitySkillSettingsView:
         if !newRequired.isEmpty {
             lines.append(
                 L10n.format(
-                    "New required Context: %@. OpenWhisper will ask again before use.",
+                    "New required Context: %@. VibeWhisper will ask again before use.",
                     newRequired.joined(separator: ", ")
                 )
             )

@@ -20,15 +20,15 @@ enum ChatGPTAuthError: LocalizedError {
         case .loginRequired:
             return L10n.text("Connect ChatGPT with the default browser first.")
         case .sessionExpired:
-            return L10n.text("OpenWhisper's saved ChatGPT session has expired. Sign in again.")
+            return L10n.text("VibeWhisper's saved ChatGPT session has expired. Sign in again.")
         case .sessionUnavailable:
-            return L10n.text("OpenWhisper cannot currently read a usable ChatGPT session.")
+            return L10n.text("VibeWhisper cannot currently read a usable ChatGPT session.")
         case .accessTokenMissing:
-            return L10n.text("OpenWhisper is signed in, but no usable ChatGPT access token is available.")
+            return L10n.text("VibeWhisper is signed in, but no usable ChatGPT access token is available.")
         case .refreshFailed(let message):
-            return L10n.format("OpenWhisper failed to refresh the ChatGPT session: %@", message)
+            return L10n.format("VibeWhisper failed to refresh the ChatGPT session: %@", message)
         case .browserLoginFailed(let message):
-            return L10n.format("OpenWhisper browser login failed: %@", message)
+            return L10n.format("VibeWhisper browser login failed: %@", message)
         }
     }
 }
@@ -97,20 +97,20 @@ final class ChatGPTAuthManager: ChatGPTAuthProviding, @unchecked Sendable {
             guard let session = try loadSession() else {
                 return ChatGPTAuthSnapshot(
                     state: .signedOut,
-                    detail: L10n.text("Use Browser Login in OpenWhisper Settings before recording."),
+                    detail: L10n.text("Use Browser Login in VibeWhisper Settings before recording."),
                     userEmail: nil
                 )
             }
             if session.tokenIsUsable(now: now()) {
                 return ChatGPTAuthSnapshot(
                     state: .ready,
-                    detail: L10n.text("OpenWhisper has its own ChatGPT session and can transcribe without Codex."),
+                    detail: L10n.text("VibeWhisper has its own ChatGPT session and can transcribe without Codex."),
                     userEmail: session.userEmail
                 )
             }
             return ChatGPTAuthSnapshot(
                 state: .expired,
-                detail: L10n.text("OpenWhisper has a saved ChatGPT session, but it needs refresh or sign-in again."),
+                detail: L10n.text("VibeWhisper has a saved ChatGPT session, but it needs refresh or sign-in again."),
                 userEmail: session.userEmail
             )
         } catch {

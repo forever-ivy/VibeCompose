@@ -47,6 +47,35 @@ final class PermissionStatusMonitor: ObservableObject {
         snapshot = nextSnapshot
     }
 
+    /// Poll after the user grants Accessibility in System Settings (or via the
+    /// guided flow). TCC often lands a beat after the Settings toggle flips.
+    @discardableResult
+    func refreshAccessibilityUntilTrusted(
+        maximumRefreshAttempts: Int = 20,
+        refreshDelay: Duration = .milliseconds(250),
+        pause: @escaping RefreshPause = { delay in
+            try? await Task.sleep(for: delay)
+        }
+    ) async -> Bool {
+        refresh()
+        if snapshot.accessibilityTrusted {
+            return true
+        }
+
+        guard maximumRefreshAttempts > 1 else {
+            return snapshot.accessibilityTrusted
+        }
+
+        for _ in 1..<maximumRefreshAttempts {
+            await pause(refreshDelay)
+            refresh()
+            if snapshot.accessibilityTrusted {
+                return true
+            }
+        }
+        return snapshot.accessibilityTrusted
+    }
+
     func requestMicrophoneAccess(
         using request: @escaping @MainActor @Sendable () async -> Result<Void, any Error>,
         maximumRefreshAttempts: Int = 10,

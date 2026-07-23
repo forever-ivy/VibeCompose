@@ -1,5 +1,17 @@
 import SwiftUI
 
+
+/// Shared trailing-control geometry for the General settings form so every
+/// row’s control cluster shares the same right edge (System Settings style).
+enum GeneralSettingsChrome {
+    static let controlClusterWidth: CGFloat = 220
+    static let recorderWidth: CGFloat = 120
+    static let controlHeight: CGFloat = 28
+}
+
+/// System Settings–style row: leading title (+ optional caption), trailing control.
+/// Controls stay trailing and never stack under the title until the pane is
+/// genuinely too narrow for a single line.
 struct SettingsRow<Control: View>: View {
     let title: String
     let detail: String?
@@ -16,25 +28,32 @@ struct SettingsRow<Control: View>: View {
     }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: OpenWhisperMetrics.space18) {
-                labels
-                Spacer(minLength: OpenWhisperMetrics.space20)
-                control()
+        HStack(alignment: .center, spacing: VibeWhisperMetrics.space16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(VibeWhisperTypography.body(.medium))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(VibeWhisperTypography.caption())
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            VStack(alignment: .leading, spacing: OpenWhisperMetrics.space10) {
-                labels
-                control()
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(0)
+
+            control()
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
-    }
-
-    private var labels: some View {
-        Text(title)
-            .font(OpenWhisperTypography.body(.medium))
-            .accessibilityHint(detail ?? "")
+        .padding(.vertical, VibeWhisperMetrics.space8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityHint(detail ?? "")
     }
 }
 
@@ -51,7 +70,7 @@ struct InlineStatus: View {
 
     var body: some View {
         Label(text, systemImage: icon)
-            .font(OpenWhisperTypography.caption(.medium))
+            .font(VibeWhisperTypography.caption(.medium))
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
             .labelStyle(.titleAndIcon)
@@ -69,14 +88,14 @@ struct InlineStatus: View {
     private var color: Color {
         switch kind {
         case .neutral: .secondary
-        case .success: Color(nsColor: OpenWhisperPalette.success)
-        case .warning: Color(nsColor: OpenWhisperPalette.amber)
-        case .error: Color(nsColor: OpenWhisperPalette.error)
+        case .success: Color(nsColor: VibeWhisperPalette.success)
+        case .warning: Color(nsColor: VibeWhisperPalette.amber)
+        case .error: Color(nsColor: VibeWhisperPalette.error)
         }
     }
 }
 
-struct SettingsCardContainer<Content: View>: View {
+struct SettingsCardContainer<Content: View, HeaderAccessory: View>: View {
     enum Style {
         /// Default grouped-form card: title + rows with dividers.
         case grouped
@@ -86,15 +105,18 @@ struct SettingsCardContainer<Content: View>: View {
 
     let title: String?
     let style: Style
+    let headerAccessory: HeaderAccessory
     let content: Content
 
     init(
         title: String? = nil,
         style: Style = .grouped,
+        @ViewBuilder headerAccessory: () -> HeaderAccessory,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.style = style
+        self.headerAccessory = headerAccessory()
         self.content = content()
     }
 
@@ -108,23 +130,31 @@ struct SettingsCardContainer<Content: View>: View {
     }
 
     private var groupedBody: some View {
-        VStack(alignment: .leading, spacing: OpenWhisperMetrics.space8) {
-            if let title {
-                Text(L10n.text(title))
-                    .textCase(.uppercase)
-                    .font(OpenWhisperTypography.micro(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .tracking(0.4)
-                    .padding(.horizontal, 4)
+        VStack(alignment: .leading, spacing: VibeWhisperMetrics.space10) {
+            if title != nil || !(headerAccessory is EmptyView) {
+                HStack(alignment: .center, spacing: VibeWhisperMetrics.space12) {
+                    if let title {
+                        Text(L10n.text(title))
+                            .textCase(.uppercase)
+                            .font(VibeWhisperTypography.micro(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .tracking(0.55)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Spacer(minLength: 0)
+                    }
+                    headerAccessory
+                }
+                .padding(.horizontal, VibeWhisperMetrics.space4)
             }
             VStack(alignment: .leading, spacing: 0) {
                 content
             }
-            .font(OpenWhisperTypography.callout())
+            .font(VibeWhisperTypography.callout())
         }
         .openWhisperCard(
-            padding: OpenWhisperMetrics.space16,
-            cornerRadius: OpenWhisperMetrics.radiusL,
+            padding: VibeWhisperMetrics.space16,
+            cornerRadius: VibeWhisperMetrics.radiusXL,
             elevated: false
         )
     }
@@ -133,11 +163,26 @@ struct SettingsCardContainer<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             content
         }
-            .font(OpenWhisperTypography.callout())
-            .openWhisperCard(
-                padding: OpenWhisperMetrics.space20,
-                cornerRadius: OpenWhisperMetrics.radiusXL,
-                elevated: true
-            )
+        .font(VibeWhisperTypography.callout())
+        .openWhisperCard(
+            padding: VibeWhisperMetrics.space20,
+            cornerRadius: VibeWhisperMetrics.radiusXL,
+            elevated: true
+        )
+    }
+}
+
+extension SettingsCardContainer where HeaderAccessory == EmptyView {
+    init(
+        title: String? = nil,
+        style: Style = .grouped,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title: title,
+            style: style,
+            headerAccessory: { EmptyView() },
+            content: content
+        )
     }
 }

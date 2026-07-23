@@ -11,13 +11,13 @@ enum SupportDiagnosticsExportError: LocalizedError, Equatable {
         switch self {
         case .destinationIsDirectory(let name):
             return L10n.format(
-                "OpenWhisper cannot replace the folder named %@ with a diagnostics archive.",
+                "VibeWhisper cannot replace the folder named %@ with a diagnostics archive.",
                 name
             )
         case .archiveCreationFailed:
-            return L10n.text("OpenWhisper could not create the diagnostics archive.")
+            return L10n.text("VibeWhisper could not create the diagnostics archive.")
         case .archiveOutputMissing:
-            return L10n.text("OpenWhisper created no diagnostics archive.")
+            return L10n.text("VibeWhisper created no diagnostics archive.")
         }
     }
 }
@@ -220,7 +220,10 @@ private struct SupportLatencySample: Codable, Sendable, Equatable {
         textPolishProvider = sample.textPolishProvider.map {
             Self.allowedValue(
                 $0,
-                allowed: [TextPolishProviderID.chatGPTAuth.rawValue]
+                allowed: [
+                    TextPolishProviderID.chatGPTAuth.rawValue,
+                    TextPolishProviderID.openAICompatible.rawValue,
+                ]
             )
         }
         authMs = Self.nonnegative(sample.authMs)
@@ -394,7 +397,7 @@ struct SupportDiagnosticsExporter {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return "OpenWhisper-Support-\(formatter.string(from: now)).zip"
+        return "VibeWhisper-Support-\(formatter.string(from: now)).zip"
     }
 
     func export(
@@ -410,13 +413,13 @@ struct SupportDiagnosticsExporter {
 
         let workspaceURL = temporaryDirectoryURL
             .appendingPathComponent(
-                "openwhisper-support-\(UUID().uuidString)",
+                "vibewhisper-support-\(UUID().uuidString)",
                 isDirectory: true
             )
         let bundleURL = workspaceURL
-            .appendingPathComponent("OpenWhisper-Support", isDirectory: true)
+            .appendingPathComponent("VibeWhisper-Support", isDirectory: true)
         let temporaryArchiveURL = workspaceURL
-            .appendingPathComponent("OpenWhisper-Support.zip")
+            .appendingPathComponent("VibeWhisper-Support.zip")
         defer {
             try? fileManager.removeItem(at: workspaceURL)
         }
@@ -482,7 +485,7 @@ struct SupportDiagnosticsExporter {
         let stagedDestinationURL = destinationURL
             .deletingLastPathComponent()
             .appendingPathComponent(
-                ".openwhisper-support-\(UUID().uuidString).zip"
+                ".vibewhisper-support-\(UUID().uuidString).zip"
             )
         defer {
             try? fileManager.removeItem(at: stagedDestinationURL)
@@ -547,7 +550,7 @@ struct SupportDiagnosticsExporter {
                 ),
                 speechCleanupEnabled: config.transcription.speechCleanupEnabled,
                 feedbackSoundsEnabled: config.transcription.feedbackSoundsEnabled,
-                languagePreference: config.transcription.languagePreference.rawValue,
+                languagePreference: "follow_input",
                 punctuationPreference: config.transcription.punctuationPreference.rawValue,
                 terminologyEnabled: config.transcription.terminology.enabled,
                 enabledTerminologyEntryCount: config.transcription
@@ -988,7 +991,7 @@ struct SupportDiagnosticsExporter {
     }
 
     private static let readmeText = """
-    OpenWhisper Support Diagnostics
+    VibeWhisper Support Diagnostics
 
     This archive is generated locally and is not uploaded automatically.
 
@@ -997,14 +1000,14 @@ struct SupportDiagnosticsExporter {
     - non-secret configuration flags and retention values
     - redacted local latency records
     - opt-in local product metrics with enum and bucket values only
-    - whitelisted metadata from up to five recent OpenWhisper crash reports
+    - whitelisted metadata from up to five recent VibeWhisper crash reports
     - SHA-256 checksums for every included file
 
     Excluded:
     - audio and failed recordings
     - transcript and clipboard text
     - terminology entries and imported source paths
-    - Style Capsule summaries, examples, and source samples
+    - Writing Style summaries, examples, and source samples
     - community Skill prompts, terminology, localizations, and package file names
     - account email, access tokens, refresh tokens, API keys, cookies, and authorization headers
     - custom endpoint URLs and environment-variable values

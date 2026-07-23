@@ -8,10 +8,12 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     case polish = "AI Polish"
     case context = "Context"
     case terminology = "Terminology"
+    case styleCapsules = "Style Capsules"
     case paste = "Paste"
     case privacy = "Privacy"
     case advanced = "Advanced"
     case skills = "Skills"
+    case rules = "Rules"
     case history = "History"
 
     var id: String { rawValue }
@@ -32,6 +34,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return "context"
         case .terminology:
             return "terminology"
+        case .styleCapsules:
+            return "style-capsules"
         case .paste:
             return "paste"
         case .privacy:
@@ -40,6 +44,8 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return "advanced"
         case .skills:
             return "skills"
+        case .rules:
+            return "rules"
         case .history:
             return "history"
         }
@@ -70,6 +76,11 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
              "terms",
              "domain-packs":
             return .terminology
+        case "style-capsules",
+             "stylecapsules",
+             "style-capsule",
+             "stylecapsule":
+            return .styleCapsules
         case "paste":
             return .paste
         case "privacy":
@@ -81,6 +92,11 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
              "skilllibrary",
              "library":
             return .skills
+        case "rules",
+             "skill-rules",
+             "application-rules",
+             "app-rules":
+            return .rules
         case "history":
             return .history
         default:
@@ -98,8 +114,12 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
             return L10n.text("Context & Privacy")
         case .terminology:
             return L10n.text("Terminology")
+        case .styleCapsules:
+            return L10n.text("Writing Styles")
         case .skills:
             return L10n.text("Skills")
+        case .rules:
+            return L10n.text("Rules")
         case .history:
             return L10n.text("History")
         default:
@@ -109,7 +129,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
 
     var sidebarGroup: SettingsSidebarGroup {
         switch self {
-        case .skills, .history, .terminology:
+        case .skills, .rules, .history, .terminology, .styleCapsules:
             return .library
         case .general, .account, .dictation, .polish, .paste, .appearance:
             return .workspace
@@ -134,8 +154,10 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// App Store–style product destinations shown in the main shell sidebar.
     static let visiblePanes: [SettingsPane] = [
         .skills,
+        .rules,
         .history,
         .terminology,
+        .styleCapsules,
         .general,
         .dictation,
         .context,
@@ -145,8 +167,10 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable, Sendable {
 
     static let libraryPanes: [SettingsPane] = [
         .skills,
+        .rules,
         .history,
         .terminology,
+        .styleCapsules,
     ]
 
     static let workspacePanes: [SettingsPane] = [
@@ -192,8 +216,10 @@ enum SettingsSidebarGroup: String, CaseIterable, Identifiable, Sendable {
 }
 
 struct SettingsWindowStateStore {
-    static let frameAutosaveName = "OpenWhisper.SettingsWindow"
-    static let selectedPaneKey = "OpenWhisper.Settings.SelectedPane"
+    static let frameAutosaveName = "VibeWhisper.SettingsWindow"
+    static let selectedPaneKey = "VibeWhisper.Settings.SelectedPane"
+    static let skillLibrarySectionKey =
+        "VibeWhisper.Settings.SkillLibrarySection"
 
     private let defaults: UserDefaults
 
@@ -223,6 +249,33 @@ struct SettingsWindowStateStore {
     }
 
     func saveSelectedPane(_ pane: SettingsPane) {
-        defaults.set(pane.rawValue, forKey: Self.selectedPaneKey)
+        defaults.set(
+            pane.normalizedVisiblePane.rawValue,
+            forKey: Self.selectedPaneKey
+        )
+    }
+
+    /// Restores the last Skill Library segment (Discover / Install / Created).
+    /// Deep-link `preferred` values win when provided so launch-mode and
+    /// acceptance captures still land on the requested tab.
+    func initialSkillLibrarySection(
+        preferred: SkillLibrarySection? = nil
+    ) -> SkillLibrarySection {
+        if let preferred {
+            return preferred
+        }
+        guard
+            let rawValue = defaults.string(
+                forKey: Self.skillLibrarySectionKey
+            ),
+            let section = SkillLibrarySection(rawValue: rawValue)
+        else {
+            return .discover
+        }
+        return section
+    }
+
+    func saveSkillLibrarySection(_ section: SkillLibrarySection) {
+        defaults.set(section.rawValue, forKey: Self.skillLibrarySectionKey)
     }
 }

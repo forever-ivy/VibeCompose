@@ -95,7 +95,7 @@ private struct MultipartBodyFile: Sendable {
         }
 
         let bodyFileURL = temporaryDirectoryURL
-            .appendingPathComponent("openwhisper-upload-\(UUID().uuidString).multipart")
+            .appendingPathComponent("vibewhisper-upload-\(UUID().uuidString).multipart")
         let outputDescriptor = try createPrivateOutputFile(bodyFileURL)
         var shouldDeleteOutput = true
         defer {
@@ -275,7 +275,7 @@ enum TranscriptionError: LocalizedError {
             )
         case .recoveryCredentialUnavailable(let detail):
             return L10n.format(
-                "OpenWhisper could not read the OpenAI-Compatible API key from Keychain: %@",
+                "VibeWhisper could not read the OpenAI-Compatible API key from Keychain: %@",
                 detail
             )
         case .retryableCloudflareChallenge(let attempts):
@@ -407,79 +407,149 @@ struct ChatGPTTranscriber: Sendable {
         let prompt = promptBuilder.buildPrompt(
             hintTerms: config.promptHintTerms,
             speechCleanupEnabled: config.speechCleanupEnabled,
-            languagePreference: config.languagePreference,
             punctuationPreference: config.punctuationPreference
         )
 
         switch config.provider {
         case .chatGPTManagedAuth:
-            let authStarted = DispatchTime.now().uptimeNanoseconds
-            var token = try await authManager.bestAvailableAccessToken()
-            var authMs = elapsedMilliseconds(since: authStarted)
-            Self.logger.info("ChatGPT access token resolved authMs=\(authMs, privacy: .public)")
-            let transcribeStarted = DispatchTime.now().uptimeNanoseconds
-            let response: (text: String, promptIncluded: Bool)
             do {
-                response = try await transcribeViaChatGPTBridgeWithCloudflareRetries(
-                    audioFileURL: audio.fileURL,
+                return try await transcribeViaChatGPTManagedAuth(
+                    audio: audio,
                     audioMetadata: audioMetadata,
-                    token: token,
                     prompt: prompt
                 )
-            } catch let error as ProviderRequestFailure
-                where error.shouldRefreshAuthentication
-            {
-                Self.logger.info(
-                    "ChatGPT transcription requested an access-token refresh after HTTP \(error.statusCode ?? 0, privacy: .public)"
-                )
-                let refreshStarted = DispatchTime.now().uptimeNanoseconds
-                token = try await authManager.refreshAccessToken()
-                authMs += elapsedMilliseconds(since: refreshStarted)
-                response = try await transcribeViaChatGPTBridgeWithCloudflareRetries(
-                    audioFileURL: audio.fileURL,
-                    audioMetadata: audioMetadata,
-                    token: token,
-                    prompt: prompt
-                )
+            } catch {
+                if shouldFallbackToOpenAICompatible(after: error) {
+                    Self.logger.info(
+                        "ChatGPT transcription failed; attempting OpenAI-compatible fallback"
+                    )
+                    return try await transcribeViaOpenAICompatibleResult(
+                        audio: audio,
+                        audioMetadata: audioMetadata,
+                        prompt: prompt
+                    )
+                }
+                throw error
             }
-            let transcribeMs = elapsedMilliseconds(since: transcribeStarted)
-            Self.logger.info(
-                "ChatGPT transcription completed transcribeMs=\(transcribeMs, privacy: .public) transcriptCharacters=\(response.text.count, privacy: .public) promptIncluded=\(response.promptIncluded, privacy: .public)"
-            )
-            return TranscriptionResult(
-                text: response.text,
-                metrics: TranscriptionMetrics(
-                    provider: .chatGPTManagedAuth,
-                    audioDurationMs: audio.durationMs,
-                    audioBytes: audioMetadata.byteCount,
-                    authMs: authMs,
-                    transcribeMs: transcribeMs,
-                    promptIncluded: response.promptIncluded
-                )
-            )
         case .openAICompatible:
-            let transcribeStarted = DispatchTime.now().uptimeNanoseconds
-            let text = try await transcribeViaOpenAICompatible(
-                audioFileURL: audio.fileURL,
+            return try await transcribeViaOpenAICompatibleResult(
+                audio: audio,
                 audioMetadata: audioMetadata,
                 prompt: prompt
             )
-            let transcribeMs = elapsedMilliseconds(since: transcribeStarted)
-            Self.logger.info(
-                "OpenAI-compatible transcription completed transcribeMs=\(transcribeMs, privacy: .public) transcriptCharacters=\(text.count, privacy: .public)"
+        }
+    }
+
+    private func transcribeViaChatGPTManagedAuth(
+        audio: RecordedAudio,
+        audioMetadata: AudioUploadMetadata,
+        prompt: String
+    ) async throws -> TranscriptionResult {
+        let authStarted = DispatchTime.now().uptimeNanoseconds
+        var token = try await authManager.bestAvailableAccessToken()
+        var authMs = elapsedMilliseconds(since: authStarted)
+        Self.logger.info("ChatGPT access token resolved authMs=\(authMs, privacy: .public)")
+        let transcribeStarted = DispatchTime.now().uptimeNanoseconds
+        let response: (text: String, promptIncluded: Bool)
+        do {
+            response = try await transcribeViaChatGPTBridgeWithCloudflareRetries(
+                audioFileURL: audio.fileURL,
+                audioMetadata: audioMetadata,
+                token: token,
+                prompt: prompt
             )
-            return TranscriptionResult(
-                text: text,
-                metrics: TranscriptionMetrics(
-                    provider: .openAICompatible,
-                    audioDurationMs: audio.durationMs,
-                    audioBytes: audioMetadata.byteCount,
-                    authMs: 0,
-                    transcribeMs: transcribeMs,
-                    promptIncluded: true
-                )
+        } catch let error as ProviderRequestFailure
+            where error.shouldRefreshAuthentication
+        {
+            Self.logger.info(
+                "ChatGPT transcription requested an access-token refresh after HTTP \(error.statusCode ?? 0, privacy: .public)"
+            )
+            let refreshStarted = DispatchTime.now().uptimeNanoseconds
+            token = try await authManager.refreshAccessToken()
+            authMs += elapsedMilliseconds(since: refreshStarted)
+            response = try await transcribeViaChatGPTBridgeWithCloudflareRetries(
+                audioFileURL: audio.fileURL,
+                audioMetadata: audioMetadata,
+                token: token,
+                prompt: prompt
             )
         }
+        let transcribeMs = elapsedMilliseconds(since: transcribeStarted)
+        Self.logger.info(
+            "ChatGPT transcription completed transcribeMs=\(transcribeMs, privacy: .public) transcriptCharacters=\(response.text.count, privacy: .public) promptIncluded=\(response.promptIncluded, privacy: .public)"
+        )
+        return TranscriptionResult(
+            text: response.text,
+            metrics: TranscriptionMetrics(
+                provider: .chatGPTManagedAuth,
+                audioDurationMs: audio.durationMs,
+                audioBytes: audioMetadata.byteCount,
+                authMs: authMs,
+                transcribeMs: transcribeMs,
+                promptIncluded: response.promptIncluded
+            )
+        )
+    }
+
+    private func transcribeViaOpenAICompatibleResult(
+        audio: RecordedAudio,
+        audioMetadata: AudioUploadMetadata,
+        prompt: String
+    ) async throws -> TranscriptionResult {
+        let transcribeStarted = DispatchTime.now().uptimeNanoseconds
+        let text = try await transcribeViaOpenAICompatible(
+            audioFileURL: audio.fileURL,
+            audioMetadata: audioMetadata,
+            prompt: prompt
+        )
+        let transcribeMs = elapsedMilliseconds(since: transcribeStarted)
+        Self.logger.info(
+            "OpenAI-compatible transcription completed transcribeMs=\(transcribeMs, privacy: .public) transcriptCharacters=\(text.count, privacy: .public)"
+        )
+        return TranscriptionResult(
+            text: text,
+            metrics: TranscriptionMetrics(
+                provider: .openAICompatible,
+                audioDurationMs: audio.durationMs,
+                audioBytes: audioMetadata.byteCount,
+                authMs: 0,
+                transcribeMs: transcribeMs,
+                promptIncluded: true
+            )
+        )
+    }
+
+    /// Whether ChatGPT ASR failure may escalate to the user-owned OpenAI path.
+    private func shouldFallbackToOpenAICompatible(after error: any Error) -> Bool {
+        guard config.openAIFallbackEnabled else {
+            return false
+        }
+        guard config.provider == .chatGPTManagedAuth else {
+            return false
+        }
+        // Local / client errors must not silently switch providers.
+        if error is TranscriptionError {
+            return false
+        }
+        if error is CancellationError {
+            return false
+        }
+        if let failure = error as? ProviderRequestFailure {
+            switch failure.category {
+            case .network,
+                 .serviceUnavailable,
+                 .rateLimited,
+                 .challenge,
+                 .authentication,
+                 .unknown:
+                break
+            case .requestRejected, .contractChanged, .invalidResponse:
+                return false
+            }
+        }
+        // Credential check is best-effort; missing key fails inside openAI path.
+        let hasKey = (try? recoveryCredentialStore.hasAPIKey()) ?? false
+        return hasKey
     }
 
     private func transcribeViaChatGPTBridgeWithCloudflareRetries(
@@ -777,7 +847,7 @@ struct ChatGPTTranscriber: Sendable {
     }
 
     private func makeBoundary() -> String {
-        "OpenWhisper-\(UUID().uuidString)"
+        "VibeWhisper-\(UUID().uuidString)"
     }
 
     private func inspectAudioFile(at fileURL: URL) async throws -> AudioUploadMetadata {

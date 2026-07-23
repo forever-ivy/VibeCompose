@@ -71,14 +71,14 @@ struct TemporaryArtifactCleanupService {
         let name = url.lastPathComponent
         if let identifier = identifier(
             in: name,
-            prefix: "openwhisper-",
+            prefix: "vibewhisper-",
             suffix: ".wav"
         ) {
             return UUID(uuidString: identifier) != nil
         }
         if let identifier = identifier(
             in: name,
-            prefix: "openwhisper-upload-",
+            prefix: "vibewhisper-upload-",
             suffix: ".multipart"
         ) {
             return UUID(uuidString: identifier) != nil

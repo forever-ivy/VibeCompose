@@ -26,15 +26,52 @@ enum AccessibilityPermission {
         configuration: .init(promptForAccessibilityTrust: false)
     )
 
+    /// Live process trust for Accessibility.
+    ///
+    /// Status UI and paste routing must read this without prompting. Some macOS
+    /// builds disagree briefly between the plain and options APIs right after a
+    /// grant outside the app, so treat either affirmative as trusted.
     static func isTrusted(
-        trustCheck: TrustCheck = { AXIsProcessTrusted() }
+        trustCheck: TrustCheck = { liveProcessIsTrusted() }
     ) -> Bool {
         trustCheck()
     }
 
+    /// Non-prompting dual check used by production status reads.
+    static func liveProcessIsTrusted() -> Bool {
+        let options = [
+            promptOptionKey: false,
+        ] as CFDictionary
+        if AXIsProcessTrustedWithOptions(options) {
+            return true
+        }
+        return AXIsProcessTrusted()
+    }
+
+    /// Status chip title for Settings / setup tiles.
+    ///
+    /// Granted always wins. When the process is not trusted, prefer an honest
+    /// "not enabled" label; only ad-hoc builds escalate to "Re-add required"
+    /// because TCC often keeps a stale toggle that never maps to the binary.
+    static func statusTitle(
+        isTrusted: Bool,
+        signatureState: SignatureState = signatureState()
+    ) -> String {
+        if isTrusted {
+            return L10n.text("Granted")
+        }
+
+        switch signatureState {
+        case .adHocOrUnsigned:
+            return L10n.text("Re-add required")
+        case .stable, .unavailable:
+            return L10n.text("Not enabled")
+        }
+    }
+
     @discardableResult
     static func requestTrustIfNeeded(
-        trustCheck: TrustCheck = { AXIsProcessTrusted() },
+        trustCheck: TrustCheck = { liveProcessIsTrusted() },
         prompt: TrustPrompt = {
             let options = [
                 promptOptionKey: true,
@@ -118,7 +155,7 @@ enum AccessibilityPermission {
     static func repairGuidance(
         appName: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
-            ?? "OpenWhisper",
+            ?? "VibeWhisper",
         signatureState: SignatureState = signatureState(),
         bundleURL: URL = Bundle.main.bundleURL
     ) -> RepairGuidance {
@@ -142,7 +179,7 @@ enum AccessibilityPermission {
         case .unavailable:
             details.append(
                 L10n.format(
-                    "OpenWhisper could not inspect its own code signature. If Accessibility opens without a %@ row, rebuild the packaged app before requesting access again.",
+                    "VibeWhisper could not inspect its own code signature. If Accessibility opens without a %@ row, rebuild the packaged app before requesting access again.",
                     appName
                 )
             )

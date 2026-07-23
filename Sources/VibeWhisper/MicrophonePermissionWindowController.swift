@@ -12,7 +12,7 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
         )
         let hostingController = NSHostingController(
             rootView:
-                view.applyingOpenWhisperBrandTint()
+                view.applyingVibeWhisperBrandTint()
                 .applyingAccessibilityDisplayOptionsOverride(
                     .currentVisualAcceptance
                 )
@@ -46,7 +46,7 @@ final class MicrophonePermissionWindowController: NSWindowController, NSWindowDe
                     self?.finish(with: false)
                 }
             )
-            .applyingOpenWhisperBrandTint()
+            .applyingVibeWhisperBrandTint()
             .applyingAccessibilityDisplayOptionsOverride(
                 .currentVisualAcceptance
             )
@@ -101,7 +101,7 @@ private struct MicrophonePermissionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 14) {
-                OpenWhisperIconWell(
+                VibeWhisperIconWell(
                     systemName: "mic.fill",
                     size: 44,
                     symbolSize: 18
@@ -111,7 +111,7 @@ private struct MicrophonePermissionView: View {
                     .tracking(-0.3)
                     .accessibilityHint(
                         L10n.text(
-                            "OpenWhisper needs microphone access before it can record your first dictation."
+                            "VibeWhisper needs microphone access before it can record your first dictation."
                         )
                     )
             }
@@ -121,9 +121,9 @@ private struct MicrophonePermissionView: View {
             HStack {
                 Spacer()
                 Button(L10n.text("Cancel"), action: onCancel)
-                    .buttonStyle(OpenWhisperSecondaryButtonStyle())
+                    .buttonStyle(VibeWhisperSecondaryButtonStyle())
                 Button(L10n.text("Continue"), action: onContinue)
-                    .buttonStyle(OpenWhisperPrimaryButtonStyle())
+                    .buttonStyle(VibeWhisperPrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }

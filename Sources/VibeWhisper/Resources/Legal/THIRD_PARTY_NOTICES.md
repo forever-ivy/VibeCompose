@@ -1,7 +1,7 @@
-# OpenWhisper Third-Party Notices
+# VibeWhisper Third-Party Notices
 
-OpenWhisper includes the dependencies below. Their licenses apply only to the
-corresponding third-party components and do not replace OpenWhisper's own
+VibeWhisper includes the dependencies below. Their licenses apply only to the
+corresponding third-party components and do not replace VibeWhisper's own
 `LICENSE`.
 
 The machine-readable source of truth is `third-party-licenses.json`. Release
@@ -33,7 +33,7 @@ sais-lite, Ed25519, and `SUSignatureVerifier.m`.
 - License: MIT License
 - Full text: `ThirdPartyLicenses/EdgeGlow-LICENSE.txt`
 
-OpenWhisper's AI Activity Glow adapts EdgeGlow's four-layer segmented neon
-rendering architecture and iridescent palette. OpenWhisper retains its own
+VibeWhisper's AI Activity Glow adapts EdgeGlow's four-layer segmented neon
+rendering architecture and iridescent palette. VibeWhisper retains its own
 dictation state machine, target selection, accessibility behavior, and
 completion/error choreography.
