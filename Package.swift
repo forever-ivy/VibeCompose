@@ -3,12 +3,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "OpenWhisper",
+    name: "VibeWhisper",
     platforms: [
         .macOS(.v13),
     ],
     products: [
-        .executable(name: "OpenWhisper", targets: ["OpenWhisper"]),
+        .executable(name: "VibeWhisper", targets: ["VibeWhisper"]),
     ],
     dependencies: [
         .package(
@@ -22,19 +22,19 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "OpenWhisper",
+            name: "VibeWhisper",
             dependencies: [
                 .product(name: "PermissionFlow", package: "PermissionFlow"),
                 .product(name: "SystemSettingsKit", package: "PermissionFlow"),
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
-            path: "Sources/OpenWhisper",
+            path: "Sources/VibeWhisper",
             exclude: ["Resources"]
         ),
         .testTarget(
-            name: "OpenWhisperTests",
-            dependencies: ["OpenWhisper"],
-            path: "Tests/OpenWhisperTests"
+            name: "VibeWhisperTests",
+            dependencies: ["VibeWhisper"],
+            path: "Tests/VibeWhisperTests"
         ),
     ],
     swiftLanguageModes: [.v6]

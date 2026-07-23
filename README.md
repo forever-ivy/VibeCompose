@@ -1,12 +1,12 @@
-# OpenWhisper
+# VibeWhisper
 
 [简体中文](README.zh-CN.md)
 
-OpenWhisper is an MIT-licensed, native macOS push-to-talk voice input app. Press the configured global shortcut (default `F5`) to start recording, press the same shortcut again to stop, and OpenWhisper returns the transcript to the current editable field or leaves it in the clipboard when automatic insertion is not safe.
+VibeWhisper is an MIT-licensed, native macOS push-to-talk voice input app. Press the configured global shortcut (default `F5`) to start recording, press the same shortcut again to stop, and VibeWhisper returns the transcript to the current editable field or leaves it in the clipboard when automatic insertion is not safe.
 
 ## Status
 
-OpenWhisper is currently a **macOS alpha**. The working version is `0.1.0`; no production-ready signed release is declared yet.
+VibeWhisper is currently a **macOS alpha**. The working version is `0.1.0`; no production-ready signed release is declared yet.
 
 The current implementation already includes:
 
@@ -31,13 +31,13 @@ The current implementation already includes:
 - opt-in selected-text context for Context Rewrite and Context Reply, with
   per-Skill Ask/Always/Never permissions, sensitive-app blocking, a local Diff
   Preview, and exact target/range/text verification before replacement
-- five built-in Style Capsules plus local custom Capsule creation, editing,
+- five built-in Writing Styles plus local custom Writing Style creation, editing,
   per-Skill assignment, deletion, and export; source samples are analyzed in
   memory and cleared instead of being stored by default
 - layered terminology with personal corrections, Skill-local terms, and
   Backend Engineering, Medical, and Kubernetes Domain Packs; conflicts are
   visible and the high-risk Medical pack forces Preview
-- local declarative `.openwhisperskill` import with package review, hard file
+- local declarative `.vibewhisperskill` import with package review, hard file
   limits, path/symlink/executable rejection, content SHA-256, multiple
   versions, rollback, disable/uninstall, Skill Inspector, and Golden contract
   tests; arbitrary code, custom network, and external actions remain blocked
@@ -86,19 +86,19 @@ swift test --package-path .
 ./scripts/check.sh
 ./scripts/package_app.sh
 ./scripts/install_app.sh
-open -n /Applications/OpenWhisper.app
+open -n /Applications/VibeWhisper.app
 ```
 
 For local debugging when no valid Apple signing identity is available:
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
 Ad-hoc signing is for local validation only. It can prevent macOS from showing a stable Accessibility permission row.
 
-Do not launch `dist/OpenWhisper.app` as the live app. Permission and interaction verification must use `/Applications/OpenWhisper.app`.
+Do not launch `dist/VibeWhisper.app` as the live app. Permission and interaction verification must use `/Applications/VibeWhisper.app`.
 
 Automated product-surface screenshots run in an isolated acceptance mode with
 default configuration, empty in-memory credentials, and no live history,
@@ -107,7 +107,7 @@ recovery, or terminology records.
 Installed accessibility structure precheck:
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
 This checks all nine Settings panes, every one of the four Onboarding steps,
@@ -119,7 +119,7 @@ For official Computer Use interaction acceptance without loading the user's
 live configuration, credentials, history, Recovery data, or terminology:
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 \
   ./scripts/interaction_acceptance.sh --install settings account
 ./scripts/interaction_acceptance.sh --restore
 ```
@@ -130,10 +130,10 @@ acceptance process and relaunches the normal installed menu bar app.
 
 ## Runtime Data
 
-OpenWhisper stores local application data under:
+VibeWhisper stores local application data under:
 
 ```text
-~/Library/Application Support/OpenWhisper/
+~/Library/Application Support/VibeWhisper/
 ```
 
 Current privacy defaults:
@@ -165,31 +165,31 @@ manually.
 
 **Settings → Advanced → Export Diagnostics** creates a local, reviewable ZIP containing redacted runtime, permission, latency, optional product-metric, and crash-summary data. It excludes audio, transcripts, clipboard text, account email, credentials, terminology, custom endpoints, raw crash reports, history, Recovery metadata, and `config.json`.
 
-The export also excludes Style Capsule summaries/examples/source samples,
+The export also excludes Writing Style summaries/examples/source samples,
 Community Skill prompts/files, and installed package names. It may contain
 only bounded counts, risk indicators, semantic versions, and validator issue
 codes for these features.
 
 The ChatGPT session is stored in Keychain under
-`app.openwhisper.mac.ChatGPTSession`. The optional OpenAI-Compatible Recovery
+`app.vibewhisper.mac.ChatGPTSession`. The optional OpenAI-Compatible Recovery
 API key is stored separately under
-`app.openwhisper.mac.OpenAICompatibleAPIKey`; it is never read from
+`app.vibewhisper.mac.OpenAICompatibleAPIKey`; it is never read from
 `OPENAI_API_KEY` or written to `config.json`. **Settings → Advanced** manages
 the endpoint, model, Keychain credential, real connection test, third-party
 billing disclosure, and switch back to the ChatGPT account route. Recovery changes
 dictation ASR only; AI Polish remains ChatGPT-authenticated.
 
 **Settings → Context & Privacy → Delete All Data** removes settings, terminology, custom
-Style Capsules, installed Community Skills, transcript history, failed
+Writing Styles, installed Community Skills, transcript history, failed
 recordings, diagnostics, product metrics, retry files, the saved ChatGPT
-session, and the Recovery API key, then returns OpenWhisper to its signed-out
+session, and the Recovery API key, then returns VibeWhisper to its signed-out
 defaults.
 
 ## Repository Layout
 
 ```text
-Sources/OpenWhisper/          macOS application source
-Tests/OpenWhisperTests/       unit and integration tests
+Sources/VibeWhisper/          macOS application source
+Tests/VibeWhisperTests/       unit and integration tests
 scripts/                      build, package, install, benchmark, and acceptance tools
 examples/skills/              reviewed declarative Community Skill template
 packaging/homebrew/           Homebrew Cask metadata
@@ -226,7 +226,7 @@ MIT. See [LICENSE](LICENSE). The existing copyright and permission notice must r
 PermissionFlow, Sparkle, and Sparkle's bundled third-party components retain
 their own licenses. The exact pinned dependency metadata and full notices are
 stored under
-[`Sources/OpenWhisper/Resources/Legal`](Sources/OpenWhisper/Resources/Legal)
+[`Sources/VibeWhisper/Resources/Legal`](Sources/VibeWhisper/Resources/Legal)
 and are available in **Settings → Advanced → View Third-Party Licenses**.
 Build, package, packaged-app, and signed-release checks fail if
 `Package.resolved`, license hashes, notices, or App resources diverge.

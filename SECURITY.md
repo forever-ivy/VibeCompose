@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-OpenWhisper is currently a private alpha. Security fixes are applied to the latest `main` build and the newest authorized alpha artifact. Older alpha builds may be required to upgrade.
+VibeWhisper is currently a private alpha. Security fixes are applied to the latest `main` build and the newest authorized alpha artifact. Older alpha builds may be required to upgrade.
 
 ## Reporting a Vulnerability
 
@@ -25,4 +25,4 @@ These are private-alpha response targets, not a guaranteed support SLA.
 
 ## Disclosure
 
-Please allow time to reproduce, fix, test the installed app, and distribute an update before public disclosure. OpenWhisper will credit reporters who request attribution and whose report materially improves the product.
+Please allow time to reproduce, fix, test the installed app, and distribute an update before public disclosure. VibeWhisper will credit reporters who request attribution and whose report materially improves the product.

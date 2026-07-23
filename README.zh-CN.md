@@ -1,12 +1,12 @@
-# OpenWhisper
+# VibeWhisper
 
 [English README](README.md)
 
-OpenWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工具。按下已配置的全局快捷键（默认 `F5`）开始录音，再按同一个快捷键停止；OpenWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
+VibeWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工具。按下已配置的全局快捷键（默认 `F5`）开始录音，再按同一个快捷键停止；VibeWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
 
 ## 当前状态
 
-OpenWhisper 目前处于 **macOS Alpha 阶段**，工作版本为 `0.1.0`。核心能力以非商业、可审查的本地工作流为目标；签名公开分发仍需单独的工程证据。
+VibeWhisper 目前处于 **macOS Alpha 阶段**，工作版本为 `0.1.0`。核心能力以非商业、可审查的本地工作流为目标；签名公开分发仍需单独的工程证据。
 
 当前代码已经具备：
 
@@ -19,9 +19,9 @@ OpenWhisper 目前处于 **macOS Alpha 阶段**，工作版本为 `0.1.0`。核�
 - 版本化声明式 Skill Runtime：提供 13 个经审查的内置真实任务，覆盖直述、回复、邮件、开发、会议、产品、客服和选区工作流；应用规则只使用应用名称和精确 Bundle Identifier，录音开始时冻结本次技能解析，模型输出未通过本地校验时会在投递前安全回退
 - 全局 Skill 切换器、独立的已安装/发现/已创建 Skill 资料库、可编辑 Preview、脱敏 Skill Run Receipt、安全撤销，以及标准 Agent Skills 的 Creator/Test Bench 闭环
 - 可选的选中文本上下文：支持选区改写和选区回复，提供按技能“每次询问 / 始终允许 / 永不允许”权限、敏感应用阻断、本地 Diff 预览，以及替换前对同一目标、范围和原文的再次校验
-- 五个内置 Style Capsule，以及本地自定义 Capsule 的创建、编辑、按 Skill 分配、删除和导出；创建样本文本默认只在内存中分析并清空
+- 五个内置 Writing Style，以及本地自定义写作风格 的创建、编辑、按 Skill 分配、删除和导出；创建样本文本默认只在内存中分析并清空
 - 分层术语系统：用户纠正、Skill 私有术语、用户普通术语和 Backend Engineering、Medical、Kubernetes Domain Packs；冲突可见，Medical 高风险包强制 Preview
-- 本地声明式 `.openwhisperskill` 导入：支持安装前审查、文件硬限制、路径/软链接/可执行内容拒绝、内容 SHA-256、多版本、回滚、禁用、卸载、Skill Inspector 和 Golden contract tests；任意代码、自定义网络和外部 Action 继续被阻止
+- 本地声明式 `.vibewhisperskill` 导入：支持安装前审查、文件硬限制、路径/软链接/可执行内容拒绝、内容 SHA-256、多版本、回滚、禁用、卸载、Skill Inspector 和 Golden contract tests；任意代码、自定义网络和外部 Action 继续被阻止
 - 保守自动粘贴与剪贴板兜底
 - Retry 结果默认只复制、要求用户手动粘贴
 - 麦克风和辅助功能权限诊断
@@ -54,26 +54,26 @@ swift test --package-path .
 ./scripts/check.sh
 ./scripts/package_app.sh
 ./scripts/install_app.sh
-open -n /Applications/OpenWhisper.app
+open -n /Applications/VibeWhisper.app
 ```
 
 本机没有有效 Apple 签名证书时，可仅为调试显式使用 ad-hoc 签名：
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
 Ad-hoc 签名只适合本地验证，可能导致 macOS 辅助功能设置中无法出现稳定、可切换的应用条目。
 
-不要把 `dist/OpenWhisper.app` 当作真实运行路径。权限和交互验收必须使用 `/Applications/OpenWhisper.app`。
+不要把 `dist/VibeWhisper.app` 当作真实运行路径。权限和交互验收必须使用 `/Applications/VibeWhisper.app`。
 
 自动产品界面截图会进入隔离验收模式，仅使用默认配置、空的内存凭据以及空历史、Recovery 和术语数据，不读取或展示用户真实内容。
 
 安装版无障碍结构预检：
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
 该命令覆盖九个设置页面、Onboarding 的全部四个步骤、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
@@ -81,7 +81,7 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --instal
 使用官方 Computer Use 做安装版交互验收时，可以启用不读取真实配置、凭据、History、Recovery 或术语的隔离模式：
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 \
   ./scripts/interaction_acceptance.sh --install settings account
 ./scripts/interaction_acceptance.sh --restore
 ```
@@ -90,10 +90,10 @@ OPENWHISPER_ALLOW_ADHOC_SIGNING=1 \
 
 ## 本地数据
 
-OpenWhisper 的本地应用数据位于：
+VibeWhisper 的本地应用数据位于：
 
 ```text
-~/Library/Application Support/OpenWhisper/
+~/Library/Application Support/VibeWhisper/
 ```
 
 当前默认隐私策略：
@@ -115,19 +115,19 @@ OpenWhisper 的本地应用数据位于：
 
 通过 **设置 → 高级 → 导出诊断**，可以创建一个由用户自行检查的本地 ZIP，其中包含脱敏运行状态、权限、延迟、可选产品指标和崩溃摘要；不包含音频、转写正文、剪贴板文本、账户邮箱、凭据、术语、自定义端点、原始崩溃报告、历史、Recovery 元数据或 `config.json`。
 
-诊断也不包含 Style Capsule 摘要、示例或源样本，不包含 Community
+诊断也不包含 Writing Style 摘要、示例或源样本，不包含 Community
 Skill Prompt、包文件或安装包名称；相关功能只允许输出有限数量、风险、
 语义版本和 Validator 问题码。
 
-ChatGPT 会话保存在 Keychain 服务 `app.openwhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible 恢复路径 API 密钥独立保存在 `app.openwhisper.mac.OpenAICompatibleAPIKey`，不会再从 `OPENAI_API_KEY` 读取，也不会写入 `config.json`。通过 **设置 → 高级** 可以管理端点、模型和钥匙串凭据，执行真实连接测试，在确认可能产生 API 费用后启用恢复路径，并随时切回 ChatGPT 账户。恢复路径只改变听写 ASR；AI 润色仍使用 ChatGPT 登录授权。
+ChatGPT 会话保存在 Keychain 服务 `app.vibewhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible 恢复路径 API 密钥独立保存在 `app.vibewhisper.mac.OpenAICompatibleAPIKey`，不会再从 `OPENAI_API_KEY` 读取，也不会写入 `config.json`。通过 **设置 → 高级** 可以管理端点、模型和钥匙串凭据，执行真实连接测试，在确认可能产生 API 费用后启用恢复路径，并随时切回 ChatGPT 账户。恢复路径只改变听写 ASR；AI 润色仍使用 ChatGPT 登录授权。
 
-通过 **设置 → 上下文与隐私 → 删除全部数据**，可以删除设置、术语、自定义 Style Capsule、已安装 Community Skills、转写历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话和恢复路径 API 密钥，并恢复为退出登录后的默认状态。
+通过 **设置 → 上下文与隐私 → 删除全部数据**，可以删除设置、术语、自定义 Writing Style、已安装 Community Skills、转写历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话和恢复路径 API 密钥，并恢复为退出登录后的默认状态。
 
 ## 仓库结构
 
 ```text
-Sources/OpenWhisper/          macOS 应用源码
-Tests/OpenWhisperTests/       单元与集成测试
+Sources/VibeWhisper/          macOS 应用源码
+Tests/VibeWhisperTests/       单元与集成测试
 scripts/                      构建、打包、安装、基准和验收工具
 examples/skills/              已审查的声明式 Community Skill 模板
 packaging/homebrew/           Homebrew Cask 元数据
@@ -162,6 +162,6 @@ docs/design/                  视觉规范
 MIT，详见 [LICENSE](LICENSE)。分发软件副本或其重要部分时，必须保留现有版权声明和许可声明。
 
 PermissionFlow、Sparkle 及 Sparkle 内置第三方组件继续适用各自许可证。精确锁定的依赖元数据和许可证全文位于
-[`Sources/OpenWhisper/Resources/Legal`](Sources/OpenWhisper/Resources/Legal)，
+[`Sources/VibeWhisper/Resources/Legal`](Sources/VibeWhisper/Resources/Legal)，
 也可通过 **设置 → 高级 → 查看第三方许可证** 阅读。构建、打包、安装包检查和签名发布门禁会在
 `Package.resolved`、许可证哈希、notices 或 App 内资源不一致时直接失败。
