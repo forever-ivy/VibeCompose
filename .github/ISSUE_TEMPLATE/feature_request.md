@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an improvement for OpenWhisper
+about: Suggest an improvement for VibeWhisper
 title: "[Feature] "
 labels: enhancement
 assignees: ""
@@ -12,7 +12,7 @@ What workflow is currently awkward or missing?
 
 ## Proposed Improvement
 
-What should OpenWhisper do instead?
+What should VibeWhisper do instead?
 
 ## Why It Matters
 

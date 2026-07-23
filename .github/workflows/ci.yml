@@ -9,7 +9,7 @@ jobs:
   macos:
     runs-on: macos-26
     env:
-      OPENWHISPER_ALLOW_ADHOC_SIGNING: "1"
+      VIBEWHISPER_ALLOW_ADHOC_SIGNING: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Select Xcode

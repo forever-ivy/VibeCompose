@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem in OpenWhisper
+about: Report a reproducible problem in VibeWhisper
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -14,7 +14,7 @@ Describe the problem in one or two sentences.
 
 - macOS version:
 - Mac model:
-- OpenWhisper version:
+- VibeWhisper version:
 - install path: packaged app / zipped release / local build
 
 ## Reproduction

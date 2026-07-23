@@ -87,8 +87,8 @@ jobs:
           done
 
           umask 077
-          RELEASE_DIRECTORY="$RUNNER_TEMP/openwhisper-release"
-          RELEASE_KEYCHAIN="$RUNNER_TEMP/openwhisper-release.keychain-db"
+          RELEASE_DIRECTORY="$RUNNER_TEMP/vibewhisper-release"
+          RELEASE_KEYCHAIN="$RUNNER_TEMP/vibewhisper-release.keychain-db"
           mkdir -p "$RELEASE_DIRECTORY"
           printf '%s' "$APPLE_DEVELOPER_ID_P12_BASE64" \
             | /usr/bin/base64 -D >"$RELEASE_DIRECTORY/developer-id.p12"
@@ -115,7 +115,7 @@ jobs:
             "$RELEASE_KEYCHAIN"
           security list-keychains -d user -s "$RELEASE_KEYCHAIN" login.keychain-db
 
-          xcrun notarytool store-credentials openwhisper-ci-notary \
+          xcrun notarytool store-credentials vibewhisper-ci-notary \
             --key "$RELEASE_DIRECTORY/AuthKey.p8" \
             --key-id "$APPLE_NOTARY_KEY_ID" \
             --issuer "$APPLE_NOTARY_ISSUER_ID" \
@@ -125,8 +125,8 @@ jobs:
         if: inputs.phase == 'finalize'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: openwhisper-signed-candidate
-          path: ${{ runner.temp }}/openwhisper-candidate-download
+          name: vibewhisper-signed-candidate
+          path: ${{ runner.temp }}/vibewhisper-candidate-download
           github-token: ${{ github.token }}
           run-id: ${{ inputs.prepare_run_id }}
 
@@ -137,8 +137,8 @@ jobs:
           source scripts/lib/load_env.sh
           load_version_env "$GITHUB_WORKSPACE/version.env"
           scripts/restore_release_candidate.sh \
-            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.zip" \
-            "$RUNNER_TEMP/openwhisper-candidate-download/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.sha256"
+            "$RUNNER_TEMP/vibewhisper-candidate-download/VibeWhisper-$VIBEWHISPER_VERSION-signed-candidate.zip" \
+            "$RUNNER_TEMP/vibewhisper-candidate-download/VibeWhisper-$VIBEWHISPER_VERSION-signed-candidate.sha256"
 
       - name: Configure protected public-release evidence
         if: inputs.phase == 'finalize'
@@ -149,7 +149,7 @@ jobs:
           PUBLIC_CONTACT_JSON_BASE64: ${{ secrets.PUBLIC_CONTACT_JSON_BASE64 }}
         run: |
           set -euo pipefail
-          EVIDENCE_DIRECTORY="$RUNNER_TEMP/openwhisper-release-evidence"
+          EVIDENCE_DIRECTORY="$RUNNER_TEMP/vibewhisper-release-evidence"
           umask 077
           mkdir -p "$EVIDENCE_DIRECTORY"
 
@@ -179,78 +179,78 @@ jobs:
           decode_evidence PUBLIC_CONTACT_JSON_BASE64 public-contact.json
 
           {
-            echo "OPENWHISPER_INSTALLED_ACCEPTANCE_PATH=$EVIDENCE_DIRECTORY/installed-acceptance.json"
-            echo "OPENWHISPER_COMMUNITY_PILOT_SUMMARY_PATH=$EVIDENCE_DIRECTORY/community-pilot-summary.json"
-            echo "OPENWHISPER_BETA_METRICS_PATH=$EVIDENCE_DIRECTORY/beta-metrics.json"
-            echo "OPENWHISPER_PUBLIC_CONTACT_PATH=$EVIDENCE_DIRECTORY/public-contact.json"
+            echo "VIBEWHISPER_INSTALLED_ACCEPTANCE_PATH=$EVIDENCE_DIRECTORY/installed-acceptance.json"
+            echo "VIBEWHISPER_COMMUNITY_PILOT_SUMMARY_PATH=$EVIDENCE_DIRECTORY/community-pilot-summary.json"
+            echo "VIBEWHISPER_BETA_METRICS_PATH=$EVIDENCE_DIRECTORY/beta-metrics.json"
+            echo "VIBEWHISPER_PUBLIC_CONTACT_PATH=$EVIDENCE_DIRECTORY/public-contact.json"
           } >>"$GITHUB_ENV"
 
       - name: Prepare notarized signed candidate
         if: inputs.phase == 'prepare'
         env:
-          OPENWHISPER_CODESIGN_IDENTITY: ${{ secrets.OPENWHISPER_CODESIGN_IDENTITY }}
-          OPENWHISPER_TEAM_ID: ${{ secrets.OPENWHISPER_TEAM_ID }}
-          OPENWHISPER_NOTARY_PROFILE: openwhisper-ci-notary
-          OPENWHISPER_NOTARY_KEYCHAIN: ${{ runner.temp }}/openwhisper-release.keychain-db
-          OPENWHISPER_RELEASE_BASE_URL: ${{ vars.OPENWHISPER_RELEASE_BASE_URL }}
-          OPENWHISPER_SPARKLE_FEED_URL: ${{ vars.OPENWHISPER_SPARKLE_FEED_URL }}
-          OPENWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_SPARKLE_PUBLIC_ED_KEY }}
-          OPENWHISPER_SPARKLE_PRIVATE_KEY_FILE: ${{ runner.temp }}/openwhisper-release/sparkle.key
-          OPENWHISPER_CAPABILITY_POLICY_URL: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_URL }}
-          OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
-          OPENWHISPER_CAPABILITY_PRIVATE_KEY_FILE: ${{ runner.temp }}/openwhisper-release/capability.key
-          OPENWHISPER_CAPABILITY_POLICY_REVISION: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_REVISION }}
-          OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_EXPIRES_AT }}
-          OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
+          VIBEWHISPER_CODESIGN_IDENTITY: ${{ secrets.VIBEWHISPER_CODESIGN_IDENTITY }}
+          VIBEWHISPER_TEAM_ID: ${{ secrets.VIBEWHISPER_TEAM_ID }}
+          VIBEWHISPER_NOTARY_PROFILE: vibewhisper-ci-notary
+          VIBEWHISPER_NOTARY_KEYCHAIN: ${{ runner.temp }}/vibewhisper-release.keychain-db
+          VIBEWHISPER_RELEASE_BASE_URL: ${{ vars.VIBEWHISPER_RELEASE_BASE_URL }}
+          VIBEWHISPER_SPARKLE_FEED_URL: ${{ vars.VIBEWHISPER_SPARKLE_FEED_URL }}
+          VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY }}
+          VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE: ${{ runner.temp }}/vibewhisper-release/sparkle.key
+          VIBEWHISPER_CAPABILITY_POLICY_URL: ${{ vars.VIBEWHISPER_CAPABILITY_POLICY_URL }}
+          VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
+          VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE: ${{ runner.temp }}/vibewhisper-release/capability.key
+          VIBEWHISPER_CAPABILITY_POLICY_REVISION: ${{ vars.VIBEWHISPER_CAPABILITY_POLICY_REVISION }}
+          VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT: ${{ vars.VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT }}
+          VIBEWHISPER_CASK_PATH: ${{ github.workspace }}/dist/vibewhisper.rb
         run: scripts/release_signed.sh prepare
 
       - name: Archive exact prepared candidate
         if: inputs.phase == 'prepare'
         env:
-          OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
+          VIBEWHISPER_CASK_PATH: ${{ github.workspace }}/dist/vibewhisper.rb
         run: |
           set -euo pipefail
           source scripts/lib/load_env.sh
           load_version_env "$GITHUB_WORKSPACE/version.env"
           scripts/archive_release_candidate.sh \
-            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.zip" \
-            "$RUNNER_TEMP/OpenWhisper-$OPENWHISPER_VERSION-signed-candidate.sha256"
+            "$RUNNER_TEMP/VibeWhisper-$VIBEWHISPER_VERSION-signed-candidate.zip" \
+            "$RUNNER_TEMP/VibeWhisper-$VIBEWHISPER_VERSION-signed-candidate.sha256"
 
       - name: Persist prepared candidate for finalize
         if: inputs.phase == 'prepare'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: openwhisper-signed-candidate
+          name: vibewhisper-signed-candidate
           path: |
-            ${{ runner.temp }}/OpenWhisper-*-signed-candidate.zip
-            ${{ runner.temp }}/OpenWhisper-*-signed-candidate.sha256
+            ${{ runner.temp }}/VibeWhisper-*-signed-candidate.zip
+            ${{ runner.temp }}/VibeWhisper-*-signed-candidate.sha256
           if-no-files-found: error
           retention-days: 30
 
       - name: Finalize published signed release
         if: inputs.phase == 'finalize'
         env:
-          OPENWHISPER_TEAM_ID: ${{ secrets.OPENWHISPER_TEAM_ID }}
-          OPENWHISPER_RELEASE_BASE_URL: ${{ vars.OPENWHISPER_RELEASE_BASE_URL }}
-          OPENWHISPER_SPARKLE_FEED_URL: ${{ vars.OPENWHISPER_SPARKLE_FEED_URL }}
-          OPENWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_SPARKLE_PUBLIC_ED_KEY }}
-          OPENWHISPER_CAPABILITY_POLICY_URL: ${{ vars.OPENWHISPER_CAPABILITY_POLICY_URL }}
-          OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.OPENWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
-          OPENWHISPER_CASK_PATH: ${{ github.workspace }}/dist/openwhisper.rb
+          VIBEWHISPER_TEAM_ID: ${{ secrets.VIBEWHISPER_TEAM_ID }}
+          VIBEWHISPER_RELEASE_BASE_URL: ${{ vars.VIBEWHISPER_RELEASE_BASE_URL }}
+          VIBEWHISPER_SPARKLE_FEED_URL: ${{ vars.VIBEWHISPER_SPARKLE_FEED_URL }}
+          VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY }}
+          VIBEWHISPER_CAPABILITY_POLICY_URL: ${{ vars.VIBEWHISPER_CAPABILITY_POLICY_URL }}
+          VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY: ${{ secrets.VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY }}
+          VIBEWHISPER_CASK_PATH: ${{ github.workspace }}/dist/vibewhisper.rb
         run: scripts/release_signed.sh finalize
 
       - name: Upload reviewable release evidence
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: openwhisper-${{ inputs.phase }}-${{ github.sha }}
+          name: vibewhisper-${{ inputs.phase }}-${{ github.sha }}
           path: |
             dist/*.zip
             dist/*.dmg
             dist/*.xml
             dist/*.json
             dist/SHA256SUMS
-            dist/openwhisper.rb
+            dist/vibewhisper.rb
           if-no-files-found: error
           retention-days: 30
 
@@ -262,16 +262,16 @@ jobs:
           set -euo pipefail
           source scripts/lib/load_env.sh
           load_version_env "$GITHUB_WORKSPACE/version.env"
-          TAG="v$OPENWHISPER_VERSION"
+          TAG="v$VIBEWHISPER_VERSION"
           ASSETS=(
-            "dist/OpenWhisper-$OPENWHISPER_VERSION-macos-arm64.zip"
-            "dist/OpenWhisper-$OPENWHISPER_VERSION-macos-arm64.dmg"
-            "dist/OpenWhisper-$OPENWHISPER_VERSION-release-evidence.zip"
+            "dist/VibeWhisper-$VIBEWHISPER_VERSION-macos-arm64.zip"
+            "dist/VibeWhisper-$VIBEWHISPER_VERSION-macos-arm64.dmg"
+            "dist/VibeWhisper-$VIBEWHISPER_VERSION-release-evidence.zip"
             "dist/appcast.xml"
             "dist/provider-capabilities.json"
             "dist/release-manifest.json"
             "dist/SHA256SUMS"
-            "dist/openwhisper.rb"
+            "dist/vibewhisper.rb"
           )
 
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -282,26 +282,26 @@ jobs:
             }
             gh release edit "$TAG" \
               --draft \
-              --title "OpenWhisper $OPENWHISPER_VERSION" \
-              --notes-file "docs/releases/v$OPENWHISPER_VERSION.md"
+              --title "VibeWhisper $VIBEWHISPER_VERSION" \
+              --notes-file "docs/releases/v$VIBEWHISPER_VERSION.md"
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
             gh release create "$TAG" \
               --draft \
               --verify-tag \
-              --title "OpenWhisper $OPENWHISPER_VERSION" \
-              --notes-file "docs/releases/v$OPENWHISPER_VERSION.md" \
+              --title "VibeWhisper $VIBEWHISPER_VERSION" \
+              --notes-file "docs/releases/v$VIBEWHISPER_VERSION.md" \
               "${ASSETS[@]}"
           fi
 
       - name: Destroy temporary release credentials
         if: always()
         run: |
-          security delete-keychain "$RUNNER_TEMP/openwhisper-release.keychain-db" 2>/dev/null || true
+          security delete-keychain "$RUNNER_TEMP/vibewhisper-release.keychain-db" 2>/dev/null || true
           rm -rf \
-            "$RUNNER_TEMP/openwhisper-release" \
-            "$RUNNER_TEMP/openwhisper-release-evidence" \
-            "$RUNNER_TEMP/openwhisper-candidate-download"
+            "$RUNNER_TEMP/vibewhisper-release" \
+            "$RUNNER_TEMP/vibewhisper-release-evidence" \
+            "$RUNNER_TEMP/vibewhisper-candidate-download"
           rm -f \
-            "$RUNNER_TEMP"/OpenWhisper-*-signed-candidate.zip \
-            "$RUNNER_TEMP"/OpenWhisper-*-signed-candidate.sha256
+            "$RUNNER_TEMP"/VibeWhisper-*-signed-candidate.zip \
+            "$RUNNER_TEMP"/VibeWhisper-*-signed-candidate.sha256

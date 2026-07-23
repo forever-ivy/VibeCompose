@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: OpenWhisper Security Reporting
-    url: https://github.com/forever-ivy/openwhisper/security/advisories/new
+  - name: VibeWhisper Security Reporting
+    url: https://github.com/forever-ivy/vibewhisper/security/advisories/new
     about: Report credential exposure, data loss, or other vulnerabilities privately.
-  - name: OpenWhisper Release Notes
-    url: https://github.com/forever-ivy/openwhisper/blob/main/docs/releases/README.md
+  - name: VibeWhisper Release Notes
+    url: https://github.com/forever-ivy/vibewhisper/blob/main/docs/releases/README.md
     about: Check the release status before opening a support request.
