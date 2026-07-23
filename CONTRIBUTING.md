@@ -1,4 +1,4 @@
-# Contributing to OpenWhisper
+# Contributing to VibeWhisper
 
 ## Development Flow
 
@@ -7,6 +7,7 @@
 3. Keep `product.env` as the source of truth for product identity.
 4. Keep `version.env` as the source of truth for release version metadata.
 5. Update documentation when changing permissions, provider behavior, storage, packaging, startup, release assets, or public claims.
+6. Write commit messages using the [Git Commit Messages](#git-commit-messages) rules below.
 
 ## Engineering Standards
 
@@ -18,6 +19,221 @@
 - Keep undocumented upstream dependencies explicit in product copy and error handling.
 - Do not add a second product identity, legacy brand alias, or compatibility path without an approved migration requirement.
 
+## Git Commit Messages
+
+### Why this style
+
+Industry practice for open and private product repos has converged on
+**[Conventional Commits](https://www.conventionalcommits.org/)**
+(`type[optional scope]: description`). It is the most common shared format
+across GitHub, Angular/AngularJS lineage, many JS and mobile monorepos, and
+tools that build changelogs or version bumps from history.
+
+This repository already follows that shape in practice (`feat:`, `fix:`,
+`test:`, `chore:`). There is **no commitlint, husky, or other automated
+commit-message gate** in the tree today—the rules below are the **project
+default for human authors and reviewers**, chosen so new commits stay
+consistent with existing history without inventing tooling we do not run.
+
+**Adopted default:** Conventional Commits 1.0.0, with the project-specific
+choices called out in each subsection.
+
+### Format
+
+```text
+<type>[optional scope][optional !]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+| Part | Required | Meaning |
+| --- | --- | --- |
+| `type` | Yes | Kind of change (see table below). |
+| `scope` | No | Area of the product or tree (see scope guidance). |
+| `!` | No | Immediately before `:` marks a breaking change (see below). |
+| `description` | Yes | Short imperative summary of **what** changed. |
+| `body` | No | Motivation, approach, and non-obvious trade-offs. |
+| `footer` | No | Issue links, `BREAKING CHANGE:`, reviewers notes. |
+
+One blank line separates subject, body, and footer when body or footer is present.
+
+### Types
+
+Use these types. Prefer the narrowest accurate type.
+
+| Type | When to use |
+| --- | --- |
+| `feat` | User-visible capability or product behavior. |
+| `fix` | Bug fix; behavior now matches intent. |
+| `test` | Tests or acceptance harnesses only (no production behavior change). |
+| `docs` | Documentation only (README, legal, engineering docs, comments-as-docs). |
+| `chore` | Tooling, repo hygiene, packaging scripts, metadata with no user feature. |
+| `refactor` | Internal structure change with no intentional behavior change. |
+| `perf` | Performance improvement with same external behavior. |
+| `ci` | CI workflow or automation only (`.github/workflows`, etc.). |
+| `build` | Build system or dependency packaging that is not a product feature. |
+| `style` | Formatting-only (whitespace, ordering) with no logic change. |
+| `revert` | Reverts a previous commit; reference the reverted subject or hash in the body. |
+
+Historical commits on `main` have mostly used `feat`, `fix`, `test`, and
+`chore`. Prefer those four when they fit; use the wider set above when they
+describe the change more accurately.
+
+### Scope (optional)
+
+Scope is **optional**. Use it when it clarifies the area without padding the
+subject. Prefer short lowercase tokens that match product surfaces or top-level
+areas, for example:
+
+- `hotkey`, `hud`, `settings`, `onboarding`
+- `paste`, `history`, `terminology`, `skills`
+- `provider`, `auth`, `updater`, `packaging`
+- `docs`, `ci`, `release`
+
+Examples: `feat(hotkey):`, `fix(paste):`, `docs(release):`.
+
+Do not invent a long taxonomy. If no clear scope fits, omit it.
+
+### Description (subject line)
+
+- Use the **imperative mood**: `add`, `fix`, `harden`, not `added` / `adds` / `fixing`.
+- Start with a **lowercase** letter after `: ` (unless the first word is a proper noun or acronym: `VibeWhisper`, `HUD`, `Keychain`, `Sparkle`).
+- **Do not** end the subject with a period.
+- Keep the full subject line **≤ 72 characters** (hard limit). Prefer **≤ 50** when practical.
+- Describe **one** primary change. Split unrelated work into separate commits.
+- Be specific: name the capability or failure mode, not vague verbs alone (`update`, `improve`, `misc`, `wip`).
+
+### Body
+
+Use a body when the subject is not enough for a reviewer to understand **why**
+or **what to verify**.
+
+- Wrap body lines at about **72 characters**.
+- Explain motivation, risk, and user-visible impact.
+- Do not restate the subject.
+- Bullet lists are fine.
+
+### Footer and issue / PR links
+
+This repository’s issue templates use titles such as `[Bug] …` and
+`[Feature] …`. There is **no separate ticket-ID scheme** (for example no
+required `PROJ-123`) enforced in-repo. When a commit closes or references a
+GitHub issue or PR, use standard GitHub trailers in the footer:
+
+```text
+Fixes #12
+Closes #34
+Refs #56
+```
+
+Multiple trailers are allowed, one per line. Link PRs the same way when useful
+(`Refs #78`). Do not invent project keys that are not used in GitHub Issues.
+
+### Breaking changes
+
+Mark a breaking change in **either or both** of these ways:
+
+1. `!` after type/scope: `feat(api)!: remove legacy skill extension`
+2. Footer (required detail when the subject alone is unclear):
+
+```text
+BREAKING CHANGE: skill packages must use the .vibewhisperskill extension;
+.openwhisperskill is no longer loaded.
+```
+
+`BREAKING CHANGE` must be uppercase and followed by `: ` and a full-sentence
+description of the incompatibility and migration hint when applicable.
+
+### Correct examples
+
+Single-line (matches most of this project’s history):
+
+```text
+feat: add application-aware voice modes
+```
+
+```text
+fix: harden permission and installed acceptance
+```
+
+```text
+test: expand installed paste acceptance matrix
+```
+
+```text
+chore: add repository hygiene gate
+```
+
+With optional scope:
+
+```text
+feat(skills): add declarative skill runtime
+```
+
+Multi-line with body and issue footer:
+
+```text
+feat(paste): verify paste insertion outcomes
+
+Installed-app acceptance now asserts paste vs clipboard fallback when the
+focused target is not editable, without reading live user transcripts.
+
+Fixes #42
+```
+
+Breaking change:
+
+```text
+feat(packaging)!: rename release asset prefix to VibeWhisper
+
+BREAKING CHANGE: release ZIP and appcast asset names use the VibeWhisper
+prefix; consumers of the old OpenWhisper asset names must update URLs.
+```
+
+### Incorrect examples
+
+```text
+# Missing type prefix (not Conventional Commits)
+updated voice modes
+```
+
+```text
+# Non-imperative, trailing period, too vague
+feat: Updated stuff.
+```
+
+```text
+# Wrong type for a user-facing bugfix
+chore: fix paste not inserting in Notes
+```
+
+```text
+# Multiple unrelated changes in one subject
+feat: add hotkeys and rewrite updater and fix CI
+```
+
+```text
+# WIP / noise subjects
+wip
+fix
+misc
+```
+
+### Pre-commit checklist
+
+Before you create a commit:
+
+- [ ] Subject matches `<type>[scope][!]?: <description>`.
+- [ ] `type` is from the table above and matches the actual change.
+- [ ] Description is imperative, no trailing period, ≤ 72 characters.
+- [ ] Commit contains one logical change (or a tightly related set).
+- [ ] Body explains why when the subject is not enough.
+- [ ] Breaking behavior uses `!` and/or a `BREAKING CHANGE:` footer.
+- [ ] Related GitHub issues use `Fixes` / `Closes` / `Refs` trailers when applicable.
+- [ ] Product, docs, and verification steps in this guide still apply to the change itself.
+
 ## Verification
 
 Minimum verification for product changes:
@@ -25,15 +241,15 @@ Minimum verification for product changes:
 ```bash
 swift build --package-path .
 swift test --package-path .
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ```
 
 For packaging or install changes:
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ./scripts/install_app.sh
 ./scripts/check_packaged_app.sh
 ```
 
-Native interaction changes require installed-app verification through `/Applications/OpenWhisper.app` and the Computer Use flow described in `AGENTS.md`.
+Native interaction changes require installed-app verification through `/Applications/VibeWhisper.app` and the Computer Use flow described in `AGENTS.md`.
