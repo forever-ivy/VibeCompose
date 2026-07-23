@@ -1,8 +1,8 @@
-# OpenWhisper macOS 安全基线
+# VibeWhisper macOS 安全基线
 
 > 日期：2026-07-13
 > 产品版本：`0.1.0 Alpha`
-> 基线对象：本报告所在提交对应的 OpenWhisper 产品化工作树
+> 基线对象：本报告所在提交对应的 VibeWhisper 产品化工作树
 > 原始输入：[逻辑与安全审计报告](security-audit-2026-07-13.md)
 > 报告性质：修复后基线；不改写原始审计快照，也不代表已经满足签名公开分发门禁
 
@@ -65,13 +65,13 @@ Managed ASR、Recovery ASR 与 AI Polish 分 route 熔断；half-open 探测取�
 | OW-AUD-008 发布完整性 | 部分关闭 | 严格 env parser；Hardened Runtime；Developer ID/Team ID 强校验；notarytool/stapler 路径；Gatekeeper fail-closed；安装 staging/旧版备份/失败恢复；ZIP/DMG SHA-256 与 release manifest；Cask 默认全零 checksum fail-closed；Sparkle 2.9.4 已固定、嵌入、签名并接入菜单/设置；支持外部私钥或 Keychain 生成签名 appcast，并用内置公钥对 ZIP 做 CryptoKit 实际验签；本地 ad-hoc 构建仅为无 Team ID 框架加载临时关闭 library validation，商业 gate 明确拒绝该 entitlement | 当前证书已撤销，尚无真实 Developer ID + notarization/staple 产物；生产 feed/公钥/私钥未配置，尚无真实签名 appcast、自动更新和回滚实机证据 |
 | OW-AUD-009 技术字面量归一化 | 关闭 | `TechnicalLiteralTokenizer` 保护 URL、邮箱、POSIX/Windows 路径、文件名、版本、IP、UUID、hash、CLI flag、环境变量、inline/fenced code 和代码符号；本地处理使用 private-use token，AI Polish 使用显式 model-safe token；token 缺失或重复即回退；Settings 支持简体、繁体、原样及自动/全角/半角/原样标点 | 扩充真实混输语料和边缘文件名 corpus，保持 round-trip 门禁 |
 | OW-AUD-010 MainActor/旧回调污染 | 关闭 | 协调器使用 `activeSessionID`，取消后迟到 pipeline 或注入结果不能写入新状态；`AsyncPasteTargetWaiter` 与 `AsyncPasteVerificationWaiter` 使用 `ContinuousClock` 和可取消 `Task.sleep`，只在短检查/激活/AX 采样阶段回到 MainActor；HUD apply/hide 使用 presentation generation 拒绝 stale auto-hide 与动画 completion | 多应用真实验证矩阵继续归入 OW-AUD-001，不再用单一 `.pasted` 状态掩盖验证边界 |
-| OW-AUD-011 剪贴板恢复竞态 | 关闭 | 恢复前校验 pasteboard change count 与 OpenWhisper 所有权 | 真实跨应用复制/Universal Clipboard 场景继续验收 |
+| OW-AUD-011 剪贴板恢复竞态 | 关闭 | 恢复前校验 pasteboard change count 与 VibeWhisper 所有权 | 真实跨应用复制/Universal Clipboard 场景继续验收 |
 | OW-AUD-012 首次麦克风顺序 | 部分关闭 | `.notDetermined` 有独立请求动作；Settings/Onboarding 共用异步请求结果，并在成功回调后有上限地轮询真实权限状态；未收敛时显示明确恢复文案和“刷新权限状态”；四步 Onboarding 已实现；`permission_surface_acceptance.sh` 已在当前授权 TCC 状态下黑盒确认安装版两张权限卡均显示“已授权” | clean TCC 下的系统提示顺序、拒绝后修复及完整首次成功听写仍缺可信安装版原生 GUI 证据 |
 | OW-AUD-013 配置 URL 崩溃 | 关闭 | 可配置 endpoint 经 `validatedUserOwnedURL` 返回可理解错误；Managed URL 为编译时常量 | 对全部高风险文本字段统一失焦/提交校验 |
 | OW-AUD-014 Settings stale index | 关闭 | Terminology 条目持久化稳定 UUID；独立 Manager 的选择、编辑、启停和删除均按 ID 定位；旧配置迁移补齐稳定 ID；导入和 Quick Add 在写入前执行重复与语义冲突检测 | 继续保留 ID 迁移、删除后编辑和冲突分类回归测试 |
-| OW-AUD-015 失败清理不完整 | 关闭 | Recorder 初始化写入失败和启动失败会删除 partial WAV；上传成功、失败或取消均删除 multipart；`shutdown()` 同步删除处理中自有音频；下次启动只清理严格 UUID 命名的 `openwhisper-*.wav` 与 `openwhisper-upload-*.multipart`，跳过目录和 lookalike，删除 symlink 本身而不触碰目标 | 继续做真实磁盘满、SIGKILL 后重启和长时间压力测试 |
+| OW-AUD-015 失败清理不完整 | 关闭 | Recorder 初始化写入失败和启动失败会删除 partial WAV；上传成功、失败或取消均删除 multipart；`shutdown()` 同步删除处理中自有音频；下次启动只清理严格 UUID 命名的 `vibewhisper-*.wav` 与 `vibewhisper-upload-*.multipart`，跳过目录和 lookalike，删除 symlink 本身而不触碰目标 | 继续做真实磁盘满、SIGKILL 后重启和长时间压力测试 |
 | OW-AUD-016 死配置/预检偏差 | 部分关闭 | Advanced Recovery 的 endpoint、model、Keychain API Key、连接测试、第三方费用提示、切回 ChatGPT 与 Runtime Preflight 已接入同一运行链路；旧 `openAIAuthTokenEnv` 可解码但不会重新编码 | 继续审计其余公开配置，为每个设置建立行为契约和安装版交互证据 |
-| OW-AUD-017 测试可能假绿 | 部分关闭 | 高风险边界已有纯单元测试，仓库提供安装版 smoke 与 visual acceptance | TCC、焦点、热键、多应用真实操作仍必须使用 `/Applications/OpenWhisper.app` 验收，不能只引用单元测试 |
+| OW-AUD-017 测试可能假绿 | 部分关闭 | 高风险边界已有纯单元测试，仓库提供安装版 smoke 与 visual acceptance | TCC、焦点、热键、多应用真实操作仍必须使用 `/Applications/VibeWhisper.app` 验收，不能只引用单元测试 |
 
 ## 3. 当前隐私默认值
 
@@ -102,7 +102,7 @@ excludeSensitiveApps = true
 - macOS Keychain Access；
 - macOS Passwords。
 
-额外 bundle ID 可以由用户配置。匹配时，OpenWhisper 跳过 transcript history 和 failed-audio recovery。
+额外 bundle ID 可以由用户配置。匹配时，VibeWhisper 跳过 transcript history 和 failed-audio recovery。
 
 ## 4. 删除全部数据的边界
 
@@ -111,9 +111,9 @@ excludeSensitiveApps = true
 1. 取消当前录音/处理或清理 Pending Retry；
 2. Sign out，并删除 Keychain 中的 ChatGPT session；
 3. 删除 Keychain 中的 OpenAI-Compatible Recovery API Key；
-4. 验证删除目标确实是 OpenWhisper Application Support 目录；
+4. 验证删除目标确实是 VibeWhisper Application Support 目录；
 5. 拒绝通过 symlink 删除；
-6. 删除整个 `~/Library/Application Support/OpenWhisper/`；
+6. 删除整个 `~/Library/Application Support/VibeWhisper/`；
 7. 以 `0700` 重建空目录；
 8. 保存新的默认 `AppConfig`；
 9. 将运行状态切回需要重新连接 ChatGPT。
@@ -151,12 +151,12 @@ excludeSensitiveApps = true
 完整仓库检查命令：
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ```
 
 2026-07-13 19:52（UTC+8）本地基线执行结果：**退出码 0**。Swift build/test、Landing Page 内容契约和 packaged-app metadata 检查均通过。该结果使用 ad-hoc 签名，仅证明当前开发构建与自动化门禁，不替代 Developer ID、公证或真实 GUI/TCC 验收。
 
-同日对 `/Applications/OpenWhisper.app` 的启动清理进行实机检查：原有 Recovery WAV 从 `0644` 被统一收紧为 `0600`，应用以 Settings 模式保持运行。
+同日对 `/Applications/VibeWhisper.app` 的启动清理进行实机检查：原有 Recovery WAV 从 `0644` 被统一收紧为 `0600`，应用以 Settings 模式保持运行。
 
 自动验收模式会在账户管理器创建前统一进入隐私隔离，使用默认配置和内存凭据，不读取真实 Keychain，避免 `SecItemCopyMatching` 阻塞或用户状态泄漏。产品表面截图还会拒绝全黑/近似纯色的 CoreGraphics 帧，回退到确定性 content-view 渲染，并再次执行非纯色门禁。
 
@@ -179,7 +179,7 @@ ad-hoc 本地构建，不构成 Developer ID、notarization/staple 或 clean TCC
 单元测试通过不构成最终验收。涉及 TCC、焦点、热键和多步 GUI 的证据必须来自：
 
 ```text
-/Applications/OpenWhisper.app
+/Applications/VibeWhisper.app
 ```
 
 最低安装版矩阵：

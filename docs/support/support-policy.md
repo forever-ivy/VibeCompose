@@ -1,4 +1,4 @@
-# OpenWhisper Support Policy
+# VibeWhisper Support Policy
 
 > Private-alpha baseline: July 13, 2026
 
@@ -6,7 +6,7 @@
 
 - Apple silicon Mac;
 - macOS 13 or later;
-- `/Applications/OpenWhisper.app`;
+- `/Applications/VibeWhisper.app`;
 - the current private-alpha version;
 - default ChatGPT account route or the documented OpenAI-compatible recovery route.
 
@@ -20,12 +20,12 @@ Security vulnerabilities should follow the repository `SECURITY.md` process rath
 
 ## What to Include
 
-1. OpenWhisper version and macOS version.
-2. Whether the app is installed at `/Applications/OpenWhisper.app`.
+1. VibeWhisper version and macOS version.
+2. Whether the app is installed at `/Applications/VibeWhisper.app`.
 3. Microphone and Accessibility status.
 4. Default ChatGPT route or advanced recovery route.
 5. Exact reproduction steps and the smallest non-sensitive error.
-6. A redacted support archive generated from **Settings → Advanced → Export Diagnostics**, when requested.
+6. A redacted support archive generated from VibeWhisper support diagnostics export, when requested.
 
 Never attach access tokens, refresh tokens, cookies, API keys, raw crash reports, audio, transcripts, unrelated screenshots, or private document content.
 
@@ -42,7 +42,7 @@ These are private-alpha response targets, not a service-level guarantee:
 
 ## Support Boundaries
 
-OpenWhisper support covers the OpenWhisper app, its documented installation flow, and reproducible product behavior. It does not guarantee:
+VibeWhisper support covers the VibeWhisper app, its documented installation flow, and reproducible product behavior. It does not guarantee:
 
 - ChatGPT or third-party account access;
 - recovery of deleted third-party data;

@@ -1,4 +1,4 @@
-# OpenWhisper HUD Visual Spec
+# VibeWhisper HUD Visual Spec
 
 This spec mirrors the HUD implementation built from source. Installed-product
 acceptance remains authoritative.

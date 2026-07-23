@@ -1,8 +1,8 @@
-# OpenWhisper macOS Architecture
+# VibeWhisper macOS Architecture
 
 ## 1. Product Scope
 
-OpenWhisper is a native AppKit + SwiftUI menu bar application for one global dictation workflow:
+VibeWhisper is a native AppKit + SwiftUI menu bar application for one global dictation workflow:
 
 ```text
 focus an editable target
@@ -15,7 +15,7 @@ focus an editable target
 → paste when proven safe, otherwise copy
 ```
 
-The current product line is macOS-only. The installed application at `/Applications/OpenWhisper.app` is the authoritative runtime for permission and interaction verification; `dist/OpenWhisper.app` is packaging output only.
+The current product line is macOS-only. The installed application at `/Applications/VibeWhisper.app` is the authoritative runtime for permission and interaction verification; `dist/VibeWhisper.app` is packaging output only.
 
 ## 2. Trust-Boundary Rules
 
@@ -32,7 +32,7 @@ The implementation follows six fail-safe rules:
    execute code, add providers or network origins, request external actions,
    or move ahead of the fixed Prompt and delivery boundaries.
 
-When OpenWhisper cannot prove a safe insertion target, the transcript remains in the clipboard. HUD Retry and saved Recovery Retry are copy-only by default.
+When VibeWhisper cannot prove a safe insertion target, the transcript remains in the clipboard. HUD Retry and saved Recovery Retry are copy-only by default.
 
 ## 3. Runtime State and Session Ownership
 
@@ -159,7 +159,7 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - records only bounded Skill IDs, semantic versions, and validation issue
     codes in History and redacted diagnostics.
 - `SkillPackageStore`
-  - imports only local `.openwhisperskill` directory packages containing the
+  - imports only local `.vibewhisperskill` directory packages containing the
     constrained v1 file set;
   - rejects unknown paths, traversal, symlinks, executable bits, shebangs,
     Mach-O content, scripts, unsupported capabilities, external actions, and
@@ -179,10 +179,10 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - clear selected text from retained retry configuration and never add it to
     History, Recovery, product metrics, or support diagnostics.
 - `StyleCapsuleStore` and `StyleCapsuleResolver`
-  - expose five built-in Capsules and owner-only local custom Capsule files;
+  - expose five built-in Writing Styles and owner-only local custom Writing Style files;
   - analyze creation samples locally, clear the source-sample field after
     summary generation, and do not persist source samples by default;
-  - inject only a user-assigned Capsule into a Skill that declares the
+  - inject only a user-assigned Writing Style into a Skill that declares the
     `styleCapsule` capability;
   - freeze the resolved Capsule summary at recording start.
 - `TerminologyPackRegistry` and `TerminologyPackResolver`
@@ -227,10 +227,10 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - validates callback method, path, state, and duplicate query parameters;
   - applies timeout/cancellation cleanup to the local listener.
 - `ChatGPTSessionStore`
-  - persists the managed session in macOS Keychain under `app.openwhisper.mac.ChatGPTSession`.
+  - persists the managed session in macOS Keychain under `app.vibewhisper.mac.ChatGPTSession`.
 - `KeychainOpenAICompatibleCredentialStore`
   - persists the user-owned Recovery API key in a separate generic-password
-    item under `app.openwhisper.mac.OpenAICompatibleAPIKey`;
+    item under `app.vibewhisper.mac.OpenAICompatibleAPIKey`;
   - trims and bounds the credential, uses
     `AfterFirstUnlockThisDeviceOnly`, and never writes the key or an
     environment-variable name into `config.json`.
@@ -282,7 +282,7 @@ matching locally verified signed policy before release.
 - `.clipboardFallback(.noEditableTarget)`;
 - `.clipboardFallback(.retryRequiresManualPaste)`.
 
-Immediately before dispatch, OpenWhisper captures the same focused AX target and, when the destination exposes both `AXValue` and `AXSelectedTextRange`, a bounded before snapshot. After `Cmd+V`, it polls that same target for up to 500 ms and compares the observed value against the exact UTF-16 replacement implied by the original selection.
+Immediately before dispatch, VibeWhisper captures the same focused AX target and, when the destination exposes both `AXValue` and `AXSelectedTextRange`, a bounded before snapshot. After `Cmd+V`, it polls that same target for up to 500 ms and compares the observed value against the exact UTF-16 replacement implied by the original selection.
 
 Delivery outcomes are intentionally distinct:
 
@@ -290,7 +290,7 @@ Delivery outcomes are intentionally distinct:
 - `.pasteDispatchedClipboardRetained`: `Cmd+V` was sent, but AX verification was unavailable or inconclusive, so the transcript remains in the clipboard;
 - `.copiedToClipboard(...)`: no paste event was sent.
 
-The original clipboard is restored only after `.insertedAndVerified` and only when the pasteboard change count still proves OpenWhisper owns the current contents. Retry output and unverified paste output intentionally remain in the clipboard.
+The original clipboard is restored only after `.insertedAndVerified` and only when the pasteboard change count still proves VibeWhisper owns the current contents. Retry output and unverified paste output intentionally remain in the clipboard.
 
 Paste-target waiting is implemented by `AsyncPasteTargetWaiter` with `ContinuousClock` and cancellation-aware `Task.sleep`. Focus checks and application activation briefly execute on MainActor, while the wait itself no longer blocks it. Cancelling the active dictation session also cancels pending insertion and prevents a late outcome from updating HUD or history.
 
@@ -301,7 +301,7 @@ The remaining acceptance boundary is application coverage: targets that expose a
 The application support root is:
 
 ```text
-~/Library/Application Support/OpenWhisper/
+~/Library/Application Support/VibeWhisper/
 ```
 
 Current defaults:
@@ -330,7 +330,7 @@ Privacy behavior:
 - bounded JSONL tail reads avoid synchronously loading an unlimited history file;
 - startup pruning enforces time and count limits.
 
-The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `openwhisper-<UUID>.wav` and `openwhisper-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
+The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `vibewhisper-<UUID>.wav` and `vibewhisper-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
 
 `AppCoordinator.deleteAllUserData()` deletes the ChatGPT session and Recovery
 API key from their separate Keychain items, then
@@ -428,15 +428,15 @@ management windows.
 Sources of truth:
 
 - `product.env` — shell-facing product identity;
-- `Sources/OpenWhisper/ProductIdentity.swift` — runtime identity;
+- `Sources/VibeWhisper/ProductIdentity.swift` — runtime identity;
 - `version.env` — version/build;
-- `/Applications/OpenWhisper.app` — installed runtime.
+- `/Applications/VibeWhisper.app` — installed runtime.
 
 Canonical commands:
 
 ```bash
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ./scripts/install_app.sh
 ./scripts/check_packaged_app.sh
 ```

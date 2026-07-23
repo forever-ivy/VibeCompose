@@ -1,4 +1,4 @@
-# OpenWhisper Documentation
+# VibeWhisper Documentation
 
 ## Product
 

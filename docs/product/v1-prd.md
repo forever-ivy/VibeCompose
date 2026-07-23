@@ -1,15 +1,15 @@
-# OpenWhisper V1 PRD
+# VibeWhisper V1 PRD
 
 ## Summary
 
-`OpenWhisper` is a native macOS voice input tool for people who want a private,
+`VibeWhisper` is a native macOS voice input tool for people who want a private,
 repeatable writing workflow. The core promise is simple: install once, connect
 ChatGPT through the default browser, no API key, no local model setup, press
 `F5`, speak, choose a trusted Skill, and get an understandable result back.
 
 ## Product Comparison Matrix
 
-| Product | Main model posture | Setup burden | Cross-app insertion | Zero-config browser route | Core weakness vs OpenWhisper |
+| Product | Main model posture | Setup burden | Cross-app insertion | Zero-config browser route | Core weakness vs VibeWhisper |
 | --- | --- | --- | --- | --- | --- | --- |
 | Wispr Flow | cloud-first | low | yes | no | cloud-first and broader surface |
 | Aqua Voice | cloud/model-provider heavy | low-medium | yes | no | broader, heavier product surface |
@@ -17,11 +17,11 @@ ChatGPT through the default browser, no API key, no local model setup, press
 | Superwhisper | hybrid local/cloud | medium | yes | no | still a model/config product |
 | TapWisper | BYO provider | medium | yes | no | still needs provider setup |
 | VoiceCommand | local STT + cloud command | medium | yes | no | still needs provider selection |
-| **OpenWhisper** | **browser ChatGPT session** | **very low** | **yes** | **yes** | **private backend dependency; Community Skills are inspectable** |
+| **VibeWhisper** | **browser ChatGPT session** | **very low** | **yes** | **yes** | **private backend dependency; Community Skills are inspectable** |
 
 ## Product Positioning
 
-- Product name: `OpenWhisper`
+- Product name: `VibeWhisper`
 - Category: desktop voice input for office work
 - Primary user: a repeat writer who wants faster writing without API keys or local model ops
 - Primary jobs:
@@ -32,7 +32,7 @@ ChatGPT through the default browser, no API key, no local model setup, press
 ## Core Value Proposition
 
 - You already pay for ChatGPT.
-- Install OpenWhisper.
+- Install VibeWhisper.
 - Press `F5`.
 - Speak.
 - Get text back in the active app.
@@ -42,7 +42,7 @@ ChatGPT through the default browser, no API key, no local model setup, press
 ### Included
 
 - native macOS menu bar app
-- zero-config default route through OpenWhisper-owned ChatGPT login state
+- zero-config default route through VibeWhisper-owned ChatGPT login state
 - setup checks for ChatGPT login, microphone, and Accessibility
 - safe paste into editable targets
 - clipboard fallback otherwise

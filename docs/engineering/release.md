@@ -1,6 +1,6 @@
 # Signed release runbook
 
-OpenWhisper has one feature-complete build. Release tooling does not create an
+VibeWhisper has one feature-complete build. Release tooling does not create an
 edition, entitlement, activation state, or feature tier.
 
 ## Local quality ladder
@@ -14,9 +14,9 @@ scripts/install_app.sh
 scripts/check_packaged_app.sh
 ```
 
-The installed path `/Applications/OpenWhisper.app` is authoritative for TCC,
+The installed path `/Applications/VibeWhisper.app` is authoritative for TCC,
 LaunchServices, keyboard, focus, paste, and interaction evidence. Never launch
-`dist/OpenWhisper.app` as live proof.
+`dist/VibeWhisper.app` as live proof.
 
 ## Signed build
 
@@ -28,7 +28,7 @@ requires a clean canonical Git checkout, canonical credential-free production
 URLs, the optimized Swift release configuration, two distinct Ed25519 keys, and
 owner-only private key files outside the repository. Local packaging defaults
 to debug, while every Developer ID candidate fails unless
-`OPENWHISPER_BUILD_CONFIGURATION=release`. The signed release gate verifies the Hardened Runtime flag,
+`VIBEWHISPER_BUILD_CONFIGURATION=release`. The signed release gate verifies the Hardened Runtime flag,
 Developer ID authority, Team ID, and trusted timestamp for the main app and
 each embedded Sparkle executable. `notarytool` must also return two distinct
 `Accepted` JSON receipts—one for the App submission and one for the DMG—and the

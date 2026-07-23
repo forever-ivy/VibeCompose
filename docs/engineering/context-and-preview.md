@@ -1,4 +1,4 @@
-# OpenWhisper Context Broker and Diff Preview
+# VibeWhisper Context Broker and Diff Preview
 
 > Status: selected-text context implemented for the macOS alpha
 > Scope: explicit per-Skill permission, bounded AX selection capture, sensitive
@@ -6,7 +6,7 @@
 
 ## Privacy boundary
 
-The first Context Broker capability is `selection`. OpenWhisper does not use
+The first Context Broker capability is `selection`. VibeWhisper does not use
 this path to read an entire window, document, screen, clipboard, browser DOM,
 conversation, terminal history, or file.
 
@@ -84,7 +84,7 @@ application and checks:
 5. existing post-paste value/range verification still succeeds when the target
    exposes readable AX text.
 
-If the target, range, text, or verification surface changed, OpenWhisper does
+If the target, range, text, or verification surface changed, VibeWhisper does
 not replace the selection. It keeps the result in the clipboard and reports
 `Copied — selection changed`.
 
@@ -117,11 +117,11 @@ Primary tests:
 - `AppCoordinatorCancellationTests.swift`
 
 The installed visual harness captures `11-diff-preview.png` from
-`/Applications/OpenWhisper.app` using the private `--preview-demo` launch mode.
+`/Applications/VibeWhisper.app` using the private `--preview-demo` launch mode.
 
 Run:
 
 ```bash
 swift test
-OPENWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/visual_acceptance.sh --install
+VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/visual_acceptance.sh --install
 ```

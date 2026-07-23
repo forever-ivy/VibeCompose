@@ -1,4 +1,4 @@
-# OpenWhisper Skill Runtime
+# VibeWhisper Skill Runtime
 
 > Status: implemented for built-in and locally imported declarative Skills in
 > the macOS alpha
@@ -7,23 +7,52 @@
 
 ## Runtime boundary
 
-OpenWhisper Skills are declarative input/output contracts. They are not
+VibeWhisper Skills are declarative input/output contracts. They are not
 plugins and cannot execute Swift, JavaScript, Python, Shell, dynamic
 libraries, subprocesses, arbitrary file reads, Keychain access, or custom
 network requests.
 
-The built-in registry currently exposes stable IDs and semantic versions for:
+The built-in registry currently exposes 13 stable declarations at version
+`1.1.0`:
 
-| Skill | Stable ID |
-| --- | --- |
-| Direct | `app.openwhisper.skill.direct` |
-| Reply | `app.openwhisper.skill.reply` |
-| Email | `app.openwhisper.skill.email` |
-| Backend Prompt | `app.openwhisper.skill.agent-plan` |
-| Code Prompt | `app.openwhisper.skill.code-prompt` |
-| Translate | `app.openwhisper.skill.translate` |
-| Context Rewrite | `app.openwhisper.skill.context-rewrite` |
-| Context Reply | `app.openwhisper.skill.context-reply` |
+| Skill | Stable ID | Context | Output / delivery | Scenario validator |
+| --- | --- | --- | --- | --- |
+| Direct | `app.vibewhisper.skill.direct` | Voice | Plain text / automatic when verified / low | Non-empty, bounded, spoken technical literals |
+| Reply | `app.vibewhisper.skill.reply` | Voice; optional Style | Plain text / automatic when verified / low | 4,000 characters, spoken technical literals |
+| Email | `app.vibewhisper.skill.email` | Voice; optional Style | Plain text / Preview / medium | 8,000 characters, spoken technical literals |
+| Backend Prompt | `app.vibewhisper.skill.agent-plan` | Voice; optional Style | Markdown / Preview / medium | Goal, Constraints, Implementation Steps, Edge Cases, Acceptance Criteria; closed fences |
+| Code Prompt | `app.vibewhisper.skill.code-prompt` | Voice; optional Style | Markdown / Preview / medium | Closed fences, spoken technical literals |
+| Translate | `app.vibewhisper.skill.translate` | Voice; optional Style | Plain text / Preview / medium | Spoken technical literals |
+| Context Rewrite | `app.vibewhisper.skill.context-rewrite` | **Required Voice + Selection**; optional Style | Plain text / Preview / medium | Selected-source technical literals |
+| Context Reply | `app.vibewhisper.skill.context-reply` | **Required Voice + Selection**; optional Style | Plain text / Preview / medium | 5,000 characters; no forced echo of source literals |
+| Bug Report | `app.vibewhisper.skill.bug-report` | Voice; optional Selection + Style | Markdown / Preview / medium | Six required report sections, 8,000 characters, closed fences |
+| Commit Message | `app.vibewhisper.skill.commit-message` | Voice; optional Selection + Style | Plain text / Preview / medium | 1,000 characters, spoken technical literals |
+| Meeting Action Items | `app.vibewhisper.skill.meeting-action-items` | Voice; optional Selection + Style | Markdown / Preview / medium | Decisions, Action Items, Open Questions; 8,000 characters, closed fences |
+| Product Brief | `app.vibewhisper.skill.product-brief` | Voice; optional Selection + Style | Markdown / Preview / medium | Seven required brief sections, 8,000 characters, closed fences |
+| Customer Support Reply | `app.vibewhisper.skill.customer-support-reply` | Voice; optional Selection + Style | Plain text / Preview / medium | 5,000 characters, spoken technical literals, unsupported-guarantee phrases |
+
+## Built-in configuration source
+
+The app-owned declarations are code-reviewed configuration, not downloaded
+prompts:
+
+- `SkillRegistry.builtIn` in `Sources/VibeWhisper/SkillRuntime.swift` owns each
+  stable ID, semantic version, Context request, terminology, prompt,
+  output/delivery/risk contract, and validator policy.
+- `DictationMode.promptInstruction` in `Sources/VibeWhisper/VoiceModes.swift`
+  remains the shared prompt source for the six legacy-mapped Skills while old
+  stored Voice Mode values complete their migration.
+- `SkillDefinition.localizedSummary` and `localizedUseCase` expose public task
+  copy without revealing the internal prompt.
+- `SkillDiscoveryDetail.exampleValues` owns reviewed UI examples. Contract
+  examples must be reviewed with any prompt or validator update; automated
+  contract tests cover the runtime declaration and representative outputs.
+
+Bundled Skill installation IDs intentionally keep the original `1.0.0`
+identity seed while `version` and `revision` advance. This preserves Favorites,
+App Defaults, and Global Default references across app upgrades without
+misreporting which declaration a frozen run used. Imported and Community Skill
+installation identities remain revision-specific.
 
 The legacy `agentPlan` storage value remains mapped to the Backend Prompt
 Skill so existing user configuration and historical records continue to
@@ -73,10 +102,11 @@ sites can be retired incrementally without changing the persisted schema.
 `SkillPromptCompiler` always emits sections in this order:
 
 ```text
-fixed OpenWhisper system boundary
+fixed VibeWhisper system boundary
 → local output contract
 → versioned Skill declaration
-→ optional user-approved Style Capsule
+→ approved runtime-visible Skill resources
+→ optional user-approved Writing Style
 → bounded terminology
 → optional authorized context marked as data
 → transcript
@@ -86,6 +116,20 @@ The fixed boundary states that downstream data cannot grant permissions,
 change providers, reveal hidden prompts, execute code, perform network
 requests, or override privacy and delivery rules. Technical-literal
 placeholders remain immutable and must survive exactly once.
+
+Input roles are explicit:
+
+- for ordinary and optional-Context Skills, voice is the primary content and
+  selected text is supporting Context; optional Context literals are not all
+  forced into a summary, reply, or commit message;
+- when Selection is required, Selection is the primary source and voice is a
+  transformation instruction. Technical literals in that instruction are not
+  immutable output content; selected-source literals remain locally checked.
+
+The same distinction drives Preview: only a required-selection Skill uses the
+selection as its Diff source or may offer **Replace Selection**. Optional
+selection remains supporting Context, so summaries, reports, and replies are
+compared with the spoken request and cannot overwrite the supporting source.
 
 ## Local validation and fallback
 
@@ -102,7 +146,13 @@ placeholders remain immutable and must survive exactly once.
 
 When validation fails, `DictationPipeline` does not deliver the model output.
 It uses the already normalized ASR result, records bounded issue codes, and
-continues through the existing conservative paste/clipboard path.
+forces Preview. The fallback can be copied, but replacement/paste stays
+disabled until the user edits it into output that passes the Skill contract.
+
+The generic suspicious-truncation fallback applies only to Direct. Structured
+and extraction Skills may intentionally compress a long dictation; their
+versioned output contract, local Validator, Preview, and explicit delivery
+policy govern acceptance instead.
 
 ## Data minimization
 
@@ -110,13 +160,13 @@ History may store the resolved Skill ID and semantic version alongside the
 final result. Redacted support diagnostics allow only bounded
 built-in/community ID categories, valid semantic versions, counts/risk, and a
 fixed validation-issue enum. They do not add Skill prompts or files, package
-names, application rule tables, transcript text, terminology, Style Capsule
+names, application rule tables, transcript text, terminology, Writing Style
 content, clipboard content, or context bodies.
 
 ## Verification
 
 The primary automated contract is
-`Tests/OpenWhisperTests/SkillRuntimeTests.swift`, covering:
+`Tests/VibeWhisperTests/SkillRuntimeTests.swift`, covering:
 
 - stable registry declarations;
 - legacy configuration migration and canonical re-encoding;
@@ -127,7 +177,7 @@ The primary automated contract is
 - pipeline fallback before delivery;
 - local package install, hash, version rollback, malicious-file rejection, and
   repository-template validation in
-  `Tests/OpenWhisperTests/CommunitySkillRuntimeTests.swift`.
+  `Tests/VibeWhisperTests/CommunitySkillRuntimeTests.swift`.
 
 Run:
 
@@ -137,8 +187,8 @@ swift test --filter CommunitySkillRuntimeTests
 ./scripts/check.sh
 ```
 
-Installed-app verification continues to use `/Applications/OpenWhisper.app`;
-`dist/OpenWhisper.app` is packaging output only.
+Installed-app verification continues to use `/Applications/VibeWhisper.app`;
+`dist/VibeWhisper.app` is packaging output only.
 
 Remote Registry and Action execution are intentionally absent. Their research
 gates are documented in

@@ -1,4 +1,4 @@
-# OpenWhisper 逻辑与安全审计报告
+# VibeWhisper 逻辑与安全审计报告
 
 > 审计日期：2026-07-12 至 2026-07-13
 > 审计快照：`main@5ed14d5`，包含审计时工作树中的未提交改动
@@ -7,7 +7,7 @@
 
 ## 1. 执行摘要
 
-本轮审计确认，OpenWhisper 当前最重要的风险集中在以下信任边界：
+本轮审计确认，VibeWhisper 当前最重要的风险集中在以下信任边界：
 
 1. **转录文本到目标应用的注入边界**
    - “只有可编辑焦点才自动粘贴”的约束可以被 `launchAppContext` 绕过。
@@ -78,12 +78,12 @@
 
 **位置**
 
-- `Sources/OpenWhisper/TextInjector.swift:110-127`
-- `Sources/OpenWhisper/TextInjector.swift:136-152`
-- `Sources/OpenWhisper/TextInjector.swift:227-257`
-- `Sources/OpenWhisper/FocusedElementInspector.swift:23-58`
-- `Sources/OpenWhisper/FocusedElementInspector.swift:77-138`
-- `Tests/OpenWhisperTests/TextInjectorTests.swift:197-208`
+- `Sources/VibeWhisper/TextInjector.swift:110-127`
+- `Sources/VibeWhisper/TextInjector.swift:136-152`
+- `Sources/VibeWhisper/TextInjector.swift:227-257`
+- `Sources/VibeWhisper/FocusedElementInspector.swift:23-58`
+- `Sources/VibeWhisper/FocusedElementInspector.swift:77-138`
+- `Tests/VibeWhisperTests/TextInjectorTests.swift:197-208`
 
 **根因**
 
@@ -164,11 +164,11 @@ hasLaunchAppContext: true
 
 **位置**
 
-- `Sources/OpenWhisper/AppConfig.swift:105`
-- `Sources/OpenWhisper/AppConfig.swift:158`
-- `Sources/OpenWhisper/AppConfig.swift:413-455`
-- `Sources/OpenWhisper/ChatGPTTranscriber.swift:305-320`
-- `Sources/OpenWhisper/TextPolisher.swift:243-289`
+- `Sources/VibeWhisper/AppConfig.swift:105`
+- `Sources/VibeWhisper/AppConfig.swift:158`
+- `Sources/VibeWhisper/AppConfig.swift:413-455`
+- `Sources/VibeWhisper/ChatGPTTranscriber.swift:305-320`
+- `Sources/VibeWhisper/TextPolisher.swift:243-289`
 
 **根因**
 
@@ -197,7 +197,7 @@ BODY_BYTES=1066
 
 **攻击前提**
 
-- 同用户进程能够修改 OpenWhisper Application Support 中的配置；
+- 同用户进程能够修改 VibeWhisper Application Support 中的配置；
 - 或用户被诱导导入、复制或编辑恶意配置。
 
 **影响**
@@ -207,7 +207,7 @@ BODY_BYTES=1066
 - 完整转录文本和术语内容外传；
 - 恶意 endpoint 返回 401/403 后，新刷新的 token 也可能再次发送到同一地址。
 
-这会让 OpenWhisper 成为绕过 Keychain 访问限制的 confused deputy。
+这会让 VibeWhisper 成为绕过 Keychain 访问限制的 confused deputy。
 
 **修复要求**
 
@@ -225,11 +225,11 @@ BODY_BYTES=1066
 
 **位置**
 
-- `Sources/OpenWhisper/RecoveryHistory.swift:27-31`
-- `Sources/OpenWhisper/RecoveryHistory.swift:200-215`
-- `Sources/OpenWhisper/AppCoordinator.swift:662-682`
-- `Sources/OpenWhisper/PreferencesWindowController.swift:808-839`
-- `Sources/OpenWhisper/ChatGPTTranscriber.swift:151-163`
+- `Sources/VibeWhisper/RecoveryHistory.swift:27-31`
+- `Sources/VibeWhisper/RecoveryHistory.swift:200-215`
+- `Sources/VibeWhisper/AppCoordinator.swift:662-682`
+- `Sources/VibeWhisper/PreferencesWindowController.swift:808-839`
+- `Sources/VibeWhisper/ChatGPTTranscriber.swift:151-163`
 
 **根因**
 
@@ -288,8 +288,8 @@ baseDirectory
 
 **位置**
 
-- `Sources/OpenWhisper/ChatGPTAuthManager.swift:103-136`
-- `Sources/OpenWhisper/ChatGPTAuthManager.swift:160-188`
+- `Sources/VibeWhisper/ChatGPTAuthManager.swift:103-136`
+- `Sources/VibeWhisper/ChatGPTAuthManager.swift:160-188`
 
 **根因**
 
@@ -341,10 +341,10 @@ after_refresh=resurrected-access
 
 **位置**
 
-- `Sources/OpenWhisper/AppConfig.swift:163,185`
-- `Sources/OpenWhisper/AudioRecorder.swift:193-239`
-- `Sources/OpenWhisper/ChatGPTTranscriber.swift:151-163`
-- `Sources/OpenWhisper/AppCoordinator.swift:958-979`
+- `Sources/VibeWhisper/AppConfig.swift:163,185`
+- `Sources/VibeWhisper/AudioRecorder.swift:193-239`
+- `Sources/VibeWhisper/ChatGPTTranscriber.swift:151-163`
+- `Sources/VibeWhisper/AppCoordinator.swift:958-979`
 
 **根因**
 
@@ -385,10 +385,10 @@ let data = try Data(contentsOf: audio.fileURL)
 
 **位置**
 
-- `Sources/OpenWhisper/AppCoordinator.swift:1016-1052`
-- `Sources/OpenWhisper/TranscriptionHistory.swift:145-200`
-- `Sources/OpenWhisper/RecoveryHistory.swift:149-241`
-- `Sources/OpenWhisper/PreferencesWindowController.swift:451-490`
+- `Sources/VibeWhisper/AppCoordinator.swift:1016-1052`
+- `Sources/VibeWhisper/TranscriptionHistory.swift:145-200`
+- `Sources/VibeWhisper/RecoveryHistory.swift:149-241`
+- `Sources/VibeWhisper/PreferencesWindowController.swift:451-490`
 
 **根因**
 
@@ -429,9 +429,9 @@ Settings 为显示有限记录，仍同步读取整个历史和 latency 文件�
 
 **位置**
 
-- `Sources/OpenWhisper/BrowserAuthBridge.swift:96-124`
-- `Sources/OpenWhisper/BrowserAuthBridge.swift:331-369`
-- `Sources/OpenWhisper/BrowserAuthBridge.swift:439-466`
+- `Sources/VibeWhisper/BrowserAuthBridge.swift:96-124`
+- `Sources/VibeWhisper/BrowserAuthBridge.swift:331-369`
+- `Sources/VibeWhisper/BrowserAuthBridge.swift:439-466`
 
 #### A. 重复 query 参数触发 fatal error
 
@@ -490,7 +490,7 @@ TaskGroup 超时后虽然调用 `cancelAll()`，但退出 TaskGroup 仍需等待
 - `scripts/package_app.sh:42-46`
 - `scripts/package_app.sh:126-169`
 - `scripts/install_app.sh:8-14`
-- `packaging/homebrew/Casks/openwhisper.rb:3`
+- `packaging/homebrew/Casks/vibewhisper.rb:3`
 - `.github/workflows/ci.yml:12-18`
 
 **确认问题**
@@ -510,7 +510,7 @@ TaskGroup 超时后虽然调用 `cancelAll()`，但退出 TaskGroup 仍需等待
 
    后续只识别证书吊销字符串，其他拒绝结果 fail-open。
 
-4. `OPENWHISPER_CODESIGN_IDENTITY=-` 可绕过明确的 ad-hoc 开关。
+4. `VIBEWHISPER_CODESIGN_IDENTITY=-` 可绕过明确的 ad-hoc 开关。
 5. 自动选择本机第一个签名身份，没有固定 Team ID。
 6. 安装脚本只检查目录存在，不检查签名、bundle ID 或架构。
 7. 安装先删除旧 app，再复制新 app，非原子且无回滚。
@@ -524,7 +524,7 @@ TeamIdentifier=not set
 designated requirement was identifier-only
 ```
 
-identifier-only ad-hoc requirement 可被其他代码克隆。其是否能继承具体 TCC 或 Keychain 权限未直接验证，因此该部分按条件性风险处理。OpenWhisper 的新 bundle identifier 不改变这一签名风险。
+identifier-only ad-hoc requirement 可被其他代码克隆。其是否能继承具体 TCC 或 Keychain 权限未直接验证，因此该部分按条件性风险处理。VibeWhisper 的新 bundle identifier 不改变这一签名风险。
 
 **修复要求**
 
@@ -545,9 +545,9 @@ identifier-only ad-hoc requirement 可被其他代码克隆。其是否能继承
 
 **位置**
 
-- `Sources/OpenWhisper/TerminologyNormalizer.swift:51-85`
-- `Sources/OpenWhisper/TerminologyNormalizer.swift:95-138`
-- `Sources/OpenWhisper/TerminologyNormalizer.swift:523-633`
+- `Sources/VibeWhisper/TerminologyNormalizer.swift:51-85`
+- `Sources/VibeWhisper/TerminologyNormalizer.swift:95-138`
+- `Sources/VibeWhisper/TerminologyNormalizer.swift:523-633`
 
 **根因**
 
@@ -564,10 +564,10 @@ Exact replacement 不避开 URL 或路径。URL 保护正则在 `?`、端口冒�
 
 ```text
 输入：
-请打开 https://example.com/openwhisper/繁體測試?name=openwhisper
+请打开 https://example.com/vibewhisper/繁體測試?name=vibewhisper
 
 输出：
-请打开 https://example.com/OpenWhisper/繁体测试？name=OpenWhisper
+请打开 https://example.com/VibeWhisper/繁体测试？name=VibeWhisper
 ```
 
 ```text
@@ -601,11 +601,11 @@ Exact replacement 不避开 URL 或路径。URL 保护正则在 `?`、端口冒�
 
 **位置**
 
-- `Sources/OpenWhisper/AppCoordinator.swift:275-331`
-- `Sources/OpenWhisper/AppCoordinator.swift:443-453`
-- `Sources/OpenWhisper/TextInjector.swift:181-224`
-- `Sources/OpenWhisper/TextInjector.swift:242-258`
-- `Sources/OpenWhisper/OverlayController.swift:253-265`
+- `Sources/VibeWhisper/AppCoordinator.swift:275-331`
+- `Sources/VibeWhisper/AppCoordinator.swift:443-453`
+- `Sources/VibeWhisper/TextInjector.swift:181-224`
+- `Sources/VibeWhisper/TextInjector.swift:242-258`
+- `Sources/VibeWhisper/OverlayController.swift:253-265`
 
 #### A. 注入阻塞 MainActor
 
@@ -656,8 +656,8 @@ Exact replacement 不避开 URL 或路径。URL 保护正则在 `?`、端口冒�
 
 **位置**
 
-- `Sources/OpenWhisper/TextInjector.swift:178-209`
-- `Sources/OpenWhisper/AppConfig.swift:389-399`
+- `Sources/VibeWhisper/TextInjector.swift:178-209`
+- `Sources/VibeWhisper/AppConfig.swift:389-399`
 
 **问题**
 
@@ -685,7 +685,7 @@ Task { @MainActor in
 **修复要求**
 
 1. 保存并取消上一次 restore task。
-2. 记录 OpenWhisper 写入后的 `changeCount`。
+2. 记录 VibeWhisper 写入后的 `changeCount`。
 3. 只有剪贴板仍由本次注入拥有时才恢复。
 4. 对 delay 设置合理范围并使用溢出安全换算。
 5. 对快照类型和总大小设置限制。
@@ -698,10 +698,10 @@ Task { @MainActor in
 
 **位置**
 
-- `Sources/OpenWhisper/MicrophonePermissionWindowController.swift:48-80`
-- `Sources/OpenWhisper/AppCoordinator.swift:226-258`
-- `Sources/OpenWhisper/AppCoordinator.swift:747-779`
-- `Sources/OpenWhisper/RuntimePreflight.swift:23-42`
+- `Sources/VibeWhisper/MicrophonePermissionWindowController.swift:48-80`
+- `Sources/VibeWhisper/AppCoordinator.swift:226-258`
+- `Sources/VibeWhisper/AppCoordinator.swift:747-779`
+- `Sources/VibeWhisper/RuntimePreflight.swift:23-42`
 
 **问题**
 
@@ -738,9 +738,9 @@ Task { @MainActor in
 
 **位置**
 
-- `Sources/OpenWhisper/ChatGPTTranscriber.swift:319`
-- `Sources/OpenWhisper/ChatGPTTranscriber.swift:338`
-- `Sources/OpenWhisper/RuntimePreflight.swift:23-42`
+- `Sources/VibeWhisper/ChatGPTTranscriber.swift:319`
+- `Sources/VibeWhisper/ChatGPTTranscriber.swift:338`
+- `Sources/VibeWhisper/RuntimePreflight.swift:23-42`
 
 **问题**
 
@@ -773,8 +773,8 @@ Unexpectedly found nil while unwrapping an Optional value
 
 **位置**
 
-- `Sources/OpenWhisper/PreferencesWindowController.swift:1355`
-- `Sources/OpenWhisper/PreferencesWindowController.swift:1381-1382`
+- `Sources/VibeWhisper/PreferencesWindowController.swift:1355`
+- `Sources/VibeWhisper/PreferencesWindowController.swift:1381-1382`
 
 **触发**
 
@@ -806,7 +806,7 @@ entries[editingTerminologyIndex] = entry
 
 **位置**
 
-- `Sources/OpenWhisper/AudioRecorder.swift:193-215`
+- `Sources/VibeWhisper/AudioRecorder.swift:193-215`
 
 `prepareToRecord()` 或 `record()` 返回 false 时直接抛错，没有：
 
@@ -820,8 +820,8 @@ entries[editingTerminologyIndex] = entry
 
 **位置**
 
-- `Sources/OpenWhisper/AppCoordinator.swift:420-424`
-- `Sources/OpenWhisper/AppCoordinator.swift:443-503`
+- `Sources/VibeWhisper/AppCoordinator.swift:420-424`
+- `Sources/VibeWhisper/AppCoordinator.swift:443-503`
 
 Pipeline 已成功得到文本，但注入抛错时：
 
@@ -833,9 +833,9 @@ Pipeline 已成功得到文本，但注入抛错时：
 
 **位置**
 
-- `Sources/OpenWhisper/AppCoordinator.swift:155-159`
-- `Sources/OpenWhisper/StatusMenuController.swift:71-95`
-- `Sources/OpenWhisper/AppDelegate.swift:3-19`
+- `Sources/VibeWhisper/AppCoordinator.swift:155-159`
+- `Sources/VibeWhisper/StatusMenuController.swift:71-95`
+- `Sources/VibeWhisper/AppDelegate.swift:3-19`
 - `scripts/install_launch_agent.sh:21-28`
 
 Quit 直接 terminate，没有明确取消录音、processing、剪贴板恢复和 timer。无条件 `KeepAlive` 的 LaunchAgent 还可能立即重新拉起应用。
@@ -965,8 +965,8 @@ BODY_BYTES=1066
 ### 5.3 URL 和繁体文本被破坏
 
 ```text
-URL_INPUT=请打开 https://example.com/openwhisper/繁體測試?name=openwhisper
-URL_OUTPUT=请打开 https://example.com/OpenWhisper/繁体测试？name=OpenWhisper
+URL_INPUT=请打开 https://example.com/vibewhisper/繁體測試?name=vibewhisper
+URL_OUTPUT=请打开 https://example.com/VibeWhisper/繁体测试？name=VibeWhisper
 
 TRAD_INPUT=请逐字保留繁體中文：龍門測試
 TRAD_OUTPUT=请逐字保留繁体中文：龙门测试
@@ -1039,7 +1039,7 @@ CSSMERR_TP_CERT_REVOKED
 
 13. 修复 OW-AUD-008。
 14. 修复 OW-AUD-017。
-15. 在 `/Applications/OpenWhisper.app` 上完成真实 TCC 和交互验收。
+15. 在 `/Applications/VibeWhisper.app` 上完成真实 TCC 和交互验收。
 
 ## 8. 发布前最低安全验收条件
 

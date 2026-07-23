@@ -1,8 +1,8 @@
 # Community Skill Contribution Guide
 
-OpenWhisper accepts Agent Skills standard directories or ZIP archives for local
+VibeWhisper accepts Agent Skills standard directories or ZIP archives for local
 testing. `SKILL.md` is the only required public entry. An optional
-`openwhisper.yaml` may declare the Host Profile; it does not create a second
+`vibewhisper.yaml` may declare the Host Profile; it does not create a second
 Skill definition.
 
 This guide prepares curated Community Pilot content. It is not a public Registry
@@ -26,10 +26,10 @@ A candidate must:
 - avoid unexplained permission, output-policy, risk, resource, or Validator
   expansion between revisions.
 
-OpenWhisper rejects or disables Skills that depend on executable scripts,
+VibeWhisper rejects or disables Skills that depend on executable scripts,
 Shell, Hooks, MCP, Subagents, custom network access, arbitrary files, Keychain,
 or external Actions. Packaging such files for another Host never makes them
-executable in OpenWhisper.
+executable in VibeWhisper.
 
 ## Authoring flow
 
@@ -63,7 +63,7 @@ Provide these notes with a Pilot candidate:
 - compatibility limitations;
 - revision changes, including permission, risk, delivery, and Validator diffs.
 
-Do not include test audio, participant text, selection content, Style Capsules,
+Do not include test audio, participant text, selection content, Writing Styles,
 private terminology, History, credentials, or local paths.
 
 ## Reviewer checklist
