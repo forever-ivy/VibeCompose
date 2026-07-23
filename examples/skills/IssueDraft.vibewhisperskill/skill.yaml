@@ -1,8 +1,8 @@
 schemaVersion: 1
-id: dev.openwhisper.example.issue-draft
+id: dev.vibewhisper.example.issue-draft
 version: 1.0.0
 name: Issue Draft
-author: OpenWhisper Example
+author: VibeWhisper Example
 minimumAppVersion: 0.1.0
 
 triggers:
