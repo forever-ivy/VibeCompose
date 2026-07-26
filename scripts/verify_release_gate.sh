@@ -7,15 +7,15 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-APP="$ROOT/dist/$VIBEWHISPER_APP_NAME.app"
-DMG="$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-$(uname -m).dmg"
-MANIFEST="${VIBEWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
-CASK="${VIBEWHISPER_CASK_PATH:-$ROOT/packaging/homebrew/Casks/vibewhisper.rb}"
-EXPECTED_TEAM_ID="${VIBEWHISPER_TEAM_ID:-}"
-APPCAST="${VIBEWHISPER_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
-CAPABILITY_POLICY="${VIBEWHISPER_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
-APP_NOTARIZATION_RESULT="${VIBEWHISPER_APP_NOTARIZATION_RESULT_PATH:-$ROOT/dist/notarization-app.json}"
-DMG_NOTARIZATION_RESULT="${VIBEWHISPER_DMG_NOTARIZATION_RESULT_PATH:-$ROOT/dist/notarization-dmg.json}"
+APP="$ROOT/dist/$VIBECOMPOSE_APP_NAME.app"
+DMG="$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-$(uname -m).dmg"
+MANIFEST="${VIBECOMPOSE_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
+CASK="${VIBECOMPOSE_CASK_PATH:-$ROOT/packaging/homebrew/Casks/vibecompose.rb}"
+EXPECTED_TEAM_ID="${VIBECOMPOSE_TEAM_ID:-}"
+APPCAST="${VIBECOMPOSE_SPARKLE_APPCAST_PATH:-$ROOT/dist/appcast.xml}"
+CAPABILITY_POLICY="${VIBECOMPOSE_CAPABILITY_POLICY_PATH:-$ROOT/dist/provider-capabilities.json}"
+APP_NOTARIZATION_RESULT="${VIBECOMPOSE_APP_NOTARIZATION_RESULT_PATH:-$ROOT/dist/notarization-app.json}"
+DMG_NOTARIZATION_RESULT="${VIBECOMPOSE_DMG_NOTARIZATION_RESULT_PATH:-$ROOT/dist/notarization-dmg.json}"
 
 verify_developer_id_runtime_signature() {
   local code_path="$1"
@@ -29,7 +29,7 @@ verify_developer_id_runtime_signature() {
     exit 1
   }
   [[ "$details" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
-    echo "$label Team ID does not match VIBEWHISPER_TEAM_ID." >&2
+    echo "$label Team ID does not match VIBECOMPOSE_TEAM_ID." >&2
     exit 1
   }
   [[ "$details" == *"Timestamp="* ]] || {
@@ -66,7 +66,7 @@ validate_notarization_result() {
 }
 
 [[ -n "$EXPECTED_TEAM_ID" ]] || {
-  echo "VIBEWHISPER_TEAM_ID is required for the signed release gate." >&2
+  echo "VIBECOMPOSE_TEAM_ID is required for the signed release gate." >&2
   exit 1
 }
 [[ -d "$APP" && -f "$DMG" && -f "$MANIFEST" ]] || {
@@ -84,7 +84,7 @@ swift "$ROOT/scripts/verify_dependency_licenses.swift" \
 python3 "$ROOT/scripts/verify_repository_hygiene.py"
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP"
-verify_developer_id_runtime_signature "$APP" "VibeWhisper.app"
+verify_developer_id_runtime_signature "$APP" "VibeCompose.app"
 ENTITLEMENTS="$(/usr/bin/codesign -d --entitlements :- "$APP" 2>/dev/null || true)"
 [[ "$ENTITLEMENTS" != *"com.apple.security.cs.disable-library-validation"* ]] || {
   echo "Signed release must not disable hardened-runtime library validation." >&2
@@ -115,23 +115,23 @@ ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$MANIFEST")"
 ZIP_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.0.downloadURL raw -o - "$MANIFEST")"
 DMG_FILENAME="$(/usr/bin/plutil -extract artifacts.1.fileName raw -o - "$MANIFEST")"
 DMG_DOWNLOAD_URL="$(/usr/bin/plutil -extract artifacts.1.downloadURL raw -o - "$MANIFEST")"
-[[ "$MANIFEST_VERSION" == "$VIBEWHISPER_VERSION" ]] || {
+[[ "$MANIFEST_VERSION" == "$VIBECOMPOSE_VERSION" ]] || {
   echo "Release manifest version mismatch." >&2
   exit 1
 }
-[[ "$MANIFEST_BUILD" == "$VIBEWHISPER_BUILD" ]] || {
+[[ "$MANIFEST_BUILD" == "$VIBECOMPOSE_BUILD" ]] || {
   echo "Release manifest build mismatch." >&2
   exit 1
 }
-if [[ -n "${VIBEWHISPER_RELEASE_BASE_URL:-}" ]]; then
-  EXPECTED_RELEASE_BASE_URL="${VIBEWHISPER_RELEASE_BASE_URL%/}"
+if [[ -n "${VIBECOMPOSE_RELEASE_BASE_URL:-}" ]]; then
+  EXPECTED_RELEASE_BASE_URL="${VIBECOMPOSE_RELEASE_BASE_URL%/}"
   [[ "$ZIP_DOWNLOAD_URL" == "$EXPECTED_RELEASE_BASE_URL/$ZIP_FILENAME" \
     && "$DMG_DOWNLOAD_URL" == "$EXPECTED_RELEASE_BASE_URL/$DMG_FILENAME" ]] || {
-    echo "Release manifest artifact URLs do not match VIBEWHISPER_RELEASE_BASE_URL." >&2
+    echo "Release manifest artifact URLs do not match VIBECOMPOSE_RELEASE_BASE_URL." >&2
     exit 1
   }
 fi
-grep -q "version \"$VIBEWHISPER_VERSION\"" "$CASK"
+grep -q "version \"$VIBECOMPOSE_VERSION\"" "$CASK"
 grep -q "sha256 \"$ZIP_SHA256\"" "$CASK"
 grep -Fq "url \"$ZIP_DOWNLOAD_URL\"" "$CASK"
 if grep -q "sha256 :no_check" "$CASK"; then
@@ -141,7 +141,7 @@ fi
 
 PLIST="$APP/Contents/Info.plist"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
-EXECUTABLE="$APP/Contents/MacOS/$VIBEWHISPER_APP_NAME"
+EXECUTABLE="$APP/Contents/MacOS/$VIBECOMPOSE_APP_NAME"
 [[ -d "$SPARKLE_FRAMEWORK" ]] || {
   echo "Sparkle.framework is not embedded in the signed app." >&2
   exit 1
@@ -202,13 +202,13 @@ fi
   echo "Signed updater public key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
-if [[ -n "${VIBEWHISPER_SPARKLE_FEED_URL:-}" \
-  && "$FEED_URL" != "$VIBEWHISPER_SPARKLE_FEED_URL" ]]; then
+if [[ -n "${VIBECOMPOSE_SPARKLE_FEED_URL:-}" \
+  && "$FEED_URL" != "$VIBECOMPOSE_SPARKLE_FEED_URL" ]]; then
   echo "Signed updater feed does not match the configured production feed." >&2
   exit 1
 fi
-if [[ -n "${VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY:-}" \
-  && "$PUBLIC_KEY" != "$VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY" ]]; then
+if [[ -n "${VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY:-}" \
+  && "$PUBLIC_KEY" != "$VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY" ]]; then
   echo "Signed updater public key does not match the configured production key." >&2
   exit 1
 fi
@@ -232,13 +232,13 @@ fi
   echo "Signed provider capability policy key is not a 32-byte base64 Ed25519 key." >&2
   exit 1
 }
-if [[ -n "${VIBEWHISPER_CAPABILITY_POLICY_URL:-}" \
-  && "$CAPABILITY_POLICY_URL" != "$VIBEWHISPER_CAPABILITY_POLICY_URL" ]]; then
+if [[ -n "${VIBECOMPOSE_CAPABILITY_POLICY_URL:-}" \
+  && "$CAPABILITY_POLICY_URL" != "$VIBECOMPOSE_CAPABILITY_POLICY_URL" ]]; then
   echo "Provider capability policy URL does not match the production configuration." >&2
   exit 1
 fi
-if [[ -n "${VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}" \
-  && "$CAPABILITY_PUBLIC_KEY" != "$VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY" ]]; then
+if [[ -n "${VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY:-}" \
+  && "$CAPABILITY_PUBLIC_KEY" != "$VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY" ]]; then
   echo "Provider capability public key does not match the production configuration." >&2
   exit 1
 fi
@@ -250,7 +250,7 @@ fi
 "$ROOT/scripts/verify_provider_capability_policy.swift" \
   --policy "$CAPABILITY_POLICY" \
   --public-key "$CAPABILITY_PUBLIC_KEY" \
-  --build "$VIBEWHISPER_BUILD"
+  --build "$VIBECOMPOSE_BUILD"
 
 [[ -f "$APPCAST" && ! -L "$APPCAST" ]] || {
   echo "Missing regular signed Sparkle appcast: $APPCAST" >&2
@@ -262,7 +262,7 @@ grep -q 'sparkle:edSignature="' "$APPCAST" || {
   exit 1
 }
 grep -Eq \
-  "<sparkle:version>$VIBEWHISPER_BUILD</sparkle:version>|sparkle:version=\"$VIBEWHISPER_BUILD\"" \
+  "<sparkle:version>$VIBECOMPOSE_BUILD</sparkle:version>|sparkle:version=\"$VIBECOMPOSE_BUILD\"" \
   "$APPCAST" || {
     echo "Sparkle appcast build does not match the release build." >&2
     exit 1
@@ -277,4 +277,4 @@ grep -Fq "$ZIP_DOWNLOAD_URL" "$APPCAST" || {
   --manifest "$MANIFEST" \
   --public-key "$PUBLIC_KEY"
 
-echo "VibeWhisper signed release gate passed."
+echo "VibeCompose signed release gate passed."

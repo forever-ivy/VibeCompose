@@ -660,7 +660,7 @@ def _write_csv(path: Path, fields: tuple[str, ...], rows: list[dict[str, str]]) 
 
 
 def self_test() -> None:
-    with tempfile.TemporaryDirectory(prefix="vibewhisper-community-pilot-") as directory:
+    with tempfile.TemporaryDirectory(prefix="vibecompose-community-pilot-") as directory:
         root = Path(directory)
         participant_path = root / "participants.csv"
         observation_path = root / "observations.csv"
@@ -767,7 +767,7 @@ def _write_report(path: Path, report_text: str) -> None:
         raise PilotDataError(f"output parent must be a regular directory: {parent}")
 
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=".vibewhisper-community-pilot-",
+        prefix=".vibecompose-community-pilot-",
         suffix=".json",
         dir=parent,
     )

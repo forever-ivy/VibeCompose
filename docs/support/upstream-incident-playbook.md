@@ -1,10 +1,10 @@
-# VibeWhisper Upstream Incident and Recovery Playbook
+# VibeCompose Upstream Incident and Recovery Playbook
 
 > Operational baseline: July 13, 2026
 
 ## Purpose
 
-VibeWhisper's default account route depends on upstream ChatGPT behavior that is not a documented public API. This playbook prevents an upstream incident from becoming repeated credential transmission, silent data loss, or misleading product claims.
+VibeCompose's default account route depends on upstream ChatGPT behavior that is not a documented public API. This playbook prevents an upstream incident from becoming repeated credential transmission, silent data loss, or misleading product claims.
 
 ## Detection Categories
 
@@ -70,7 +70,7 @@ initial signed policy, and installed-app incident drill.
 Generate and verify a policy without placing the private key in the repository:
 
 ```bash
-VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/vibewhisper-capability.key \
+VIBECOMPOSE_CAPABILITY_PRIVATE_KEY_FILE=/secure/vibecompose-capability.key \
 scripts/generate_provider_capability_policy.swift \
   --revision 1 \
   --incident-id OW-INC-2026-001 \
@@ -88,5 +88,5 @@ scripts/verify_provider_capability_policy.swift \
 - Never describe the default route as a stable public API or guaranteed SLA.
 - Never ask users to send access tokens, cookies, API keys, raw audio, or full transcripts.
 - State exact affected versions and dates.
-- Distinguish upstream failure from expired VibeWhisper session and local permission failure.
+- Distinguish upstream failure from expired VibeCompose session and local permission failure.
 - Keep recovery instructions available in English and Simplified Chinese before public beta.

@@ -1,6 +1,6 @@
-# VibeWhisper Visual Acceptance
+# VibeCompose Visual Acceptance
 
-Use this chain for VibeWhisper HUD or interaction-facing visual work after unit/integration tests pass.
+Use this chain for VibeCompose HUD or interaction-facing visual work after unit/integration tests pass.
 
 ## Required Command
 
@@ -8,7 +8,7 @@ Use this chain for VibeWhisper HUD or interaction-facing visual work after unit/
 ./scripts/visual_acceptance.sh --install
 ```
 
-The command packages the current build, installs it to `/Applications/VibeWhisper.app`, and launches one installed-app demo process per HUD state through LaunchServices with `--overlay-demo-state`.
+The command packages the current build, installs it to `/Applications/VibeCompose.app`, and launches one installed-app demo process per HUD state through LaunchServices with `--overlay-demo-state`.
 
 After the Refined HUD image matrix passes, the same command runs
 `scripts/feedback_mode_acceptance.sh`. That installed-app harness verifies
@@ -51,7 +51,7 @@ History, Terminology, Quick Add, the searchable Skill Switcher, and the
 Community Skills Library use a separate installed-app acceptance harness:
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --install
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/product_surface_acceptance.sh --install
 ```
 
 The harness opens each surface through LaunchServices, writes its snapshot to a
@@ -69,7 +69,7 @@ non-uniform-image guard before evidence is accepted.
 Run the installed-app SwiftUI accessibility audit with:
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
 It covers General, Account, Dictation, Appearance & Feedback, AI Polish,
@@ -93,15 +93,15 @@ state and prevents acceptance startup from blocking in
 
 ## Installed permission surface precheck
 
-When macOS shows Microphone and Accessibility as enabled but VibeWhisper appears
+When macOS shows Microphone and Accessibility as enabled but VibeCompose appears
 stale, run:
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 \
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 \
   ./scripts/permission_surface_acceptance.sh --install
 ```
 
-The harness launches `/Applications/VibeWhisper.app` through LaunchServices,
+The harness launches `/Applications/VibeCompose.app` through LaunchServices,
 opens Settings → Account in privacy-isolated snapshot mode, and uses Vision OCR
 to require both the Microphone and Accessibility cards to render as
 `Granted`/`已授权`. The process reads live TCC state but does not load the user's
@@ -117,7 +117,7 @@ VoiceOver/keyboard interaction acceptance.
 Launch a privacy-isolated installed surface for those interaction checks with:
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 \
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 \
   ./scripts/interaction_acceptance.sh --install settings account
 ```
 
@@ -130,7 +130,7 @@ Use pass is complete, restore the normal installed runtime with:
 ./scripts/interaction_acceptance.sh --restore
 ```
 
-The script intentionally stops each transient overlay-demo process between HUD states. That cleanup is not the final user-review state. A successful run must relaunch the normal installed app from `/Applications/VibeWhisper.app`, verify that VibeWhisper is running, and leave it running.
+The script intentionally stops each transient overlay-demo process between HUD states. That cleanup is not the final user-review state. A successful run must relaunch the normal installed app from `/Applications/VibeCompose.app`, verify that VibeCompose is running, and leave it running.
 
 ## Evidence
 
@@ -157,12 +157,12 @@ The directory must contain HUD-window screenshots:
 
 ## Closeout Rule
 
-For VibeWhisper UI closeouts, report:
+For VibeCompose UI closeouts, report:
 
 - the visual acceptance artifact directory
 - whether `verification.txt` passed
 - the installed-app live flow used for interaction acceptance
 - the observed paste-versus-clipboard result when transcription/injection behavior was touched
-- the normal installed VibeWhisper runtime state left for user review
+- the normal installed VibeCompose runtime state left for user review
 
-The scripted visual run does not replace Computer Use interaction acceptance. It proves the installed build can render the expected HUD states and retry affordance without relying on full-screen screenshots, foreground browser state, or guessed screen bands. Do not finish a VibeWhisper GUI closeout by quitting or killing the app; if a script performs internal demo cleanup, relaunch `/Applications/VibeWhisper.app` before reporting completion.
+The scripted visual run does not replace Computer Use interaction acceptance. It proves the installed build can render the expected HUD states and retry affordance without relying on full-screen screenshots, foreground browser state, or guessed screen bands. Do not finish a VibeCompose GUI closeout by quitting or killing the app; if a script performs internal demo cleanup, relaunch `/Applications/VibeCompose.app` before reporting completion.

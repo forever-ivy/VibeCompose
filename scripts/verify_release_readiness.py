@@ -285,11 +285,11 @@ def audit_identity(
         return {}, {}
 
     required_product = (
-        "VIBEWHISPER_APP_NAME",
-        "VIBEWHISPER_BUNDLE_ID",
-        "VIBEWHISPER_REPOSITORY",
+        "VIBECOMPOSE_APP_NAME",
+        "VIBECOMPOSE_BUNDLE_ID",
+        "VIBECOMPOSE_REPOSITORY",
     )
-    required_version = ("VIBEWHISPER_VERSION", "VIBEWHISPER_BUILD")
+    required_version = ("VIBECOMPOSE_VERSION", "VIBECOMPOSE_BUILD")
     missing = [
         name
         for name in required_product
@@ -311,21 +311,21 @@ def audit_identity(
 
 def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     public_names = (
-        "VIBEWHISPER_TEAM_ID",
-        "VIBEWHISPER_RELEASE_BASE_URL",
-        "VIBEWHISPER_SPARKLE_FEED_URL",
-        "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY",
-        "VIBEWHISPER_CAPABILITY_POLICY_URL",
-        "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY",
+        "VIBECOMPOSE_TEAM_ID",
+        "VIBECOMPOSE_RELEASE_BASE_URL",
+        "VIBECOMPOSE_SPARKLE_FEED_URL",
+        "VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY",
+        "VIBECOMPOSE_CAPABILITY_POLICY_URL",
+        "VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY",
     )
     candidate_names = (
-        "VIBEWHISPER_CODESIGN_IDENTITY",
-        "VIBEWHISPER_NOTARY_PROFILE",
-        "VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE",
-        "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE",
-        "VIBEWHISPER_CAPABILITY_POLICY_REVISION",
-        "VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT",
-        "VIBEWHISPER_BUILD_CONFIGURATION",
+        "VIBECOMPOSE_CODESIGN_IDENTITY",
+        "VIBECOMPOSE_NOTARY_PROFILE",
+        "VIBECOMPOSE_SPARKLE_PRIVATE_KEY_FILE",
+        "VIBECOMPOSE_CAPABILITY_PRIVATE_KEY_FILE",
+        "VIBECOMPOSE_CAPABILITY_POLICY_REVISION",
+        "VIBECOMPOSE_CAPABILITY_POLICY_EXPIRES_AT",
+        "VIBECOMPOSE_BUILD_CONFIGURATION",
     )
     required_names = public_names + (candidate_names if phase == "candidate" else ())
     missing = [name for name in required_names if not os.environ.get(name, "").strip()]
@@ -337,7 +337,7 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         else f"missing values: {', '.join(missing)}",
     )
 
-    team_id = os.environ.get("VIBEWHISPER_TEAM_ID", "").strip()
+    team_id = os.environ.get("VIBECOMPOSE_TEAM_ID", "").strip()
     audit.add(
         "configuration.team-id",
         TEAM_ID_PATTERN.fullmatch(team_id) is not None,
@@ -345,9 +345,9 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     )
 
     url_names = (
-        "VIBEWHISPER_RELEASE_BASE_URL",
-        "VIBEWHISPER_SPARKLE_FEED_URL",
-        "VIBEWHISPER_CAPABILITY_POLICY_URL",
+        "VIBECOMPOSE_RELEASE_BASE_URL",
+        "VIBECOMPOSE_SPARKLE_FEED_URL",
+        "VIBECOMPOSE_CAPABILITY_POLICY_URL",
     )
     invalid_urls = [
         name
@@ -363,8 +363,8 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     )
 
     key_names = (
-        "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY",
-        "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY",
+        "VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY",
+        "VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY",
     )
     public_keys = [os.environ.get(name, "").strip() for name in key_names]
     public_keys_valid = all(valid_public_key(value) for value in public_keys)
@@ -378,7 +378,7 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         return
 
     build_configuration = os.environ.get(
-        "VIBEWHISPER_BUILD_CONFIGURATION",
+        "VIBECOMPOSE_BUILD_CONFIGURATION",
         "",
     ).strip()
     audit.add(
@@ -387,9 +387,9 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         "Developer ID candidate uses the optimized release build configuration",
     )
 
-    revision = os.environ.get("VIBEWHISPER_CAPABILITY_POLICY_REVISION", "")
+    revision = os.environ.get("VIBECOMPOSE_CAPABILITY_POLICY_REVISION", "")
     expires_at = parse_date(
-        os.environ.get("VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT", "")
+        os.environ.get("VIBECOMPOSE_CAPABILITY_POLICY_EXPIRES_AT", "")
     )
     now = dt.datetime.now(dt.timezone.utc)
     policy_window_valid = (
@@ -405,8 +405,8 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
     )
 
     private_key_names = (
-        "VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE",
-        "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE",
+        "VIBECOMPOSE_SPARKLE_PRIVATE_KEY_FILE",
+        "VIBECOMPOSE_CAPABILITY_PRIVATE_KEY_FILE",
     )
     private_paths: list[pathlib.Path] = []
     private_errors: list[str] = []
@@ -441,7 +441,7 @@ def audit_environment(root: pathlib.Path, audit: Audit, phase: str) -> None:
         else ", ".join(private_errors),
     )
 
-    notary_keychain = os.environ.get("VIBEWHISPER_NOTARY_KEYCHAIN", "").strip()
+    notary_keychain = os.environ.get("VIBECOMPOSE_NOTARY_KEYCHAIN", "").strip()
     if not notary_keychain:
         audit.add(
             "configuration.notary-keychain",
@@ -842,7 +842,7 @@ def audit_installed_acceptance(
         == {"schemaVersion", "status", "installedApp", "release", "checks", "evidence"}
         and value.get("schemaVersion") == 2
         and value.get("status") == "approved"
-        and value.get("installedApp") == "/Applications/VibeWhisper.app"
+        and value.get("installedApp") == "/Applications/VibeCompose.app"
         and release_matches
         and checks_have_exact_schema
         and not failed_checks
@@ -1245,8 +1245,8 @@ def write_report(
         "passed": audit.passed,
         "sourceCommit": source_commit,
         "release": {
-            "version": version.get("VIBEWHISPER_VERSION", ""),
-            "build": version.get("VIBEWHISPER_BUILD", ""),
+            "version": version.get("VIBECOMPOSE_VERSION", ""),
+            "build": version.get("VIBECOMPOSE_BUILD", ""),
         },
         "evidenceDigests": dict(sorted(audit.evidence_digests.items())),
         "gates": [asdict(gate) for gate in audit.gates],
@@ -1278,7 +1278,7 @@ def write_report(
 
 def self_test() -> None:
     now = dt.datetime(2026, 7, 18, tzinfo=dt.timezone.utc)
-    with tempfile.TemporaryDirectory(prefix="vibewhisper-release-readiness-") as directory:
+    with tempfile.TemporaryDirectory(prefix="vibecompose-release-readiness-") as directory:
         root = pathlib.Path(directory)
         source_commit = "a" * 40
         archive_sha256 = "b" * 64
@@ -1293,7 +1293,7 @@ def self_test() -> None:
         brand = {
             "schemaVersion": 1,
             "status": "approved",
-            "productName": "VibeWhisper",
+            "productName": "VibeCompose",
             "reviewedAt": "2026-07-18T00:00:00Z",
             "reviewer": "Product owner",
             "checks": {
@@ -1311,10 +1311,10 @@ def self_test() -> None:
             "status": "approved",
             "reviewedAt": "2026-07-18T00:00:00Z",
             "reviewer": "Product owner",
-            "supportURL": "https://support.example.com/vibewhisper",
-            "securityURL": "https://security.example.com/vibewhisper",
-            "privacyContactURL": "https://privacy.example.com/vibewhisper",
-            "legalContactURL": "https://legal.example.com/vibewhisper",
+            "supportURL": "https://support.example.com/vibecompose",
+            "securityURL": "https://security.example.com/vibecompose",
+            "privacyContactURL": "https://privacy.example.com/vibecompose",
+            "legalContactURL": "https://legal.example.com/vibecompose",
             "supportOwner": "Support owner",
             "securityOwner": "Security owner",
             "privacyOwner": "Privacy owner",
@@ -1323,7 +1323,7 @@ def self_test() -> None:
         installed = {
             "schemaVersion": 2,
             "status": "approved",
-            "installedApp": "/Applications/VibeWhisper.app",
+            "installedApp": "/Applications/VibeCompose.app",
             "release": {
                 "version": "0.1.0",
                 "build": "1",
@@ -1516,7 +1516,7 @@ def self_test() -> None:
             raise AssertionError("valid notarization receipts did not pass")
 
         passing = Audit()
-        audit_brand(passing, brand_path, "VibeWhisper", now)
+        audit_brand(passing, brand_path, "VibeCompose", now)
         audit_public_contacts(root, passing, public_contact_path, now)
         audit_installed_acceptance(
             passing,
@@ -1534,7 +1534,7 @@ def self_test() -> None:
         brand["status"] = "blocked"
         brand_path.write_text(json.dumps(brand) + "\n", encoding="utf-8")
         blocked_brand = Audit()
-        audit_brand(blocked_brand, brand_path, "VibeWhisper", now)
+        audit_brand(blocked_brand, brand_path, "VibeCompose", now)
         if blocked_brand.passed:
             raise AssertionError("blocked brand evidence passed")
 
@@ -1605,28 +1605,28 @@ def self_test() -> None:
         sparkle_key.chmod(0o600)
         capability_key.chmod(0o600)
         candidate_environment = {
-            "VIBEWHISPER_TEAM_ID": "ABCDE12345",
-            "VIBEWHISPER_RELEASE_BASE_URL": "https://downloads.example.com/vibewhisper/v0.1.0",
-            "VIBEWHISPER_SPARKLE_FEED_URL": "https://updates.example.com/stable/appcast.xml",
-            "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY": base64.b64encode(
+            "VIBECOMPOSE_TEAM_ID": "ABCDE12345",
+            "VIBECOMPOSE_RELEASE_BASE_URL": "https://downloads.example.com/vibecompose/v0.1.0",
+            "VIBECOMPOSE_SPARKLE_FEED_URL": "https://updates.example.com/stable/appcast.xml",
+            "VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY": base64.b64encode(
                 bytes(range(32))
             ).decode("ascii"),
-            "VIBEWHISPER_CAPABILITY_POLICY_URL": "https://updates.example.com/provider-capabilities.json",
-            "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY": base64.b64encode(
+            "VIBECOMPOSE_CAPABILITY_POLICY_URL": "https://updates.example.com/provider-capabilities.json",
+            "VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY": base64.b64encode(
                 bytes(range(1, 33))
             ).decode("ascii"),
-            "VIBEWHISPER_CODESIGN_IDENTITY": "Developer ID Application identity",
-            "VIBEWHISPER_NOTARY_PROFILE": "vibewhisper-notary",
-            "VIBEWHISPER_NOTARY_KEYCHAIN": "",
-            "VIBEWHISPER_SPARKLE_PRIVATE_KEY_FILE": str(sparkle_key),
-            "VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE": str(capability_key),
-            "VIBEWHISPER_CAPABILITY_POLICY_REVISION": "1",
-            "VIBEWHISPER_CAPABILITY_POLICY_EXPIRES_AT": (
+            "VIBECOMPOSE_CODESIGN_IDENTITY": "Developer ID Application identity",
+            "VIBECOMPOSE_NOTARY_PROFILE": "vibecompose-notary",
+            "VIBECOMPOSE_NOTARY_KEYCHAIN": "",
+            "VIBECOMPOSE_SPARKLE_PRIVATE_KEY_FILE": str(sparkle_key),
+            "VIBECOMPOSE_CAPABILITY_PRIVATE_KEY_FILE": str(capability_key),
+            "VIBECOMPOSE_CAPABILITY_POLICY_REVISION": "1",
+            "VIBECOMPOSE_CAPABILITY_POLICY_EXPIRES_AT": (
                 dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
             )
             .isoformat()
             .replace("+00:00", "Z"),
-            "VIBEWHISPER_BUILD_CONFIGURATION": "release",
+            "VIBECOMPOSE_BUILD_CONFIGURATION": "release",
         }
         previous_environment = {
             name: os.environ.get(name) for name in candidate_environment
@@ -1638,8 +1638,8 @@ def self_test() -> None:
             if not candidate_audit.passed:
                 raise AssertionError("valid candidate configuration did not pass")
 
-            os.environ["VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY"] = os.environ[
-                "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY"
+            os.environ["VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY"] = os.environ[
+                "VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY"
             ]
             reused_key_audit = Audit()
             audit_environment(candidate_root, reused_key_audit, "candidate")
@@ -1682,14 +1682,14 @@ def main() -> int:
     source_commit = audit_git(
         root,
         audit,
-        product.get("VIBEWHISPER_REPOSITORY", ""),
-        version.get("VIBEWHISPER_VERSION", ""),
+        product.get("VIBECOMPOSE_REPOSITORY", ""),
+        version.get("VIBECOMPOSE_VERSION", ""),
         require_tag=arguments.phase == "public",
     )
 
     if arguments.phase == "public":
-        current_version = version.get("VIBEWHISPER_VERSION", "")
-        current_build = version.get("VIBEWHISPER_BUILD", "")
+        current_version = version.get("VIBECOMPOSE_VERSION", "")
+        current_build = version.get("VIBECOMPOSE_BUILD", "")
         zip_sha256 = read_manifest_zip_sha256(
             root,
             audit,
@@ -1708,35 +1708,35 @@ def main() -> int:
         audit_notarization_receipts(root, audit)
         brand_path = pathlib.Path(
             os.environ.get(
-                "VIBEWHISPER_BRAND_CLEARANCE_PATH",
+                "VIBECOMPOSE_BRAND_CLEARANCE_PATH",
                 root / "release" / "brand-clearance.json",
             )
         )
         installed_path = pathlib.Path(
             os.environ.get(
-                "VIBEWHISPER_INSTALLED_ACCEPTANCE_PATH",
+                "VIBECOMPOSE_INSTALLED_ACCEPTANCE_PATH",
                 root / "release" / "installed-acceptance.json",
             )
         )
         summary_path = pathlib.Path(
             os.environ.get(
-                "VIBEWHISPER_COMMUNITY_PILOT_SUMMARY_PATH",
+                "VIBECOMPOSE_COMMUNITY_PILOT_SUMMARY_PATH",
                 root / "release" / "community-pilot-summary.json",
             )
         )
         review_path = pathlib.Path(
             os.environ.get(
-                "VIBEWHISPER_BETA_METRICS_PATH",
+                "VIBECOMPOSE_BETA_METRICS_PATH",
                 root / "release" / "beta-metrics.json",
             )
         )
         public_contact_path = pathlib.Path(
             os.environ.get(
-                "VIBEWHISPER_PUBLIC_CONTACT_PATH",
+                "VIBECOMPOSE_PUBLIC_CONTACT_PATH",
                 root / "release" / "public-contact.json",
             )
         )
-        audit_brand(audit, brand_path, product.get("VIBEWHISPER_APP_NAME", ""), now)
+        audit_brand(audit, brand_path, product.get("VIBECOMPOSE_APP_NAME", ""), now)
         audit_public_contacts(root, audit, public_contact_path, now)
         audit_installed_acceptance(
             audit,

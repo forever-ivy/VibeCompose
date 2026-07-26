@@ -15,18 +15,18 @@ swift "$ROOT/scripts/verify_dependency_licenses.swift" \
   --root "$ROOT"
 python3 "$ROOT/scripts/verify_repository_hygiene.py"
 
-: "${VIBEWHISPER_APP_NAME:?VIBEWHISPER_APP_NAME is required}"
-: "${VIBEWHISPER_BUNDLE_ID:?VIBEWHISPER_BUNDLE_ID is required}"
-: "${VIBEWHISPER_MIN_MACOS:?VIBEWHISPER_MIN_MACOS is required}"
-: "${VIBEWHISPER_VERSION:?VIBEWHISPER_VERSION is required}"
-: "${VIBEWHISPER_BUILD:?VIBEWHISPER_BUILD is required}"
+: "${VIBECOMPOSE_APP_NAME:?VIBECOMPOSE_APP_NAME is required}"
+: "${VIBECOMPOSE_BUNDLE_ID:?VIBECOMPOSE_BUNDLE_ID is required}"
+: "${VIBECOMPOSE_MIN_MACOS:?VIBECOMPOSE_MIN_MACOS is required}"
+: "${VIBECOMPOSE_VERSION:?VIBECOMPOSE_VERSION is required}"
+: "${VIBECOMPOSE_BUILD:?VIBECOMPOSE_BUILD is required}"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
-BUILD_CONFIGURATION="${VIBEWHISPER_BUILD_CONFIGURATION:-debug}"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
+BUILD_CONFIGURATION="${VIBECOMPOSE_BUILD_CONFIGURATION:-debug}"
 case "$BUILD_CONFIGURATION" in
   debug|release) ;;
   *)
-    echo "VIBEWHISPER_BUILD_CONFIGURATION must be debug or release." >&2
+    echo "VIBECOMPOSE_BUILD_CONFIGURATION must be debug or release." >&2
     exit 1
     ;;
 esac
@@ -35,7 +35,7 @@ BUILD_DIR="$ROOT/.build/$BUILD_CONFIGURATION"
 # FinderInfo/fpfs xattrs on nested Sparkle XPC bundles mid-sign, which fails with
 # "resource fork, Finder information, or similar detritus not allowed". The final
 # signed app is published into dist/ after verification.
-PACKAGE_WORK_DIR="$(/usr/bin/mktemp -d /tmp/vibewhisper-package.XXXXXX)"
+PACKAGE_WORK_DIR="$(/usr/bin/mktemp -d /tmp/vibecompose-package.XXXXXX)"
 cleanup_package_work_dir() {
   rm -rf "$PACKAGE_WORK_DIR"
 }
@@ -51,21 +51,33 @@ SPARKLE_FRAMEWORK_SOURCE="$BUILD_DIR/Sparkle.framework"
 SPARKLE_FRAMEWORK="$FRAMEWORKS_DIR/Sparkle.framework"
 ICONSET_DIR="$PACKAGE_WORK_DIR/AppIcon.iconset"
 ICON_FILE="$RESOURCES_DIR/AppIcon.icns"
-ICON_SOURCE="$ROOT/packaging/assets/VibeWhisperLogoSource.png"
+ICON_SOURCE="$ROOT/packaging/assets/VibeComposeLogoSource.png"
 STATUS_ICON_FILE="$RESOURCES_DIR/StatusBarLogoTemplate.png"
-ENTITLEMENTS_FILE="$PACKAGE_WORK_DIR/VibeWhisper.entitlements"
-SIGNING_IDENTITY="${VIBEWHISPER_CODESIGN_IDENTITY:-}"
-ALLOW_ADHOC_SIGNING="${VIBEWHISPER_ALLOW_ADHOC_SIGNING:-0}"
-REQUIRE_DEVELOPER_ID="${VIBEWHISPER_REQUIRE_DEVELOPER_ID:-0}"
-EXPECTED_TEAM_ID="${VIBEWHISPER_TEAM_ID:-}"
-NOTARIZE="${VIBEWHISPER_NOTARIZE:-0}"
-NOTARY_PROFILE="${VIBEWHISPER_NOTARY_PROFILE:-}"
-NOTARY_KEYCHAIN="${VIBEWHISPER_NOTARY_KEYCHAIN:-}"
-SPARKLE_FEED_URL="${VIBEWHISPER_SPARKLE_FEED_URL:-}"
-SPARKLE_PUBLIC_ED_KEY="${VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY:-}"
-CAPABILITY_POLICY_URL="${VIBEWHISPER_CAPABILITY_POLICY_URL:-}"
-CAPABILITY_PUBLIC_ED_KEY="${VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY:-}"
-ADHOC_DESIGNATED_REQUIREMENT="=designated => identifier \"$VIBEWHISPER_BUNDLE_ID\""
+ENTITLEMENTS_FILE="$PACKAGE_WORK_DIR/VibeCompose.entitlements"
+SIGNING_IDENTITY="${VIBECOMPOSE_CODESIGN_IDENTITY:-}"
+ALLOW_ADHOC_SIGNING="${VIBECOMPOSE_ALLOW_ADHOC_SIGNING:-0}"
+REQUIRE_DEVELOPER_ID="${VIBECOMPOSE_REQUIRE_DEVELOPER_ID:-0}"
+EXPECTED_TEAM_ID="${VIBECOMPOSE_TEAM_ID:-}"
+NOTARIZE="${VIBECOMPOSE_NOTARIZE:-0}"
+NOTARY_PROFILE="${VIBECOMPOSE_NOTARY_PROFILE:-}"
+NOTARY_KEYCHAIN="${VIBECOMPOSE_NOTARY_KEYCHAIN:-}"
+SPARKLE_FEED_URL="${VIBECOMPOSE_SPARKLE_FEED_URL:-}"
+SPARKLE_PUBLIC_ED_KEY="${VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY:-}"
+CAPABILITY_POLICY_URL="${VIBECOMPOSE_CAPABILITY_POLICY_URL:-}"
+CAPABILITY_PUBLIC_ED_KEY="${VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY:-}"
+ADHOC_DESIGNATED_REQUIREMENT="=designated => identifier \"$VIBECOMPOSE_BUNDLE_ID\""
+
+strip_codesign_hostile_xattrs() {
+  local app="$1"
+  /usr/bin/xattr -cr "$app" >/dev/null 2>&1 || true
+  /usr/bin/chflags -R nouchg,noschg,nohidden "$app" >/dev/null 2>&1 || true
+  /usr/bin/find "$app" \( -type f -o -type d \) -print0 2>/dev/null \
+    | while IFS= read -r -d '' path; do
+        /usr/bin/xattr -d com.apple.FinderInfo "$path" >/dev/null 2>&1 || true
+        /usr/bin/xattr -d com.apple.fileprovider.fpfs#P "$path" >/dev/null 2>&1 || true
+        /usr/bin/xattr -d com.apple.fileprovider.detached#P "$path" >/dev/null 2>&1 || true
+      done
+}
 
 resolve_signing_identity() {
   if [[ -n "$SIGNING_IDENTITY" ]]; then
@@ -93,17 +105,17 @@ resolve_signing_identity() {
 }
 
 ARCH="$(uname -m)"
-ZIP_PATH="$ROOT/dist/${APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.zip"
-DMG_PATH="$ROOT/dist/${APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.dmg"
+ZIP_PATH="$ROOT/dist/${APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.zip"
+DMG_PATH="$ROOT/dist/${APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.dmg"
 SHA256_PATH="$ROOT/dist/SHA256SUMS"
 DMG_STAGING_DIR="$ROOT/dist/.dmg-staging"
-DMG_RAW_PATH="$ROOT/dist/.${APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.raw.dmg"
-NOTARY_ZIP_PATH="$ROOT/dist/.${APP_NAME}-${VIBEWHISPER_VERSION}-notary.zip"
+DMG_RAW_PATH="$ROOT/dist/.${APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.raw.dmg"
+NOTARY_ZIP_PATH="$ROOT/dist/.${APP_NAME}-${VIBECOMPOSE_VERSION}-notary.zip"
 APP_NOTARIZATION_RESULT="$ROOT/dist/notarization-app.json"
 DMG_NOTARIZATION_RESULT="$ROOT/dist/notarization-dmg.json"
 
 if [[ "$REQUIRE_DEVELOPER_ID" == "1" && "$BUILD_CONFIGURATION" != "release" ]]; then
-  echo "Developer ID release packaging requires VIBEWHISPER_BUILD_CONFIGURATION=release." >&2
+  echo "Developer ID release packaging requires VIBECOMPOSE_BUILD_CONFIGURATION=release." >&2
   exit 1
 fi
 
@@ -156,8 +168,11 @@ if ! /usr/bin/otool -l "$EXECUTABLE" \
     -add_rpath "@executable_path/../Frameworks" \
     "$EXECUTABLE"
 fi
-if [[ -d "$ROOT/Sources/VibeWhisper/Resources" ]]; then
-  cp -R "$ROOT/Sources/VibeWhisper/Resources/." "$RESOURCES_DIR/"
+if [[ -d "$ROOT/Sources/VibeCompose/Resources" ]]; then
+  cp -R "$ROOT/Sources/VibeCompose/Resources/." "$RESOURCES_DIR/"
+  # Desktop/iCloud File Provider can stamp UF_HIDDEN on nested resources after
+  # copy. Clear it so runtime FileManager enumeration (and Finder) see SKILL.md.
+  /usr/bin/chflags -R nouchg,noschg,nohidden "$RESOURCES_DIR" >/dev/null 2>&1 || true
 fi
 swift "$ROOT/scripts/verify_dependency_licenses.swift" \
   --root "$ROOT" \
@@ -185,7 +200,7 @@ swift "$ROOT/scripts/render_app_icon.swift" \
   printf '%s\n' '  <key>CFBundleExecutable</key>'
   printf '  <string>%s</string>\n' "$APP_NAME"
   printf '%s\n' '  <key>CFBundleIdentifier</key>'
-  printf '  <string>%s</string>\n' "$VIBEWHISPER_BUNDLE_ID"
+  printf '  <string>%s</string>\n' "$VIBECOMPOSE_BUNDLE_ID"
   printf '%s\n' '  <key>CFBundleIconFile</key>'
   printf '%s\n' '  <string>AppIcon</string>'
   printf '%s\n' '  <key>CFBundleInfoDictionaryVersion</key>'
@@ -197,13 +212,13 @@ swift "$ROOT/scripts/render_app_icon.swift" \
   printf '%s\n' '  <key>CFBundlePackageType</key>'
   printf '%s\n' '  <string>APPL</string>'
   printf '%s\n' '  <key>CFBundleShortVersionString</key>'
-  printf '  <string>%s</string>\n' "$VIBEWHISPER_VERSION"
+  printf '  <string>%s</string>\n' "$VIBECOMPOSE_VERSION"
   printf '%s\n' '  <key>CFBundleVersion</key>'
-  printf '  <string>%s</string>\n' "$VIBEWHISPER_BUILD"
+  printf '  <string>%s</string>\n' "$VIBECOMPOSE_BUILD"
   printf '%s\n' '  <key>LSMinimumSystemVersion</key>'
-  printf '  <string>%s</string>\n' "$VIBEWHISPER_MIN_MACOS"
+  printf '  <string>%s</string>\n' "$VIBECOMPOSE_MIN_MACOS"
   printf '%s\n' '  <key>NSMicrophoneUsageDescription</key>'
-  printf '%s\n' '  <string>VibeWhisper records short dictation clips and sends them through its own ChatGPT account session.</string>'
+  printf '%s\n' '  <string>VibeCompose records short dictation clips and sends them through its own ChatGPT account session.</string>'
   printf '%s\n' '  <key>NSPrincipalClass</key>'
   printf '%s\n' '  <string>NSApplication</string>'
   printf '%s\n' '</dict>'
@@ -218,11 +233,11 @@ if [[ -n "$SPARKLE_FEED_URL" || -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
   if [[ "$SPARKLE_FEED_URL" != https://* \
     || "$SPARKLE_FEED_URL" == *"@"* \
     || "$SPARKLE_FEED_URL" == *[[:space:]\<\>\"\'\\]* ]]; then
-    echo "VIBEWHISPER_SPARKLE_FEED_URL must be a credential-free HTTPS URL." >&2
+    echo "VIBECOMPOSE_SPARKLE_FEED_URL must be a credential-free HTTPS URL." >&2
     exit 1
   fi
   if [[ ! "$SPARKLE_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
-    echo "VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
+    echo "VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
     exit 1
   fi
   /usr/bin/plutil -insert SUFeedURL -string "$SPARKLE_FEED_URL" "$PLIST"
@@ -245,11 +260,11 @@ if [[ -n "$CAPABILITY_POLICY_URL" || -n "$CAPABILITY_PUBLIC_ED_KEY" ]]; then
     || "$CAPABILITY_POLICY_URL" == *"?"* \
     || "$CAPABILITY_POLICY_URL" == *"#"* \
     || "$CAPABILITY_POLICY_URL" == *[[:space:]\<\>\"\'\\]* ]]; then
-    echo "VIBEWHISPER_CAPABILITY_POLICY_URL must be a credential-free HTTPS URL without query or fragment." >&2
+    echo "VIBECOMPOSE_CAPABILITY_POLICY_URL must be a credential-free HTTPS URL without query or fragment." >&2
     exit 1
   fi
   if [[ ! "$CAPABILITY_PUBLIC_ED_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
-    echo "VIBEWHISPER_CAPABILITY_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
+    echo "VIBECOMPOSE_CAPABILITY_PUBLIC_ED_KEY must be a 32-byte base64 Ed25519 public key." >&2
     exit 1
   fi
   /usr/bin/plutil -insert OWCapabilityPolicyURL -string "$CAPABILITY_POLICY_URL" "$PLIST"
@@ -390,12 +405,13 @@ elif [[ "$ALLOW_ADHOC_SIGNING" == "1" ]]; then
   SIGNING_SUMMARY="ad-hoc"
 else
   echo "No Apple Development or Developer ID Application signing identity is available." >&2
-  echo "VibeWhisper's Accessibility repair flow relies on TCC recognizing the packaged app." >&2
-  echo "Ad-hoc signing often opens System Settings without creating a toggleable VibeWhisper row." >&2
-  echo "Install a stable code-signing identity, or rerun with VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 only if you explicitly accept that broken repair path." >&2
+  echo "VibeCompose's Accessibility repair flow relies on TCC recognizing the packaged app." >&2
+  echo "Ad-hoc signing often opens System Settings without creating a toggleable VibeCompose row." >&2
+  echo "Install a stable code-signing identity, or rerun with VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 only if you explicitly accept that broken repair path." >&2
   exit 1
 fi
 
+strip_codesign_hostile_xattrs "$APP_DIR"
 /usr/bin/codesign "${CODESIGN_ARGS[@]}" "$APP_DIR" >/dev/null
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 
@@ -405,7 +421,7 @@ if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
     exit 1
   fi
   if [[ -z "$EXPECTED_TEAM_ID" ]]; then
-    echo "VIBEWHISPER_TEAM_ID is required for Developer ID release packaging." >&2
+    echo "VIBECOMPOSE_TEAM_ID is required for Developer ID release packaging." >&2
     exit 1
   fi
 
@@ -415,7 +431,7 @@ if [[ "$REQUIRE_DEVELOPER_ID" == "1" ]]; then
     exit 1
   fi
   if [[ "$SIGNATURE_DETAILS" != *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]]; then
-    echo "Release signing Team ID does not match VIBEWHISPER_TEAM_ID." >&2
+    echo "Release signing Team ID does not match VIBECOMPOSE_TEAM_ID." >&2
     exit 1
   fi
 fi
@@ -443,7 +459,7 @@ if [[ -n "$SIGNING_IDENTITY" && "$SIGNING_IDENTITY" != "-" ]]; then
     else
       echo "The selected code-signing identity is revoked according to Gatekeeper:" >&2
       echo "$ASSESSMENT_OUTPUT" >&2
-      echo "Renew the Apple Development certificate, or rerun with VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 only for local debugging." >&2
+      echo "Renew the Apple Development certificate, or rerun with VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 only for local debugging." >&2
       rm -rf "$APP_DIR"
       exit 1
     fi
@@ -452,18 +468,18 @@ fi
 
 if [[ "$NOTARIZE" == "1" ]]; then
   if [[ "$REQUIRE_DEVELOPER_ID" != "1" ]]; then
-    echo "Notarization requires VIBEWHISPER_REQUIRE_DEVELOPER_ID=1." >&2
+    echo "Notarization requires VIBECOMPOSE_REQUIRE_DEVELOPER_ID=1." >&2
     exit 1
   fi
   if [[ -z "$NOTARY_PROFILE" ]]; then
-    echo "VIBEWHISPER_NOTARY_PROFILE is required for notarization." >&2
+    echo "VIBECOMPOSE_NOTARY_PROFILE is required for notarization." >&2
     exit 1
   fi
 
   NOTARY_AUTH_ARGUMENTS=(--keychain-profile "$NOTARY_PROFILE")
   if [[ -n "$NOTARY_KEYCHAIN" ]]; then
     [[ -f "$NOTARY_KEYCHAIN" && ! -L "$NOTARY_KEYCHAIN" ]] || {
-      echo "VIBEWHISPER_NOTARY_KEYCHAIN must name a regular keychain file." >&2
+      echo "VIBECOMPOSE_NOTARY_KEYCHAIN must name a regular keychain file." >&2
       exit 1
     }
     NOTARY_AUTH_ARGUMENTS+=(--keychain "$NOTARY_KEYCHAIN")
@@ -473,7 +489,7 @@ if [[ "$NOTARIZE" == "1" ]]; then
   submit_for_notarization \
     "$NOTARY_ZIP_PATH" \
     "$APP_NOTARIZATION_RESULT" \
-    "VibeWhisper.app"
+    "VibeCompose.app"
   /usr/bin/xcrun stapler staple "$APP_DIR"
   /usr/bin/xcrun stapler validate "$APP_DIR"
   rm -f "$NOTARY_ZIP_PATH"
@@ -493,7 +509,7 @@ if [[ "$NOTARIZE" == "1" ]]; then
   submit_for_notarization \
     "$DMG_PATH" \
     "$DMG_NOTARIZATION_RESULT" \
-    "VibeWhisper DMG"
+    "VibeCompose DMG"
   /usr/bin/xcrun stapler staple "$DMG_PATH"
   /usr/bin/xcrun stapler validate "$DMG_PATH"
   /usr/sbin/spctl --assess --type execute --verbose=4 "$APP_DIR"
@@ -506,7 +522,7 @@ fi
 } >"$SHA256_PATH.tmp"
 mv "$SHA256_PATH.tmp" "$SHA256_PATH"
 
-VIBEWHISPER_RELEASE_ARCHITECTURE="$ARCH" \
+VIBECOMPOSE_RELEASE_ARCHITECTURE="$ARCH" \
   "$ROOT/scripts/generate_release_metadata.sh" >/dev/null
 
 # Publish through a non-bundle path and rename it atomically. Copying directly
@@ -515,8 +531,21 @@ VIBEWHISPER_RELEASE_ARCHITECTURE="$ARCH" \
 rm -rf "$DIST_APP_DIR"
 rm -rf "$DIST_PUBLISH_DIR"
 /usr/bin/ditto --norsrc --noextattr --noqtn "$APP_DIR" "$DIST_PUBLISH_DIR"
+# Publishing onto Desktop can re-apply UF_HIDDEN via File Provider; clear it
+# before the final rename so installed BuiltInSkills remain enumerable.
+/usr/bin/chflags -R nouchg,noschg,nohidden "$DIST_PUBLISH_DIR" >/dev/null 2>&1 || true
 mv "$DIST_PUBLISH_DIR" "$DIST_APP_DIR"
-/usr/bin/codesign --verify --deep --strict --verbose=2 "$DIST_APP_DIR" >/dev/null
+strip_codesign_hostile_xattrs "$DIST_APP_DIR"
+# The Desktop File Provider may restore FinderInfo between the scrub above and
+# this verification. Validate a metadata-free copy under /tmp; install_app.sh
+# performs the same scrub again at the authoritative /Applications path.
+DIST_VERIFY_APP="$PACKAGE_WORK_DIR/${APP_NAME}-published.app"
+rm -rf "$DIST_VERIFY_APP"
+/usr/bin/ditto --norsrc --noextattr --noqtn \
+  "$DIST_APP_DIR" \
+  "$DIST_VERIFY_APP"
+/usr/bin/codesign --verify --deep --strict --verbose=2 \
+  "$DIST_VERIFY_APP" >/dev/null
 
 rm -rf "$DMG_STAGING_DIR"
 rm -rf "$ICONSET_DIR"

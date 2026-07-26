@@ -1,4 +1,4 @@
-# VibeWhisper Community Skills Pilot Launch Kit
+# VibeCompose Community Skills Pilot Launch Kit
 
 > Date: 2026-07-18  
 > Status: execution kit ready; recruitment has not been claimed or started by this repository  
@@ -7,7 +7,7 @@
 This kit turns the [Community Pilot runbook](community-pilot-runbook-2026-07-17.md)
 into an executable, privacy-bounded study. It does not authorize a public
 Registry, remote analytics, participant outreach, or collection of private
-content. The VibeWhisper product owner must approve the study owner, recruitment
+content. The VibeCompose product owner must approve the study owner, recruitment
 channel, installed build, and incident owner before the first invitation is
 sent.
 
@@ -48,13 +48,13 @@ The screener may ask only whether the candidate uses macOS, can install a privat
 test build, already has access to the browser-based ChatGPT connection, performs
 one of the target tasks repeatedly, and can attend W0 plus weekly follow-ups.
 Names and contact details stay in the approved recruitment system. They never
-enter the Pilot CSV files or VibeWhisper diagnostics.
+enter the Pilot CSV files or VibeCompose diagnostics.
 
 ### Recruitment copy — English
 
-> We are running a four-week private study of VibeWhisper Community Skills on
+> We are running a four-week private study of VibeCompose Community Skills on
 > macOS. The study observes whether task-specific Skills make voice input easier
-> to review and apply. Participation is voluntary. VibeWhisper does not upload
+> to review and apply. Participation is voluntary. VibeCompose does not upload
 > study analytics; researchers collect only bucketed outcomes and aggregate
 > reports you explicitly choose to share. We do not collect audio, transcript or
 > generated text, selected text, prompts, file names, window titles, account
@@ -63,9 +63,9 @@ enter the Pilot CSV files or VibeWhisper diagnostics.
 
 ### 招募文案 — 中文
 
-> 我们正在进行一项为期四周的 VibeWhisper Community Skills macOS 私有研究，
+> 我们正在进行一项为期四周的 VibeCompose Community Skills macOS 私有研究，
 > 目的是了解面向具体任务的 Skill 是否能让语音输入更容易审阅和使用。参与完全自愿。
-> VibeWhisper 不会自动上传研究数据；研究员只记录分桶后的结果，以及你明确选择分享的
+> VibeCompose 不会自动上传研究数据；研究员只记录分桶后的结果，以及你明确选择分享的
 > 本地汇总报告。我们不会收集音频、转写或生成正文、选区、Prompt、文件名、窗口标题、
 > 账户信息或设备标识。你可以随时停止参与或要求删除研究记录。
 

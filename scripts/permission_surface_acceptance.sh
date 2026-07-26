@@ -6,13 +6,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 OUT_ROOT="$ROOT/dist/permission-surface-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="$OUT_ROOT/$RUN_ID"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-permission-surface.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibecompose-permission-surface.XXXXXX")"
 SNAPSHOT="$OUT_DIR/settings-account.png"
 OCR_OUTPUT="$OUT_DIR/ocr.txt"
 LAUNCH_LOG="$OUT_DIR/launch.log"
@@ -115,7 +115,7 @@ fi
 
 RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# VibeWhisper Installed Permission Surface Acceptance
+# VibeCompose Installed Permission Surface Acceptance
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_DIR\`
@@ -124,9 +124,9 @@ cat >"$OUT_DIR/summary.md" <<SUMMARY
 - Snapshot: \`settings-account.png\`
 - OCR evidence: \`ocr.txt\`
 - Verification: \`verification.txt\`
-- Final live state: normal installed VibeWhisper relaunched and left running as PID \`$RUNNING_PID\`
+- Final live state: normal installed VibeCompose relaunched and left running as PID \`$RUNNING_PID\`
 
-The snapshot process uses VibeWhisper's privacy-isolated acceptance mode, so it
+The snapshot process uses VibeCompose's privacy-isolated acceptance mode, so it
 does not read account credentials, History, Recovery, terminology, or user
 configuration. Permission state remains live and is read by the installed app.
 This is a deterministic installed-surface precheck; clean-TCC prompt order and

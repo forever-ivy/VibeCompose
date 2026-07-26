@@ -1,4 +1,4 @@
-# VibeWhisper Community Skills Pilot Runbook
+# VibeCompose Community Skills Pilot Runbook
 
 > Date: 2026-07-17  
 > Status: execution kit ready for product-owner approval and recruitment; no participant evidence has been claimed  
@@ -51,14 +51,14 @@ This Pilot uses local evidence plus researcher observation. It does not upload
 product events.
 
 - Participants explicitly consent to each observed session and interview.
-- VibeWhisper's Product Metrics setting remains off unless a participant
+- VibeCompose's Product Metrics setting remains off unless a participant
   separately opts into a local export.
 - Participants export aggregate product metrics or selected redacted History
   receipts themselves; researchers never collect audio, transcript text,
   selection text, generated text, edits, Prompt content, terminology, file
   paths, window titles, account identity, or hardware identity.
 - A participant is referenced only by a researcher-generated random cohort code
-  stored outside VibeWhisper. The participant can request a new code or deletion
+  stored outside VibeCompose. The participant can request a new code or deletion
   at any time.
 - Free-form notes describe the task category and failure reason, not private
   content.

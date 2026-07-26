@@ -7,12 +7,12 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-SOURCE_APP="$ROOT/dist/$VIBEWHISPER_APP_NAME.app"
-TARGET_APP="/Applications/$VIBEWHISPER_APP_NAME.app"
-STAGED_APP="/Applications/.$VIBEWHISPER_APP_NAME.install.$$.app"
-BACKUP_APP="/Applications/.$VIBEWHISPER_APP_NAME.backup.$$.app"
-REQUIRE_GATEKEEPER="${VIBEWHISPER_INSTALL_REQUIRE_GATEKEEPER:-0}"
-EXPECTED_TEAM_ID="${VIBEWHISPER_TEAM_ID:-}"
+SOURCE_APP="$ROOT/dist/$VIBECOMPOSE_APP_NAME.app"
+TARGET_APP="/Applications/$VIBECOMPOSE_APP_NAME.app"
+STAGED_APP="/Applications/.$VIBECOMPOSE_APP_NAME.install.$$.app"
+BACKUP_APP="/Applications/.$VIBECOMPOSE_APP_NAME.backup.$$.app"
+REQUIRE_GATEKEEPER="${VIBECOMPOSE_INSTALL_REQUIRE_GATEKEEPER:-0}"
+EXPECTED_TEAM_ID="${VIBECOMPOSE_TEAM_ID:-}"
 
 cleanup() {
   rm -rf "$STAGED_APP"
@@ -25,7 +25,7 @@ trap cleanup EXIT
 validate_app() {
   local app="$1"
   local plist="$app/Contents/Info.plist"
-  local executable="$app/Contents/MacOS/$VIBEWHISPER_APP_NAME"
+  local executable="$app/Contents/MacOS/$VIBECOMPOSE_APP_NAME"
   local bundle_id=""
   local version=""
   local build=""
@@ -33,23 +33,23 @@ validate_app() {
   local signature_details=""
 
   [[ -f "$plist" && -x "$executable" ]] || {
-    echo "Invalid VibeWhisper bundle layout: $app" >&2
+    echo "Invalid VibeCompose bundle layout: $app" >&2
     return 1
   }
 
   bundle_id="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$plist")"
   version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$plist")"
   build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$plist")"
-  [[ "$bundle_id" == "$VIBEWHISPER_BUNDLE_ID" ]] || {
-    echo "Bundle identifier mismatch: expected $VIBEWHISPER_BUNDLE_ID, got $bundle_id" >&2
+  [[ "$bundle_id" == "$VIBECOMPOSE_BUNDLE_ID" ]] || {
+    echo "Bundle identifier mismatch: expected $VIBECOMPOSE_BUNDLE_ID, got $bundle_id" >&2
     return 1
   }
-  [[ "$version" == "$VIBEWHISPER_VERSION" ]] || {
-    echo "Version mismatch: expected $VIBEWHISPER_VERSION, got $version" >&2
+  [[ "$version" == "$VIBECOMPOSE_VERSION" ]] || {
+    echo "Version mismatch: expected $VIBECOMPOSE_VERSION, got $version" >&2
     return 1
   }
-  [[ "$build" == "$VIBEWHISPER_BUILD" ]] || {
-    echo "Build mismatch: expected $VIBEWHISPER_BUILD, got $build" >&2
+  [[ "$build" == "$VIBECOMPOSE_BUILD" ]] || {
+    echo "Build mismatch: expected $VIBECOMPOSE_BUILD, got $build" >&2
     return 1
   }
 
@@ -66,7 +66,7 @@ validate_app() {
 
   if [[ "$REQUIRE_GATEKEEPER" == "1" ]]; then
     [[ -n "$EXPECTED_TEAM_ID" ]] || {
-      echo "VIBEWHISPER_TEAM_ID is required when Gatekeeper installation is enforced." >&2
+      echo "VIBECOMPOSE_TEAM_ID is required when Gatekeeper installation is enforced." >&2
       return 1
     }
     signature_details="$(/usr/bin/codesign -dvvv "$app" 2>&1)"
@@ -75,7 +75,7 @@ validate_app() {
       return 1
     }
     [[ "$signature_details" == *"TeamIdentifier=$EXPECTED_TEAM_ID"* ]] || {
-      echo "Installed app Team ID does not match VIBEWHISPER_TEAM_ID." >&2
+      echo "Installed app Team ID does not match VIBECOMPOSE_TEAM_ID." >&2
       return 1
     }
     /usr/sbin/spctl --assess --type execute --verbose=4 "$app"
@@ -93,6 +93,9 @@ strip_codesign_hostile_xattrs() {
   local app="$1"
   # Prefer a clean copy path first; then scrub anything Finder re-applies.
   /usr/bin/xattr -cr "$app" >/dev/null 2>&1 || true
+  # UF_HIDDEN on BuiltInSkills/* makes FileManager.skipsHiddenFiles (and some
+  # acceptance tooling) miss SKILL.md after install under Desktop/iCloud paths.
+  /usr/bin/chflags -R nouchg,noschg,nohidden "$app" >/dev/null 2>&1 || true
   /usr/bin/find "$app" \( -type f -o -type d \) -print0 2>/dev/null \
     | while IFS= read -r -d '' path; do
         /usr/bin/xattr -d com.apple.FinderInfo "$path" >/dev/null 2>&1 || true
@@ -108,7 +111,7 @@ rm -rf "$STAGED_APP" "$BACKUP_APP"
 strip_codesign_hostile_xattrs "$STAGED_APP"
 validate_app "$STAGED_APP"
 
-pkill -x "$VIBEWHISPER_APP_NAME" >/dev/null 2>&1 || true
+pkill -x "$VIBECOMPOSE_APP_NAME" >/dev/null 2>&1 || true
 
 if [[ -d "$TARGET_APP" ]]; then
   mv "$TARGET_APP" "$BACKUP_APP"

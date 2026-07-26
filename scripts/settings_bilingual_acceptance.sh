@@ -6,12 +6,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 OUT_ROOT="$ROOT/dist/settings-bilingual-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="$OUT_ROOT/$RUN_ID"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-settings-bilingual.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibecompose-settings-bilingual.XXXXXX")"
 INSTALL_FIRST=0
 
 if [[ "${1:-}" == "--install" ]]; then
@@ -131,7 +131,7 @@ for profile_index in "${!profiles[@]}"; do
 done
 
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# VibeWhisper Bilingual Settings Acceptance
+# VibeCompose Bilingual Settings Acceptance
 
 - Installed app: \`$APP_DIR\`
 - Window profiles: minimum \`900 × 620\`, default \`980 × 680\`, and wide \`1180 × 760\`

@@ -1,0 +1,24 @@
+context:
+  required:
+  - voice
+  optional:
+  - selection
+  - styleCapsule
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 8000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: true
+  requiredSections:
+  - Observed Behavior|Observed|实际行为
+  - Expected Behavior|Expected|预期行为
+  - Reproduction Steps|Steps to Reproduce|复现步骤
+  - Environment|环境
+  - Evidence|证据
+  - Impact|影响

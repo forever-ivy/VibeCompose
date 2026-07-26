@@ -6,10 +6,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
-LAUNCH_AGENT_LABEL="$VIBEWHISPER_BUNDLE_ID"
+LAUNCH_AGENT_LABEL="$VIBECOMPOSE_BUNDLE_ID"
 LAUNCH_AGENT_PLIST="$HOME/Library/LaunchAgents/$LAUNCH_AGENT_LABEL.plist"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true

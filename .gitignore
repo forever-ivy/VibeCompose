@@ -28,3 +28,15 @@ __pycache__/
 
 # Local Community Pilot evidence must never be committed.
 /.pilot-data/
+
+# Website (Next.js) local install and build artifacts.
+/website/node_modules/
+/website/.next/
+/website/out/
+/website/.preview-root/
+/website/.turbo/
+/website/tsconfig.tsbuildinfo
+**/node_modules/
+
+# Local Claude worktrees.
+/.claude/worktrees/

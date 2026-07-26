@@ -1,4 +1,4 @@
-# VibeWhisper macOS 原生 UI 重构计划
+# VibeCompose macOS 原生 UI 重构计划
 
 > 日期：2026-07-14  
 > 最近修订：2026-07-17  
@@ -135,7 +135,7 @@ Window / Unified Toolbar
 
 `AI Activity Glow` 是 Agent Presence Indicator，不是控件 Focus Ring。它表达：
 
-> 当前显示器或聚焦窗口正在被 VibeWhisper 的 AI 输入流程使用。
+> 当前显示器或聚焦窗口正在被 VibeCompose 的 AI 输入流程使用。
 
 ### 7.1 视觉结构
 
@@ -167,7 +167,7 @@ Ambient outer/inner glow
 
 品牌源文件：
 
-`packaging/assets/VibeWhisperLogoSource.png`
+`packaging/assets/VibeComposeLogoSource.png`
 
 生成规则：
 
@@ -187,7 +187,7 @@ Ambient outer/inner glow
 | Skills Library / Creator | `AINativeSettingsViews.swift`、`SkillCreatorSettingsView.swift` |
 | Context Center | `ContextFabricRuntime.swift`、`ContextRuntime.swift` |
 | Activity Glow | `VisualFeedback.swift`、`BlueSignalFrameController.swift`、`FeedbackSurfaceController.swift` |
-| Logo / Icon | `VibeWhisperVisualSystem.swift`、`scripts/render_app_icon.swift`、`scripts/package_app.sh` |
+| Logo / Icon | `VibeComposeVisualSystem.swift`、`scripts/render_app_icon.swift`、`scripts/package_app.sh` |
 
 ## 10. 验收矩阵
 
@@ -204,7 +204,7 @@ Ambient outer/inner glow
 
 ### 10.2 安装版人工与脚本验收
 
-1. 从 `/Applications/VibeWhisper.app` 启动，不从 `dist` 启动。
+1. 从 `/Applications/VibeCompose.app` 启动，不从 `dist` 启动。
 2. 打开 Settings，在最小尺寸检查全高侧栏和八个始终可见的导航入口。
 3. 在 General 切换 English，检查标题、长说明、Picker、Toggle 和 Skills Inspector。
 4. 切回简体中文，确认菜单栏和新开窗口同步。
@@ -224,7 +224,7 @@ Ambient outer/inner glow
 - Activity Glow 覆盖录音、处理、成功、复制、错误和无障碍状态；
 - Logo 同步到 App Icon 与菜单栏 Template；
 - 单元、打包、视觉、反馈和粘贴验收全部通过；
-- 最终正常启动的 `/Applications/VibeWhisper.app` 保持运行，供产品复核。
+- 最终正常启动的 `/Applications/VibeCompose.app` 保持运行，供产品复核。
 
 ## 12. 2026-07-15 实施与验收结果
 
@@ -245,7 +245,7 @@ Ambient outer/inner glow
   多轮展开/收起中边界、图标、文字和选中态从首帧连续出现，不再发生末段内容跳入；
 - 侧栏选中态按产品参考图落地：`#EFEFEF` 连续圆角背景搭配 `#0074FF` 图标和文字；
   同一品牌蓝已用于 SwiftUI 控件 tint、状态蓝和网站交互色；
-- VibeWhisper 使用标准 `.regular` 激活策略并继续提供菜单栏入口；Dock 始终显示品牌
+- VibeCompose 使用标准 `.regular` 激活策略并继续提供菜单栏入口；Dock 始终显示品牌
   App Icon，Settings 黄色按钮可原生最小化、从 Dock 恢复，并保持窗口状态一致；
 - `scripts/visual_acceptance.sh --install`：Refined HUD 的录音、处理、确认插入、
   Paste Sent、Copied、Error、Retryable Error、Reduce Motion 与 Increase Contrast 通过；

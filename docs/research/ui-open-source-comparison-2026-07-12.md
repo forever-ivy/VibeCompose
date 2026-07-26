@@ -1,14 +1,14 @@
-# VibeWhisper UI 与成熟开源产品对比调研
+# VibeCompose UI 与成熟开源产品对比调研
 
 > 调研日期：2026-07-12
 >
-> 范围：VibeWhisper 当前 macOS UI、首次使用、权限、菜单栏、HUD、History、Terminology、视觉验收
+> 范围：VibeCompose 当前 macOS UI、首次使用、权限、菜单栏、HUD、History、Terminology、视觉验收
 >
-> 方法：VibeWhisper 工作树静态审计、源码离屏渲染、并行子代理审计、6 个开源仓库 pinned-commit 对比
+> 方法：VibeCompose 工作树静态审计、源码离屏渲染、并行子代理审计、6 个开源仓库 pinned-commit 对比
 
 ## 1. 结论摘要
 
-VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + SwiftUI、`NSStatusItem`、`NSPanel`、SF Symbols 和系统字体**，不是跨平台 Web 壳。当前最影响“iOS / macOS 原生感”的问题也不是 graphite + ice blue HUD 品牌，而是：
+VibeCompose 的底层 UI 技术路线是正确的：应用使用 **AppKit + SwiftUI、`NSStatusItem`、`NSPanel`、SF Symbols 和系统字体**，不是跨平台 Web 壳。当前最影响“iOS / macOS 原生感”的问题也不是 graphite + ice blue HUD 品牌，而是：
 
 1. **Settings 像桌面 Web 管理台，不像 macOS Settings。**
    - 固定 `980 × 720`，不可调整大小。
@@ -26,7 +26,7 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
    - error `286 × 44`
    - 普通 error 仅显示 2 秒；如果错误需要用户阅读或处理，这一时长不足。
 5. **视觉事实源不一致。**
-   - 源码 HUD 尺寸与 `docs/vibewhisper-hud-visual-spec.md` 不一致。
+   - 源码 HUD 尺寸与 `docs/vibecompose-hud-visual-spec.md` 不一致。
    - 文档宣传图不是安装版真实截图。
    - 当前视觉验收只证明“有足够像素且状态截图不同”，不验证文字、尺寸、颜色、裁切、动作或自动隐藏语义。
 
@@ -42,7 +42,7 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 
 ## 2. 调研基线与子代理分工
 
-### 2.1 VibeWhisper 基线
+### 2.1 VibeCompose 基线
 
 | 项目 | 值 |
 | --- | --- |
@@ -51,13 +51,13 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 | 基线提交时间 | 2026-07-07 11:19:33 +0800 |
 | UI 审计日期 | 2026-07-12 |
 | 最低系统 | macOS 13 |
-| 权威运行路径 | `/Applications/VibeWhisper.app` |
+| 权威运行路径 | `/Applications/VibeCompose.app` |
 
 本报告审计的是 **2026-07-12 的工作树**，其中中文本地化和权限状态刷新已在其他并发改动中开始落地，包括：
 
-- `Sources/VibeWhisper/Localization.swift`
-- `Sources/VibeWhisper/Resources/zh-Hans.lproj/`
-- `Sources/VibeWhisper/PermissionStatusMonitor.swift`
+- `Sources/VibeCompose/Localization.swift`
+- `Sources/VibeCompose/Resources/zh-Hans.lproj/`
+- `Sources/VibeCompose/PermissionStatusMonitor.swift`
 
 因此，不能再将当前项目描述为“完全没有本地化”或“完全没有权限状态模型”。更准确的结论是：**本地化和权限基础已经出现，但 UI 架构、键值治理、布局适配和可访问性尚未完成系统化改造。**
 
@@ -67,7 +67,7 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 
 本次通过并行子代理完成了四条审计轨道：
 
-1. VibeWhisper Settings、HUD、菜单栏、权限窗口和视觉规范静态审计。
+1. VibeCompose Settings、HUD、菜单栏、权限窗口和视觉规范静态审计。
 2. VoiceInk、Buzz、Handy 的同类语音产品功能与信息架构审计。
 3. Maccy、CotEditor、Ice 的 macOS 原生窗口、Settings、菜单栏、权限和可访问性范式审计。
 4. 安装版视觉证据链、宣传素材和 screenshot verifier 审计。
@@ -87,7 +87,7 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 
 ---
 
-## 3. VibeWhisper 当前 UI 盘点
+## 3. VibeCompose 当前 UI 盘点
 
 ### 3.1 已有优势
 
@@ -104,7 +104,7 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 
 ### 3.2 当前 Settings 视觉证据
 
-品牌迁移期间已删除旧名称时期生成的离屏截图，避免继续把过时视觉资产作为 VibeWhisper 的公开事实源。本节结论来自同一代码基线的结构审计；后续证据必须从 `/Applications/VibeWhisper.app` 重新生成。
+品牌迁移期间已删除旧名称时期生成的离屏截图，避免继续把过时视觉资产作为 VibeCompose 的公开事实源。本节结论来自同一代码基线的结构审计；后续证据必须从 `/Applications/VibeCompose.app` 重新生成。
 
 从该画面可以直接观察到：
 
@@ -116,7 +116,7 @@ VibeWhisper 的底层 UI 技术路线是正确的：应用使用 **AppKit + Swif
 
 ### 3.3 当前 HUD 视觉证据
 
-旧名称时期的 HUD 离屏截图也已清理。VibeWhisper 后续只接受安装版生成的 recording、processing、verified insert、paste sent、copied、error 和 retryable-error 证据。
+旧名称时期的 HUD 离屏截图也已清理。VibeCompose 后续只接受安装版生成的 recording、processing、verified insert、paste sent、copied、error 和 retryable-error 证据。
 
 HUD 的视觉语言可以保留，但需要解决：
 
@@ -148,7 +148,7 @@ HUD 的视觉语言可以保留，但需要解决：
 - `TranscriptionHistoryView.swift` 提供搜索、分页、选择、sidebar、inspector、分析和删除。
 - `Views/Dictionary/` 将 Vocabulary 与 Word Replacement 分开，并提供独立 Quick Add panel。
 
-VibeWhisper 应借鉴：
+VibeCompose 应借鉴：
 
 1. 首次使用应该有明确阶段、进度、返回和恢复，而不是把所有配置压入 Settings。
 2. History 是用户内容，不只是一个设置卡片。
@@ -157,7 +157,7 @@ VibeWhisper 应借鉴：
 
 不应照搬：
 
-- VoiceInk 的 8 步流程对 VibeWhisper 过长。VibeWhisper 更适合 4 步紧凑 onboarding。
+- VoiceInk 的 8 步流程对 VibeCompose 过长。VibeCompose 更适合 4 步紧凑 onboarding。
 - Notch 模式容易成为视觉噱头，不应成为默认或第一优先级。
 - VoiceInk 部分表面也使用较多自绘卡片，不能作为 macOS Settings 原生性的唯一标杆。
 
@@ -170,7 +170,7 @@ VibeWhisper 应借鉴：
 - 菜单栏资源使用 template rendering，交给系统处理明暗和选中态。
 - Settings pane metadata 集中定义，标题、symbol 和 destination 不散落在多个 switch 中。
 
-VibeWhisper 应借鉴：
+VibeCompose 应借鉴：
 
 - 保留当前 template status icon 和 `⌘,` / `⌘Q`。
 - 将 Settings destination metadata 集中化。
@@ -193,7 +193,7 @@ VibeWhisper 应借鉴：
 - 空状态使用 `ContentUnavailableView`。
 - String Catalog 按功能拆分，并给 translator 提供 default value 和 comment。
 
-VibeWhisper 应借鉴：
+VibeCompose 应借鉴：
 
 - 记忆上次 Settings destination 和窗口 frame。
 - 将 Reduce Motion、Increase Contrast、VoiceOver 作为实现条件，而非发布后补丁。
@@ -202,7 +202,7 @@ VibeWhisper 应借鉴：
 
 兼容性注意：
 
-- VibeWhisper 当前最低支持 macOS 13，而 `ContentUnavailableView` 需要更高系统版本。
+- VibeCompose 当前最低支持 macOS 13，而 `ContentUnavailableView` 需要更高系统版本。
 - 推荐在 macOS 14+ 使用 `ContentUnavailableView`，macOS 13 使用同语义的自定义 fallback；不要为了一个控件无意提高最低系统版本。
 
 ### 4.4 Ice：Settings sidebar 与权限状态模型标杆
@@ -218,7 +218,7 @@ VibeWhisper 应借鉴：
   - has all permissions
 - optional permission 缺失时显示 Limited Mode，而不是阻断整个应用。
 
-VibeWhisper 应直接映射为：
+VibeCompose 应直接映射为：
 
 | 权限 | 产品级别 | 未授权行为 |
 | --- | --- | --- |
@@ -227,9 +227,9 @@ VibeWhisper 应直接映射为：
 
 不应照搬：
 
-- Ice 的 Settings selection 没有完整持久化，VibeWhisper 应增加 `@AppStorage` 或等效状态恢复。
+- Ice 的 Settings selection 没有完整持久化，VibeCompose 应增加 `@AppStorage` 或等效状态恢复。
 - 颜色状态仍需配合文字、glyph 和 VoiceOver value，不能只依赖红黄绿。
-- VibeWhisper 必须保留现有 `.notDetermined` 权限请求顺序和签名修复逻辑。
+- VibeCompose 必须保留现有 `.notDetermined` 权限请求顺序和签名修复逻辑。
 
 ### 4.5 Buzz：任务表格和模型管理参考
 
@@ -240,7 +240,7 @@ Buzz 是 Qt 跨平台应用，不适合作为 macOS 视觉样式模板，但其�
 - History 任务可重启、删除、复制、查看错误和备注。
 - 模型管理明确区分 downloaded 与 available，并提供下载、进度、删除和文件位置。
 
-VibeWhisper 应借鉴：
+VibeCompose 应借鉴：
 
 - History 的字段完整性和状态动作。
 - 长列表的排序、过滤、上下文菜单和批量操作。
@@ -248,7 +248,7 @@ VibeWhisper 应借鉴：
 
 不应照搬：
 
-- Qt 控件密度、平台中性视觉和复杂列配置不适合 VibeWhisper 的轻量菜单栏产品。
+- Qt 控件密度、平台中性视觉和复杂列配置不适合 VibeCompose 的轻量菜单栏产品。
 
 ### 4.6 Handy：History、模型目录和 overlay 状态参考
 
@@ -259,7 +259,7 @@ Handy 使用 Tauri + React，不适合作为原生控件视觉标杆，但功能
 - overlay 将 recording / streaming / transcribing / processing 建模为统一状态集合。
 - 本地化覆盖多语言。
 
-VibeWhisper 应借鉴：
+VibeCompose 应借鉴：
 
 - History 行动作和音频回放。
 - 对异步状态进行完整建模，而不是仅显示 spinner。
@@ -268,13 +268,13 @@ VibeWhisper 应借鉴：
 不应照搬：
 
 - HTML/CSS 卡片、Lucide 图标、Web toggle 和自绘 dropdown 会削弱 macOS 原生感。
-- VibeWhisper 应用同等功能时应优先使用 `Table`、`List`、`Form`、`Menu`、`ProgressView`、SF Symbols 和系统 dialog。
+- VibeCompose 应用同等功能时应优先使用 `Table`、`List`、`Form`、`Menu`、`ProgressView`、SF Symbols 和系统 dialog。
 
 ---
 
 ## 5. 差异矩阵
 
-| 维度 | VibeWhisper 当前 | 成熟对标 | 主要差异 | 优先级 |
+| 维度 | VibeCompose 当前 | 成熟对标 | 主要差异 | 优先级 |
 | --- | --- | --- | --- | --- |
 | 技术栈 | AppKit + SwiftUI | Maccy / CotEditor / Ice 同样以原生框架为主 | 技术路线无须替换 | 保留 |
 | Settings 窗口 | 固定 `980 × 720`，不可 resize | Ice 可调整 sidebar window；CotEditor 恢复 pane / size | 缺窗口恢复、尺寸适配和系统行为 | P0 |
@@ -285,7 +285,7 @@ VibeWhisper 应借鉴：
 | 首次使用 | 分散在权限窗和 Settings | VoiceInk 分阶段 onboarding | 缺进度、练习、恢复和完成状态 | P0 |
 | 权限层级 | 状态已有，但叙事混合 | Ice required / optional / limited mode | 未形成简单清晰的产品模型 | P0 |
 | 权限文案 | 展示安装路径、clean TCC、签名长诊断 | 用户层说明 + 独立 diagnostics | 工程细节过度暴露 | P0 |
-| HUD 品牌 | 统一 graphite pill | VoiceInk / Handy 有完整 recorder 状态 | VibeWhisper 已有识别度，应保留 | 保留 |
+| HUD 品牌 | 统一 graphite pill | VoiceInk / Handy 有完整 recorder 状态 | VibeCompose 已有识别度，应保留 | 保留 |
 | HUD 几何 | 196 / 286 / 300 三种宽度 | 成熟 overlay 通常维持稳定锚点和壳体 | 状态切换横向跳动明显 | P0 |
 | HUD 错误 | 普通错误 2 秒消失 | actionable error 常保持到处理 | 阅读与恢复时间不足 | P0 |
 | History | Settings 内 Latest 10 预览 | VoiceInk 独立窗口；Buzz 表格；Handy 完整动作 | 搜索、详情、音频、批量、自动更新不足 | P1 |
@@ -398,7 +398,7 @@ detail 内容优先使用：
 
 ### 6.3 首次使用与权限方案
 
-VibeWhisper 不需要复制 VoiceInk 的 8 步流程，推荐 4 步：
+VibeCompose 不需要复制 VoiceInk 的 8 步流程，推荐 4 步：
 
 1. **Welcome**
    - 一句话说明：本地 Codex 桌面登录、按 F5 录音、转写后自动粘贴或留在剪贴板。
@@ -423,7 +423,7 @@ VibeWhisper 不需要复制 VoiceInk 的 8 步流程，推荐 4 步：
 
 以下内容移入 Advanced / Diagnostics：
 
-- `/Applications/VibeWhisper.app` 路径。
+- `/Applications/VibeCompose.app` 路径。
 - clean TCC、签名状态、重建 packaged app 等排障说明。
 - 详细系统设置路径和底层状态。
 
@@ -506,7 +506,7 @@ Notch 模式放在 P2 作为可选项，不作为原生感的必要条件。
 
 ### 6.7 iOS / macOS 共同设计语言
 
-“iOS 原生感”不等于把 iPhone tab bar、超大圆角卡片和移动端开关搬到 Mac。VibeWhisper 更适合采用 Apple 平台共同语言，同时尊重 macOS 窗口和键盘习惯：
+“iOS 原生感”不等于把 iPhone tab bar、超大圆角卡片和移动端开关搬到 Mac。VibeCompose 更适合采用 Apple 平台共同语言，同时尊重 macOS 窗口和键盘习惯：
 
 - SF Symbols。
 - 系统字体和 semantic text styles。
@@ -629,7 +629,7 @@ Notch 模式放在 P2 作为可选项，不作为原生感的必要条件。
 ./scripts/visual_acceptance.sh --install
 ```
 
-并使用 `/Applications/VibeWhisper.app` 做真实焦点、快捷键、权限和 paste-versus-clipboard 流程验证。
+并使用 `/Applications/VibeCompose.app` 做真实焦点、快捷键、权限和 paste-versus-clipboard 流程验证。
 
 ---
 
@@ -664,7 +664,7 @@ Notch 模式放在 P2 作为可选项，不作为原生感的必要条件。
 - TCC 系统弹窗顺序。
 - 多屏、全屏和 Space 行为。
 
-相关旧截图已在 VibeWhisper 品牌迁移时删除。因此，本报告是 **UI 架构与源码视觉调研结论**，不是当前 installed-app 交互验收通过证明。
+相关旧截图已在 VibeCompose 品牌迁移时删除。因此，本报告是 **UI 架构与源码视觉调研结论**，不是当前 installed-app 交互验收通过证明。
 
 ---
 
@@ -678,7 +678,7 @@ Notch 模式放在 P2 作为可选项，不作为原生感的必要条件。
 4. 将 History 和 Terminology 升级为完整管理工作流。
 5. 统一 HUD 代码、规范、宣传截图和 snapshot tests，并修复宽度跳动与错误自动消失。
 
-完成这五项后，VibeWhisper 会从“使用原生技术实现的功能型工具”提升为“行为、信息架构、可访问性和视觉证据都符合 macOS 习惯的成熟菜单栏产品”，同时不需要牺牲现有 HUD 品牌或 `F5` 单触发体验。
+完成这五项后，VibeCompose 会从“使用原生技术实现的功能型工具”提升为“行为、信息架构、可访问性和视觉证据都符合 macOS 习惯的成熟菜单栏产品”，同时不需要牺牲现有 HUD 品牌或 `F5` 单触发体验。
 
 ---
 
@@ -688,15 +688,15 @@ Notch 模式放在 P2 作为可选项，不作为原生感的必要条件。
 
 | 项目 | 关键证据路径 |
 | --- | --- |
-| VibeWhisper | `Sources/VibeWhisper/PreferencesWindowController.swift` |
-| VibeWhisper | `Sources/VibeWhisper/OverlayController.swift` |
-| VibeWhisper | `Sources/VibeWhisper/OverlayVisualModel.swift` |
-| VibeWhisper | `Sources/VibeWhisper/StatusMenuController.swift` |
-| VibeWhisper | `Sources/VibeWhisper/VibeWhisperVisualSystem.swift` |
-| VibeWhisper | `Sources/VibeWhisper/MicrophonePermissionWindowController.swift` |
-| VibeWhisper | `Sources/VibeWhisper/PermissionStatusMonitor.swift` |
-| VibeWhisper | `docs/vibewhisper-hud-visual-spec.md` |
-| VibeWhisper | `scripts/verify_visual_acceptance.swift` |
+| VibeCompose | `Sources/VibeCompose/PreferencesWindowController.swift` |
+| VibeCompose | `Sources/VibeCompose/OverlayController.swift` |
+| VibeCompose | `Sources/VibeCompose/OverlayVisualModel.swift` |
+| VibeCompose | `Sources/VibeCompose/StatusMenuController.swift` |
+| VibeCompose | `Sources/VibeCompose/VibeComposeVisualSystem.swift` |
+| VibeCompose | `Sources/VibeCompose/MicrophonePermissionWindowController.swift` |
+| VibeCompose | `Sources/VibeCompose/PermissionStatusMonitor.swift` |
+| VibeCompose | `docs/vibecompose-hud-visual-spec.md` |
+| VibeCompose | `scripts/verify_visual_acceptance.swift` |
 | VoiceInk | `VoiceInk/HistoryWindowController.swift` |
 | VoiceInk | `VoiceInk/Views/History/TranscriptionHistoryView.swift` |
 | VoiceInk | `VoiceInk/Views/Dictionary/DictionarySettingsView.swift` |

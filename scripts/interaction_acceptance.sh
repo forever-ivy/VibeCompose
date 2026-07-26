@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 
@@ -57,7 +57,7 @@ if [[ "${1:-}" == "--restore" ]]; then
   fi
   /usr/bin/open "$APP_DIR"
   wait_for_running
-  echo "Normal installed VibeWhisper restored: $APP_DIR"
+  echo "Normal installed VibeCompose restored: $APP_DIR"
   exit 0
 fi
 

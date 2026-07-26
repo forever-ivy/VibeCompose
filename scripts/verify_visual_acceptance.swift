@@ -244,7 +244,7 @@ do {
             + "\(contrastDifference) changed HUD-window pixels"
     )
 
-    print("VibeWhisper visual acceptance passed.")
+    print("VibeCompose visual acceptance passed.")
 } catch {
     fputs("Visual acceptance failed: \(error)\n", stderr)
     exit(1)

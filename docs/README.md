@@ -1,4 +1,4 @@
-# VibeWhisper Documentation
+# VibeCompose Documentation
 
 ## Product
 
@@ -11,6 +11,7 @@
 - [V1 PRD](product/v1-prd.md) — current product scope
 - [Brand identity](product/brand-identity.md) — canonical product names and identifiers
 - [Brand clearance](product/brand-clearance-2026-07-14.md) — current same-category name review and naming risk
+- [Website Next.js plan](product/website-nextjs-plan-2026-07-24.md) — static marketing site + GitHub-hosted Skill catalog (Typeless-inspired IA; no remote Registry)
 
 ## Risk and Research
 

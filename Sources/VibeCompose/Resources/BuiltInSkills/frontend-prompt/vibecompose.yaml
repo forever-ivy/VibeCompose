@@ -1,0 +1,21 @@
+context:
+  required:
+  - voice
+  optional:
+  - styleCapsule
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 12000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: false
+  requiredSections:
+  - Component|组件
+  - Interactions|交互|Interaction
+  - Accessibility|无障碍
+  - Acceptance Criteria|验收标准

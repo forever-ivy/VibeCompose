@@ -1,4 +1,4 @@
-# VibeWhisper Skill Runtime
+# VibeCompose Skill Runtime
 
 > Status: implemented for built-in and locally imported declarative Skills in
 > the macOS alpha
@@ -7,7 +7,7 @@
 
 ## Runtime boundary
 
-VibeWhisper Skills are declarative input/output contracts. They are not
+VibeCompose Skills are declarative input/output contracts. They are not
 plugins and cannot execute Swift, JavaScript, Python, Shell, dynamic
 libraries, subprocesses, arbitrary file reads, Keychain access, or custom
 network requests.
@@ -17,36 +17,57 @@ The built-in registry currently exposes 13 stable declarations at version
 
 | Skill | Stable ID | Context | Output / delivery | Scenario validator |
 | --- | --- | --- | --- | --- |
-| Direct | `app.vibewhisper.skill.direct` | Voice | Plain text / automatic when verified / low | Non-empty, bounded, spoken technical literals |
-| Reply | `app.vibewhisper.skill.reply` | Voice; optional Style | Plain text / automatic when verified / low | 4,000 characters, spoken technical literals |
-| Email | `app.vibewhisper.skill.email` | Voice; optional Style | Plain text / Preview / medium | 8,000 characters, spoken technical literals |
-| Backend Prompt | `app.vibewhisper.skill.agent-plan` | Voice; optional Style | Markdown / Preview / medium | Goal, Constraints, Implementation Steps, Edge Cases, Acceptance Criteria; closed fences |
-| Code Prompt | `app.vibewhisper.skill.code-prompt` | Voice; optional Style | Markdown / Preview / medium | Closed fences, spoken technical literals |
-| Translate | `app.vibewhisper.skill.translate` | Voice; optional Style | Plain text / Preview / medium | Spoken technical literals |
-| Context Rewrite | `app.vibewhisper.skill.context-rewrite` | **Required Voice + Selection**; optional Style | Plain text / Preview / medium | Selected-source technical literals |
-| Context Reply | `app.vibewhisper.skill.context-reply` | **Required Voice + Selection**; optional Style | Plain text / Preview / medium | 5,000 characters; no forced echo of source literals |
-| Bug Report | `app.vibewhisper.skill.bug-report` | Voice; optional Selection + Style | Markdown / Preview / medium | Six required report sections, 8,000 characters, closed fences |
-| Commit Message | `app.vibewhisper.skill.commit-message` | Voice; optional Selection + Style | Plain text / Preview / medium | 1,000 characters, spoken technical literals |
-| Meeting Action Items | `app.vibewhisper.skill.meeting-action-items` | Voice; optional Selection + Style | Markdown / Preview / medium | Decisions, Action Items, Open Questions; 8,000 characters, closed fences |
-| Product Brief | `app.vibewhisper.skill.product-brief` | Voice; optional Selection + Style | Markdown / Preview / medium | Seven required brief sections, 8,000 characters, closed fences |
-| Customer Support Reply | `app.vibewhisper.skill.customer-support-reply` | Voice; optional Selection + Style | Plain text / Preview / medium | 5,000 characters, spoken technical literals, unsupported-guarantee phrases |
+| Direct | `app.vibecompose.skill.direct` | Voice | Plain text / automatic when verified / low | Non-empty, bounded, spoken technical literals |
+| Reply | `app.vibecompose.skill.reply` | Voice; optional Style | Plain text / automatic when verified / low | 4,000 characters, spoken technical literals |
+| Email | `app.vibecompose.skill.email` | Voice; optional Style | Plain text / Preview / medium | 8,000 characters, spoken technical literals |
+| Backend Prompt | `app.vibecompose.skill.agent-plan` | Voice; optional Style | Markdown / Preview / medium | Goal, Constraints, Implementation Steps, Edge Cases, Acceptance Criteria; closed fences |
+| Code Prompt | `app.vibecompose.skill.code-prompt` | Voice; optional Style | Markdown / Preview / medium | Closed fences, spoken technical literals |
+| Translate | `app.vibecompose.skill.translate` | Voice; optional Style | Plain text / Preview / medium | Spoken technical literals |
+| Context Rewrite | `app.vibecompose.skill.context-rewrite` | **Required Voice + Selection**; optional Style | Plain text / Preview / medium | Selected-source technical literals |
+| Context Reply | `app.vibecompose.skill.context-reply` | **Required Voice + Selection**; optional Style | Plain text / Preview / medium | 5,000 characters; no forced echo of source literals |
+| Bug Report | `app.vibecompose.skill.bug-report` | Voice; optional Selection + Style | Markdown / Preview / medium | Six required report sections, 8,000 characters, closed fences |
+| Commit Message | `app.vibecompose.skill.commit-message` | Voice; optional Selection + Style | Plain text / Preview / medium | 1,000 characters, spoken technical literals |
+| Meeting Action Items | `app.vibecompose.skill.meeting-action-items` | Voice; optional Selection + Style | Markdown / Preview / medium | Decisions, Action Items, Open Questions; 8,000 characters, closed fences |
+| Product Brief | `app.vibecompose.skill.product-brief` | Voice; optional Selection + Style | Markdown / Preview / medium | Seven required brief sections, 8,000 characters, closed fences |
+| Customer Support Reply | `app.vibecompose.skill.customer-support-reply` | Voice; optional Selection + Style | Plain text / Preview / medium | 5,000 characters, spoken technical literals, unsupported-guarantee phrases |
 
 ## Built-in configuration source
 
-The app-owned declarations are code-reviewed configuration, not downloaded
-prompts:
+The app-owned declarations are reviewed **Agent Skills standard packages**, not
+downloaded prompts and not a second Community format:
 
-- `SkillRegistry.builtIn` in `Sources/VibeWhisper/SkillRuntime.swift` owns each
-  stable ID, semantic version, Context request, terminology, prompt,
-  output/delivery/risk contract, and validator policy.
-- `DictationMode.promptInstruction` in `Sources/VibeWhisper/VoiceModes.swift`
-  remains the shared prompt source for the six legacy-mapped Skills while old
-  stored Voice Mode values complete their migration.
+- Each built-in Skill is a directory under
+  `Sources/VibeCompose/Resources/BuiltInSkills/<portable-name>/` containing
+  required `SKILL.md` (YAML frontmatter + instructions) and optional
+  `vibecompose.yaml` Host Profile, plus Skill-local `terminology.csv` when
+  needed.
+- `BuiltInSkillCatalog` in `Sources/VibeCompose/AgentSkillRuntime.swift` loads
+  those packages in a fixed order, maps reserved
+  `metadata.vibecompose-id` values (`app.vibecompose.skill.*`) into
+  `SkillDefinition`, and feeds `SkillRegistry.builtIn`.
+- `DictationMode.promptInstruction` in `Sources/VibeCompose/VoiceModes.swift`
+  reads the same loaded instructions for the six legacy-mapped Skills so old
+  Voice Mode storage continues to decode without a second prompt source of
+  truth.
 - `SkillDefinition.localizedSummary` and `localizedUseCase` expose public task
   copy without revealing the internal prompt.
 - `SkillDiscoveryDetail.exampleValues` owns reviewed UI examples. Contract
   examples must be reviewed with any prompt or validator update; automated
   contract tests cover the runtime declaration and representative outputs.
+
+Package layout for each built-in Skill:
+
+```text
+Sources/VibeCompose/Resources/BuiltInSkills/<portable-name>/
+  SKILL.md              required (name, description, metadata, instructions)
+  vibecompose.yaml      Host Profile (context, output, validators, resources)
+  terminology.csv       optional Skill-local terms
+```
+
+`scripts/package_app.sh` copies `Sources/VibeCompose/Resources` into the app
+bundle so packaged builds resolve `BuiltInSkills` via `Bundle.main`. Debug and
+`swift test` resolve the same tree relative to the source file or the
+repository root.
 
 Bundled Skill installation IDs intentionally keep the original `1.0.0`
 identity seed while `version` and `revision` advance. This preserves Favorites,
@@ -102,7 +123,7 @@ sites can be retired incrementally without changing the persisted schema.
 `SkillPromptCompiler` always emits sections in this order:
 
 ```text
-fixed VibeWhisper system boundary
+fixed VibeCompose system boundary
 → local output contract
 → versioned Skill declaration
 → approved runtime-visible Skill resources
@@ -166,7 +187,7 @@ content, clipboard content, or context bodies.
 ## Verification
 
 The primary automated contract is
-`Tests/VibeWhisperTests/SkillRuntimeTests.swift`, covering:
+`Tests/VibeComposeTests/SkillRuntimeTests.swift`, covering:
 
 - stable registry declarations;
 - legacy configuration migration and canonical re-encoding;
@@ -177,7 +198,7 @@ The primary automated contract is
 - pipeline fallback before delivery;
 - local package install, hash, version rollback, malicious-file rejection, and
   repository-template validation in
-  `Tests/VibeWhisperTests/CommunitySkillRuntimeTests.swift`.
+  `Tests/VibeComposeTests/CommunitySkillRuntimeTests.swift`.
 
 Run:
 
@@ -187,8 +208,8 @@ swift test --filter CommunitySkillRuntimeTests
 ./scripts/check.sh
 ```
 
-Installed-app verification continues to use `/Applications/VibeWhisper.app`;
-`dist/VibeWhisper.app` is packaging output only.
+Installed-app verification continues to use `/Applications/VibeCompose.app`;
+`dist/VibeCompose.app` is packaging output only.
 
 Remote Registry and Action execution are intentionally absent. Their research
 gates are documented in

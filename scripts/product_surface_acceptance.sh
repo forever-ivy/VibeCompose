@@ -6,13 +6,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 APP_BINARY="$APP_DIR/Contents/MacOS/$APP_NAME"
 OUT_ROOT="$ROOT/dist/product-surface-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="$OUT_ROOT/$RUN_ID"
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-product-surfaces.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/vibecompose-product-surfaces.XXXXXX")"
 
 INSTALL_FIRST=0
 if [[ "${1:-}" == "--install" ]]; then
@@ -121,7 +121,7 @@ fi
 RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
 
 cat >"$OUT_DIR/summary.md" <<SUMMARY
-# VibeWhisper Product Surface Acceptance
+# VibeCompose Product Surface Acceptance
 
 - Run ID: \`$RUN_ID\`
 - App: \`$APP_BINARY\`

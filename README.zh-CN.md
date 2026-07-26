@@ -1,52 +1,59 @@
-# VibeWhisper
+# VibeCompose
 
 [English README](README.md)
 
-VibeWhisper 是一个采用 MIT 许可证的原生 macOS 按键语音输入工具。按下已配置的全局快捷键（默认 `F5`）开始录音，再按同一个快捷键停止；VibeWhisper 会把转写结果安全回填到当前可编辑位置，无法确认安全目标时则保留在剪贴板。
+**macOS 语音优先写作工具。** 一个快捷键，说你想说的，拿到可以直接发送的文字——由声明式 Skill 塑造，绝不在你的机器上运行代码。
+
+VibeCompose 采用 MIT 许可证，原生、本地优先。按 `F5` 开始录音，再按停止。文字落入当前输入框——无法确认安全时则保留在剪贴板。
+
+## 为什么选 VibeCompose
+
+大多数语音工具止步于转写。VibeCompose 更进一步：**Skill Runtime** 把原始语音变成邮件、提交信息、缺陷报告、代码提示词或任意结构化格式——用的是纯文本指令，不是可执行脚本。
+
+- **一键多形态** — 同一个 `F5` 工作流，无论你需要原始转写、润色回复还是结构化任务
+- **声明式，不可执行** — Skill 是提示词文件，无法访问文件系统、运行 shell 命令或发起网络请求
+- **感知上下文** — 选中文本、剪贴板、写作风格、术语自动参与 Skill 解析，无需手动配置
+- **隐私为先** — 零遥测、本地历史、无账号系统、无远程 Skill 商店
 
 ## 当前状态
 
-VibeWhisper 目前处于 **macOS Alpha 阶段**，工作版本为 `0.1.0`。核心能力以非商业、可审查的本地工作流为目标；签名公开分发仍需单独的工程证据。
+**macOS Alpha · v0.1.0** — 活跃开发中，尚未签名公开分发。
 
-当前代码已经具备：
+已经实现：
 
-- 原生 AppKit + SwiftUI 菜单栏应用
-- 可自定义的全局开始/停止快捷键，默认 `F5`，支持冲突检测、原子切换和失败回滚
-- Refined HUD、Blue Signal Frame 和 Hidden 三种视觉反馈模式，支持减少动态效果、提高对比度、VoiceOver 播报、菜单重试和可选完成通知
-- 简体中文和英文界面
-- 浏览器连接 ChatGPT，Keychain 保存本机会话
-- 语音转写、术语对齐和可选 AI 润色；自动模式会跳过短且低复杂度的听写，避免不必要的等待
-- 版本化声明式 Skill Runtime：提供 13 个经审查的内置真实任务，覆盖直述、回复、邮件、开发、会议、产品、客服和选区工作流；应用规则只使用应用名称和精确 Bundle Identifier，录音开始时冻结本次技能解析，模型输出未通过本地校验时会在投递前安全回退
-- 全局 Skill 切换器、独立的已安装/发现/已创建 Skill 资料库、可编辑 Preview、脱敏 Skill Run Receipt、安全撤销，以及标准 Agent Skills 的 Creator/Test Bench 闭环
-- 可选的选中文本上下文：支持选区改写和选区回复，提供按技能“每次询问 / 始终允许 / 永不允许”权限、敏感应用阻断、本地 Diff 预览，以及替换前对同一目标、范围和原文的再次校验
-- 五个内置 Writing Style，以及本地自定义写作风格 的创建、编辑、按 Skill 分配、删除和导出；创建样本文本默认只在内存中分析并清空
-- 分层术语系统：用户纠正、Skill 私有术语、用户普通术语和 Backend Engineering、Medical、Kubernetes Domain Packs；冲突可见，Medical 高风险包强制 Preview
-- 本地声明式 `.vibewhisperskill` 导入：支持安装前审查、文件硬限制、路径/软链接/可执行内容拒绝、内容 SHA-256、多版本、回滚、禁用、卸载、Skill Inspector 和 Golden contract tests；任意代码、自定义网络和外部 Action 继续被阻止
-- 保守自动粘贴与剪贴板兜底
-- Retry 结果默认只复制、要求用户手动粘贴
-- 麦克风和辅助功能权限诊断
-- 有限留存的本地历史、失败音频恢复、隐私控制和性能基准工具
-- 敏感应用排除与“删除全部数据”
+- 原生 AppKit + SwiftUI 菜单栏应用，支持简体中文和英文界面
+- 可自定义全局快捷键（默认 `F5`），冲突检测与原子回滚
+- 三种视觉反馈模式：状态条、边缘光晕、隐藏——支持减少动态效果、提高对比度和 VoiceOver
+- 浏览器连接 ChatGPT，Keychain 保存会话
+- 转写 → 术语对齐 → 可选 AI 润色流水线，Auto 模式跳过短听写以降低延迟
+- **21 个经审查的内置 Skill**，覆盖转写、回复、邮件、开发、会议、产品、客服、翻译和上下文工作流
+- 全局 Skill 切换器、Skill 资料库（已安装/发现/已创建）、可编辑预览、脱敏运行回执、安全撤销和 Creator/Test Bench
+- 选中文本上下文：按 Skill 设定权限、敏感应用阻断、本地 Diff 预览、替换前目标校验
+- 五个内置 Writing Style，支持自定义创建、按 Skill 分配和导出
+- 分层术语：个人纠正 → Skill 私有词条 → 领域术语包（后端工程、医学、Kubernetes）
+- `.vibecomposeskill` 包导入：文件校验、SHA-256 验证、多版本、回滚、Skill Inspector
+- 保守粘贴：剪贴板兜底、重试仅复制、已验证插入
+- 有限本地历史、失败音频恢复、隐私控制与性能基准
+- 敏感应用排除与删除全部数据
 - 脱敏支持诊断 ZIP 导出
-- 默认关闭、仅保存在本机的产品指标；只记录激活和听写结果的有限枚举及时间区间，不使用持久用户标识，也不会自动上传
-- 面向托管转写和 AI 润色事故的签名服务安全策略
-- 作为高级恢复路径的 OpenAI-Compatible 转写，包括原生端点/模型配置、Keychain API 密钥、第三方费用提示和合成静音连接测试
-- 锁定的第三方依赖许可证清单、许可证 SHA-256 校验和 App 内许可证查看
+- OpenAI-Compatible 转写作为高级恢复路径，Keychain API 密钥与连接测试
+- 签名服务安全策略，用于托管转写和 AI 润色事故
+- Sparkle 更新、锁定依赖许可证清单与 SHA-256 校验
 
 ## 产品边界
 
-默认 ChatGPT 账户路径依赖未公开的上游行为，不应被描述为稳定公开 API、OpenAI 官方合作或企业 SLA。
+默认 ChatGPT 账户路径依赖未公开的上游行为，**不是**稳定公开 API、OpenAI 官方合作或企业 SLA。
 
-当前 Alpha 已关闭原始审计中的 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。Sparkle 2.9.4 与签名 Provider Capability Policy 客户端已完成技术集成，但签名公开分发仍受 Developer ID 签名、公证、生产更新与能力策略托管/密钥、实机更新与事故演练、完整安装版 Onboarding/交互验收，以及明确支持联系人约束。详见[当前安全基线](docs/audits/security-baseline-2026-07-13.md)。
+当前 Alpha 已关闭所有原始 Managed Endpoint、Recovery 路径、认证刷新竞态和仅凭旧上下文自动粘贴问题。Sparkle 2.9.4 与签名 Provider Capability Policy 已集成。签名公开分发受 Developer ID 签名、公证、生产托管和最终验收测试约束。详见[安全基线](docs/audits/security-baseline-2026-07-13.md)。
 
 ## 系统要求
 
-- macOS 13 或更高版本
-- 默认路径需要可用的 ChatGPT 账户
-- 录音需要麦克风权限
-- 自动回填需要辅助功能权限；未授权时结果仍会保留在剪贴板
+- macOS 13+
+- 可用的 ChatGPT 账户（默认路径）
+- 麦克风权限（录音）
+- 辅助功能权限（自动粘贴；未授权时结果保留在剪贴板）
 
-## 构建、安装与运行
+## 快速开始
 
 ```bash
 swift build --package-path .
@@ -54,81 +61,91 @@ swift test --package-path .
 ./scripts/check.sh
 ./scripts/package_app.sh
 ./scripts/install_app.sh
-open -n /Applications/VibeWhisper.app
+open -n /Applications/VibeCompose.app
 ```
 
-本机没有有效 Apple 签名证书时，可仅为调试显式使用 ad-hoc 签名：
+本机没有有效 Apple 签名证书时：
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ```
 
-Ad-hoc 签名只适合本地验证，可能导致 macOS 辅助功能设置中无法出现稳定、可切换的应用条目。
+Ad-hoc 签名仅供本地验证，可能导致辅助功能设置中无法出现稳定的应用条目。
 
-不要把 `dist/VibeWhisper.app` 当作真实运行路径。权限和交互验收必须使用 `/Applications/VibeWhisper.app`。
+> **注意：** 权限和交互验收必须使用 `/Applications/VibeCompose.app`，不要把 `dist/VibeCompose.app` 当作真实运行路径。
 
-自动产品界面截图会进入隔离验收模式，仅使用默认配置、空的内存凭据以及空历史、Recovery 和术语数据，不读取或展示用户真实内容。
-
-安装版无障碍结构预检：
+### 无障碍结构预检
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
 ```
 
-该命令覆盖九个设置页面、Onboarding 的全部四个步骤、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树是否非空以及可操作控件是否具备可读名称。它是键盘和 VoiceOver 真实交互验收的补充，不替代后者。
+覆盖九个设置页面、四个 Onboarding 步骤、History、Terminology 和 Quick Add，检查 SwiftUI 无障碍树和可操作控件名称。
 
-使用官方 Computer Use 做安装版交互验收时，可以启用不读取真实配置、凭据、History、Recovery 或术语的隔离模式：
+### 交互验收
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 \
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 \
   ./scripts/interaction_acceptance.sh --install settings account
 ./scripts/interaction_acceptance.sh --restore
 ```
 
-第一条命令会保持指定安装版界面打开，所有修改仅作用于非持久化展示数据；第二条命令结束临时验收进程并恢复正常菜单栏运行状态。
-
 ## 本地数据
 
-VibeWhisper 的本地应用数据位于：
+应用数据位于：
 
 ```text
-~/Library/Application Support/VibeWhisper/
+~/Library/Application Support/VibeCompose/
 ```
 
-当前默认隐私策略：
+### 隐私默认策略
 
-| 数据 | 默认策略 |
+| 数据 | 默认 |
 | --- | --- |
-| 转写历史 | 开启；保留 30 天且最多 500 条 |
-| 原始 ASR 文本 | 关闭；除非用户显式开启，否则只保存最终文本 |
-| 成功录音 | 处理后删除，不进入 Recovery |
-| 失败录音 | 开启 Retry；保留 24 小时且最多 10 条 |
-| 本地诊断 | 开启；保留 14 天且最多 1,000 条 |
-| 本地产品指标 | 默认关闭；开启后保留 30 天且最多 5,000 条枚举/区间事件 |
-| 敏感应用 | 已知密码管理器、钥匙串和“密码”默认不写历史或恢复音频 |
-| Retry 文件 | 临时且有有效期；重启时删除不可恢复的孤儿文件 |
+| 转写历史 | 开启 · 30 天 / 最多 500 条 |
+| 原始 ASR 文本 | 关闭 · 除非显式开启，只保存最终文本 |
+| 成功录音 | 处理后删除 · 不进入 Recovery |
+| 失败录音 | 开启重试 · 24 小时 / 最多 10 条 |
+| 本地诊断 | 开启 · 14 天 / 最多 1,000 条 |
+| 产品指标 | 默认关闭 · 开启后：30 天 / 最多 5,000 条 |
+| 敏感应用 | 密码管理器与钥匙串不写历史或恢复音频 |
+| Retry 文件 | 临时 · 有时限 · 重启时清理 |
 
-诊断只包含耗时、字节数、服务类型、有限枚举的 AI 润色决策原因和错误分类，不包含音频、转写正文、剪贴板内容或 Token。在系统支持的范围内，本地数据文件使用仅当前用户可读写的权限。
+诊断只包含耗时、字节数、服务标签和错误分类——不含音频、转写正文、剪贴板内容或 Token。本地文件使用仅当前用户可读写的权限。
 
-可选产品指标默认关闭且只保存在当前 Mac。开启后只记录产品版本/构建、已完成的 Onboarding 步骤、服务类别、时长与延迟区间、结果类别和失败类别；不记录应用名称、路径、账户信息、正文或持久标识，也不会自动上传。开启后可通过 **设置 → 上下文与隐私 → 导出产品指标** 生成不含单条事件时间戳的汇总 JSON，由你自行检查并决定是否分享。
+### Keychain 存储
 
-通过 **设置 → 高级 → 导出诊断**，可以创建一个由用户自行检查的本地 ZIP，其中包含脱敏运行状态、权限、延迟、可选产品指标和崩溃摘要；不包含音频、转写正文、剪贴板文本、账户邮箱、凭据、术语、自定义端点、原始崩溃报告、历史、Recovery 元数据或 `config.json`。
+- ChatGPT 会话：`app.vibecompose.mac.ChatGPTSession`
+- 恢复路径 API 密钥：`app.vibecompose.mac.OpenAICompatibleAPIKey`（不从 `OPENAI_API_KEY` 读取，不写入 `config.json`）
 
-诊断也不包含 Writing Style 摘要、示例或源样本，不包含 Community
-Skill Prompt、包文件或安装包名称；相关功能只允许输出有限数量、风险、
-语义版本和 Validator 问题码。
+### 数据管理
 
-ChatGPT 会话保存在 Keychain 服务 `app.vibewhisper.mac.ChatGPTSession` 中。可选的 OpenAI-Compatible 恢复路径 API 密钥独立保存在 `app.vibewhisper.mac.OpenAICompatibleAPIKey`，不会再从 `OPENAI_API_KEY` 读取，也不会写入 `config.json`。通过 **设置 → 高级** 可以管理端点、模型和钥匙串凭据，执行真实连接测试，在确认可能产生 API 费用后启用恢复路径，并随时切回 ChatGPT 账户。恢复路径只改变听写 ASR；AI 润色仍使用 ChatGPT 登录授权。
+- **设置 → 上下文与隐私 → 导出产品指标** — 不含单条时间戳的汇总 JSON
+- **设置 → 高级 → 导出诊断** — 脱敏 ZIP，不含音频、转写、凭据和个人数据
+- **设置 → 上下文与隐私 → 删除全部数据** — 清除一切并恢复到未登录默认状态
 
-通过 **设置 → 上下文与隐私 → 删除全部数据**，可以删除设置、术语、自定义 Writing Style、已安装 Community Skills、转写历史、失败录音、诊断、产品指标、Retry 文件、已保存的 ChatGPT 会话和恢复路径 API 密钥，并恢复为退出登录后的默认状态。
+## 官网
+
+营销站与 Skill 目录位于 [`website/`](website/)。面向 GitHub Pages 的 Next.js 静态导出，完整双语路由（`/zh-Hans`、`/en`）。
+
+```bash
+cd website
+pnpm install
+pnpm dev          # 本地预览
+pnpm build        # 静态导出 → website/out
+pnpm verify       # 构建 + 目录校验 + 文案契约
+```
+
+Skill 目录在构建时从 [`Sources/VibeCompose/Resources/BuiltInSkills`](Sources/VibeCompose/Resources/BuiltInSkills) 生成。没有远程 Skill 商店，没有账号系统。
 
 ## 仓库结构
 
 ```text
-Sources/VibeWhisper/          macOS 应用源码
-Tests/VibeWhisperTests/       单元与集成测试
-scripts/                      构建、打包、安装、基准和验收工具
+Sources/VibeCompose/          macOS 应用源码
+Tests/VibeComposeTests/       单元与集成测试
+scripts/                      构建、打包、安装、基准与验收工具
+website/                      Next.js 营销站 + Skill 目录（静态导出）
 examples/skills/              已审查的声明式 Community Skill 模板
 packaging/homebrew/           Homebrew Cask 元数据
 docs/product/                 PRD、Community Skills、品牌与产品计划
@@ -138,20 +155,17 @@ docs/engineering/             架构、发布和验收文档
 docs/design/                  视觉规范
 ```
 
-## 核心文档
+## 文档
 
 - [文档索引](docs/README.md)
-- [Community Skills 核心计划](docs/product/community-skills-core-next-step-plan-2026-07-15.md)
-- [安全审计](docs/audits/security-audit-2026-07-13.md)
-- [当前安全基线](docs/audits/security-baseline-2026-07-13.md)
-- [UI 对标调研](docs/research/ui-open-source-comparison-2026-07-12.md)
 - [架构说明](docs/engineering/architecture.md)
 - [Skill Runtime](docs/engineering/skill-runtime.md)
 - [上下文与预览](docs/engineering/context-and-preview.md)
 - [Community Skill SDK](docs/engineering/community-skill-sdk.md)
 - [Registry 与 Action 边界](docs/engineering/registry-and-actions-boundary.md)
 - [发布流程](docs/engineering/release.md)
-- [更新器选型](docs/engineering/updater.md)
+- [安全审计](docs/audits/security-audit-2026-07-13.md)
+- [安全基线](docs/audits/security-baseline-2026-07-13.md)
 - [隐私政策](docs/legal/privacy-policy.zh-CN.md)
 - [使用条款](docs/legal/terms-of-use.zh-CN.md)
 - [支持政策](docs/support/support-policy.zh-CN.md)
@@ -159,9 +173,6 @@ docs/design/                  视觉规范
 
 ## 许可证
 
-MIT，详见 [LICENSE](LICENSE)。分发软件副本或其重要部分时，必须保留现有版权声明和许可声明。
+MIT，详见 [LICENSE](LICENSE)。
 
-PermissionFlow、Sparkle 及 Sparkle 内置第三方组件继续适用各自许可证。精确锁定的依赖元数据和许可证全文位于
-[`Sources/VibeWhisper/Resources/Legal`](Sources/VibeWhisper/Resources/Legal)，
-也可通过 **设置 → 高级 → 查看第三方许可证** 阅读。构建、打包、安装包检查和签名发布门禁会在
-`Package.resolved`、许可证哈希、notices 或 App 内资源不一致时直接失败。
+PermissionFlow、Sparkle 及 Sparkle 内置组件继续适用各自许可证。锁定依赖元数据和许可证全文位于 [`Sources/VibeCompose/Resources/Legal`](Sources/VibeCompose/Resources/Legal)，也可通过 **设置 → 高级 → 查看第三方许可证** 查看。

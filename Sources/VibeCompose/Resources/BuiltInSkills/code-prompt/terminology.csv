@@ -1,0 +1,4 @@
+type,original,replacement,enabled,aliases
+term,stack trace,,true,stacktrace
+term,Acceptance Criteria,,true,acceptance criteria
+term,OpenAPI,,true,open api

@@ -58,15 +58,15 @@ load_env_file() {
 load_product_env() {
   load_env_file \
     "$1" \
-    VIBEWHISPER_APP_NAME \
-    VIBEWHISPER_BUNDLE_ID \
-    VIBEWHISPER_REPOSITORY \
-    VIBEWHISPER_MIN_MACOS
+    VIBECOMPOSE_APP_NAME \
+    VIBECOMPOSE_BUNDLE_ID \
+    VIBECOMPOSE_REPOSITORY \
+    VIBECOMPOSE_MIN_MACOS
 }
 
 load_version_env() {
   load_env_file \
     "$1" \
-    VIBEWHISPER_VERSION \
-    VIBEWHISPER_BUILD
+    VIBECOMPOSE_VERSION \
+    VIBECOMPOSE_BUILD
 }

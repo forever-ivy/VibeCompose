@@ -1,18 +1,18 @@
-# VibeWhisper Registry, Connectors, and Action Boundary
+# VibeCompose Registry, Connectors, and Action Boundary
 
 > Status: Phase 6 research boundary completed; Registry and Action execution
 > are not enabled in the current macOS alpha
 
 ## 1. Decision
 
-VibeWhisper may later distribute declarative Skills through a Registry and may
+VibeCompose may later distribute declarative Skills through a Registry and may
 later support a small set of external actions through app-owned Connectors.
 Neither feature is allowed to turn a Skill package into arbitrary code or a
 general automation runtime.
 
 The current shipping boundary remains:
 
-- local `.vibewhisperskill` directory import only;
+- local `.vibecomposeskill` directory import only;
 - no remote Registry fetch or automatic package update;
 - no publisher trust badge;
 - no package-defined network endpoint;
@@ -67,7 +67,7 @@ Requirements:
 - a “verified publisher” label proves identity and artifact continuity only,
   not output correctness or professional suitability.
 
-VibeWhisper should support more than one trusted Registry root so product
+VibeCompose should support more than one trusted Registry root so product
 safety does not depend on one long-lived key.
 
 ## 4. Hashing, caching, and reproducibility
@@ -75,7 +75,7 @@ safety does not depend on one long-lived key.
 Future Registry downloads should be content-addressed:
 
 ```text
-Skills/Cache/<sha256>.vibewhisperskill
+Skills/Cache/<sha256>.vibecomposeskill
 ```
 
 The app should:
@@ -91,7 +91,7 @@ The app should:
 9. activate only after every stage succeeds.
 
 Golden cases remain deterministic contract tests. A Registry may publish
-reproducible test evidence, but VibeWhisper must not treat model-quality claims
+reproducible test evidence, but VibeCompose must not treat model-quality claims
 as a security signature.
 
 ## 5. Deprecation, revocation, and takedown
@@ -122,7 +122,7 @@ Rules:
 
 ## 6. Connector architecture
 
-A future Connector is app-owned, reviewed code shipped with VibeWhisper. A
+A future Connector is app-owned, reviewed code shipped with VibeCompose. A
 Skill can request a typed action intent, but it never receives credentials or
 direct network access.
 
@@ -201,7 +201,7 @@ Example:
 GitHub
 × user@example.com
 × createIssue
-× forever-ivy/vibewhisper
+× forever-ivy/vibecompose
 × allow once
 ```
 

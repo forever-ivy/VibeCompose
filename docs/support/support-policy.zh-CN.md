@@ -1,4 +1,4 @@
-# VibeWhisper 支持政策
+# VibeCompose 支持政策
 
 > 私有 Alpha 基线日期：2026 年 7 月 13 日
 
@@ -6,7 +6,7 @@
 
 - Apple 芯片 Mac；
 - macOS 13 或更高版本；
-- 安装路径 `/Applications/VibeWhisper.app`；
+- 安装路径 `/Applications/VibeCompose.app`；
 - 当前私有 Alpha 版本；
 - 默认 ChatGPT 账户路径或文档所述 OpenAI-Compatible 恢复路径。
 
@@ -20,8 +20,8 @@ Intel 构建、虚拟机、被修改的 App、未签名再分发版本、macOS B
 
 ## 提交信息
 
-1. VibeWhisper 版本和 macOS 版本；
-2. 是否安装在 `/Applications/VibeWhisper.app`；
+1. VibeCompose 版本和 macOS 版本；
+2. 是否安装在 `/Applications/VibeCompose.app`；
 3. 麦克风和辅助功能状态；
 4. 使用默认 ChatGPT 路径还是高级恢复路径；
 5. 精确复现步骤和最小化、非敏感错误；
@@ -42,12 +42,12 @@ Intel 构建、虚拟机、被修改的 App、未签名再分发版本、macOS B
 
 ## 支持边界
 
-支持范围包括 VibeWhisper 应用、文档化安装流程和可复现产品行为，不保证：
+支持范围包括 VibeCompose 应用、文档化安装流程和可复现产品行为，不保证：
 
 - ChatGPT 或第三方账户可用；
 - 恢复第三方已删除数据；
 - 第三方端点的可用性、限流或政策决定；
-- 排查与 VibeWhisper 无关的 macOS、网络、MDM 或账户安全问题；
+- 排查与 VibeCompose 无关的 macOS、网络、MDM 或账户安全问题；
 - 对所有语言、口音、麦克风或专业领域均达到同等转写准确率。
 
 ## 生命周期

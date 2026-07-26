@@ -1,0 +1,306 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — VibeCompose brand system                            */
+/* White canvas · near-black ink · brand blue #0074FF · infinity knot  */
+/* ------------------------------------------------------------------ */
+@theme {
+  --color-bg: #ffffff;
+  --color-surface: #f6f7f9;
+  --color-ink: #0f1419;
+  --color-muted: #5c6570;
+  --color-line: #e8ebef;
+  --color-accent: #0074ff;
+  --color-accent-soft: #e8f1ff;
+  --color-accent-hover: #0066e0;
+  --color-dark: #0f1419;
+  --color-dark-muted: #9aa3ad;
+  --color-soft: #f8f9fb;
+
+  --radius-button: 9999px;
+  --radius-card: 16px;
+  --radius-chip: 9999px;
+
+  --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Typography                                                          */
+/* ------------------------------------------------------------------ */
+.display-hero {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.display-section {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+/* ------------------------------------------------------------------ */
+/* Interaction                                                         */
+/* ------------------------------------------------------------------ */
+.btn-primary {
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s var(--ease-smooth),
+    box-shadow 0.2s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(0, 116, 255, 0.28);
+}
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+.btn-ghost {
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s var(--ease-smooth);
+}
+.btn-ghost:hover {
+  background: var(--color-accent-soft);
+  border-color: rgba(0, 116, 255, 0.28);
+  color: var(--color-accent);
+  transform: translateY(-1px);
+}
+.btn-ghost:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.skill-card {
+  transition:
+    transform 0.25s var(--ease-smooth),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.skill-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 40px rgba(15, 20, 25, 0.07);
+  border-color: rgba(0, 116, 255, 0.22);
+}
+
+.nav-link {
+  position: relative;
+}
+.nav-link::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.22s var(--ease-smooth);
+}
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+.nav-link:hover {
+  color: var(--color-ink);
+}
+
+/* App-chips marquee */
+.marquee-wrapper {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 6%,
+    black 94%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 6%,
+    black 94%,
+    transparent
+  );
+}
+.marquee-track {
+  display: flex;
+  gap: 16px;
+  width: max-content;
+  animation: marquee 32s linear infinite;
+}
+.marquee-wrapper:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.section-band {
+  background: var(--color-soft);
+}
+
+/* Accent number mark */
+.step-mark {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+/* Soft blue glow for final CTA */
+.cta-glow {
+  position: relative;
+}
+.cta-glow::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 116, 255, 0.08) 0%,
+    transparent 65%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ------------------------------------------------------------------ */
+/* CSS reveals — content is always eventually visible                  */
+/* ------------------------------------------------------------------ */
+.reveal {
+  opacity: 1;
+  transform: none;
+}
+.reveal:not(.is-in) {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-in {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.hero-boot .reveal-item {
+  opacity: 0;
+  transform: translateY(22px);
+}
+.hero-ready .reveal-item,
+.reveal-item {
+  opacity: 1 !important;
+  transform: none !important;
+}
+.hero-ready .reveal-item {
+  transition:
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hero-boot .reveal-item {
+  opacity: 0 !important;
+  transform: translateY(22px) !important;
+  transition: none;
+}
+
+.stagger-item {
+  opacity: 1 !important;
+  transform: none !important;
+}
+.stagger-boot .stagger-item {
+  opacity: 0 !important;
+  transform: translateY(14px) scale(0.98) !important;
+  transition: none;
+}
+.stagger-in .stagger-item {
+  opacity: 1 !important;
+  transform: none !important;
+  transition:
+    opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ensure-visible {
+  to {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+.reveal:not(.is-in),
+.hero-boot .reveal-item,
+.stagger-boot .stagger-item {
+  animation: ensure-visible 0.01ms linear 0.6s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .marquee-track {
+    animation: none;
+  }
+  .btn-primary:hover,
+  .btn-ghost:hover,
+  .skill-card:hover {
+    transform: none;
+  }
+  .reveal,
+  .reveal-item,
+  .stagger-item,
+  .hero-boot .reveal-item,
+  .stagger-boot .stagger-item {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

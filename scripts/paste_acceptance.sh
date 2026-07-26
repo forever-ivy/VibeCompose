@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 
-APP_NAME="$VIBEWHISPER_APP_NAME"
+APP_NAME="$VIBECOMPOSE_APP_NAME"
 APP_DIR="/Applications/$APP_NAME.app"
 OUT_ROOT="$ROOT/dist/paste-acceptance"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -81,7 +81,7 @@ fi
 
 for target in "${TARGETS[@]}"; do
   evidence="$OUT_DIR/$target.json"
-  temp_evidence="${TMPDIR:-/tmp}/vibewhisper-paste-acceptance-$RUN_ID-$target.json"
+  temp_evidence="${TMPDIR:-/tmp}/vibecompose-paste-acceptance-$RUN_ID-$target.json"
   TEMP_EVIDENCE+=("$temp_evidence")
   rm -f "$temp_evidence"
 
@@ -135,7 +135,7 @@ fi
 RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
 {
   cat <<SUMMARY
-# VibeWhisper Installed Paste Acceptance
+# VibeCompose Installed Paste Acceptance
 
 - Run ID: \`$RUN_ID\`
 - Installed app: \`$APP_DIR\`
@@ -145,7 +145,7 @@ RUNNING_PID="$(pgrep -x "$APP_NAME" | sed -n '1p')"
   marker command, proving dispatch; verified insertion restores the sentinel,
   while unverifiable dispatch retains the transcript as designed
 - Clipboard: the complete pre-acceptance snapshot is restored after each target
-- Final live state: normal installed VibeWhisper relaunched and left running as PID \`$RUNNING_PID\`
+- Final live state: normal installed VibeCompose relaunched and left running as PID \`$RUNNING_PID\`
 
 Evidence:
 SUMMARY

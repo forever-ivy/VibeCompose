@@ -1,4 +1,4 @@
-# VibeWhisper Updater Decision
+# VibeCompose Updater Decision
 
 > Decision date: July 13, 2026
 >
@@ -10,22 +10,22 @@
 
 ## Decision
 
-VibeWhisper will use Sparkle 2 for direct-distribution updates rather than implementing a custom downloader, signature format, privileged installer, or update UI.
+VibeCompose will use Sparkle 2 for direct-distribution updates rather than implementing a custom downloader, signature format, privileged installer, or update UI.
 
 Reasons:
 
 - Sparkle provides a mature macOS update lifecycle and appcast format;
 - update payloads can be verified with an EdDSA public key pinned in the app;
 - the framework supports background checks, user-visible release notes, staged installation, relaunch, and rollback-oriented failure handling;
-- using an established updater reduces the amount of security-critical custom code maintained by VibeWhisper.
+- using an established updater reduces the amount of security-critical custom code maintained by VibeCompose.
 
 The selected version must be pinned exactly in `Package.resolved` or the final Xcode project. Release signing keys must never be stored in the repository.
 
 ## Required Integration
 
 1. **Implemented:** pin Sparkle 2.9.4 in `Package.swift` and `Package.resolved`.
-2. **Implemented:** embed Sparkle.framework and its helper services inside `VibeWhisper.app`, add the app Frameworks rpath, and sign nested code before signing the app.
-3. **Implemented as fail-closed configuration:** packaging accepts `VIBEWHISPER_SPARKLE_FEED_URL` and `VIBEWHISPER_SPARKLE_PUBLIC_ED_KEY` together and writes `SUFeedURL` and `SUPublicEDKey` into the signed `Info.plist`; Developer ID packaging rejects missing configuration.
+2. **Implemented:** embed Sparkle.framework and its helper services inside `VibeCompose.app`, add the app Frameworks rpath, and sign nested code before signing the app.
+3. **Implemented as fail-closed configuration:** packaging accepts `VIBECOMPOSE_SPARKLE_FEED_URL` and `VIBECOMPOSE_SPARKLE_PUBLIC_ED_KEY` together and writes `SUFeedURL` and `SUPublicEDKey` into the signed `Info.plist`; Developer ID packaging rejects missing configuration.
 4. Store the EdDSA private key outside the repository and CI logs.
 5. **Implemented as release tooling:** `scripts/generate_sparkle_appcast.sh` generates a signed channel appcast from the exact release ZIP using a protected private-key file or a named Keychain account. Real production signing evidence is still required.
 6. **Implemented:** expose Check for Updates in the menu and Settings, with automatic-check preference control and an explicit unavailable state in unconfigured alpha builds.
@@ -47,7 +47,7 @@ The selected version must be pinned exactly in `Package.resolved` or the final X
   checksum only from that manifest.
 - `scripts/package_app.sh` embeds and signs the pinned Sparkle framework and rejects partial or unsafe updater configuration.
 - Local packages default to Swift's debug configuration; the signed release
-  entry point pins `VIBEWHISPER_BUILD_CONFIGURATION=release`, and Developer ID
+  entry point pins `VIBECOMPOSE_BUILD_CONFIGURATION=release`, and Developer ID
   packaging rejects any other configuration.
 - Ad-hoc local builds add `com.apple.security.cs.disable-library-validation` because ad-hoc code has no shared Team ID; the Developer ID release gate explicitly rejects that local-only entitlement.
 - `scripts/check_packaged_app.sh` verifies the embedded framework version, runtime link/rpath, and paired HTTPS feed/public-key configuration.

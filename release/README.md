@@ -1,7 +1,7 @@
 # Release evidence
 
 This directory contains non-secret templates for producing a signed,
-notarized VibeWhisper build. It contains release-integrity configuration only;
+notarized VibeCompose build. It contains release-integrity configuration only;
 all app capabilities are available without a product-access state.
 
 Keep real credentials outside the repository. Start from
@@ -51,10 +51,10 @@ The public phase intentionally fails closed until all of these exist:
 
 Real raw Pilot rows stay outside the repository. Only the privacy-bounded
 aggregate and review record may enter release evidence. Local evidence paths
-are ignored by Git and can be overridden with `VIBEWHISPER_INSTALLED_ACCEPTANCE_PATH`,
-`VIBEWHISPER_COMMUNITY_PILOT_SUMMARY_PATH`, and
-`VIBEWHISPER_BETA_METRICS_PATH`; public contact evidence can use
-`VIBEWHISPER_PUBLIC_CONTACT_PATH`. The production GitHub environment supplies
+are ignored by Git and can be overridden with `VIBECOMPOSE_INSTALLED_ACCEPTANCE_PATH`,
+`VIBECOMPOSE_COMMUNITY_PILOT_SUMMARY_PATH`, and
+`VIBECOMPOSE_BETA_METRICS_PATH`; public contact evidence can use
+`VIBECOMPOSE_PUBLIC_CONTACT_PATH`. The production GitHub environment supplies
 those three JSON files as protected `INSTALLED_ACCEPTANCE_JSON_BASE64`,
 `COMMUNITY_PILOT_SUMMARY_JSON_BASE64`, and `BETA_METRICS_JSON_BASE64` secrets
 during `finalize`, plus `PUBLIC_CONTACT_JSON_BASE64` for the contact record.
@@ -72,5 +72,5 @@ evidence has been claimed, and the policies still describe private-Alpha
 contact routes. Therefore public finalization is expected to fail; do not
 replace those facts with template or synthetic data.
 
-The app must always be verified from `/Applications/VibeWhisper.app`; the
+The app must always be verified from `/Applications/VibeCompose.app`; the
 copy under `dist/` is packaging output only.

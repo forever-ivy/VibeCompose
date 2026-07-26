@@ -1,0 +1,1657 @@
+import CoreGraphics
+import Foundation
+import Testing
+@testable import VibeCompose
+
+@MainActor
+private final class FakeCoordinatorRecorder: RecordingControlling {
+    private(set) var startRecordingCallCount = 0
+    private(set) var cancelRecordingCallCount = 0
+    private(set) var stopRecordingCallCount = 0
+    var onStartRecording: (@Sendable () async -> Void)?
+    var startRecordingError: (any Error)?
+    var nextAudio = RecordedAudio(
+        fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("fake.wav"),
+        durationMs: 1_000
+    )
+
+    func startRecording() async throws {
+        startRecordingCallCount += 1
+        await onStartRecording?()
+        if let startRecordingError {
+            throw startRecordingError
+        }
+    }
+
+    func stopRecording() throws -> RecordedAudio {
+        stopRecordingCallCount += 1
+        return nextAudio
+    }
+
+    func cancelRecording() throws {
+        cancelRecordingCallCount += 1
+    }
+
+    func currentLevel() -> CGFloat? {
+        0.25
+    }
+}
+
+private struct BlockingCoordinatorCapabilityPolicy:
+    ProviderCapabilityChecking
+{
+    func require(_ capability: ProviderCapability) async throws {
+        guard capability == .managedTranscription else {
+            return
+        }
+        throw ProviderCapabilityPolicyError.disabled(
+            capability: capability,
+            incidentID: "OW-INC-COORDINATOR-TEST",
+            expiresAt: Date(timeIntervalSince1970: 1_900_000_000)
+        )
+    }
+
+    func refresh(force: Bool) async -> ProviderCapabilityPolicySnapshot {
+        await snapshot()
+    }
+
+    func snapshot() async -> ProviderCapabilityPolicySnapshot {
+        ProviderCapabilityPolicySnapshot(
+            state: .disabled,
+            isConfigured: true,
+            disabledCapabilities: [.managedTranscription],
+            incidentID: "OW-INC-COORDINATOR-TEST",
+            expiresAt: Date(timeIntervalSince1970: 1_900_000_000),
+            lastCheckedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            detail: "disabled"
+        )
+    }
+}
+
+@MainActor
+private final class FakeCoordinatorOverlay: OverlayControlling {
+    var onCancel: (@MainActor (OverlayCancelSource) -> Void)?
+    var onRetry: (@MainActor () -> Void)?
+    var onShowProcessing: (@MainActor () -> Void)?
+    private(set) var hideCallCount = 0
+    private(set) var recordingElapsedTexts: [String] = []
+    private(set) var showProcessingCallCount = 0
+    private(set) var retryableErrors: [String] = []
+
+    func showRecording(elapsedText: String) {
+        recordingElapsedTexts.append(elapsedText)
+    }
+    func updateRecording(level: CGFloat, elapsedText: String) {}
+    func showProcessing() {
+        showProcessingCallCount += 1
+        onShowProcessing?()
+    }
+    func showResult(text: String, outcome: InjectionOutcome, autoHide: Bool) {}
+    func showConfirmation(title: String, autoHide: Bool) {}
+    func showError(_ message: String, autoHide: Bool) {}
+    func showRetryableError(_ message: String) {
+        retryableErrors.append(message)
+    }
+
+    func hide() {
+        hideCallCount += 1
+    }
+}
+
+@MainActor
+private final class FakeCoordinatorStatusMenu: StatusMenuUpdating {
+    private(set) var updates: [(StatusMenuVisualState, String)] = []
+
+    func update(state: StatusMenuVisualState, detail: String) {
+        updates.append((state, detail))
+    }
+}
+
+@MainActor
+private final class FakeCoordinatorNotifier: NotificationDispatching {
+    func ensureAuthorization() {}
+    func notify(title: String, body: String) {}
+}
+
+@MainActor
+private final class FakeSoundFeedback: SoundFeedbackPlaying {
+    private(set) var events: [SoundFeedbackEvent] = []
+
+    func play(_ event: SoundFeedbackEvent, enabled: Bool) {
+        guard enabled else {
+            return
+        }
+        events.append(event)
+    }
+}
+
+@MainActor
+private final class FakeCoordinatorInjector: TextInjecting {
+    private(set) var injectCallCount = 0
+    private(set) var texts: [String] = []
+    private(set) var launchContexts: [LaunchAppContext?] = []
+    private(set) var automaticPastePermissions: [Bool] = []
+
+    func inject(
+        text: String,
+        preserveClipboard: Bool,
+        restoreDelayMilliseconds: UInt64,
+        launchAppContext: LaunchAppContext?,
+        automaticPasteAllowed: Bool,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
+    ) async throws -> InjectionOutcome {
+        _ = automaticPasteFallbackReason
+        _ = expectedSelectionContext
+        injectCallCount += 1
+        texts.append(text)
+        launchContexts.append(launchAppContext)
+        automaticPastePermissions.append(automaticPasteAllowed)
+        return automaticPasteAllowed
+            ? .insertedAndVerified
+            : .copiedToClipboard(reason: .retryRequiresManualPaste)
+    }
+}
+
+@MainActor
+private final class BlockingCoordinatorInjector: TextInjecting {
+    private(set) var didStart = false
+    private(set) var didComplete = false
+
+    func inject(
+        text: String,
+        preserveClipboard: Bool,
+        restoreDelayMilliseconds: UInt64,
+        launchAppContext: LaunchAppContext?,
+        automaticPasteAllowed: Bool,
+        automaticPasteFallbackReason:
+            ClipboardFallbackReason,
+        expectedSelectionContext:
+            SelectionContextSnapshot?
+    ) async throws -> InjectionOutcome {
+        _ = automaticPasteFallbackReason
+        _ = expectedSelectionContext
+        didStart = true
+        try await Task.sleep(for: .seconds(5))
+        didComplete = true
+        return .insertedAndVerified
+    }
+}
+
+@MainActor
+private final class FakePreviewPresenter:
+    PreviewPresenting
+{
+    var decision:
+        PreviewDecision?
+    private(set) var requests:
+        [PreviewRequest] = []
+    private(set) var injectedRefinements:
+        [String] = []
+
+    init(
+        decision:
+            PreviewDecision? = nil
+    ) {
+        self.decision = decision
+    }
+
+    func present(
+        _ request: PreviewRequest,
+        regenerate: @escaping @MainActor (
+            _ skillInstallationID: UUID,
+            _ editedSource: String
+        ) async -> Result<PreviewRequest, any Error>
+    ) async -> PreviewDecision {
+        _ = regenerate
+        requests.append(request)
+        return decision
+            ?? .pasteToTarget(
+                text: request.resultText
+            )
+    }
+
+    func dismiss() {}
+
+    func injectVoiceRefinement(_ transcript: String) async {
+        injectedRefinements.append(transcript)
+    }
+}
+
+/// Holds `present` open until `release()` so tests can drive refinement
+/// hotkey routing while `isPreviewVisible` is true.
+@MainActor
+private final class HoldingPreviewPresenter:
+    PreviewPresenting
+{
+    private var continuation:
+        CheckedContinuation<PreviewDecision, Never>?
+    private(set) var isHeld = false
+    private(set) var injectedRefinements: [String] = []
+
+    func present(
+        _ request: PreviewRequest,
+        regenerate: @escaping @MainActor (
+            _ skillInstallationID: UUID,
+            _ editedSource: String
+        ) async -> Result<PreviewRequest, any Error>
+    ) async -> PreviewDecision {
+        _ = request
+        _ = regenerate
+        isHeld = true
+        return await withCheckedContinuation { cont in
+            self.continuation = cont
+        }
+    }
+
+    func dismiss() {
+        release(with: .cancel)
+    }
+
+    func injectVoiceRefinement(_ transcript: String) async {
+        injectedRefinements.append(transcript)
+    }
+
+    func release(with decision: PreviewDecision = .cancel) {
+        guard let cont = continuation else { return }
+        continuation = nil
+        isHeld = false
+        cont.resume(returning: decision)
+    }
+}
+
+@MainActor
+private final class AllowOnceCoordinatorContextPrompter:
+    ContextPermissionPrompting
+{
+    private(set) var requestCount = 0
+
+    func requestPermission(
+        _ request: ContextPermissionRequest
+    ) async -> ContextAuthorizationChoice {
+        _ = request
+        requestCount += 1
+        return .allowOnce
+    }
+}
+
+private func minimalCoordinatorWaveData() -> Data {
+    Data("RIFF".utf8) + Data(repeating: 0, count: 4) + Data("WAVE".utf8)
+}
+
+private struct FakeCoordinatorPipeline: DictationPreparing {
+    func prepare(audio: RecordedAudio) async throws -> PreparedDictation {
+        try? Data().write(to: audio.fileURL)
+        return PreparedDictation(
+            rawText: "raw",
+            finalText: "final",
+            normalizationApplied: false,
+            exactReplacementCount: 0,
+            fuzzyReplacementCount: 0,
+            metrics: DictationMetrics(
+                transcription: TranscriptionMetrics(
+                    provider: .chatGPTManagedAuth,
+                    audioDurationMs: audio.durationMs,
+                    audioBytes: 4,
+                    authMs: 0,
+                    transcribeMs: 0,
+                    promptIncluded: false
+                ),
+                normalizationMs: 0
+            )
+        )
+    }
+}
+
+private actor CoordinatorGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private struct BlockingCoordinatorPipeline: DictationPreparing {
+    let gate: CoordinatorGate
+
+    func prepare(audio: RecordedAudio) async throws -> PreparedDictation {
+        try? Data().write(to: audio.fileURL)
+        await gate.wait()
+        return PreparedDictation(
+            rawText: "raw",
+            finalText: "final",
+            normalizationApplied: false,
+            exactReplacementCount: 0,
+            fuzzyReplacementCount: 0,
+            metrics: DictationMetrics(
+                transcription: TranscriptionMetrics(
+                    provider: .chatGPTManagedAuth,
+                    audioDurationMs: audio.durationMs,
+                    audioBytes: 4,
+                    authMs: 0,
+                    transcribeMs: 0,
+                    promptIncluded: false
+                ),
+                normalizationMs: 0
+            )
+        )
+    }
+}
+
+private final class FakeLatencyRecorder: LatencyRecording, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var samples: [LatencySample] = []
+
+    func record(
+        _ sample: LatencySample,
+        retention _: DiagnosticsRetentionPolicy
+    ) throws {
+        lock.lock()
+        samples.append(sample)
+        lock.unlock()
+    }
+
+    func prune(retention _: DiagnosticsRetentionPolicy) throws {}
+}
+
+private final class FakeProductMetricsRecorder:
+    ProductMetricsRecording,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private(set) var samples: [ProductMetricSample] = []
+
+    func record(
+        _ sample: ProductMetricSample,
+        retention _: DiagnosticsRetentionPolicy
+    ) throws {
+        lock.lock()
+        samples.append(sample)
+        lock.unlock()
+    }
+
+    func prune(retention _: DiagnosticsRetentionPolicy) throws {}
+}
+
+private final class CoordinatorCallCounter:
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var value = 0
+
+    func increment() {
+        lock.lock()
+        value += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
+private enum ScriptedCoordinatorPipelineOutcome: Sendable {
+    case success(String)
+    case retryableCloudflare(Int)
+    case providerFailure(
+        ProviderErrorCategory,
+        retryAfterSeconds: Int?
+    )
+}
+
+private final class CoordinatorPipelineScript: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcomes: [ScriptedCoordinatorPipelineOutcome]
+    private(set) var policies: [TranscriptionAttemptPolicy] = []
+    private(set) var audioPaths: [String] = []
+
+    init(outcomes: [ScriptedCoordinatorPipelineOutcome]) {
+        self.outcomes = outcomes
+    }
+
+    func makePipeline(policy: TranscriptionAttemptPolicy) -> any DictationPreparing {
+        lock.lock()
+        policies.append(policy)
+        lock.unlock()
+        return ScriptedCoordinatorPipeline(script: self)
+    }
+
+    func prepare(audio: RecordedAudio) throws -> PreparedDictation {
+        lock.lock()
+        audioPaths.append(audio.fileURL.path)
+        let outcome = outcomes.isEmpty ? .success("final") : outcomes.removeFirst()
+        lock.unlock()
+
+        switch outcome {
+        case .success(let text):
+            return PreparedDictation(
+                rawText: text,
+                finalText: text,
+                normalizationApplied: false,
+                exactReplacementCount: 0,
+                fuzzyReplacementCount: 0,
+                metrics: DictationMetrics(
+                    transcription: TranscriptionMetrics(
+                        provider: .chatGPTManagedAuth,
+                        audioDurationMs: audio.durationMs,
+                        audioBytes: (try? Data(contentsOf: audio.fileURL).count) ?? 0,
+                        authMs: 0,
+                        transcribeMs: 1,
+                        promptIncluded: true
+                    ),
+                    normalizationMs: 0
+                )
+            )
+        case .retryableCloudflare(let attempts):
+            throw TranscriptionError.retryableCloudflareChallenge(attempts: attempts)
+        case .providerFailure(let category, let retryAfterSeconds):
+            throw ProviderRequestFailure(
+                route: .managedTranscription,
+                category: category,
+                statusCode: category == .rateLimited ? 429 : nil,
+                retryAfterSeconds: retryAfterSeconds
+            )
+        }
+    }
+}
+
+private final class CoordinatorVoiceModeCapture:
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var modes: [DictationMode] = []
+    private var ruleCounts: [Int] = []
+
+    func append(_ config: TranscriptionConfig) {
+        lock.lock()
+        modes.append(config.voiceModes.defaultMode)
+        ruleCounts.append(config.voiceModes.applicationRules.count)
+        lock.unlock()
+    }
+
+    func snapshot() -> (
+        modes: [DictationMode],
+        ruleCounts: [Int]
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (modes, ruleCounts)
+    }
+}
+
+private struct ScriptedCoordinatorPipeline: DictationPreparing {
+    let script: CoordinatorPipelineScript
+
+    func prepare(audio: RecordedAudio) async throws -> PreparedDictation {
+        try script.prepare(audio: audio)
+    }
+}
+
+@MainActor
+private func waitForCoordinatorState(
+    _ coordinator: AppCoordinator,
+    toBecome expectedState: AppCoordinator.State,
+    attempts: Int = 100
+) async {
+    for _ in 0..<attempts where coordinator.state != expectedState {
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+}
+
+@MainActor
+private func waitForCondition(
+    attempts: Int = 100,
+    condition: @escaping @MainActor () -> Bool
+) async {
+    for _ in 0..<attempts where condition() == false {
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+}
+
+@MainActor
+struct AppCoordinatorCancellationTests {
+    @Test
+    func deleteAllUserDataRemovesRecoveryAndPolishCredentials() throws {
+        let homeDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: homeDirectory)
+        }
+        let configStore = ConfigStore(homeDirectoryURL: homeDirectory)
+        try configStore.save(AppConfig())
+        let credentialStore =
+            InMemoryOpenAICompatibleCredentialStore(
+                apiKey: "recovery-secret"
+            )
+        let polishCredentialStore =
+            InMemoryOpenAICompatibleCredentialStore(
+                apiKey: "polish-secret"
+            )
+        let coordinator = AppCoordinator(
+            configStore: configStore,
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: FakeCoordinatorOverlay(),
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recoveryCredentialStore: credentialStore,
+            polishCredentialStore: polishCredentialStore
+        )
+
+        let result = coordinator.deleteAllUserData()
+
+        switch result {
+        case .success(let freshConfig):
+            #expect(freshConfig == AppConfig())
+        case .failure(let error):
+            Issue.record(
+                "Delete all user data failed: \(error.localizedDescription)"
+            )
+        }
+        #expect(try credentialStore.hasAPIKey() == false)
+        #expect(try polishCredentialStore.hasAPIKey() == false)
+    }
+
+    @Test
+    func signedProviderDisableStopsBeforeMicrophoneRecordingStarts() async {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            providerCapabilityPolicy: BlockingCoordinatorCapabilityPolicy(),
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCondition {
+            statusMenu.updates.contains {
+                $0.1.contains("OW-INC-COORDINATOR-TEST")
+            }
+        }
+
+        #expect(coordinator.state == .idle)
+        #expect(recorder.startRecordingCallCount == 0)
+        #expect(recorder.stopRecordingCallCount == 0)
+        #expect(overlay.recordingElapsedTexts.isEmpty)
+        #expect(
+            statusMenu.updates.last?.1.contains(
+                "OW-INC-COORDINATOR-TEST"
+            ) == true
+        )
+    }
+
+    @Test
+    func missingRequiredSelectionStopsBeforeRecordingAndProviderPipeline()
+        async
+    {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let prompter = AllowOnceCoordinatorContextPrompter()
+        var config = AppConfig()
+        config.transcription.skills = SkillsConfig(
+            defaultSkillID:
+                SkillRegistry.contextRewriteSkillID,
+            applicationRules: []
+        )
+        let pipelineCreationCount = CoordinatorCallCounter()
+        let coordinator = AppCoordinator(
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in
+                pipelineCreationCount.increment()
+                return FakeCoordinatorPipeline()
+            },
+            launchAppContextProvider: {
+                LaunchAppContext(
+                    bundleIdentifier: "com.apple.TextEdit",
+                    localizedName: "TextEdit",
+                    processIdentifier: 42
+                )
+            },
+            contextBroker: ContextBroker(
+                selectionProvider: SelectionContextProvider(
+                    capture: { _, _ in .noSelection },
+                    verify: { _ in .unchanged }
+                )
+            ),
+            contextPermissionPrompter: prompter
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCondition {
+            coordinator.state == .idle
+                && statusMenu.updates.last?.0 == .error
+        }
+
+        #expect(prompter.requestCount == 1)
+        #expect(recorder.startRecordingCallCount == 0)
+        #expect(recorder.stopRecordingCallCount == 0)
+        #expect(pipelineCreationCount.snapshot() == 0)
+        #expect(
+            statusMenu.updates.last?.1.contains(
+                "selected text"
+            ) == true
+        )
+    }
+
+    @Test
+    func cancelCurrentSessionDiscardsActiveRecordingAndResetsState() throws {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let productMetricsRecorder = FakeProductMetricsRecorder()
+        var config = AppConfig()
+        config.privacy.productMetricsEnabled = true
+        let coordinator = AppCoordinator(
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            productMetricsRecorder: productMetricsRecorder,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.state = AppCoordinator.State.recording
+        coordinator.launchAppContext = LaunchAppContext(
+            bundleIdentifier: "com.example.editor",
+            localizedName: "Editor",
+            processIdentifier: 123
+        )
+
+        coordinator.cancelCurrentSession()
+
+        #expect(recorder.cancelRecordingCallCount == 1)
+        #expect(coordinator.state == AppCoordinator.State.idle)
+        #expect(coordinator.launchAppContext == nil)
+        #expect(overlay.hideCallCount == 1)
+        #expect(statusMenu.updates.last?.0 == .ready)
+        #expect(
+            productMetricsRecorder.samples.map(\.event)
+                == [.dictationDiscarded]
+        )
+    }
+
+    @Test
+    func cancelCurrentSessionCancelsProcessingTaskWithoutInjecting() async throws {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let injector = FakeCoordinatorInjector()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+
+        let processingTask = Task<Void, Never> {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+        }
+
+        coordinator.state = AppCoordinator.State.processing
+        coordinator.statusMenu = statusMenu
+        coordinator.processingTask = processingTask
+        coordinator.launchAppContext = LaunchAppContext(
+            bundleIdentifier: "com.example.editor",
+            localizedName: "Editor",
+            processIdentifier: 123
+        )
+
+        coordinator.cancelCurrentSession()
+        await Task.yield()
+
+        #expect(processingTask.isCancelled == true)
+        #expect(injector.injectCallCount == 0)
+        #expect(coordinator.state == AppCoordinator.State.idle)
+        #expect(coordinator.processingTask == nil)
+        #expect(coordinator.launchAppContext == nil)
+        #expect(overlay.hideCallCount == 1)
+        #expect(statusMenu.updates.last?.0 == .ready)
+    }
+
+    @Test
+    func cancelCurrentSessionCancelsAsyncPasteWaitBeforeLateCompletion() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let audioURL = root.appendingPathComponent("async-injection.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: audioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let injector = BlockingCoordinatorInjector()
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { injector.didStart }
+
+        coordinator.cancelCurrentSession()
+        try await Task.sleep(for: .milliseconds(30))
+
+        #expect(coordinator.state == .idle)
+        #expect(injector.didStart)
+        #expect(injector.didComplete == false)
+        #expect(overlay.hideCallCount == 1)
+    }
+
+    @Test
+    func shutdownSynchronouslyRemovesOwnedProcessingAudio() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let audioURL = root.appendingPathComponent("processing.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let gate = CoordinatorGate()
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: audioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in BlockingCoordinatorPipeline(gate: gate) }
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .processing)
+
+        coordinator.shutdown()
+
+        #expect(coordinator.state == .idle)
+        #expect(!FileManager.default.fileExists(atPath: audioURL.path))
+        #expect(overlay.hideCallCount == 1)
+        await gate.resume()
+    }
+
+    @Test
+    func startRecordingCapturesLaunchContextBeforeProcessingOverlay() async throws {
+        // Isolation: a previous product identity may have left onboarding unfinished
+        // in this process's UserDefaults; force the first-run gate closed.
+        OnboardingStateStore().markCompleted()
+        let startGate = CoordinatorGate()
+        let recorder = FakeCoordinatorRecorder()
+        recorder.onStartRecording = {
+            await startGate.wait()
+        }
+        let capturedContext = LaunchAppContext(
+            bundleIdentifier: "com.example.editor",
+            localizedName: "Editor",
+            processIdentifier: 123
+        )
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let soundFeedback = FakeSoundFeedback()
+        var contextWhenProcessing: LaunchAppContext?
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: soundFeedback,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() },
+            launchAppContextProvider: { capturedContext }
+        )
+        overlay.onShowProcessing = {
+            contextWhenProcessing = coordinator.launchAppContext
+        }
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+
+        #expect(contextWhenProcessing == capturedContext)
+        #expect(overlay.showProcessingCallCount == 1)
+        #expect(overlay.recordingElapsedTexts.isEmpty)
+        #expect(soundFeedback.events.isEmpty)
+
+        coordinator.cancelCurrentSession()
+        await startGate.resume()
+    }
+
+    @Test
+    func appSpecificVoiceModeIsFrozenIntoProcessingConfig() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let audioURL = root.appendingPathComponent("voice-mode.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(
+            fileURL: audioURL,
+            durationMs: 1_000
+        )
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let injector = FakeCoordinatorInjector()
+        let capture = CoordinatorVoiceModeCapture()
+        let launchContext = LaunchAppContext(
+            bundleIdentifier: "com.openai.codex",
+            localizedName: "Codex",
+            processIdentifier: 123
+        )
+        var config = AppConfig()
+        config.transcription.voiceModes = VoiceModeConfig(
+            defaultMode: .direct,
+            applicationRules: [
+                try AppModeRule.validated(
+                    appName: "Codex",
+                    bundleIdentifier: "com.openai.codex",
+                    mode: .codePrompt
+                ),
+            ]
+        )
+
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: {
+                transcriptionConfig,
+                _,
+                _,
+                _,
+                _ in
+                capture.append(transcriptionConfig)
+                return FakeCoordinatorPipeline()
+            },
+            launchAppContextProvider: { launchContext },
+            previewPresenter:
+                FakePreviewPresenter()
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.config.transcription.voiceModes = VoiceModeConfig(
+            defaultMode: .email,
+            applicationRules: []
+        )
+        coordinator.handleHotkeyPress()
+        await waitForCondition { injector.injectCallCount == 1 }
+
+        let snapshot = capture.snapshot()
+        #expect(snapshot.modes == [.codePrompt])
+        #expect(snapshot.ruleCounts == [0])
+        #expect(injector.launchContexts == [launchContext])
+    }
+
+    @Test
+    func previewEditedTextIsInjectedAndPersistedAsFinalHistory()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                UUID().uuidString,
+                isDirectory: true
+            )
+        defer {
+            try? FileManager.default
+                .removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let audioURL = root.appendingPathComponent(
+            "editable-preview.wav"
+        )
+        try minimalCoordinatorWaveData().write(
+            to: audioURL
+        )
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(
+            fileURL: audioURL,
+            durationMs: 1_000
+        )
+        let injector = FakeCoordinatorInjector()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let preview = FakePreviewPresenter(
+            decision: .pasteToTarget(
+                text: "Edited final result"
+            )
+        )
+        var config = AppConfig()
+        config.transcription.skills = SkillsConfig(
+            defaultSkillID:
+                SkillRegistry.emailSkillID,
+            applicationRules: []
+        )
+        let store = ConfigStore(
+            homeDirectoryURL: root
+        )
+        let coordinator = AppCoordinator(
+            configStore: store,
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: {
+                _, _, _, _, _, _ in statusMenu
+            },
+            pipelineFactory: {
+                _, _, _, _, _ in
+                FakeCoordinatorPipeline()
+            },
+            launchAppContextProvider: {
+                LaunchAppContext(
+                    bundleIdentifier:
+                        "com.example.editor",
+                    localizedName: "Editor",
+                    processIdentifier: 123
+                )
+            },
+            previewPresenter: preview
+        )
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(
+            coordinator,
+            toBecome: .recording
+        )
+        coordinator.handleHotkeyPress()
+        await waitForCondition {
+            injector.injectCallCount == 1
+        }
+
+        #expect(injector.texts == [
+            "Edited final result",
+        ])
+        #expect(preview.requests.count == 1)
+        let records = try TranscriptionHistoryRecorder(
+            directoryURL: store.directoryURL
+        ).loadRecent(limit: 10)
+        #expect(records.map(\.finalText) == [
+            "Edited final result",
+        ])
+        #expect(
+            records.first?.skillDeliveryAction
+                == PreviewAction.pasteToTarget.rawValue
+        )
+        #expect(records.first?.skillResultEdited == true)
+    }
+
+    @Test
+    func secondHotkeyTransitionsRecordingSessionIntoProcessing() async throws {
+        let processingGate = CoordinatorGate()
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let soundFeedback = FakeSoundFeedback()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: soundFeedback,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+
+        coordinator.handleHotkeyPress()
+        await Task.yield()
+
+        #expect(recorder.stopRecordingCallCount == 1)
+        #expect(coordinator.state == AppCoordinator.State.processing)
+        #expect(overlay.showProcessingCallCount >= 1)
+        #expect(statusMenu.updates.last?.0 == .processing)
+        #expect(soundFeedback.events == [.recordingStarted, .recordingStopped])
+
+        await processingGate.resume()
+    }
+
+    @Test
+    func recordingStartSoundPlaysOnlyAfterRecorderStarts() async throws {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let soundFeedback = FakeSoundFeedback()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: soundFeedback,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+
+        #expect(soundFeedback.events == [.recordingStarted])
+
+        coordinator.cancelCurrentSession()
+    }
+
+    @Test
+    func recordingStartFailureDoesNotPlayFeedbackSound() async throws {
+        let recorder = FakeCoordinatorRecorder()
+        recorder.startRecordingError = NSError(
+            domain: "VibeComposeTests",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "recorder failed"]
+        )
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let soundFeedback = FakeSoundFeedback()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: soundFeedback,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .idle)
+
+        #expect(soundFeedback.events.isEmpty)
+    }
+
+    @Test
+    func disabledFeedbackSoundSettingSuppressesRecordingSounds() async throws {
+        let processingGate = CoordinatorGate()
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let soundFeedback = FakeSoundFeedback()
+        var config = AppConfig()
+        config.transcription.feedbackSoundsEnabled = false
+        let coordinator = AppCoordinator(
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: soundFeedback,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in BlockingCoordinatorPipeline(gate: processingGate) }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await Task.yield()
+
+        #expect(soundFeedback.events.isEmpty)
+
+        await processingGate.resume()
+    }
+
+    @Test
+    func processingHotkeyDoesNotPlayRecordingFeedbackSound() {
+        let recorder = FakeCoordinatorRecorder()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let soundFeedback = FakeSoundFeedback()
+        let coordinator = AppCoordinator(
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: soundFeedback,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.state = AppCoordinator.State.processing
+        coordinator.handleHotkeyPress()
+
+        #expect(soundFeedback.events.isEmpty)
+    }
+
+    @Test
+    func retryableTranscriptionFailureCopiesAudioAndRetriesSavedRecordingOnce() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let originalAudioURL = root.appendingPathComponent("original.wav")
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: originalAudioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let injector = FakeCoordinatorInjector()
+        let latencyRecorder = FakeLatencyRecorder()
+        let productMetricsRecorder = FakeProductMetricsRecorder()
+        let capturedContext = LaunchAppContext(
+            bundleIdentifier: "com.example.editor",
+            localizedName: "Editor",
+            processIdentifier: 123
+        )
+        let script = CoordinatorPipelineScript(outcomes: [
+            .retryableCloudflare(3),
+            .success("retry final"),
+        ])
+        let configStore = ConfigStore(fileManager: .default, homeDirectoryURL: root)
+        var config = AppConfig()
+        config.privacy.productMetricsEnabled = true
+        let coordinator = AppCoordinator(
+            configStore: configStore,
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: injector,
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: latencyRecorder,
+            productMetricsRecorder: productMetricsRecorder,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, policy, _, _ in script.makePipeline(policy: policy) },
+            launchAppContextProvider: { capturedContext }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { overlay.retryableErrors.count == 1 }
+
+        #expect(FileManager.default.fileExists(atPath: originalAudioURL.path) == false)
+        #expect(script.policies == [.automatic])
+        #expect(script.audioPaths.count == 1)
+
+        overlay.onRetry?()
+        await waitForCondition { injector.injectCallCount == 1 }
+
+        #expect(script.audioPaths.count == 2)
+        #expect(script.policies == [.automatic, .manualRetry])
+        #expect(script.audioPaths[0] == originalAudioURL.path)
+        #expect(script.audioPaths[1] != originalAudioURL.path)
+        #expect(FileManager.default.fileExists(atPath: script.audioPaths[1]) == false)
+        #expect(injector.launchContexts == [capturedContext])
+        #expect(injector.automaticPastePermissions == [false])
+        #expect(latencyRecorder.samples.map(\.resultStatus) == ["error", "clipboard"])
+        #expect(
+            productMetricsRecorder.samples.map(\.event)
+                == [
+                    .dictationStarted,
+                    .dictationFailed,
+                    .retryStarted,
+                    .retrySucceeded,
+                ]
+        )
+        #expect(
+            productMetricsRecorder.samples.last?.deliveryStatus
+                == .clipboard
+        )
+        #expect(
+            productMetricsRecorder.samples
+                .filter { $0.event == .dictationFailed }
+                .allSatisfy {
+                    $0.failureCategory == .transcriptionChallenge
+                }
+        )
+
+        let recoveryStore = RecoveryStore(
+            directoryURL: configStore.directoryURL.appendingPathComponent("Recovery", isDirectory: true)
+        )
+        let recoveryRecords = try recoveryStore.loadRecent(limit: 10)
+        #expect(recoveryRecords.map(\.outcome) == ["error"])
+        #expect(RecoveryHistoryPreview.recentItems(from: recoveryRecords, kind: .audio, limit: 10).count == 1)
+        #expect(RecoveryHistoryPreview.recentItems(from: recoveryRecords, kind: .asr, limit: 10).isEmpty)
+
+        let history = try TranscriptionHistoryRecorder(directoryURL: configStore.directoryURL)
+            .loadRecent(limit: 10)
+        #expect(history.map(\.finalText) == ["retry final"])
+        #expect(history.allSatisfy { $0.rawText == nil })
+    }
+
+    @Test
+    func providerRateLimitKeepsRetryAudioAndRecordsBoundedCategory() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let originalAudioURL = root.appendingPathComponent("original.wav")
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(
+            fileURL: originalAudioURL,
+            durationMs: 1_000
+        )
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let latencyRecorder = FakeLatencyRecorder()
+        let productMetricsRecorder = FakeProductMetricsRecorder()
+        let script = CoordinatorPipelineScript(outcomes: [
+            .providerFailure(.rateLimited, retryAfterSeconds: 30),
+        ])
+        var config = AppConfig()
+        config.privacy.productMetricsEnabled = true
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(
+                fileManager: .default,
+                homeDirectoryURL: root
+            ),
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: latencyRecorder,
+            productMetricsRecorder: productMetricsRecorder,
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: {
+                _, _, policy, _, _ in
+                script.makePipeline(policy: policy)
+            }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { overlay.retryableErrors.count == 1 }
+
+        #expect(
+            overlay.retryableErrors.first?
+                .contains("30") == true
+        )
+        #expect(
+            latencyRecorder.samples.last?.errorCategory
+                == "transcribe.rate_limited"
+        )
+        #expect(
+            productMetricsRecorder.samples.last?.failureCategory
+                == .transcriptionRateLimited
+        )
+
+        let retryDirectory = root
+            .appendingPathComponent(
+                "Library/Application Support/VibeCompose/Retry",
+                isDirectory: true
+            )
+        let retryFiles = (
+            try? FileManager.default.contentsOfDirectory(
+                atPath: retryDirectory.path
+            )
+        ) ?? []
+        #expect(retryFiles.count == 1)
+
+        coordinator.shutdown()
+        #expect(
+            (
+                try? FileManager.default.contentsOfDirectory(
+                    atPath: retryDirectory.path
+                )
+            )?.isEmpty == true
+        )
+    }
+
+    @Test
+    func retryFailureKeepsSavedAudioAndRetryControlAvailable() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let originalAudioURL = root.appendingPathComponent("original.wav")
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: originalAudioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let script = CoordinatorPipelineScript(outcomes: [
+            .retryableCloudflare(3),
+            .retryableCloudflare(1),
+        ])
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(fileManager: .default, homeDirectoryURL: root),
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, policy, _, _ in script.makePipeline(policy: policy) }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { overlay.retryableErrors.count == 1 }
+
+        overlay.onRetry?()
+        await waitForCondition { overlay.retryableErrors.count == 2 }
+
+        #expect(script.policies == [.automatic, .manualRetry])
+        #expect(script.audioPaths.count == 2)
+        #expect(script.audioPaths[1] != originalAudioURL.path)
+        #expect(FileManager.default.fileExists(atPath: script.audioPaths[1]) == true)
+    }
+
+    @Test
+    func startingNewRecordingAfterRetryableFailureClearsSavedRetryAudio() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let originalAudioURL = root.appendingPathComponent("original.wav")
+        try minimalCoordinatorWaveData().write(to: originalAudioURL)
+
+        let recorder = FakeCoordinatorRecorder()
+        recorder.nextAudio = RecordedAudio(fileURL: originalAudioURL, durationMs: 1_000)
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let script = CoordinatorPipelineScript(outcomes: [.retryableCloudflare(3)])
+        let configStore = ConfigStore(fileManager: .default, homeDirectoryURL: root)
+        let coordinator = AppCoordinator(
+            configStore: configStore,
+            config: AppConfig(),
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            recorderFactory: { _ in recorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, policy, _, _ in script.makePipeline(policy: policy) }
+        )
+
+        coordinator.recorder = recorder
+        coordinator.statusMenu = statusMenu
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition { overlay.retryableErrors.count == 1 }
+
+        let retryDirectory = configStore.directoryURL.appendingPathComponent("Retry", isDirectory: true)
+        let savedRetryFiles = (try? FileManager.default.contentsOfDirectory(atPath: retryDirectory.path)) ?? []
+        #expect(savedRetryFiles.count == 1)
+
+        coordinator.handleHotkeyPress()
+        let remainingRetryFiles = (try? FileManager.default.contentsOfDirectory(atPath: retryDirectory.path)) ?? []
+
+        #expect(remainingRetryFiles.isEmpty)
+        coordinator.cancelCurrentSession()
+    }
+
+    @Test
+    func launchWithMissingChatGPTSessionShowsSetupStateWithoutLoginWindow() throws {
+        let authManager = FakeChatGPTAuthManager(
+            snapshot: ChatGPTAuthSnapshot(
+                state: .signedOut,
+                detail: "Sign in first",
+                userEmail: nil
+            )
+        )
+        let statusMenu = FakeCoordinatorStatusMenu()
+        let coordinator = AppCoordinator(
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: FakeCoordinatorOverlay(),
+            authManager: authManager,
+            latencyRecorder: FakeLatencyRecorder(),
+            recorderFactory: { _ in FakeCoordinatorRecorder() },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() }
+        )
+        coordinator.statusMenu = statusMenu
+
+        coordinator.checkLaunchLoginState()
+
+        #expect(statusMenu.updates.contains { $0.0 == .setupRequired && $0.1 == "Sign in first" })
+    }
+
+    // MARK: - D4 Voice Refinement
+
+    @Test
+    func voiceRefinementSourceComposesInstructionWithPreviousResult() {
+        let composed = AppCoordinator.makeVoiceRefinementSource(
+            instruction: "make it shorter",
+            previousResult: "A long paragraph about shipping."
+        )
+        #expect(composed.contains("make it shorter"))
+        #expect(composed.contains("A long paragraph about shipping."))
+        #expect(composed.contains("Instruction:"))
+        #expect(composed.contains("Previous result:"))
+
+        let instructionOnly = AppCoordinator.makeVoiceRefinementSource(
+            instruction: "tighten the tone",
+            previousResult: "   "
+        )
+        #expect(instructionOnly == "tighten the tone")
+    }
+
+    @Test
+    func hotkeyWhilePreviewVisibleStartsDedicatedRefinementRecorder() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+        }
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        let audioURL = root.appendingPathComponent("d4-refine.wav")
+        try minimalCoordinatorWaveData().write(to: audioURL)
+
+        let mainRecorder = FakeCoordinatorRecorder()
+        mainRecorder.nextAudio = RecordedAudio(
+            fileURL: audioURL,
+            durationMs: 1_000
+        )
+        let refinementRecorder = FakeCoordinatorRecorder()
+        refinementRecorder.nextAudio = RecordedAudio(
+            fileURL: audioURL,
+            durationMs: 500
+        )
+        let preview = HoldingPreviewPresenter()
+        let overlay = FakeCoordinatorOverlay()
+        let statusMenu = FakeCoordinatorStatusMenu()
+        var config = AppConfig()
+        // Email skill forces Preview so the holding presenter stays open.
+        config.transcription.skills = SkillsConfig(
+            defaultSkillID: SkillRegistry.emailSkillID,
+            applicationRules: []
+        )
+        let coordinator = AppCoordinator(
+            configStore: ConfigStore(homeDirectoryURL: root),
+            config: config,
+            notifier: FakeCoordinatorNotifier(),
+            injector: FakeCoordinatorInjector(),
+            overlay: overlay,
+            authManager: FakeChatGPTAuthManager(),
+            latencyRecorder: FakeLatencyRecorder(),
+            soundFeedback: FakeSoundFeedback(),
+            // Main dictation reuses `coordinator.recorder`; every factory
+            // call after that is D4's dedicated refinement recorder.
+            recorderFactory: { _ in refinementRecorder },
+            statusMenuFactory: { _, _, _, _, _, _ in statusMenu },
+            pipelineFactory: { _, _, _, _, _ in FakeCoordinatorPipeline() },
+            launchAppContextProvider: {
+                LaunchAppContext(
+                    bundleIdentifier: "com.example.mail",
+                    localizedName: "Mail",
+                    processIdentifier: 42
+                )
+            },
+            previewPresenter: preview
+        )
+        coordinator.recorder = mainRecorder
+        coordinator.statusMenu = statusMenu
+
+        // Run a normal dictation cycle into the held preview.
+        coordinator.handleHotkeyPress()
+        await waitForCoordinatorState(coordinator, toBecome: .recording)
+        coordinator.handleHotkeyPress()
+        await waitForCondition(attempts: 200) {
+            preview.isHeld && coordinator.isPreviewVisible
+        }
+
+        #expect(coordinator.isPreviewVisible == true)
+        #expect(preview.isHeld == true)
+        #expect(mainRecorder.startRecordingCallCount == 1)
+        #expect(refinementRecorder.startRecordingCallCount == 0)
+
+        // Hotkey while preview is open must start refinement, not a new dictation.
+        coordinator.handleHotkeyPress()
+        await waitForCondition(attempts: 200) {
+            refinementRecorder.startRecordingCallCount == 1
+        }
+        #expect(mainRecorder.startRecordingCallCount == 1)
+        #expect(refinementRecorder.startRecordingCallCount == 1)
+        #expect(overlay.recordingElapsedTexts.isEmpty == false)
+
+        // Second press stops refinement and injects the composed source.
+        coordinator.handleHotkeyPress()
+        await waitForCondition(attempts: 200) {
+            preview.injectedRefinements.isEmpty == false
+        }
+        #expect(preview.injectedRefinements.count == 1)
+        let injected = try #require(preview.injectedRefinements.first)
+        // Fake pipeline returns raw "raw" / final "final"; composition wraps it
+        // with the previous preview result ("final" from the first pipeline).
+        #expect(injected.contains("raw") || injected.contains("final"))
+        #expect(injected.contains("Previous result:"))
+
+        preview.release(with: .cancel)
+        await waitForCondition(attempts: 200) {
+            coordinator.isPreviewVisible == false
+        }
+    }
+}

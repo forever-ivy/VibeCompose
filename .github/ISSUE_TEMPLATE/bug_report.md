@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem in VibeWhisper
+about: Report a reproducible problem in VibeCompose
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -14,7 +14,7 @@ Describe the problem in one or two sentences.
 
 - macOS version:
 - Mac model:
-- VibeWhisper version:
+- VibeCompose version:
 - install path: packaged app / zipped release / local build
 
 ## Reproduction

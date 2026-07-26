@@ -1,4 +1,4 @@
-# Contributing to VibeWhisper
+# Contributing to VibeCompose
 
 ## Development Flow
 
@@ -99,7 +99,7 @@ Do not invent a long taxonomy. If no clear scope fits, omit it.
 ### Description (subject line)
 
 - Use the **imperative mood**: `add`, `fix`, `harden`, not `added` / `adds` / `fixing`.
-- Start with a **lowercase** letter after `: ` (unless the first word is a proper noun or acronym: `VibeWhisper`, `HUD`, `Keychain`, `Sparkle`).
+- Start with a **lowercase** letter after `: ` (unless the first word is a proper noun or acronym: `VibeCompose`, `HUD`, `Keychain`, `Sparkle`).
 - **Do not** end the subject with a period.
 - Keep the full subject line **≤ 72 characters** (hard limit). Prefer **≤ 50** when practical.
 - Describe **one** primary change. Split unrelated work into separate commits.
@@ -139,8 +139,8 @@ Mark a breaking change in **either or both** of these ways:
 2. Footer (required detail when the subject alone is unclear):
 
 ```text
-BREAKING CHANGE: skill packages must use the .vibewhisperskill extension;
-.openwhisperskill is no longer loaded.
+BREAKING CHANGE: skill packages must use the .vibecomposeskill extension;
+.vibecomposeskill is no longer loaded.
 ```
 
 `BREAKING CHANGE` must be uppercase and followed by `: ` and a full-sentence
@@ -186,10 +186,10 @@ Fixes #42
 Breaking change:
 
 ```text
-feat(packaging)!: rename release asset prefix to VibeWhisper
+feat(packaging)!: rename release asset prefix to VibeCompose
 
-BREAKING CHANGE: release ZIP and appcast asset names use the VibeWhisper
-prefix; consumers of the old OpenWhisper asset names must update URLs.
+BREAKING CHANGE: release ZIP and appcast asset names use the VibeCompose
+prefix; consumers of the prior asset prefix must update URLs.
 ```
 
 ### Incorrect examples
@@ -241,15 +241,15 @@ Minimum verification for product changes:
 ```bash
 swift build --package-path .
 swift test --package-path .
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
 ```
 
 For packaging or install changes:
 
 ```bash
-VIBEWHISPER_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
 ./scripts/install_app.sh
 ./scripts/check_packaged_app.sh
 ```
 
-Native interaction changes require installed-app verification through `/Applications/VibeWhisper.app` and the Computer Use flow described in `AGENTS.md`.
+Native interaction changes require installed-app verification through `/Applications/VibeCompose.app` and the Computer Use flow described in `AGENTS.md`.

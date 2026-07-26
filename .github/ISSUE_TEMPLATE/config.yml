@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: VibeWhisper Security Reporting
-    url: https://github.com/forever-ivy/vibewhisper/security/advisories/new
-    about: Report credential exposure, data loss, or other vulnerabilities privately.
-  - name: VibeWhisper Release Notes
-    url: https://github.com/forever-ivy/vibewhisper/blob/main/docs/releases/README.md
-    about: Check the release status before opening a support request.
+  - name: VibeCompose Security Reporting
+    url: https://github.com/forever-ivy/vibecompose/security/advisories/new
+    about: Report credential exposure, data loss, or other vulnerabilities privately
+  - name: VibeCompose Release Notes
+    url: https://github.com/forever-ivy/vibecompose/blob/main/docs/releases/README.md
+    about: Check the latest release before opening a support request

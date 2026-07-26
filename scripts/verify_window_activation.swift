@@ -68,7 +68,7 @@ guard let runningApplication = NSRunningApplication
     )
     .first
 else {
-    fputs("VibeWhisper is not running\n", stderr)
+    fputs("VibeCompose is not running\n", stderr)
     exit(1)
 }
 
@@ -91,7 +91,7 @@ guard
     ) as? [AXUIElement],
     let window = windows.first
 else {
-    fputs("VibeWhisper Settings window is missing\n", stderr)
+    fputs("VibeCompose Settings window is missing\n", stderr)
     exit(1)
 }
 
@@ -163,8 +163,8 @@ guard
     closeResult == .success,
     regularAfterClose
 else {
-    fputs("VibeWhisper window activation acceptance failed\n", stderr)
+    fputs("VibeCompose window activation acceptance failed\n", stderr)
     exit(1)
 }
 
-print("VibeWhisper Dock icon and minimize acceptance passed.")
+print("VibeCompose Dock icon and minimize acceptance passed.")

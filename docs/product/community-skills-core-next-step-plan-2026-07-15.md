@@ -1,11 +1,11 @@
-# VibeWhisper Community Skills 核心化下一步计划
+# VibeCompose Community Skills 核心化下一步计划
 
 > 日期：2026-07-15  
 > 状态：Phase 0–3 工程实现完成；Phase 4 内容、研究手册和执行工具包就绪，招募尚未开始，Community Pilot 与 Registry Go/No-Go 待真实用户证据  
-> 产品范围：macOS 原生 VibeWhisper、Community Skills、Context、Preview、History 与安全输出  
+> 产品范围：macOS 原生 VibeCompose、Community Skills、Context、Preview、History 与安全输出
 > 商业化范围：明确排除；Phase 0 删除现有商业化设计与实现，不保留隐藏付费门禁  
 > 当前基线：`0.1.0 Alpha`  
-> 公共创作格式：Agent Skills 标准目录；Legacy `.vibewhisperskill` v1 仅保持兼容  
+> 公共创作格式：Agent Skills 标准目录；Legacy `.vibecomposeskill` v1 仅保持兼容
 > 相关边界：[AI-native 输入层完整方案](ai-native-input-layer-plan-2026-07-14.md)、[Community Skill SDK](../engineering/community-skill-sdk.md)、[Registry 与 Actions 边界](../engineering/registry-and-actions-boundary.md)
 
 ## 实施收口（更新于 2026-07-16）
@@ -66,8 +66,8 @@ Registry 继续隐藏/禁用。
 
 ## 0. 执行结论
 
-VibeWhisper 的下一阶段不应继续横向增加设置项，也不应把 Community Skills 留在
-“AI Polish 的高级选项”里。Community Skills 应成为用户理解 VibeWhisper 的主要方式：
+VibeCompose 的下一阶段不应继续横向增加设置项，也不应把 Community Skills 留在
+“AI Polish 的高级选项”里。Community Skills 应成为用户理解 VibeCompose 的主要方式：
 
 > **说一次，选择一个可信 Skill，直接得到适合当前任务、可审查、可修改、可安全投递的结果。**
 
@@ -155,7 +155,7 @@ Community Skills 解决的实际痛点不是“再提供一些 Prompt”，而�
 这个方向具有创新性，但创新不来自“可以导入 Prompt”。真正的组合优势是：
 
 1. **语音直接表达意图**：用户不需要先打开聊天窗口再描述转换要求。
-2. **可移植标准**：同一个 Agent Skill 目录可以被不同 Host 理解，VibeWhisper 不制造孤岛格式。
+2. **可移植标准**：同一个 Agent Skill 目录可以被不同 Host 理解，VibeCompose 不制造孤岛格式。
 3. **受限且可审查的运行时**：社区内容只能声明指令、资源、Context Request、Validator 和输出契约，不能获得任意代码权限。
 4. **与真实编辑目标绑定**：Skill 输出经过目标冻结、Diff Preview、再次复验和安全投递，而不是停在聊天答案。
 5. **作者—使用者闭环**：用户可以从实际需求创建、测试、Fork、分享，再由其他用户安装和改进。
@@ -196,7 +196,7 @@ Community Skills 解决的实际痛点不是“再提供一些 Prompt”，而�
 5. **Required 不能假装 Optional**：必需来源缺失必须阻断或由用户明确换用其他 Skill。
 6. **输出先可控再自动化**：高风险、选区改写和校验异常优先 Preview；Skill 不能绕过 Output Router。
 7. **失败必须可解释**：任何回退都提供用户可理解的原因和恢复动作。
-8. **开放格式、受限运行**：接受标准内容，但只执行 VibeWhisper 的声明式兼容子集。
+8. **开放格式、受限运行**：接受标准内容，但只执行 VibeCompose 的声明式兼容子集。
 9. **渐进披露**：普通用户不必理解 SHA-256、Golden tests、Host Profile 和 Registry 签名。
 10. **本地与隐私优先**：默认不上传音频、转写、选区、Prompt、Skill 正文或应用身份用于指标。
 
@@ -249,10 +249,10 @@ Community Skills 解决的实际痛点不是“再提供一些 Prompt”，而�
 - `docs/engineering/licensing.md`
 - `docs/legal/refund-policy.md` 与 `docs/legal/refund-policy.zh-CN.md`
 - 仅服务于定价与增长的 `docs/marketing/` 内容
-- `Sources/VibeWhisper/CommercialLicensing.swift`
-- `Sources/VibeWhisperLicensing/`
-- `Sources/VibeWhisperLicenseTool/`
-- `Tests/VibeWhisperLicensingTests/`
+- `Sources/VibeCompose/CommercialLicensing.swift`
+- `Sources/VibeComposeLicensing/`
+- `Sources/VibeComposeLicenseTool/`
+- `Tests/VibeComposeLicensingTests/`
 - `scripts/release_commercial.sh`
 - `release/commercial-operator.example.json`
 
@@ -467,7 +467,7 @@ Advanced Inspector 再展示：安装 ID、版本/revision、SHA-256、文件清
 - 升级：突出指令、Context Request、输出策略、风险、Validator 和资源变更。
 - 权限扩大：必须重新确认，不能沿用旧授权静默升级。
 - 风险升高或自动投递变化：默认转入 Preview，并要求明确确认。
-- 不兼容脚本/工具：说明“VibeWhisper 不会执行这些内容”；若 Skill 依赖它们才能成立，则拒绝安装或标记不可运行。
+- 不兼容脚本/工具：说明“VibeCompose 不会执行这些内容”；若 Skill 依赖它们才能成立，则拒绝安装或标记不可运行。
 
 安装前提供 Test Run。用户可以使用包自带示例，也可以输入本地临时样例；临时样例默认不保存。
 
@@ -556,7 +556,7 @@ Reason: Missing required section.
 
 复验失败时只复制并明确显示原因。绝不为了“成功率”放宽目标匹配。
 
-Undo 只在 VibeWhisper 能验证“目标当前仍包含刚刚插入的准确结果”时执行反向替换；无法验证时不自动修改目标，而是提供复制原文。Undo 状态必须与 History 结果一致。
+Undo 只在 VibeCompose 能验证“目标当前仍包含刚刚插入的准确结果”时执行反向替换；无法验证时不自动修改目标，而是提供复制原文。Undo 状态必须与 History 结果一致。
 
 ## 10. Context：从声明变成统一权威门禁
 
@@ -629,7 +629,7 @@ Creator 根据这些信息生成标准 `SKILL.md` 和可选安全 Host Profile�
 **高级模式**提供：
 
 - `SKILL.md` 正文与 Frontmatter；
-- `vibewhisper.yaml` Host Profile；
+- `vibecompose.yaml` Host Profile；
 - References、Assets、Terminology；
 - Required/Optional Context；
 - Validators、风险和输出策略；
@@ -667,7 +667,7 @@ Test Bench 必须支持：
 - 至少两个正常样例和一个边界/失败样例；
 - 声明真实的 Required/Optional Context；
 - 输出策略与风险匹配；
-- 不依赖 VibeWhisper 不执行的工具、脚本或网络；
+- 不依赖 VibeCompose 不执行的工具、脚本或网络；
 - Golden tests 可重现；
 - 安装审查中不存在未解释的权限扩大；
 - 中英文至少有一种完整文案，另一种缺失时明确标识而不是机器伪翻译。
@@ -730,7 +730,7 @@ History…
 Terminologies…
 Settings…
 
-Quit VibeWhisper
+Quit VibeCompose
 ```
 
 Retry、Cancel 和错误恢复按当前运行状态就近出现，不把状态动作埋进 Settings。
@@ -834,7 +834,7 @@ History 中可保存用户允许的结果正文；诊断导出默认只包含上
 
 - 现有 Voice Mode、默认 Skill 和 App Rule 无损迁移到安装身份模型。
 - 遗失 Community Skill 时不崩溃，不静默换成同名包；显示缺失并回退 Direct。
-- Legacy `.vibewhisperskill` 的历史版本、授权与回滚继续有效。
+- Legacy `.vibecomposeskill` 的历史版本、授权与回滚继续有效。
 - 删除商业许可证状态时，不要把旧 License 配置迁移成新的隐藏开关；安全忽略并在 Delete All Data 时清除。
 - Settings 窗口状态迁移到新导航时，对已删除 pane 回退 General。
 
@@ -1017,9 +1017,9 @@ Preview 编辑率高可能代表编辑能力有价值，也可能代表 Skill �
 6. `./scripts/visual_acceptance.sh --install`；
 7. `./scripts/paste_acceptance.sh --install`；
 8. `scripts/check_packaged_app.sh`；
-9. 使用 `/Applications/VibeWhisper.app` 做真实 installed-app 流程。
+9. 使用 `/Applications/VibeCompose.app` 做真实 installed-app 流程。
 
-不得从 `dist/VibeWhisper.app` 直接启动进行权限或交互证明。
+不得从 `dist/VibeCompose.app` 直接启动进行权限或交互证明。
 
 ### 18.2 安装版必测分支
 
@@ -1035,7 +1035,7 @@ Preview 编辑率高可能代表编辑能力有价值，也可能代表 Skill �
 - Community Skill 安装、升级、禁用、回滚和卸载；
 - Settings、Skill Library、Creator、Preview 的键盘与 VoiceOver。
 
-完成验收后必须重新启动正常的 `/Applications/VibeWhisper.app` 并保持菜单栏 App 运行；如果最终工作是 Skill Library/Creator，则在实际可行时将对应窗口留给产品所有者检查。
+完成验收后必须重新启动正常的 `/Applications/VibeCompose.app` 并保持菜单栏 App 运行；如果最终工作是 Skill Library/Creator，则在实际可行时将对应窗口留给产品所有者检查。
 
 ## 19. 风险与缓解
 
@@ -1046,7 +1046,7 @@ Preview 编辑率高可能代表编辑能力有价值，也可能代表 Skill �
 | 选错 Skill | 输出形式完全不符预期 | Next Run、HUD 可见、解析原因、快速 Retry/切换 |
 | Required Context 造成阻塞感 | 用户只看到失败，不知道怎么恢复 | 在录音前提示，提供授权、选择文本、换 Direct 三种动作 |
 | Preview 变成重型编辑器 | 交互拖慢快速听写 | Direct 低风险仍可按策略自动；Preview 聚焦轻量校对，不做完整文档编辑器 |
-| “Agent Skills 兼容”被误解 | 用户以为 VibeWhisper 会执行脚本或工具 | 安装兼容性报告明确“可读取/忽略/拒绝”，文案不承诺等价运行 |
+| “Agent Skills 兼容”被误解 | 用户以为 VibeCompose 会执行脚本或工具 | 安装兼容性报告明确“可读取/忽略/拒绝”，文案不承诺等价运行 |
 | Settings 再次膨胀 | Library 功能复制到多个 Pane | 一个功能一个权威表面，Settings 只留摘要与入口 |
 | 远程 Registry 带来运营负担 | 恶意包、下架、更新和信任问题 | 本地/精选 Pilot 先行，满足 Go 条件后再立项 |
 | 去商业化清理破坏构建 | License DI 深入 AppCoordinator 和发布脚本 | 先建立完整功能基线测试，再按 target→DI→UI→docs 顺序删除 |
@@ -1054,7 +1054,7 @@ Preview 编辑率高可能代表编辑能力有价值，也可能代表 Skill �
 
 ## 20. 完成定义
 
-当且仅当以下条件全部满足，才能称为“Community Skills 已成为 VibeWhisper 的产品核心”：
+当且仅当以下条件全部满足，才能称为“Community Skills 已成为 VibeCompose 的产品核心”：
 
 ### 产品体验
 
@@ -1092,7 +1092,7 @@ Preview 编辑率高可能代表编辑能力有价值，也可能代表 Skill �
 
 - 单元、集成、完整检查、打包、安装和 installed-app 验收全绿。
 - 默认 F5、自定义绑定、取消、Retry、三档反馈、Preview、Context 阻断、Skill 生命周期均有真实证据。
-- 关闭任务时 `/Applications/VibeWhisper.app` 以正常菜单栏状态运行并留给产品所有者复核。
+- 关闭任务时 `/Applications/VibeCompose.app` 以正常菜单栏状态运行并留给产品所有者复核。
 
 ## 21. 下一步立即执行顺序
 

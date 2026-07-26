@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an improvement for VibeWhisper
+about: Suggest an improvement for VibeCompose
 title: "[Feature] "
 labels: enhancement
 assignees: ""
@@ -12,7 +12,7 @@ What workflow is currently awkward or missing?
 
 ## Proposed Improvement
 
-What should VibeWhisper do instead?
+What should VibeCompose do instead?
 
 ## Why It Matters
 

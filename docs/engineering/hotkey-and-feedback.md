@@ -1,4 +1,4 @@
-# VibeWhisper Hotkey and Feedback Architecture
+# VibeCompose Hotkey and Feedback Architecture
 
 ## Scope
 
@@ -26,7 +26,7 @@ modifiers: UInt32
 
 Only Carbon Command, Shift, Option, and Control bits survive normalization.
 Unmodified function keys are allowed. Letters, numbers, punctuation, and
-navigation keys require Control, Option, or Command. VibeWhisper rejects:
+navigation keys require Control, Option, or Command. VibeCompose rejects:
 
 - `Esc`;
 - the fixed Quick Add binding;
@@ -53,7 +53,7 @@ remain active. At startup, an unavailable custom binding falls back to `F5`.
 If `F5` is also unavailable, menu-based start/stop remains available and
 Settings explains how to choose another binding.
 
-While the native shortcut recorder has keyboard focus, VibeWhisper suspends the
+While the native shortcut recorder has keyboard focus, VibeCompose suspends the
 current global monitor so the existing shortcut cannot accidentally trigger a
 dictation. It restores the same binding before testing a captured candidate.
 
@@ -153,7 +153,7 @@ Installed Refined HUD and all-mode feedback acceptance:
 
 The second command:
 
-1. packages and installs `/Applications/VibeWhisper.app`;
+1. packages and installs `/Applications/VibeCompose.app`;
 2. captures the complete Refined HUD state matrix;
 3. runs Refined HUD, AI Activity Glow, and Hidden mode assertions;
 4. verifies explicit Reduce Motion behavior;

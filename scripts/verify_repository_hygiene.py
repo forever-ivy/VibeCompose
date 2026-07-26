@@ -10,7 +10,20 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-EXCLUDED_DIRECTORIES = {".git", ".build", "dist", ".agents"}
+EXCLUDED_DIRECTORIES = {
+    ".git",
+    ".build",
+    "dist",
+    ".agents",
+    # Session/worktree scratch (Claude Code, agent worktrees) is not product
+    # source and may retain historical wording from isolated experiments.
+    ".claude",
+    # Website toolchain: never scan dependency trees as product docs.
+    "node_modules",
+    ".pnpm",
+    ".next",
+    "out",
+}
 TEXT_SUFFIXES = {
     ".entitlements",
     ".html",
@@ -37,6 +50,7 @@ TEXT_FILENAMES = {
 }
 
 LEGACY_MARKERS = (
+    "Vibe" + "Whisper",
     "Chat" + "Type",
     "chat" + "-type",
     "chat" + "type",
@@ -44,6 +58,11 @@ LEGACY_MARKERS = (
     "Voice" + "Dex",
     "voice" + "dex",
 )
+
+LEGACY_IDENTITY_ALLOWLIST = {
+    # Deliberate, non-user-facing upgrade identifiers for existing installs.
+    "Sources/VibeCompose/LegacyProductIdentity.swift",
+}
 
 LOCALIZATION_CALL_PATTERN = re.compile(
     r'L10n\.(?:text|format)\(\s*"((?:\\.|[^"\\])*)"',
@@ -73,10 +92,10 @@ PRIVATE_KEY_FILENAME_PATTERN = re.compile(
 )
 
 REMOVED_COMMERCIAL_ARTIFACTS = (
-    "Sources/VibeWhisper/CommercialLicensing.swift",
-    "Sources/VibeWhisperLicensing",
-    "Sources/VibeWhisperLicenseTool",
-    "Tests/VibeWhisperLicensingTests",
+    "Sources/VibeCompose/CommercialLicensing.swift",
+    "Sources/VibeComposeLicensing",
+    "Sources/VibeComposeLicenseTool",
+    "Tests/VibeComposeLicensingTests",
     "docs/engineering/licensing.md",
     "docs/legal/refund-policy.md",
     "docs/legal/refund-policy.zh-CN.md",
@@ -93,7 +112,7 @@ COMMERCIALIZATION_MARKERS = (
     "commercial release",
     "commercial-release",
     "commercialization",
-    "vibewhisper pro",
+    "vibecompose pro",
     "pro preview",
     "license activation",
     "license receipt",
@@ -147,6 +166,8 @@ def unescape_source_string(value: str) -> str:
 def verify_canonical_identity(paths: list[Path]) -> list[str]:
     failures: list[str] = []
     for path in paths:
+        if relative(path) in LEGACY_IDENTITY_ALLOWLIST:
+            continue
         contents = read_text(path)
         for marker in LEGACY_MARKERS:
             if marker.casefold() in contents.casefold():
@@ -202,7 +223,7 @@ def verify_commercialization_removal(paths: list[Path]) -> list[str]:
             or relative_path.startswith("Tests/")
             or relative_path == "scripts/verify_repository_hygiene.py"
             or relative_path.startswith(
-                "Sources/VibeWhisper/Resources/Legal/ThirdPartyLicenses/"
+                "Sources/VibeCompose/Resources/Legal/ThirdPartyLicenses/"
             )
             or relative_path == "LICENSE"
         ):
@@ -229,7 +250,7 @@ def verify_commercialization_removal(paths: list[Path]) -> list[str]:
 
 def verify_localization() -> list[str]:
     failures: list[str] = []
-    source_root = ROOT / "Sources" / "VibeWhisper"
+    source_root = ROOT / "Sources" / "VibeCompose"
     strings_path = (
         source_root
         / "Resources"

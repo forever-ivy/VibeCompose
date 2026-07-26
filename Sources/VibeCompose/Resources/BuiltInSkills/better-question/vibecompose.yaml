@@ -1,0 +1,17 @@
+context:
+  required:
+  - voice
+  optional:
+  - selection
+  - styleCapsule
+
+output:
+  format: plainText
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 4000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: false

@@ -1,0 +1,21 @@
+context:
+  required:
+  - voice
+  optional:
+  - selection
+  - styleCapsule
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 8000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: true
+  requiredSections:
+  - Decisions|决定|决策
+  - Action Items|行动项|待办
+  - Open Questions|开放问题|待确认

@@ -1,4 +1,4 @@
-# VibeWhisper HUD Visual Spec
+# VibeCompose HUD Visual Spec
 
 This spec mirrors the HUD implementation built from source. Installed-product
 acceptance remains authoritative.

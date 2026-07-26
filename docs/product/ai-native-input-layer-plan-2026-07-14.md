@@ -1,4 +1,4 @@
-# VibeWhisper AI-native 输入层完整方案
+# VibeCompose AI-native 输入层完整方案
 
 > 日期：2026-07-14
 > 最近修订：2026-07-18
@@ -35,7 +35,7 @@ Swift `release` 构建配置而不是 `.build/debug`；App 与 DMG 的两次 App
 中英文政策，直到产品所有者提供并同步真实 support/security/privacy/legal URL 与
 责任角色。因此公开签名分发继续阻断。
 
-2026-07-15 的收口验收已从 `/Applications/VibeWhisper.app` 完成：
+2026-07-15 的收口验收已从 `/Applications/VibeCompose.app` 完成：
 `scripts/check.sh`、三档窗口双语 Settings 快照、三种 Feedback Surface、
 Reduce Motion / Increase Contrast、全部主要窗口的无障碍结构与视觉检查、
 TextEdit 已确认插入和 Terminal 粘贴派发均通过。标准 Agent Skill Loader、Archive、
@@ -44,11 +44,11 @@ Legacy Adapter、Creator 导出/重导入、Collections 隔离和签名 Registry
 高级 Context Source 显示为 unavailable 以及外部 Action 被拒绝的产品边界。
 
 本文 v6 收敛下一阶段架构：Agent Skills 开放标准成为唯一公共创作格式；当前
-`.vibewhisperskill` v1 通过 Legacy Adapter 保持兼容；一个标准 Skill 对应一个主要
-输出行为，相关 Skills 由 Collection 组织；可选 `vibewhisper.yaml` 只补充 Host
+`.vibecomposeskill` v1 通过 Legacy Adapter 保持兼容；一个标准 Skill 对应一个主要
+输出行为，相关 Skills 由 Collection 组织；可选 `vibecompose.yaml` 只补充 Host
 Profile，不重复 `SKILL.md`。Context 升格为全局 Context Fabric，所有 Skill 仍由
-VibeWhisper 内嵌 Skill Engine 执行。Codex、Claude Code 可以读取同一标准目录或
-接收生成的 Prompt，但不是 VibeWhisper 调用或绑定的 Runtime。标准目录、可选
+VibeCompose 内嵌 Skill Engine 执行。Codex、Claude Code 可以读取同一标准目录或
+接收生成的 Prompt，但不是 VibeCompose 调用或绑定的 Runtime。标准目录、可选
 Host Profile、Legacy Adapter、Creator、Collections 和可信 Registry 管线现已进入
 同一仓库实现；远程来源开放与高级 Context Adapter 仍受独立门禁约束。
 
@@ -113,7 +113,7 @@ Phase 4 已完成：
 
 Phase 5 已完成：
 
-- `.vibewhisperskill` v1 本地目录包导入；
+- `.vibecomposeskill` v1 本地目录包导入；
 - 受限 `skill.yaml`、`prompt.md`、`terminology.csv`、`validators.json`、本地化、示例和 Golden cases；
 - 文件数、单文件、Prompt 和整包硬限制；
 - 路径穿越、软链接、可执行位、shebang、Mach-O、脚本、动态库和未知文件拒绝；
@@ -149,11 +149,11 @@ Inspector、Golden tests 和兼容性分析。可信 Registry 管线已经实现
 
 ## 0. 执行结论
 
-VibeWhisper 不应继续只被定义为“语音转文字工具”，而应升级为：
+VibeCompose 不应继续只被定义为“语音转文字工具”，而应升级为：
 
 > **macOS 上由语音、上下文和可组合 Skills 驱动的 AI 输入层。**
 
-用户不只是在“说一段文字”，而是在表达意图。VibeWhisper 应结合当前任务、用户明确授权的上下文、专业术语和个人风格，把口述内容转换成可以直接发送、提交、粘贴或继续编辑的产物。
+用户不只是在“说一段文字”，而是在表达意图。VibeCompose 应结合当前任务、用户明确授权的上下文、专业术语和个人风格，把口述内容转换成可以直接发送、提交、粘贴或继续编辑的产物。
 
 本方案确定以下产品决策：
 
@@ -173,22 +173,22 @@ VibeWhisper 不应继续只被定义为“语音转文字工具”，而应升�
     `skill.yaml + prompt.md` 只由 v1 Legacy Adapter 读取。
 11. 一个标准 Skill 对应一个主要输出行为；医学、Prompt Writer 等相关能力通过
     `SkillCollection` 组织，不在公共格式中增加私有多 Entrypoint。
-12. `vibewhisper.yaml` 是可选 Host Profile，只声明 Context、资源、输出、风险和
+12. `vibecompose.yaml` 是可选 Host Profile，只声明 Context、资源、输出、风险和
     Validator；没有它的标准 Skill 仍可按安全默认值运行。
 13. Context 是全局一等能力。Skill 只能提出 Context Request，不能直接读取
     Accessibility、文件、终端、浏览器、剪贴板、Keychain、MCP 或网络。
-14. 所有兼容 Skill 都由 VibeWhisper 内嵌 `SkillExecutionEngine` 执行，共用
+14. 所有兼容 Skill 都由 VibeCompose 内嵌 `SkillExecutionEngine` 执行，共用
     Prompt Compiler、Context Fabric、Validator、Preview 和 Output Router。
-15. 标准包可包含其他 Host 使用的脚本和元数据，但 VibeWhisper 永不执行脚本、
+15. 标准包可包含其他 Host 使用的脚本和元数据，但 VibeCompose 永不执行脚本、
     Shell、Hooks、MCP 或自定义网络；依赖这些能力的 Skill 标记为不兼容。
-16. VibeWhisper Skill 生态独立存在，不依赖 Codex、Claude Code 或其他应用；
+16. VibeCompose Skill 生态独立存在，不依赖 Codex、Claude Code 或其他应用；
     “生成 Codex Prompt”只是一个输出场景，不是外部 Agent 调用。
 
 ## 1. 当前产品基线
 
 ### 1.1 已有可复用能力
 
-VibeWhisper 当前已具备 AI-native 输入层的本地运行底座：
+VibeCompose 当前已具备 AI-native 输入层的本地运行底座：
 
 - 原生 AppKit + SwiftUI 菜单栏应用；
 - 可自定义全局快捷键，默认 `F5` 开始、同键停止；
@@ -216,14 +216,14 @@ VibeWhisper 当前已具备 AI-native 输入层的本地运行底座：
 | 术语 | 用户词典 + Skill 私有术语 + Backend/Medical/Kubernetes Domain Packs | 后续可增加经过审查的 Pack，但优先级和高风险 Preview 不变 |
 | AI Polish | 固定安全外壳 + Skill Prompt Compiler + 本地 Validator + ASR 回退 | 提升质量评估，不放宽本地安全顺序 |
 | HUD | Refined HUD、AI Activity Glow、Hidden 三模式 | 继续优化安装版多显示器和无障碍证据 |
-| 社区扩展 | 本地 `.vibewhisperskill` v1、Inspector、多版本和 Golden tests | Agent Skills 标准导入、Collections 与远程 Registry 尚未开放 |
+| 社区扩展 | 本地 `.vibecomposeskill` v1、Inspector、多版本和 Golden tests | Agent Skills 标准导入、Collections 与远程 Registry 尚未开放 |
 | 外部动作 | 未开放，导入时拒绝 `externalAction` 和 `actionPreview` | 不属于 Skill Engine；只在独立产品边界中研究有限集成 |
 
 ## 2. 产品定位
 
 ### 2.1 新品类定义
 
-VibeWhisper 的长期品类不是输入法，也不是聊天机器人，而是：
+VibeCompose 的长期品类不是输入法，也不是聊天机器人，而是：
 
 > **Intent-to-Output Layer / 意图到产物的输入层**
 
@@ -319,7 +319,7 @@ VibeWhisper 的长期品类不是输入法，也不是聊天机器人，而是�
 
 ```text
 用户选中一段文本
-→ 触发 VibeWhisper
+→ 触发 VibeCompose
 → 说“保持这个语气，缩短一半，但保留日期和数字”
 → Skill 只读取选区
 → 展示 Diff
@@ -347,13 +347,13 @@ VibeWhisper 的长期品类不是输入法，也不是聊天机器人，而是�
 → 默认预览
 ```
 
-## 5. VibeWhisper Skill Engine
+## 5. VibeCompose Skill Engine
 
 ### 5.1 标准选择
 
-VibeWhisper 的公共 Skill 创作格式采用 **Agent Skills 开放标准**，不再设计一套
+VibeCompose 的公共 Skill 创作格式采用 **Agent Skills 开放标准**，不再设计一套
 并列的 Community Skill v2 格式。Codex 和 Claude Code 都以该标准的
-`SKILL.md` 目录为公共基础；VibeWhisper 作为第三种独立 Host，只实现与语音输入
+`SKILL.md` 目录为公共基础；VibeCompose 作为第三种独立 Host，只实现与语音输入
 和输出定制相关的运行语义。
 
 标准依据：
@@ -363,8 +363,8 @@ VibeWhisper 的公共 Skill 创作格式采用 **Agent Skills 开放标准**，�
 - [Claude Code — Extend Claude with skills](https://code.claude.com/docs/en/slash-commands)。
 
 这项决策保证开源作者可以复用同一个目录、`SKILL.md`、References、Assets 和示例，
-不需要为 VibeWhisper 重写一份 Prompt 包。格式兼容不表示所有 Host 能力相同：
-Codex、Claude Code 可以使用工具或脚本；VibeWhisper 只把兼容内容编译成语音输出
+不需要为 VibeCompose 重写一份 Prompt 包。格式兼容不表示所有 Host 能力相同：
+Codex、Claude Code 可以使用工具或脚本；VibeCompose 只把兼容内容编译成语音输出
 转换计划，不调用这些产品，也不执行它们的 Agent 工作流。
 
 ### 5.2 Skill 的公共定义
@@ -376,10 +376,10 @@ medical-clinical-note/
 ├── SKILL.md                 # required: metadata + instructions
 ├── references/              # optional: domain knowledge
 ├── assets/                  # optional: templates and static resources
-├── scripts/                 # optional in the standard; never executed by VibeWhisper
+├── scripts/                 # optional in the standard; never executed by VibeCompose
 ├── agents/
-│   └── openai.yaml          # optional Codex metadata; ignored by VibeWhisper
-└── vibewhisper.yaml         # optional VibeWhisper Host Profile
+│   └── openai.yaml          # optional Codex metadata; ignored by VibeCompose
+└── vibecompose.yaml         # optional VibeCompose Host Profile
 ```
 
 公共最低契约：
@@ -399,11 +399,11 @@ medical-clinical-note/
 name: medical-clinical-note
 description: 将医学语音整理成结构化临床记录。用于病历口述、诊疗记录和医学术语听写。
 license: Apache-2.0
-compatibility: Works as an instruction-only Skill in VibeWhisper, Codex, and Claude Code.
+compatibility: Works as an instruction-only Skill in VibeCompose, Codex, and Claude Code.
 metadata:
   author: example-org
   version: "1.0.0"
-  vibewhisper-id: com.example.medical-clinical-note
+  vibecompose-id: com.example.medical-clinical-note
 ---
 
 把用户口述整理成临床记录。
@@ -416,9 +416,9 @@ metadata:
 术语和格式要求见 `references/terminology.md`。
 ```
 
-### 5.3 VibeWhisper Host Profile
+### 5.3 VibeCompose Host Profile
 
-纯 Agent Skills 标准目录无需修改即可导入 VibeWhisper。没有 Host Profile 时使用
+纯 Agent Skills 标准目录无需修改即可导入 VibeCompose。没有 Host Profile 时使用
 安全默认值：
 
 ```text
@@ -431,7 +431,7 @@ validators = app defaults
 ```
 
 需要确定性 Context、模板、术语、Validator 或投递策略时，可增加可选
-`vibewhisper.yaml`。它是标准目录允许的 Host 扩展，不是第二份 Skill 定义，也不能
+`vibecompose.yaml`。它是标准目录允许的 Host 扩展，不是第二份 Skill 定义，也不能
 重复或替代 `SKILL.md` 主指令：
 
 ```yaml
@@ -461,18 +461,18 @@ validators:
     - 计划
 ```
 
-Profile 只能请求 VibeWhisper 已实现的能力。最终授权、字符预算、风险升级、Preview
+Profile 只能请求 VibeCompose 已实现的能力。最终授权、字符预算、风险升级、Preview
 和安全投递仍由 App 决定；Profile 不能授予文件、网络、工具、Keychain、MCP 或
 外部 Action 权限。
 
 ### 5.4 一 Skill 一主要输出行为
 
 Agent Skills 的公共入口是一个目录中的一个 `SKILL.md`。为了保持真正的跨 Host
-可移植性，VibeWhisper 社区格式采用：
+可移植性，VibeCompose 社区格式采用：
 
 > **一个 Skill 对应一个主要语音输出行为。**
 
-不在公共格式里增加 VibeWhisper 私有的多 Entrypoint 模型。相关能力通过
+不在公共格式里增加 VibeCompose 私有的多 Entrypoint 模型。相关能力通过
 `SkillCollection` 在展示和分发层组合：
 
 ```text
@@ -493,14 +493,14 @@ Skill。
 
 ### 5.5 Host 兼容性分级
 
-VibeWhisper 不宣称所有 Codex / Claude Code Skill 都能等价运行，而是提供明确的
+VibeCompose 不宣称所有 Codex / Claude Code Skill 都能等价运行，而是提供明确的
 兼容性报告：
 
-| 等级 | 内容 | VibeWhisper 行为 |
+| 等级 | 内容 | VibeCompose 行为 |
 | --- | --- | --- |
 | Portable | `SKILL.md` + 文本 References / Assets | 完整支持 |
-| VibeWhisper Enhanced | Portable + `vibewhisper.yaml` | 完整支持 Context、输出和 Validator 契约 |
-| Vendor Extended | `agents/openai.yaml`、Claude 私有 Frontmatter 等 | 保留并忽略与 VibeWhisper 无关的元数据 |
+| VibeCompose Enhanced | Portable + `vibecompose.yaml` | 完整支持 Context、输出和 Validator 契约 |
+| Vendor Extended | `agents/openai.yaml`、Claude 私有 Frontmatter 等 | 保留并忽略与 VibeCompose 无关的元数据 |
 | Tool-dependent | `allowed-tools`、Bash、MCP、文件写入、Hooks、Subagent | 标记不兼容，不启用依赖能力 |
 | Executable-dependent | `scripts/`、动态命令或二进制 | 不执行；若主流程依赖它们则拒绝启用 |
 
@@ -512,14 +512,14 @@ VibeWhisper 不宣称所有 Codex / Claude Code Skill 都能等价运行，而�
 - 不把脚本正文送入模型；
 - 不允许 `SkillResourceResolver` 返回脚本或二进制；
 - 检测到 `!command`、Hooks、工具依赖或必须运行脚本的指令时标记不兼容；
-- Inspector 明确显示“标准格式兼容”和“VibeWhisper 运行兼容”是两个状态。
+- Inspector 明确显示“标准格式兼容”和“VibeCompose 运行兼容”是两个状态。
 
 ### 5.6 当前 v1 与迁移边界
 
-当前已经实现的 `.vibewhisperskill` v1 使用：
+当前已经实现的 `.vibecomposeskill` v1 使用：
 
 ```text
-Legacy.vibewhisperskill/
+Legacy.vibecomposeskill/
 ├── skill.yaml
 ├── prompt.md
 ├── terminology.csv
@@ -529,13 +529,13 @@ Legacy.vibewhisperskill/
 └── tests/golden.jsonl
 ```
 
-它继续受支持，但从 Phase 8 开始只作为 `LegacyVibeWhisperV1Adapter` 输入，不再是
+它继续受支持，但从 Phase 8 开始只作为 `LegacyVibeComposeV1Adapter` 输入，不再是
 新作者的推荐格式：
 
 ```text
 Legacy skill.yaml + prompt.md
-→ LegacyVibeWhisperV1Adapter
-→ normalized AgentSkillPackage + VibeWhisperSkillProfile
+→ LegacyVibeComposeV1Adapter
+→ normalized AgentSkillPackage + VibeComposeSkillProfile
 → existing SkillExecutionEngine
 ```
 
@@ -544,13 +544,13 @@ Legacy skill.yaml + prompt.md
 - 不修改用户已安装 v1 包；
 - 保留稳定 ID、版本、App Rule、History 和回滚状态；
 - Skill Creator 默认导出 Agent Skills 标准目录；
-- 可选择把 v1 包导出为标准 `SKILL.md` + `vibewhisper.yaml`；
-- `.vibewhisperskill` 仅保留为可选运输包装，不再是公共创作格式；
+- 可选择把 v1 包导出为标准 `SKILL.md` + `vibecompose.yaml`；
+- `.vibecomposeskill` 仅保留为可选运输包装，不再是公共创作格式；
 - 普通目录、ZIP/Registry Archive 解包后都必须得到同一标准 Skill 目录。
 
 ### 5.7 身份、版本与来源
 
-Agent Skills 标准要求 `name`，但不强制全局 ID 和版本。VibeWhisper 不能继续把
+Agent Skills 标准要求 `name`，但不强制全局 ID 和版本。VibeCompose 不能继续把
 公共 `name` 当作唯一安装身份：
 
 ```text
@@ -558,7 +558,7 @@ Portable identity
 ├── name / description / license / compatibility
 └── optional metadata
 
-VibeWhisper installation identity
+VibeCompose installation identity
 ├── installationID
 ├── registryPackageID or local source ID
 ├── resolved version or local revision digest
@@ -569,7 +569,7 @@ VibeWhisper installation identity
 规则：
 
 - Registry 安装的 ID、版本、发布者和签名由签名索引提供；
-- 本地目录可以通过 `metadata.vibewhisper-id` 和 `metadata.version` 提供稳定信息；
+- 本地目录可以通过 `metadata.vibecompose-id` 和 `metadata.version` 提供稳定信息；
 - 缺少扩展信息时由 App 分配本地 `installationID`，内容哈希作为 revision；
 - App Rule、权限和历史引用 `installationID`，不直接依赖目录名；
 - 同名 Skill 不合并，由来源、发布者和安装身份区分；
@@ -577,7 +577,7 @@ VibeWhisper installation identity
 
 ### 5.8 渐进披露与资源解析
 
-VibeWhisper 采用与 Agent Skills 一致的渐进披露思想，但由内嵌引擎执行：
+VibeCompose 采用与 Agent Skills 一致的渐进披露思想，但由内嵌引擎执行：
 
 1. **Catalog**：常驻只加载 `name`、`description`、来源、兼容状态和路径；
 2. **Instructions**：Skill 被解析后加载完整 `SKILL.md` 正文；
@@ -598,22 +598,22 @@ VibeWhisper 采用与 Agent Skills 一致的渐进披露思想，但由内嵌引
 全局热键或显式选择
 → 创建 InputSession
 → 冻结目标与 Skill 安装身份
-→ 加载 SKILL.md 与 VibeWhisper Profile
+→ 加载 SKILL.md 与 VibeCompose Profile
 → 运行兼容性分析
 → 根据 Profile 生成 Context Request
 → Context Policy 批准后创建 Snapshot
 → 解析受支持 References / Assets
 → Technical Literal 与术语保护
 → Skill Prompt Compiler
-→ VibeWhisper 配置的模型转换
+→ VibeCompose 配置的模型转换
 → 声明式 Validator Engine
 → 一次有界修复或 ASR 安全回退
 → Diff / Preview / Output Router
 → History / Recovery / 脱敏 Receipt
 ```
 
-Skill 始终位于 VibeWhisper 系统安全与事实保真外壳之后。即使其输出是给 Codex、
-Claude Code 或其他应用使用的 Prompt，VibeWhisper 也只生成和投递文本。
+Skill 始终位于 VibeCompose 系统安全与事实保真外壳之后。即使其输出是给 Codex、
+Claude Code 或其他应用使用的 Prompt，VibeCompose 也只生成和投递文本。
 
 ### 5.10 解析、发现与组合
 
@@ -631,12 +631,12 @@ Skill 在录音开始时冻结，避免录音期间切换 App 导致指令、权
 运行时只允许受控组合：
 
 ```text
-VibeWhisper System Contract
+VibeCompose System Contract
 → selected Skill / SKILL.md
 → optional Domain Pack
 → Team Profile
 → User Terminology and Style Capsule
-→ VibeWhisper Output Template
+→ VibeCompose Output Template
 → Declarative Validators
 ```
 
@@ -647,13 +647,13 @@ Skill 不能调用另一个 Skill；Collection 不能改变上述顺序；冲突
 Skill Creator 面向两类作者：
 
 - 普通用户通过表单编辑名称、描述、指令、模板、术语、示例、Context 和 Validator；
-- 高级作者直接编辑标准 `SKILL.md`、References、Assets 和可选 `vibewhisper.yaml`。
+- 高级作者直接编辑标准 `SKILL.md`、References、Assets 和可选 `vibecompose.yaml`。
 
 Creator 默认生成可被其他 Agent Skills Host 读取的标准目录，不生成新的
 `skill.yaml + prompt.md` 包。Inspector 必须显示：
 
 - Agent Skills 标准校验结果；
-- VibeWhisper 兼容等级及不兼容原因；
+- VibeCompose 兼容等级及不兼容原因；
 - 最终安装身份、来源、版本 / revision 和内容哈希；
 - `SKILL.md`、实际加载 Resources 和被隔离文件；
 - 本次 Context Request、授权类别和字符数；
@@ -662,7 +662,7 @@ Creator 默认生成可被其他 Agent Skills Host 读取的标准目录，不�
 - Golden cases、跨语言、空输入、超长输入和技术字面量测试；
 - 不含用户正文的可导出诊断。
 
-Golden tests 属于 VibeWhisper 的作者工具和 Registry 质量层，不要求其他 Host 执行，
+Golden tests 属于 VibeCompose 的作者工具和 Registry 质量层，不要求其他 Host 执行，
 也不能调用 Provider、脚本或外部工具。
 
 ### 5.12 能力上限与用户定制
@@ -698,8 +698,8 @@ Golden tests 属于 VibeWhisper 的作者工具和 Registry 质量层，不要�
 - **专业人士**：Fork 医学、法律、金融 Skill，加入机构模板、词表和校验；
 - **开发者**：定义技术 Prompt、Issue、Bug Report 和 Commit Message 输出；
 - **团队管理员**：分发 Collection、锁定 Registry 版本、模板和允许列表；
-- **开源作者**：维护一份标准目录，同时服务 VibeWhisper、Codex、Claude Code 等 Host；
-- **高级作者**：增加可选 VibeWhisper Profile，但仍受内嵌声明式执行边界约束。
+- **开源作者**：维护一份标准目录，同时服务 VibeCompose、Codex、Claude Code 等 Host；
+- **高级作者**：增加可选 VibeCompose Profile，但仍受内嵌声明式执行边界约束。
 
 ## 6. Context Fabric：全局上下文与权限系统
 
@@ -809,14 +809,14 @@ Context Source Catalog
 → Context Receipt
 ```
 
-Skill 的 VibeWhisper Profile 只能提出 `ContextRequest`。Context Policy 按以下优先级决定实际
+Skill 的 VibeCompose Profile 只能提出 `ContextRequest`。Context Policy 按以下优先级决定实际
 可提供内容：
 
 ```text
 系统永久拒绝
 → 敏感 App / 目标拒绝
 → Source 全局开关
-→ VibeWhisper Source 能力限制
+→ VibeCompose Source 能力限制
 → Skill Context Request
 → Skill + Source 持久授权
 → 本次授权
@@ -1013,19 +1013,19 @@ Validator 失败时不直接投递，可：
 
 #### Phase B：Legacy v1 本地导入（已完成）
 
-- 用户导入 `.vibewhisperskill` v1；
+- 用户导入 `.vibecomposeskill` v1；
 - `skill.yaml + prompt.md` 由现有受限 Loader 读取；
 - 安装前查看作者、版本、权限、文件和内容哈希；
 - 支持禁用、卸载、多版本和回滚；
-- Phase 8 后由 `LegacyVibeWhisperV1Adapter` 继续兼容。
+- Phase 8 后由 `LegacyVibeComposeV1Adapter` 继续兼容。
 
 #### Phase C：Agent Skills 标准本地导入（已完成）
 
-- 导入普通 Skill 目录、ZIP 或可选 `.vibewhisperskill` 运输包；
+- 导入普通 Skill 目录、ZIP 或可选 `.vibecomposeskill` 运输包；
 - 必需入口统一为 `SKILL.md`；
 - 支持标准 Frontmatter、References、Assets 和渐进披露；
-- 支持可选 `vibewhisper.yaml` Host Profile；
-- 显示“标准格式有效”和“VibeWhisper 可运行”两类结果；
+- 支持可选 `vibecompose.yaml` Host Profile；
+- 显示“标准格式有效”和“VibeCompose 可运行”两类结果；
 - 标准 Skill 可原样继续被 Codex、Claude Code 等 Host 使用。
 
 #### Phase D：Community Registry 与 Collections（可信管线完成；远程默认关闭）
@@ -1045,29 +1045,29 @@ Validator 失败时不直接投递，可：
 ### 10.2 标准包安全与兼容边界
 
 社区内容始终是不可信输入。Agent Skills 标准允许不同 Host 扩展工具、脚本和其他
-文件，但 VibeWhisper 只实现输入层兼容子集：
+文件，但 VibeCompose 只实现输入层兼容子集：
 
 - `SKILL.md` 主体只能影响转换指令，不能改变系统安全外壳；
-- `vibewhisper.yaml` 只能提出 Context、资源、输出和 Validator 请求；
+- `vibecompose.yaml` 只能提出 Context、资源、输出和 Validator 请求；
 - Codex 的 `agents/openai.yaml`、Claude Code 私有 Frontmatter 和其他 Host 元数据
-  可以保留，但不进入 VibeWhisper 执行计划；
+  可以保留，但不进入 VibeCompose 执行计划；
 - `scripts/`、二进制和未知供应商资源可以为跨 Host 完整性而隔离保存，但永不加载、
   运行或发送给模型；
 - 依赖 `allowed-tools`、Hooks、动态命令、Subagent、Bash、MCP、网络或文件写入的
-  Skill 标记为 VibeWhisper 不兼容；
+  Skill 标记为 VibeCompose 不兼容；
 - 包不能绕过选择授权、敏感 App、Context Policy、Preview、Validator、粘贴验证、
   History / Recovery 或脱敏诊断；
 - 软链接、路径穿越、设备文件、超限内容和安装期间变化继续拒绝；
 - 安装副本使用 owner-only 权限，所有可执行位被清除。
 
-即使 `SKILL.md` 或旧 `prompt.md` 要求“忽略 VibeWhisper 规则”，也只能位于固定
+即使 `SKILL.md` 或旧 `prompt.md` 要求“忽略 VibeCompose 规则”，也只能位于固定
 系统安全外壳之后。当前 v1 的可执行规范继续见
 `docs/engineering/community-skill-sdk.md`；Phase 8 必须新增 Agent Skills Host
 兼容规范，而不是覆盖历史文档。
 
 ### 10.3 外部 Action 与 Skill 生态分离
 
-VibeWhisper Skill 的职责止于理解语音、组合 Context、生成和校验输出。连接
+VibeCompose Skill 的职责止于理解语音、组合 Context、生成和校验输出。连接
 GitHub、Linear、Notion、Jira、Slack 或 MCP 不属于通用 Skill 能力，也不进入
 Phase 7–11 的 Skill Engine。普通 Skill 可以生成 Issue、任务或消息文本，但不能
 自行发送或修改外部对象。
@@ -1301,7 +1301,7 @@ Dictation shortcut      [ F5 ] [Record Shortcut…]
 - 单独 `ESC`；
 - `⌘Q`、`⌘W`、`⌘C`、`⌘V`、`⌘X`、`⌘Z`、`⌘A`；
 - `⌘Tab`、`⌘Space` 等明显系统级组合；
-- 与 VibeWhisper Quick Add 或其他内部快捷键冲突的组合；
+- 与 VibeCompose Quick Add 或其他内部快捷键冲突的组合；
 - Carbon 无法稳定注册的媒体键；
 - 仅包含修饰键、不包含主键的输入。
 
@@ -1379,7 +1379,7 @@ Press ⌃⌥D again to transcribe.
 
 ### 12.7 与输入法、系统和内部快捷键的冲突
 
-- 注册前检测 VibeWhisper 内部冲突；
+- 注册前检测 VibeCompose 内部冲突；
 - 注册失败时显示“已被其他应用或系统占用”，不猜测具体占用者；
 - Quick Add 当前 `⌃⌥Space` 保持不变，直到独立快捷键管理页面完成；
 - 如果用户把主热键设置为 Quick Add，阻止保存；
@@ -1424,7 +1424,7 @@ macOS Alpha 已落地九个 Settings 页面：
    - 内置和已安装 Skills；
    - App Rules；
    - Skill Inspector；
-   - 本地 `.vibewhisperskill` v1 导入、版本和卸载。
+   - 本地 `.vibecomposeskill` v1 导入、版本和卸载。
 5. **Context**
    - 各 Skill 权限；
    - 敏感 App；
@@ -1486,20 +1486,20 @@ Skill Creator
 ├── Start from Template / Fork Skill
 ├── Standard SKILL.md
 ├── References and Assets
-├── VibeWhisper Host Profile
+├── VibeCompose Host Profile
 ├── Validators and Golden Tests
 └── Export Standard Directory / Archive
 ```
 
 每个 Skill 显示标准 `name`、`description`、安装身份、来源、版本 / revision、
-格式有效性和 VibeWhisper 兼容等级；如果存在 Host Profile，再显示 Context Request、
+格式有效性和 VibeCompose 兼容等级；如果存在 Host Profile，再显示 Context Request、
 模板、输出格式、风险和 Preview 要求。用户可以从模板创建、Fork 官方或社区 Skill，
 并在安装前用示例语音和模拟 Context 预览。这里不出现外部运行时连接设置，所有
-兼容 Skill 都由 VibeWhisper 内嵌 Skill Engine 执行。
+兼容 Skill 都由 VibeCompose 内嵌 Skill Engine 执行。
 
 ## 14. 目标技术架构
 
-这次迁移属于 **Skill 子系统的框架级重构**，不是整个 VibeWhisper 重写。需要重构
+这次迁移属于 **Skill 子系统的框架级重构**，不是整个 VibeCompose 重写。需要重构
 包加载、身份、资源、兼容性和执行计划；热键、录音、ASR、Context 授权、Preview、
 Validator、OutputRouter 和安全粘贴继续复用。
 
@@ -1512,8 +1512,8 @@ HotkeyRegistrationService
 
 AgentSkillPackageLoader
 AgentSkillFrontmatterParser
-VibeWhisperProfileLoader
-LegacyVibeWhisperV1Adapter
+VibeComposeProfileLoader
+LegacyVibeComposeV1Adapter
 SkillCompatibilityAnalyzer
 SkillPackageStore
 InstalledSkillRegistry
@@ -1551,12 +1551,12 @@ HiddenFeedbackController
 
 #### `AgentSkillPackageLoader`
 
-- 识别普通目录、Archive 解包结果和可选 `.vibewhisperskill` 运输包装；
+- 识别普通目录、Archive 解包结果和可选 `.vibecomposeskill` 运输包装；
 - 要求根目录存在 `SKILL.md`；
 - 校验目录名、`name`、`description` 和开放标准 Frontmatter；
 - 把 Markdown 正文作为唯一主指令；
 - 建立 Resources Catalog，但不立即读取全部资源；
-- 保留无法识别的 Host 元数据，不把它们解释成 VibeWhisper 权限。
+- 保留无法识别的 Host 元数据，不把它们解释成 VibeCompose 权限。
 
 #### `AgentSkillFrontmatterParser`
 
@@ -1570,18 +1570,18 @@ HiddenFeedbackController
 Parser；可以引入经过审查的 Swift YAML 依赖，或实现只覆盖标准字段和受限 Vendor
 Metadata 的专用 Parser，但不能继续把 v1 Flat YAML 当成通用 YAML。
 
-#### `VibeWhisperProfileLoader`
+#### `VibeComposeProfileLoader`
 
-- 可选读取根目录 `vibewhisper.yaml`；
+- 可选读取根目录 `vibecompose.yaml`；
 - 只解析 Context Request、资源映射、Output Contract、Risk、Delivery 和 Validators；
 - 不允许 Profile 重定义 `name`、`description` 或 `SKILL.md` 指令；
 - 未提供时生成安全默认 Profile；
 - 未知能力明确报错，不静默获得权限。
 
-#### `LegacyVibeWhisperV1Adapter`
+#### `LegacyVibeComposeV1Adapter`
 
 - 继续读取 `skill.yaml + prompt.md` v1；
-- 映射为内存中的 `AgentSkillPackage` 和 `VibeWhisperSkillProfile`；
+- 映射为内存中的 `AgentSkillPackage` 和 `VibeComposeSkillProfile`；
 - 保留旧 ID、版本、App Rule、权限和 History 引用；
 - 不把 Legacy 文件改写回用户安装目录；
 - Creator 的显式迁移功能可以另行导出标准目录。
@@ -1594,7 +1594,7 @@ Metadata 的专用 Parser，但不能继续把 v1 Flat YAML 当成通用 YAML。
 
 ```text
 StandardFormatStatus
-VibeWhisperRuntimeStatus
+VibeComposeRuntimeStatus
 CompatibilityIssues[]
 IgnoredVendorFeatures[]
 QuarantinedResources[]
@@ -1607,9 +1607,9 @@ QuarantinedResources[]
 - Codex / Claude 专属元数据；
 - `scripts/`、二进制、动态库、可执行位和 shebang；
 - SKILL.md 是否把脚本、网络、文件写入或外部工具作为必要步骤；
-- VibeWhisper Profile 请求的 Context、输出和 Validator 是否受支持。
+- VibeCompose Profile 请求的 Context、输出和 Validator 是否受支持。
 
-标准格式有效但依赖工具的 Skill 可以被浏览和检查，但不能在 VibeWhisper 中启用。
+标准格式有效但依赖工具的 Skill 可以被浏览和检查，但不能在 VibeCompose 中启用。
 不允许通过“忽略不支持步骤”静默产生含义不同的输出。
 
 #### `SkillResourceCatalog` / `SkillResourceResolver`
@@ -1660,7 +1660,7 @@ QuarantinedResources[]
 
 #### `ContextPolicy`
 
-- Skill 只通过 VibeWhisper Profile 提出 Request；
+- Skill 只通过 VibeCompose Profile 提出 Request；
 - 未授权前不读取正文；
 - 强制敏感 App、Source 开关、字符和 Token 预算；
 - Session 结束释放正文；
@@ -1671,7 +1671,7 @@ QuarantinedResources[]
 固定编译顺序：
 
 ```text
-VibeWhisper 系统安全与事实保真规则
+VibeCompose 系统安全与事实保真规则
 → App-owned Output Contract
 → SKILL.md Instructions
 → approved References / Assets
@@ -1718,7 +1718,7 @@ struct AgentSkillPackage: Sendable, Equatable {
     let vendorExtensions: [String: SkillVendorExtension]
 }
 
-struct VibeWhisperSkillProfile: Sendable, Equatable {
+struct VibeComposeSkillProfile: Sendable, Equatable {
     let contextRequest: ContextRequest
     let resourceBindings: SkillResourceBindings
     let output: SkillOutputContract
@@ -1739,7 +1739,7 @@ struct InstalledSkillIdentity: Codable, Sendable, Equatable, Identifiable {
 struct ResolvedSkillExecutionPlan: Sendable, Equatable {
     let installation: InstalledSkillIdentity
     let package: AgentSkillPackage
-    let profile: VibeWhisperSkillProfile
+    let profile: VibeComposeSkillProfile
     let resources: [ResolvedSkillResource]
     let contextSnapshot: ContextSnapshot
     let resolvedTerminology: [ResolvedTerminologyEntry]
@@ -1766,7 +1766,7 @@ struct AppSkillRule: Codable, Identifiable {
 建议目标结构：
 
 ```text
-~/Library/Application Support/VibeWhisper/
+~/Library/Application Support/VibeCompose/
   Skills/
     Sources/<installation-id>/<revision>/
     RuntimeResources/<installation-id>/<revision>/
@@ -1793,7 +1793,7 @@ flowchart TD
     Session --> Resolve["Installed Skill Resolver"]
     Resolve --> Load["Agent Skills Package or Legacy Adapter"]
     Load --> Compat["Compatibility Analyzer"]
-    Compat --> Profile["VibeWhisper Profile or Safe Defaults"]
+    Compat --> Profile["VibeCompose Profile or Safe Defaults"]
     Profile --> Request["Context Request"]
     Catalog["Context Source Catalog"] --> Policy["Context Policy"]
     Request --> Policy
@@ -1824,9 +1824,9 @@ flowchart TD
 
 代码演进：
 
-- `CommunitySkillRuntime.swift` 拆分出 `LegacyVibeWhisperV1Adapter` 与现有 v1 Store；
+- `CommunitySkillRuntime.swift` 拆分出 `LegacyVibeComposeV1Adapter` 与现有 v1 Store；
 - 新增 `AgentSkillPackageLoader.swift`、`SkillCompatibilityAnalyzer.swift`、
-  `VibeWhisperProfileLoader.swift` 和 `SkillResourceRuntime.swift`；
+  `VibeComposeProfileLoader.swift` 和 `SkillResourceRuntime.swift`；
 - `SkillRuntime.swift` 从单一 `promptInstruction` 模型演进为 Package + Profile + Plan；
 - `ContextRuntime.swift` 拆出 Catalog、Policy、Resolver、Snapshot 和 Receipt；
 - `AppCoordinator.swift` 只协调 InputSession；
@@ -1915,7 +1915,7 @@ Phase 1 的代码完成，但会继续阻断 signed release。
 - 自动化覆盖同目标替换、选区变化 copy-only、敏感 App 和无 Accessibility。
 
 发布级矩阵仍需在 TextEdit、Notes、浏览器编辑器和 Codex/第三方编辑器中
-使用 `/Applications/VibeWhisper.app` 留下可审阅结果。
+使用 `/Applications/VibeCompose.app` 留下可审阅结果。
 
 ### Phase 4 — Style Capsule 与 Terminology Packs（已完成）
 
@@ -1941,7 +1941,7 @@ Phase 1 的代码完成，但会继续阻断 signed release。
 
 交付：
 
-- `.vibewhisperskill` v1 导入；
+- `.vibecomposeskill` v1 导入；
 - 包校验；
 - 权限审查；
 - 禁用、卸载、回滚；
@@ -1950,11 +1950,11 @@ Phase 1 的代码完成，但会继续阻断 signed release。
 
 实现证据：
 
-- `Sources/VibeWhisper/CommunitySkillRuntime.swift`
-- `Sources/VibeWhisper/AINativeSettingsViews.swift`
+- `Sources/VibeCompose/CommunitySkillRuntime.swift`
+- `Sources/VibeCompose/AINativeSettingsViews.swift`
 - `docs/engineering/community-skill-sdk.md`
-- `examples/skills/IssueDraft.vibewhisperskill`
-- `Tests/VibeWhisperTests/CommunitySkillRuntimeTests.swift`
+- `examples/skills/IssueDraft.vibecomposeskill`
+- `Tests/VibeComposeTests/CommunitySkillRuntimeTests.swift`
 
 退出条件：
 
@@ -1990,13 +1990,13 @@ Phase 1 的代码完成，但会继续阻断 signed release。
 
 ### Phase 7 — 统一执行模型与 Context Fabric（仓库实现完成）
 
-目标：不改变现有行为，先把“安装身份、Skill 内容、VibeWhisper Profile、Context
+目标：不改变现有行为，先把“安装身份、Skill 内容、VibeCompose Profile、Context
 Snapshot 和执行计划”从当前单一 `SkillDefinition` 中解耦。
 
 交付：
 
 - `InputSession`、`InstalledSkillIdentity`、`ResolvedSkillExecutionPlan`；
-- 内存态 `AgentSkillPackage` 与 `VibeWhisperSkillProfile`；
+- 内存态 `AgentSkillPackage` 与 `VibeComposeSkillProfile`；
 - 当前内置 Skill 和 Community v1 的临时 Normalizer；
 - `ContextRequest`、`ContextPolicy`、`ContextSnapshot`、`ContextReceipt`；
 - selection、Style Capsule、Terminology 迁移为 Context / Resource 输入；
@@ -2013,30 +2013,30 @@ Snapshot 和执行计划”从当前单一 `SkillDefinition` 中解耦。
 
 ### Phase 8 — Agent Skills 标准 Host 与 Legacy Adapter（仓库实现完成）
 
-目标：让 VibeWhisper 原样读取 Agent Skills 标准目录，同时把现有 v1 保留为兼容
+目标：让 VibeCompose 原样读取 Agent Skills 标准目录，同时把现有 v1 保留为兼容
 输入，而不是继续发明自定义 v2 包格式。
 
 交付：
 
 - `AgentSkillPackageLoader` 与安全 Frontmatter Parser；
 - `SKILL.md` 的 `name`、`description`、Markdown 正文和标准可选字段；
-- `VibeWhisperProfileLoader` 与无 Profile 安全默认值；
-- `LegacyVibeWhisperV1Adapter`；
+- `VibeComposeProfileLoader` 与无 Profile 安全默认值；
+- `LegacyVibeComposeV1Adapter`；
 - `SkillResourceCatalog`、按需 Resolver 和渐进披露；
 - `SkillCompatibilityAnalyzer`；
 - 普通目录、Archive 和 Legacy v1 导入；
 - 源包 / Runtime Resources 隔离存储；
-- 标准目录、VibeWhisper Runtime、Vendor Extension 和工具依赖的兼容报告；
+- 标准目录、VibeCompose Runtime、Vendor Extension 和工具依赖的兼容报告；
 - Inspector、版本 / revision、启用、回滚和卸载统一。
 
 退出条件：
 
-- 一份 instruction-only 标准 Skill 可不修改地在 VibeWhisper、Codex 和 Claude Code
+- 一份 instruction-only 标准 Skill 可不修改地在 VibeCompose、Codex 和 Claude Code
   中被各自 Host 发现和读取；
 - 新格式只要求 `SKILL.md`，不要求 `skill.yaml` 或 `prompt.md`；
 - 一个标准 Skill 对应一个主要输出行为；
-- 无 `vibewhisper.yaml` 时按安全默认值运行；
-- Codex / Claude 私有元数据被保留但不改变 VibeWhisper 行为；
+- 无 `vibecompose.yaml` 时按安全默认值运行；
+- Codex / Claude 私有元数据被保留但不改变 VibeCompose 行为；
 - `scripts/`、Hooks、Bash、MCP、Subagent 和工具依赖永不执行；
 - 工具依赖型 Skill 被明确标记不兼容，不静默降级；
 - v1 已安装状态、版本、App Rule 和 History 保持不变。
@@ -2049,8 +2049,8 @@ Snapshot 和执行计划”从当前单一 `SkillDefinition` 中解耦。
 
 - 从模板创建或 Fork 内置 / 已安装 Skill；
 - 可视化编辑 `name`、`description`、SKILL.md 正文、References 和 Assets；
-- 可选编辑 `vibewhisper.yaml` 的 Context、资源、输出、风险和 Validator；
-- 标准 Frontmatter 与 VibeWhisper Profile 双层校验；
+- 可选编辑 `vibecompose.yaml` 的 Context、资源、输出、风险和 Validator；
+- 标准 Frontmatter 与 VibeCompose Profile 双层校验；
 - 示例语音、模拟 Context、Style Capsule 和本地输出预览；
 - Golden cases runner；
 - 导出普通标准目录或 Archive；
@@ -2069,7 +2069,7 @@ Snapshot 和执行计划”从当前单一 `SkillDefinition` 中解耦。
 
 - 普通创建流程不要求用户写 YAML；
 - 高级作者可直接编辑标准文件；
-- Creator 不生成 VibeWhisper 私有多 Entrypoint；
+- Creator 不生成 VibeCompose 私有多 Entrypoint；
 - 导出包可通过 Agent Skills 标准校验；
 - 导出后重新导入的 `SKILL.md`、资源和哈希一致；
 - Creator 不能生成可执行步骤或绕过兼容性分析。
@@ -2097,12 +2097,12 @@ Collection 与组合规则：
 ```text
 Collection = distribution and discovery only
 
-VibeWhisper System Contract
+VibeCompose System Contract
 → selected standard Skill
 → Domain Pack
 → Team or Organization Profile
 → User Terminology and Style Capsule
-→ VibeWhisper Output Template
+→ VibeCompose Output Template
 → Declarative Validators
 ```
 
@@ -2130,24 +2130,24 @@ VibeWhisper System Contract
 - 内容寻址缓存、密钥轮换、兼容版本、依赖、废弃、隔离、撤销和回滚；
 - 官方、认证发布者、普通社区作者和团队私有源；
 - Collection 索引和批量安装，但逐 Skill 审查；
-- Agent Skills 标准校验和 VibeWhisper Compatibility CI；
+- Agent Skills 标准校验和 VibeCompose Compatibility CI；
 - 安装前显示 Context、资源、输出、风险、Vendor Extensions 和隔离文件；
 - 评分、精选、举报、质量基线和高风险领域审核；
 - 团队允许列表、固定版本和私有 Collection；
 - 社区作者 SDK、模板、Golden tests 和跨 Host 兼容测试。
 
 Registry 只分发标准 Skill 目录及签名元数据，不能因为来源可信就获得额外执行能力。
-VibeWhisper 仍不执行 Shell、动态库、HTTP、任意文件访问、MCP、Hooks、Subagent 或
+VibeCompose 仍不执行 Shell、动态库、HTTP、任意文件访问、MCP、Hooks、Subagent 或
 脚本。外部 Action 继续作为独立产品边界，不属于 Skill Engine。
 
 Phase 7–11 当前实现证据：
 
-- `Sources/VibeWhisper/ContextFabricRuntime.swift`
-- `Sources/VibeWhisper/AgentSkillRuntime.swift`
-- `Sources/VibeWhisper/CommunitySkillRuntime.swift`
-- `Sources/VibeWhisper/SkillEcosystemRuntime.swift`
-- `Sources/VibeWhisper/SkillCreatorSettingsView.swift`
-- `Tests/VibeWhisperTests/AgentSkillRuntimeTests.swift`
+- `Sources/VibeCompose/ContextFabricRuntime.swift`
+- `Sources/VibeCompose/AgentSkillRuntime.swift`
+- `Sources/VibeCompose/CommunitySkillRuntime.swift`
+- `Sources/VibeCompose/SkillEcosystemRuntime.swift`
+- `Sources/VibeCompose/SkillCreatorSettingsView.swift`
+- `Tests/VibeComposeTests/AgentSkillRuntimeTests.swift`
 
 当前门禁：`focusedParagraph`、`openFile`、`workspace`、编辑器、终端、浏览器和
 conversation Adapter 在来源目录中可被识别，但在没有独立权限、预算和安装版证据前
@@ -2169,7 +2169,7 @@ Collection 和 Legacy Adapter 的使用。
 - Diff Preview；
 - Style Capsule 本地实验功能；
 - Backend、Medical、Kubernetes 内置 Terminology Packs；
-- 本地标准 Agent Skills 目录 / ZIP Archive、Legacy `.vibewhisperskill` v1、
+- 本地标准 Agent Skills 目录 / ZIP Archive、Legacy `.vibecomposeskill` v1、
   Creator、Collections、Inspector、Golden tests 和版本回滚；
 - 高风险 Skill 默认 Preview 或 copy-only；
 - 不开放远程社区 Registry；
@@ -2177,7 +2177,7 @@ Collection 和 Legacy Adapter 的使用。
 
 这已经足以证明：
 
-> VibeWhisper 能把“跨应用听写”升级为“跨应用任务输出”，而不需要先承担插件市场和自动化平台的全部风险。
+> VibeCompose 能把“跨应用听写”升级为“跨应用任务输出”，而不需要先承担插件市场和自动化平台的全部风险。
 
 ## 17. 验收标准
 
@@ -2231,7 +2231,7 @@ Collection 和 Legacy Adapter 的使用。
 - 全屏、Spaces、Stage Manager 下不抢焦点；
 - Copied 与 Inserted 不能只靠颜色区分；
 - 错误至少显示五秒，Retry 保持可操作；
-- 视觉验收使用 `/Applications/VibeWhisper.app`。
+- 视觉验收使用 `/Applications/VibeCompose.app`。
 
 ### 17.5 输出安全
 
@@ -2257,7 +2257,7 @@ Collection 和 Legacy Adapter 的使用。
 
 ### 17.7 本地 Community Skills v1
 
-- `.vibewhisperskill` v1 目录可审查后安装；
+- `.vibecomposeskill` v1 目录可审查后安装；
 - 多版本可切换和回滚；
 - Skill 可禁用和按版本卸载；
 - 软链接、路径穿越、可执行位、shebang、Mach-O、脚本、未知文件和超限包被拒绝；
@@ -2273,11 +2273,11 @@ Collection 和 Legacy Adapter 的使用。
 - 内置 Skill、Community v1 和标准目录都进入统一 `ResolvedSkillExecutionPlan`；
 - 标准目录以 `SKILL.md` 为唯一必需入口；
 - v1 通过 Legacy Adapter 保持 ID、版本、规则和行为；
-- 纯 instruction-only 标准 Skill 无需 `vibewhisper.yaml` 即可按安全默认值运行；
+- 纯 instruction-only 标准 Skill 无需 `vibecompose.yaml` 即可按安全默认值运行；
 - 有 Profile 时重新解析 Context、Resources、输出、风险和 Validator；
 - Context 正文只在 Policy 批准后读取；
 - Context Snapshot 不可变、默认 session-only，Retry 不复用正文；
-- 标准格式状态和 VibeWhisper Runtime 状态分别展示；
+- 标准格式状态和 VibeCompose Runtime 状态分别展示；
 - Codex / Claude 私有元数据被保留但不进入执行计划；
 - 工具、Hooks、Subagent 或脚本依赖型 Skill 明确不可启用；
 - 脚本和二进制永不进入 Runtime Resources、模型 Context 或执行路径；
@@ -2295,9 +2295,9 @@ Collection 和 Legacy Adapter 的使用。
 - 用户可在 Preview 中移除可选 Context 并重新生成；
 - Registry 包经过签名、哈希、标准校验、兼容性分析和本地复验；
 - Registry 来源不能绕过 Context Policy、Validator 或 Output Router；
-- 跨 Host 示例在 VibeWhisper、Codex 和 Claude Code 中分别通过格式发现测试；
+- 跨 Host 示例在 VibeCompose、Codex 和 Claude Code 中分别通过格式发现测试；
 - 任意脚本、Shell、自定义网络、MCP、Hooks、Subagent 和外部 Agent 绑定均不进入
-  VibeWhisper 执行路径。
+  VibeCompose 执行路径。
 
 ## 18. 测试与验收矩阵
 
@@ -2317,12 +2317,12 @@ Collection 和 Legacy Adapter 的使用。
 - Community Skill v1 受限 YAML、允许文件、大小、路径、软链接和可执行内容；
 - Community Skill v1 安装、SHA-256、多版本、回滚、禁用和卸载；
 - Community Prompt 安全外壳顺序；
-- 仓库 Legacy `.vibewhisperskill` 示例与 Golden cases；
+- 仓库 Legacy `.vibecomposeskill` 示例与 Golden cases；
 - Agent Skills Frontmatter：name/目录一致、description、license、compatibility、metadata；
 - 普通标准目录、Archive 与可选运输包装导入；
-- 无 `vibewhisper.yaml` 的安全默认 Profile；
-- VibeWhisper Profile 的 Context、Resources、Output、Risk 和 Validator；
-- v1 Skill → `LegacyVibeWhisperV1Adapter` → 统一执行计划；
+- 无 `vibecompose.yaml` 的安全默认 Profile；
+- VibeCompose Profile 的 Context、Resources、Output、Risk 和 Validator；
+- v1 Skill → `LegacyVibeComposeV1Adapter` → 统一执行计划；
 - 同名不同来源的 installation identity、revision、更新和回滚；
 - Codex / Claude Vendor Extensions 的 preserve-and-ignore；
 - `allowed-tools`、Hooks、Subagent、动态命令和工具依赖兼容性报告；
@@ -2376,7 +2376,7 @@ Collection 和 Legacy Adapter 的使用。
 关闭任务前：
 
 - 重新安装最新构建；
-- 正常启动 `/Applications/VibeWhisper.app`；
+- 正常启动 `/Applications/VibeCompose.app`；
 - 确认菜单栏进程仍在；
 - 如果本次修改 Settings 或 Skills，尽量让对应窗口可见；
 - 不以退出应用作为最终状态。
@@ -2437,8 +2437,8 @@ Collection 和 Legacy Adapter 的使用。
 | Prompt 注入改变系统行为 | 上下文标记为数据，系统安全外壳固定且优先级最高 |
 | 产品范围失控 | 按 Phase 交付，Action 和 Registry 最后做 |
 | 自定义 v2 与 Agent Skills 形成两套生态 | 不设计自定义 v2；Agent Skills 是公共格式，v1 只通过 Legacy Adapter 存活 |
-| `vibewhisper.yaml` 变成第二份 Skill 定义 | 禁止重复身份和主指令，只允许 Host Profile 能力 |
-| 格式有效被误解为运行兼容 | 分开展示 StandardFormatStatus 和 VibeWhisperRuntimeStatus |
+| `vibecompose.yaml` 变成第二份 Skill 定义 | 禁止重复身份和主指令，只允许 Host Profile 能力 |
+| 格式有效被误解为运行兼容 | 分开展示 StandardFormatStatus 和 VibeComposeRuntimeStatus |
 | 工具型 Skill 被静默降级后语义错误 | 检测工具、Hooks、Subagent、动态命令和脚本依赖并禁止启用 |
 | `SKILL.md` 退化成 Prompt 收藏夹 | 支持 References、Assets、Context、Output、Validator、Examples 和 Golden tests |
 | Skill 数量过多导致难以发现 | 分类、搜索、收藏、App Rule、最近使用和受控推荐 |
@@ -2486,8 +2486,8 @@ Collection 和 Legacy Adapter 的使用。
    - 不在公共格式增加私有多 Entrypoint；
    - 相关 Skills 通过 Collection 发现和分发；
    - Collection 不合并权限、Prompt 或执行。
-11. **VibeWhisper Host Profile**
-   - `vibewhisper.yaml` 可选；
+11. **VibeCompose Host Profile**
+   - `vibecompose.yaml` 可选；
    - 无 Profile 的 instruction-only Skill 按安全默认值运行；
    - Profile 不能重复主指令或授予 App 之外的权限。
 12. **全局 Context**
@@ -2495,7 +2495,7 @@ Collection 和 Legacy Adapter 的使用。
     - Skill 只提出 Request，Policy 决定是否读取和提供 Snapshot；
     - 全局不等于后台持续采集。
 13. **内嵌 Skill Engine**
-    - 所有 Skill 由 VibeWhisper 内部执行，不调用或绑定 Codex、Claude Code；
+    - 所有 Skill 由 VibeCompose 内部执行，不调用或绑定 Codex、Claude Code；
     - 外部应用最多是生成文本的使用对象；
     - 标准包中的脚本、Hooks、工具和 Vendor Extensions 不进入执行路径。
 
@@ -2503,11 +2503,11 @@ Collection 和 Legacy Adapter 的使用。
 
 ### 中文
 
-> **VibeWhisper 是 macOS 上的全局 AI 输入层：它以开放的 Agent Skills 标准承载可安装、可分享的输入 Skills，把语音和用户授权的上下文变成符合个人、专业和工作场景要求的可验证输出。**
+> **VibeCompose 是 macOS 上的全局 AI 输入层：它以开放的 Agent Skills 标准承载可安装、可分享的输入 Skills，把语音和用户授权的上下文变成符合个人、专业和工作场景要求的可验证输出。**
 
 ### 英文
 
-> **VibeWhisper is a global AI input layer for macOS. Skills authored with the open Agent Skills format turn voice and user-authorized context into validated output tailored to each person, profession, and workflow.**
+> **VibeCompose is a global AI input layer for macOS. Skills authored with the open Agent Skills format turn voice and user-authorized context into validated output tailored to each person, profession, and workflow.**
 
 ### 简短版本
 
@@ -2528,7 +2528,7 @@ Phase 1–11 的仓库实现和安全边界已经完成。下一阶段分为两�
 2. 用真实可编辑目标完成 F5 开始/停止、Esc、inline close、Retry、选区未变化替换和选区变化 copy-only 的完整安装版证明；
 3. 对 Style Capsule 的“样本已清空”反馈和 Community Skill 的中文错误、损坏包恢复、版本回滚执行真实安装版验收；
 4. 完成 Developer ID、Hardened Runtime、公证、生产 Sparkle、签名 Provider Policy、公共 HTTPS 托管和真实更新/回滚；仓库门禁已 fail-closed，真实凭据、托管和证据仍未完成；
-5. 完成法律/隐私/支持联系人、30–50 人 Beta 和品牌名称决策；Pilot 工具与发布证据校验已就绪，但真实研究未开始，当前 `VibeWhisper` 名称冲突继续阻断公开分发；
+5. 完成法律/隐私/支持联系人、30–50 人 Beta 和品牌名称决策；Pilot 工具与发布证据校验已就绪，但真实研究未开始，当前 `VibeCompose` 名称清查尚未完成，继续阻断公开分发；
 6. 在真实用户质量数据证明 Skills、Preview 和术语层有价值之前，不启用远程 Registry；
 7. 在 Connector 权限、Action Preview、幂等、不确定结果和 installed-app 矩阵全部完成之前，不启用任何外部 Action。
 
@@ -2536,12 +2536,12 @@ Phase 1–11 的仓库实现和安全边界已经完成。下一阶段分为两�
 
 8. 建立 ADR：`Agent Skills is the only public authoring format`；
 9. 建立 ADR：`One standard Skill, one primary output behavior; Collections are distribution only`；
-10. 建立 ADR：`vibewhisper.yaml is an optional Host Profile, not a second Skill definition`；
+10. 建立 ADR：`vibecompose.yaml is an optional Host Profile, not a second Skill definition`；
 11. 建立 ADR：`Context is global; Skills request it`；
-12. 建立 ADR：`The embedded Skill Engine is the only VibeWhisper execution boundary`；
+12. 建立 ADR：`The embedded Skill Engine is the only VibeCompose execution boundary`；
 13. 用现有回归测试固定 v1 Skill、选区、Retry、Preview 和粘贴行为；
 14. 先引入 `InputSession`、`InstalledSkillIdentity` 和 `ResolvedSkillExecutionPlan`；
-15. 将当前 v1 Loader 封装为 `LegacyVibeWhisperV1Adapter`；
+15. 将当前 v1 Loader 封装为 `LegacyVibeComposeV1Adapter`；
 16. 实现标准 Frontmatter Parser、Host Profile、Resource Resolver 和 Compatibility Analyzer；
 17. 完成标准 Skill Inspector、医学 / Prompt Writer fixtures 和跨 Host 发现测试；
 18. 完成导出 Agent Skills 标准目录的 Skill Creator 与本地社区库原型。
@@ -2587,8 +2587,8 @@ Phase 7–11 的仓库实现判定与后续 installed-app / 运营验收必须�
 - Context Source、Policy、Request、Snapshot 和 Receipt 独立存在；
 - Skill 切换重新解析权限、Resources、Context、输出和风险；
 - 用户能在 App 内创建、Fork、测试、导出和重新安装标准 Skill；
-- 同一 instruction-only fixture 可被 VibeWhisper、Codex 和 Claude Code 发现；
-- 工具、Hooks、Subagent 和脚本依赖型 Skill 在 VibeWhisper 中明确不可启用；
+- 同一 instruction-only fixture 可被 VibeCompose、Codex 和 Claude Code 发现；
+- 工具、Hooks、Subagent 和脚本依赖型 Skill 在 VibeCompose 中明确不可启用；
 - 医学记录、Prompt Writer 等至少三个不同领域 Skill 完成 installed-app 验收；
 - Registry 完成签名、哈希、兼容、版本、撤销和本地包复验；
 - 普通 Direct 快路径的延迟、可靠性和安全投递无回归；

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "status": "blocked",
-  "productName": "VibeWhisper",
-  "reviewedAt": "2026-07-22T00:00:00Z",
-  "reviewer": "VibeWhisper repository naming audit",
+  "productName": "VibeCompose",
+  "reviewedAt": "2026-07-25T00:00:00Z",
+  "reviewer": "VibeCompose repository naming audit",
   "checks": {
     "trademark": false,
     "domains": false,
@@ -14,10 +14,9 @@
   "conflicts": [
     {
       "type": "historical-same-category-software",
-      "name": "OpenWhisper",
-      "url": "https://github.com/dimatura/open-whisper",
-      "detail": "The previous product name OpenWhisper conflicted with an independently maintained macOS speech-to-text application that publishes release artifacts. The product was renamed to VibeWhisper to exit that collision; VibeWhisper still needs a fresh trademark/domain/App Store/GitHub audit before public distribution."
+      "name": "previous working identity",
+      "detail": "The previous working identity conflicted with an independently maintained macOS speech-to-text application that publishes release artifacts. The product was renamed to VibeCompose to exit that collision; VibeCompose still needs a fresh trademark/domain/App Store/GitHub audit before public distribution."
     }
   ],
-  "decision": "Product code and packaging now use VibeWhisper. Do not publish notarized stable updates, public domains, or marketplace listings until a fresh clearance pass marks this file approved with all checks true and no active conflicts for the VibeWhisper name."
+  "decision": "Product code and packaging now use VibeCompose. Do not publish notarized stable updates, public domains, or marketplace listings until a fresh clearance pass marks this file approved with all checks true and no active conflicts for the VibeCompose name."
 }

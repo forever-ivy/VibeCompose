@@ -130,7 +130,7 @@ do {
         .standardizedFileURL
     let resourceRoot = root
         .appendingPathComponent(
-            "Sources/VibeWhisper/Resources",
+            "Sources/VibeCompose/Resources",
             isDirectory: true
         )
         .standardizedFileURL

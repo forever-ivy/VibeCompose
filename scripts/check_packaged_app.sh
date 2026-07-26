@@ -7,15 +7,15 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-PACKAGED_APP="$ROOT/dist/$VIBEWHISPER_APP_NAME.app"
-CHECK_WORK_DIR="$(/usr/bin/mktemp -d /tmp/vibewhisper-package-check.XXXXXX)"
-APP="$CHECK_WORK_DIR/$VIBEWHISPER_APP_NAME.app"
+PACKAGED_APP="$ROOT/dist/$VIBECOMPOSE_APP_NAME.app"
+CHECK_WORK_DIR="$(/usr/bin/mktemp -d /tmp/vibecompose-package-check.XXXXXX)"
+APP="$CHECK_WORK_DIR/$VIBECOMPOSE_APP_NAME.app"
 cleanup_check_work_dir() {
   rm -rf "$CHECK_WORK_DIR"
 }
 trap cleanup_check_work_dir EXIT
 PLIST="$APP/Contents/Info.plist"
-EXECUTABLE="$APP/Contents/MacOS/$VIBEWHISPER_APP_NAME"
+EXECUTABLE="$APP/Contents/MacOS/$VIBECOMPOSE_APP_NAME"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 
 "$ROOT/scripts/package_app.sh" >/dev/null
@@ -41,7 +41,7 @@ fi
 
 if ! /usr/bin/otool -L "$EXECUTABLE" \
   | grep -q '@rpath/Sparkle.framework/Versions/B/Sparkle'; then
-  echo "VibeWhisper is not linked against the embedded Sparkle framework." >&2
+  echo "VibeCompose is not linked against the embedded Sparkle framework." >&2
   exit 1
 fi
 
@@ -56,7 +56,7 @@ if ! /usr/bin/otool -l "$EXECUTABLE" \
       }
       END { exit(found ? 0 : 1) }
     '; then
-  echo "VibeWhisper is missing the app Frameworks runtime search path." >&2
+  echo "VibeCompose is missing the app Frameworks runtime search path." >&2
   exit 1
 fi
 
@@ -151,26 +151,26 @@ if [[ "$LOCALIZATIONS" != *'"zh-Hans"'* ]]; then
 fi
 
 BUNDLE_ID="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST")"
-if [[ "$BUNDLE_ID" != "$VIBEWHISPER_BUNDLE_ID" ]]; then
-  echo "Packaged app bundle identifier mismatch: expected $VIBEWHISPER_BUNDLE_ID, got $BUNDLE_ID" >&2
+if [[ "$BUNDLE_ID" != "$VIBECOMPOSE_BUNDLE_ID" ]]; then
+  echo "Packaged app bundle identifier mismatch: expected $VIBECOMPOSE_BUNDLE_ID, got $BUNDLE_ID" >&2
   exit 1
 fi
 
 EXECUTABLE_NAME="$(/usr/bin/plutil -extract CFBundleExecutable raw -o - "$PLIST")"
-if [[ "$EXECUTABLE_NAME" != "$VIBEWHISPER_APP_NAME" ]]; then
-  echo "Packaged app executable mismatch: expected $VIBEWHISPER_APP_NAME, got $EXECUTABLE_NAME" >&2
+if [[ "$EXECUTABLE_NAME" != "$VIBECOMPOSE_APP_NAME" ]]; then
+  echo "Packaged app executable mismatch: expected $VIBECOMPOSE_APP_NAME, got $EXECUTABLE_NAME" >&2
   exit 1
 fi
 
 VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$PLIST")"
-if [[ "$VERSION" != "$VIBEWHISPER_VERSION" ]]; then
-  echo "Packaged app version mismatch: expected $VIBEWHISPER_VERSION, got $VERSION" >&2
+if [[ "$VERSION" != "$VIBECOMPOSE_VERSION" ]]; then
+  echo "Packaged app version mismatch: expected $VIBECOMPOSE_VERSION, got $VERSION" >&2
   exit 1
 fi
 
 BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$PLIST")"
-if [[ "$BUILD" != "$VIBEWHISPER_BUILD" ]]; then
-  echo "Packaged app build mismatch: expected $VIBEWHISPER_BUILD, got $BUILD" >&2
+if [[ "$BUILD" != "$VIBECOMPOSE_BUILD" ]]; then
+  echo "Packaged app build mismatch: expected $VIBECOMPOSE_BUILD, got $BUILD" >&2
   exit 1
 fi
 
@@ -198,15 +198,15 @@ MANIFEST_ZIP_SHA256="$(/usr/bin/plutil -extract artifacts.0.sha256 raw -o - "$RE
 MANIFEST_DMG_NAME="$(/usr/bin/plutil -extract artifacts.1.fileName raw -o - "$RELEASE_MANIFEST")"
 MANIFEST_DMG_SHA256="$(/usr/bin/plutil -extract artifacts.1.sha256 raw -o - "$RELEASE_MANIFEST")"
 
-[[ "$MANIFEST_VERSION" == "$VIBEWHISPER_VERSION" ]] || {
+[[ "$MANIFEST_VERSION" == "$VIBECOMPOSE_VERSION" ]] || {
   echo "Release manifest version mismatch." >&2
   exit 1
 }
-[[ "$MANIFEST_BUILD" == "$VIBEWHISPER_BUILD" ]] || {
+[[ "$MANIFEST_BUILD" == "$VIBECOMPOSE_BUILD" ]] || {
   echo "Release manifest build mismatch." >&2
   exit 1
 }
-[[ "$MANIFEST_BUNDLE_ID" == "$VIBEWHISPER_BUNDLE_ID" ]] || {
+[[ "$MANIFEST_BUNDLE_ID" == "$VIBECOMPOSE_BUNDLE_ID" ]] || {
   echo "Release manifest bundle identifier mismatch." >&2
   exit 1
 }

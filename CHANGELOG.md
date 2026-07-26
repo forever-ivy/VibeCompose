@@ -2,11 +2,11 @@
 
 ## 0.1.0 — Unreleased
 
-- Established VibeWhisper as the canonical product, executable, Swift target, bundle, data-directory, Keychain, packaging, and documentation identity.
+- Established VibeCompose as the canonical product, executable, Swift target, bundle, data-directory, Keychain, packaging, and documentation identity.
 - Added English and Simplified Chinese UI resources.
 - Preserved the native macOS `F5 → speak → F5 → paste-or-copy` workflow.
 - Added a centralized product identity and macOS-first repository structure.
-- Reset release metadata for the first VibeWhisper alpha.
+- Reset release metadata for the first VibeCompose alpha.
 - Added security, UI, and macOS release documentation as engineering gates.
 - Added an Auto Polish decision engine that skips short, low-complexity
   dictation, runs for corrections/structured/translation/email/long-form
@@ -68,7 +68,7 @@
   deletion, per-Skill assignments, sample clearing, three built-in Domain
   Packs, deterministic terminology precedence, conflict visibility, and
   mandatory Preview for high-risk medical terminology.
-- Added constrained local `.vibewhisperskill` import with package-size and
+- Added constrained local `.vibecomposeskill` import with package-size and
   file-type limits, path/symlink/executable rejection, permission review,
   content hashes, multi-version activation and rollback, disable/uninstall,
   Skill Inspector, Golden contract tests, bilingual errors, and a maintained
@@ -84,7 +84,7 @@
   source-commit-bound candidate with a separate SHA-256 instead of rebuilding
   on a fresh runner, verifies byte-identical published appcast/policy files,
   and withholds private signing keys from finalization.
-- Recorded a same-category VibeWhisper naming conflict as a blocking public
-  distribution naming gate rather than claiming trademark/domain clearance.
+- Recorded the previous identity's same-category naming conflict and kept
+  VibeCompose public distribution blocked pending fresh name clearance.
 
-VibeWhisper `0.1.0` is an alpha baseline, not a stable signed release.
+VibeCompose `0.1.0` is an alpha baseline, not a stable signed release.

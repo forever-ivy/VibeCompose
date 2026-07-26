@@ -1,10 +1,10 @@
-# VibeWhisper 上游事故与恢复预案
+# VibeCompose 上游事故与恢复预案
 
 > 运行基线日期：2026 年 7 月 13 日
 
 ## 目的
 
-VibeWhisper 默认账户路径依赖未公开为稳定公共 API 的 ChatGPT 上游行为。本预案用于避免上游事故演变为重复发送凭据、静默数据丢失或误导性产品承诺。
+VibeCompose 默认账户路径依赖未公开为稳定公共 API 的 ChatGPT 上游行为。本预案用于避免上游事故演变为重复发送凭据、静默数据丢失或误导性产品承诺。
 
 ## 检测分类
 
@@ -58,7 +58,7 @@ Switch 基础：
 生成和验证策略时，私钥不得进入仓库：
 
 ```bash
-VIBEWHISPER_CAPABILITY_PRIVATE_KEY_FILE=/secure/vibewhisper-capability.key \
+VIBECOMPOSE_CAPABILITY_PRIVATE_KEY_FILE=/secure/vibecompose-capability.key \
 scripts/generate_provider_capability_policy.swift \
   --revision 1 \
   --incident-id OW-INC-2026-001 \
@@ -76,5 +76,5 @@ scripts/verify_provider_capability_policy.swift \
 - 不得把默认路径描述为稳定公共 API 或保证 SLA；
 - 不得要求用户发送访问令牌、Cookie、API 密钥、原始音频或完整转写；
 - 明确受影响版本和日期；
-- 区分上游故障、VibeWhisper 会话过期和本地权限问题；
+- 区分上游故障、VibeCompose 会话过期和本地权限问题；
 - 公开 Beta 前必须提供英文和简体中文恢复说明。

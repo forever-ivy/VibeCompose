@@ -15,13 +15,13 @@ if [[ -z "$ARCHIVE_PATH" || -z "$CHECKSUM_PATH" ]]; then
 fi
 
 ARCH="$(uname -m)"
-CASK_PATH="${VIBEWHISPER_CASK_PATH:-$ROOT/dist/vibewhisper.rb}"
+CASK_PATH="${VIBECOMPOSE_CASK_PATH:-$ROOT/dist/vibecompose.rb}"
 SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD)"
 
 declare -a REQUIRED_PATHS=(
-  "$ROOT/dist/$VIBEWHISPER_APP_NAME.app"
-  "$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.zip"
-  "$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.dmg"
+  "$ROOT/dist/$VIBECOMPOSE_APP_NAME.app"
+  "$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.zip"
+  "$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.dmg"
   "$ROOT/dist/release-manifest.json"
   "$ROOT/dist/appcast.xml"
   "$ROOT/dist/provider-capabilities.json"
@@ -47,20 +47,20 @@ for output in "$ARCHIVE_PATH" "$CHECKSUM_PATH"; do
   mkdir -p "$(dirname "$output")"
 done
 
-TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/vibewhisper-candidate.XXXXXX")"
-STAGE_ROOT="$TEMPORARY_DIRECTORY/VibeWhisper-release-candidate"
+TEMPORARY_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/vibecompose-candidate.XXXXXX")"
+STAGE_ROOT="$TEMPORARY_DIRECTORY/VibeCompose-release-candidate"
 TEMPORARY_ARCHIVE="$TEMPORARY_DIRECTORY/candidate.zip"
 TEMPORARY_CHECKSUM="$TEMPORARY_DIRECTORY/candidate.sha256"
 trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
 
 umask 077
 /usr/bin/ditto \
-  "$ROOT/dist/$VIBEWHISPER_APP_NAME.app" \
-  "$STAGE_ROOT/dist/$VIBEWHISPER_APP_NAME.app"
+  "$ROOT/dist/$VIBECOMPOSE_APP_NAME.app" \
+  "$STAGE_ROOT/dist/$VIBECOMPOSE_APP_NAME.app"
 
 for file in \
-  "$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.zip" \
-  "$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.dmg" \
+  "$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.zip" \
+  "$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.dmg" \
   "$ROOT/dist/release-manifest.json" \
   "$ROOT/dist/appcast.xml" \
   "$ROOT/dist/provider-capabilities.json" \
@@ -70,16 +70,16 @@ for file in \
   "$ROOT/dist/SHA256SUMS"; do
   /usr/bin/ditto "$file" "$STAGE_ROOT/dist/$(basename "$file")"
 done
-/usr/bin/ditto "$CASK_PATH" "$STAGE_ROOT/dist/vibewhisper.rb"
+/usr/bin/ditto "$CASK_PATH" "$STAGE_ROOT/dist/vibecompose.rb"
 
 python3 - \
   "$STAGE_ROOT/candidate-metadata.json" \
   "$SOURCE_COMMIT" \
-  "$VIBEWHISPER_REPOSITORY" \
-  "$VIBEWHISPER_APP_NAME" \
-  "$VIBEWHISPER_BUNDLE_ID" \
-  "$VIBEWHISPER_VERSION" \
-  "$VIBEWHISPER_BUILD" \
+  "$VIBECOMPOSE_REPOSITORY" \
+  "$VIBECOMPOSE_APP_NAME" \
+  "$VIBECOMPOSE_BUNDLE_ID" \
+  "$VIBECOMPOSE_VERSION" \
+  "$VIBECOMPOSE_BUILD" \
   "$ARCH" \
   "${GITHUB_RUN_ID:-local}" \
   "${GITHUB_RUN_ATTEMPT:-local}" <<'PY'

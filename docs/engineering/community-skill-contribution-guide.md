@@ -1,8 +1,8 @@
 # Community Skill Contribution Guide
 
-VibeWhisper accepts Agent Skills standard directories or ZIP archives for local
+VibeCompose accepts Agent Skills standard directories or ZIP archives for local
 testing. `SKILL.md` is the only required public entry. An optional
-`vibewhisper.yaml` may declare the Host Profile; it does not create a second
+`vibecompose.yaml` may declare the Host Profile; it does not create a second
 Skill definition.
 
 This guide prepares curated Community Pilot content. It is not a public Registry
@@ -26,10 +26,10 @@ A candidate must:
 - avoid unexplained permission, output-policy, risk, resource, or Validator
   expansion between revisions.
 
-VibeWhisper rejects or disables Skills that depend on executable scripts,
+VibeCompose rejects or disables Skills that depend on executable scripts,
 Shell, Hooks, MCP, Subagents, custom network access, arbitrary files, Keychain,
 or external Actions. Packaging such files for another Host never makes them
-executable in VibeWhisper.
+executable in VibeCompose.
 
 ## Authoring flow
 

@@ -1,15 +1,14 @@
-# VibeWhisper 品牌名称初步清查
+# VibeCompose 品牌名称初步清查
 
-> 日期：2026-07-14（原 OpenWhisper 清查） / 2026-07-22（更名为 VibeWhisper）
+> 日期：2026-07-14（初次清查） / 2026-07-25（更名为 VibeCompose）
 >
 > 结论：**仍阻断公开分发**——旧名冲突已通过更名退出，新名尚未完成独立清查。
 
 ## 背景
 
-2026-07-14 的公开检索发现，GitHub 上已经存在独立项目
-[`dimatura/open-whisper`](https://github.com/dimatura/open-whisper)。该项目：
+2026-07-14 的公开检索发现，此前的工作名称已经被一个独立项目使用。该项目：
 
-- 使用 `OpenWhisper` 名称；
+- 使用此前的工作名称；
 - 同样属于 macOS 语音转文字 / 听写工具；
 - 已发布可下载版本；
 - 项目时间早于本仓库当时的公开分发准备。
@@ -18,20 +17,20 @@
 直接名称冲突。即使尚未确认注册商标，也足以使旧名不满足计划书中的
 “单一、清晰、可注册产品身份”和公开发布 clearance 门禁。
 
-## 2026-07-22 决定
+## 2026-07-25 决定
 
-- 产品身份统一更名为 **VibeWhisper**（代码、Bundle ID、文档、打包、环境变量）；
-- 旧名 `OpenWhisper` 不再作为公开发布名称；
-- 新名 `VibeWhisper` **尚未**完成商标、域名、App Store、GitHub、社交账号清查；
+- 产品身份统一更名为 **VibeCompose**（代码、Bundle ID、文档、打包、环境变量）；
+- 此前的工作名称不再作为公开发布名称；
+- 新名 `VibeCompose` **尚未**完成商标、域名、App Store、GitHub、社交账号清查；
 - 代码、自动化和产品架构继续推进，但 production release gate 必须保持
   fail-closed，直到新名 clearance 通过。
 
 ## 当前门禁
 
-- 不以 `VibeWhisper` 或 `OpenWhisper` 名称发布 Stable 公证包、公共更新源、
-  Homebrew 正式 Cask 或应用市场条目，直到 clearance 批准；
+- 不以 `VibeCompose` 名称发布 Stable 公证包、公共更新源、Homebrew 正式
+  Cask 或应用市场条目，直到 clearance 批准；
 - 不声称已经完成商标、域名或社交账号清查；
-- 产品所有者需要对 `VibeWhisper` 完成独立清查，或在发现新冲突时再次更名。
+- 产品所有者需要对 `VibeCompose` 完成独立清查，或在发现新冲突时再次更名。
 
 机器可读状态位于 `release/brand-clearance.json`。只有该文件经过真实清查
 后变为 `approved`、所有检查为真且冲突为空，公开分发的名称门禁才能通过。

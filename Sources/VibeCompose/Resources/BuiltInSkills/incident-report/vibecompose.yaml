@@ -1,0 +1,24 @@
+context:
+  required:
+  - voice
+  optional:
+  - selection
+  - styleCapsule
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 12000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: false
+  requiredSections:
+  - Summary|摘要
+  - Impact|影响
+  - Timeline|时间线
+  - Root Cause|根因|根本原因
+  - Resolution|解决|处理
+  - Prevention|预防措施|防范

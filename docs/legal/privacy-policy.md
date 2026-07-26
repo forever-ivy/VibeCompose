@@ -1,4 +1,4 @@
-# VibeWhisper Privacy Policy
+# VibeCompose Privacy Policy
 
 > Effective for the private alpha: July 13, 2026
 >
@@ -6,19 +6,19 @@
 >
 > Product status: pre-release macOS alpha
 
-This policy describes the current VibeWhisper macOS application. VibeWhisper does not currently operate its own analytics, account, synchronization, advertising, or transcription server.
+This policy describes the current VibeCompose macOS application. VibeCompose does not currently operate its own analytics, account, synchronization, advertising, or transcription server.
 
-## 1. What VibeWhisper Processes
+## 1. What VibeCompose Processes
 
 ### Audio and transcription requests
 
-When you start dictation, VibeWhisper records a short audio clip on your Mac. On the default route, the clip and transcription instructions are sent to the ChatGPT service using the ChatGPT session you connected in VibeWhisper. If you select the advanced OpenAI-compatible recovery route, the clip is sent to the HTTPS endpoint you configured using your own credential.
+When you start dictation, VibeCompose records a short audio clip on your Mac. On the default route, the clip and transcription instructions are sent to the ChatGPT service using the ChatGPT session you connected in VibeCompose. If you select the advanced OpenAI-compatible recovery route, the clip is sent to the HTTPS endpoint you configured using your own credential.
 
 When AI Polish or a non-Direct Skill runs through the ChatGPT route, the
 request may also include the current transcript, the resolved declarative
 Skill prompt, resolved terminology, a Writing Style summary you assigned to
 that Skill, and selected text only when you authorized that Skill to read the
-selection. VibeWhisper does not send the complete Skill Registry, full App
+selection. VibeCompose does not send the complete Skill Registry, full App
 Rules, unrelated installed package files, Writing Style creation source
 samples, the whole screen, or an entire document through this path.
 
@@ -27,14 +27,14 @@ silent WAV, the configured model, and your Recovery credential. It does not
 read or send your recordings, transcripts, or terminology. Your configured
 provider may still charge for that request.
 
-VibeWhisper is an independent project and is not affiliated with, sponsored by, or endorsed by OpenAI. Third-party processing is governed by the terms and privacy policy of the service you choose:
+VibeCompose is an independent project and is not affiliated with, sponsored by, or endorsed by OpenAI. Third-party processing is governed by the terms and privacy policy of the service you choose:
 
 - OpenAI Privacy Policy: `https://openai.com/policies/privacy-policy/`
 - OpenAI Terms of Use: `https://openai.com/policies/terms-of-use/`
 
 ### Local application data
 
-VibeWhisper may store the following data under `~/Library/Application Support/VibeWhisper/`:
+VibeCompose may store the following data under `~/Library/Application Support/VibeCompose/`:
 
 | Data | Default retention |
 | --- | --- |
@@ -52,10 +52,10 @@ Known password managers, Keychain Access, and macOS Passwords are excluded from 
 
 ### Keychain credentials
 
-The ChatGPT session connected in VibeWhisper is stored in macOS Keychain under
-`app.vibewhisper.mac.ChatGPTSession`. An optional OpenAI-Compatible Recovery
+The ChatGPT session connected in VibeCompose is stored in macOS Keychain under
+`app.vibecompose.mac.ChatGPTSession`. An optional OpenAI-Compatible Recovery
 API key is stored separately under
-`app.vibewhisper.mac.OpenAICompatibleAPIKey`. VibeWhisper does not read that
+`app.vibecompose.mac.OpenAICompatibleAPIKey`. VibeCompose does not read that
 key from `OPENAI_API_KEY` and does not intentionally write access tokens,
 refresh tokens, API keys, cookies, or authorization headers to `config.json`,
 transcript history, diagnostics, screenshots, or logs.
@@ -73,18 +73,18 @@ contain only product version/build, completed Onboarding step, provider
 category, audio-duration bucket, processing-latency bucket, delivery category,
 and failure category. They do not contain audio, transcript or clipboard text,
 app names, bundle identifiers, file paths, account details, or a persistent
-user/install identifier. VibeWhisper does not upload them automatically.
+user/install identifier. VibeCompose does not upload them automatically.
 When metrics are enabled, you may use **Settings → Context & Privacy → Export Product
 Metrics** to create an aggregate JSON report for manual review or sharing. The
 report contains count maps only and omits individual event timestamps.
 
-When you choose **Settings → Advanced → Export Diagnostics**, VibeWhisper creates a local ZIP for you to review and share manually. The archive contains:
+When you choose **Settings → Advanced → Export Diagnostics**, VibeCompose creates a local ZIP for you to review and share manually. The archive contains:
 
 - product, operating-system, permission, authentication-state, and signing-state summaries;
 - non-secret configuration flags and retention values;
 - redacted latency records;
 - opt-in local product metrics with enum and bucket values only;
-- whitelisted metadata from up to five recent VibeWhisper crash reports;
+- whitelisted metadata from up to five recent VibeCompose crash reports;
 - checksums for the included files.
 
 The archive excludes audio, transcripts, clipboard text, account email,
@@ -95,7 +95,7 @@ credentials, raw crash-report bodies, history, Recovery metadata, and
 
 ## 3. Clipboard and Accessibility
 
-VibeWhisper writes the completed transcript to the macOS pasteboard. If Accessibility permission and a current editable target are both confirmed, it may send `Cmd+V`. Otherwise, the transcript remains in the clipboard for manual paste. VibeWhisper does not intentionally store unrelated clipboard contents.
+VibeCompose writes the completed transcript to the macOS pasteboard. If Accessibility permission and a current editable target are both confirmed, it may send `Cmd+V`. Otherwise, the transcript remains in the clipboard for manual paste. VibeCompose does not intentionally store unrelated clipboard contents.
 
 ## 4. Your Controls
 
@@ -117,15 +117,15 @@ You can:
   diagnostics, product metrics, Retry files, the saved ChatGPT session, and the
   Recovery API key.
 
-Deleting local VibeWhisper data does not delete information already sent to or retained by a third-party service. Use that service's account and privacy controls for third-party data.
+Deleting local VibeCompose data does not delete information already sent to or retained by a third-party service. Use that service's account and privacy controls for third-party data.
 
 ## 5. Sharing and Sale of Data
 
-VibeWhisper does not currently sell personal information, serve advertising, or upload product analytics to an VibeWhisper-operated server. Data is disclosed only when you direct the app to use a third-party transcription service, manually share a support archive, or when disclosure is required by applicable law.
+VibeCompose does not currently sell personal information, serve advertising, or upload product analytics to an VibeCompose-operated server. Data is disclosed only when you direct the app to use a third-party transcription service, manually share a support archive, or when disclosure is required by applicable law.
 
 ## 6. Security
 
-VibeWhisper uses separate macOS Keychain items for the connected ChatGPT
+VibeCompose uses separate macOS Keychain items for the connected ChatGPT
 session and optional Recovery API key, and uses owner-only local file
 permissions where supported, bounded retention, HTTPS endpoint validation,
 redirect rejection, and conservative paste behavior. No security
@@ -134,7 +134,7 @@ diagnostic archives without reviewing them.
 
 ## 7. Children
 
-VibeWhisper is a productivity tool for users who are permitted to use the connected third-party services. It is not directed to children under 13.
+VibeCompose is a productivity tool for users who are permitted to use the connected third-party services. It is not directed to children under 13.
 
 ## 8. Changes
 
@@ -142,4 +142,4 @@ Material changes will be dated in this document and summarized in release notes.
 
 ## 9. Contact
 
-Private-alpha participants should use the authorized VibeWhisper GitHub issue tracker. Do not attach audio, transcripts, credentials, raw crash reports, or unrelated personal information.
+Private-alpha participants should use the authorized VibeCompose GitHub issue tracker. Do not attach audio, transcripts, credentials, raw crash reports, or unrelated personal information.

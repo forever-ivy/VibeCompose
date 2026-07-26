@@ -141,7 +141,7 @@ do {
         }
     }
 
-    print("VibeWhisper product surface acceptance passed.")
+    print("VibeCompose product surface acceptance passed.")
 } catch {
     fputs("Product surface acceptance failed: \(error)\n", stderr)
     exit(1)

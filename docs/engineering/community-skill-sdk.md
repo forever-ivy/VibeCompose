@@ -1,4 +1,4 @@
-# VibeWhisper Community Skill SDK
+# VibeCompose Community Skill SDK
 
 > Status: local declarative package import is implemented in the macOS alpha
 > Schema: Community Skill v1 / `schemaVersion: 1`
@@ -7,8 +7,8 @@
 
 ## 1. What a Community Skill is
 
-A Community Skill is a local `.vibewhisperskill` **directory package** that
-describes how VibeWhisper should transform authorized voice and selected-text
+A Community Skill is a local `.vibecomposeskill` **directory package** that
+describes how VibeCompose should transform authorized voice and selected-text
 input. It is not an executable plugin.
 
 The current runtime can:
@@ -42,31 +42,31 @@ Copy the repository example:
 
 ```bash
 cp -R \
-  examples/skills/IssueDraft.vibewhisperskill \
-  /tmp/MyIssueDraft.vibewhisperskill
+  examples/skills/IssueDraft.vibecomposeskill \
+  /tmp/MyIssueDraft.vibecomposeskill
 ```
 
 Edit its ID, version, name, prompt, validators, examples, and terminology.
 Then open:
 
 ```text
-VibeWhisper Settings
+VibeCompose Settings
 → AI Polish
 → Local Community Skills
 → Import Skill…
 ```
 
-Choose the `.vibewhisperskill` directory, review the declared permissions,
+Choose the `.vibecomposeskill` directory, review the declared permissions,
 files, output policy, and SHA-256, then install it.
 
 The maintained example is:
 
-- [`examples/skills/IssueDraft.vibewhisperskill`](../../examples/skills/IssueDraft.vibewhisperskill)
+- [`examples/skills/IssueDraft.vibecomposeskill`](../../examples/skills/IssueDraft.vibecomposeskill)
 
 ## 3. Package layout
 
 ```text
-MySkill.vibewhisperskill/
+MySkill.vibecomposeskill/
   skill.yaml                 required
   prompt.md                  required
   terminology.csv            optional
@@ -94,14 +94,14 @@ Hard limits:
 | Skill-local terminology entries | 1,000 |
 
 Every accepted file must be a local regular file, UTF-8 where text is
-required, non-symlinked, and have no executable bit. VibeWhisper rejects path
+required, non-symlinked, and have no executable bit. VibeCompose rejects path
 traversal, unsupported nesting, shebang content, known executable extensions,
 Mach-O magic bytes, unknown files, oversized input, and packages that change
 while being copied.
 
 ## 4. `skill.yaml`
 
-VibeWhisper intentionally parses a constrained YAML subset:
+VibeCompose intentionally parses a constrained YAML subset:
 
 - spaces only, with 0 / 2 / 4-space indentation;
 - scalar values and simple lists;
@@ -112,7 +112,7 @@ Minimal example:
 
 ```yaml
 schemaVersion: 1
-id: com.example.vibewhisper.issue-draft
+id: com.example.vibecompose.issue-draft
 version: 1.0.0
 name: Issue Draft
 author: Example Publisher
@@ -147,7 +147,7 @@ validators:
 | --- | --- |
 | `schemaVersion` | Must be `1` |
 | `id` | Lowercase reverse-domain style; letters, digits, dots, and hyphens; at most 160 UTF-8 bytes |
-| `id` namespace | Must not use the reserved `app.vibewhisper.skill.*` prefix |
+| `id` namespace | Must not use the reserved `app.vibecompose.skill.*` prefix |
 | `version` | Semantic version such as `1.2.0` or `1.2.0-beta.1`; at most 64 UTF-8 bytes with bounded numeric components |
 | `minimumAppVersion` | Semantic version and not newer than the running app |
 | `name` | Required, at most 120 characters |
@@ -204,7 +204,7 @@ use them to grant authority. In particular:
   budget;
 - `context.includeSelectionOnly` does not add a new context provider.
 
-Users configure App Rules and context grants in VibeWhisper Settings.
+Users configure App Rules and context grants in VibeCompose Settings.
 
 ## 5. `prompt.md`
 
@@ -218,10 +218,10 @@ Users configure App Rules and context grants in VibeWhisper Settings.
 - avoid instructions about providers, credentials, hidden prompts, local
   files, network requests, process execution, or delivery.
 
-At runtime, VibeWhisper compiles content in this fixed order:
+At runtime, VibeCompose compiles content in this fixed order:
 
 ```text
-VibeWhisper safety and factual-fidelity shell
+VibeCompose safety and factual-fidelity shell
 → local output contract
 → untrusted Skill prompt
 → optional user-approved Writing Style
@@ -250,7 +250,7 @@ Rules:
 - `correction` requires a replacement;
 - aliases are optional;
 - installed entries are scoped to the Skill;
-- VibeWhisper assigns deterministic local IDs and the source
+- VibeCompose assigns deterministic local IDs and the source
   `skill:<skill-id>`;
 - duplicate or invalid entries are normalized or dropped by the app-owned
   terminology pipeline.
@@ -295,10 +295,10 @@ Supported app-owned checks:
 - at least one label from every required-section alternative group;
 - every protected technical literal appears exactly once;
 - forbidden phrase absence;
-- no internal VibeWhisper marker or selection tag leakage.
+- no internal VibeCompose marker or selection tag leakage.
 
 Community packages cannot provide executable validators. If validation fails,
-the model result is not delivered; VibeWhisper falls back to normalized ASR
+the model result is not delivered; VibeCompose falls back to normalized ASR
 before the existing Preview/paste/clipboard boundary.
 
 ## 8. Localization, examples, and Golden cases
@@ -350,12 +350,12 @@ It does not call a provider or compare a live model response.
 Packages are installed under:
 
 ```text
-~/Library/Application Support/VibeWhisper/Skills/Installed/
+~/Library/Application Support/VibeCompose/Skills/Installed/
   <skill-id>/
     <semantic-version>/
 ```
 
-VibeWhisper writes directories as `0700`, files as `0600`, and computes a
+VibeCompose writes directories as `0700`, files as `0600`, and computes a
 SHA-256 over the sorted relative file paths and bytes. Installation copies
 into a private temporary directory, re-inspects the copy, verifies the
 definition and hash, and only then atomically moves the version into place.
@@ -401,7 +401,7 @@ Before distributing a local package:
 5. include bilingual required-section alternatives where practical;
 6. add at least one Golden case for structure and one for literal
    preservation;
-7. inspect the package in VibeWhisper and review every listed file;
+7. inspect the package in VibeCompose and review every listed file;
 8. run Golden tests from Skill Inspector;
 9. test Preview, copy fallback, disabled state, version rollback, and
    uninstall;

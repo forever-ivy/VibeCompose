@@ -15,7 +15,7 @@ Plans written by `improve-animations` audit — commit `c4f9052`.
 ## Recommended execution order
 
 1. **003** — one-line change, zero risk, immediate feel improvement on every dictation
-2. **002** — touches only `VibeWhisperVisualSystem.swift`, isolated, high daily visibility
+2. **002** — touches only `VibeComposeVisualSystem.swift`, isolated, high daily visibility
 3. **001** — most complex, requires `stepForward` state + transition wiring; do after 002 so you have a feel baseline
 4. **004** — depends on understanding the SkillSwitcher panel structure; do after 001
 5. **005** — AppKit `NSAnimationContext` frame animation; verify no layout side-effects last
@@ -29,7 +29,7 @@ Plans written by `improve-animations` audit — commit `c4f9052`.
 | 3 | MEDIUM | Easing | HUD dismiss uses `CAMediaTimingFunction(.easeIn)` — starts slow |
 | 4 | MEDIUM | Physicality | SkillSwitcher `show()` calls `orderFrontRegardless()` with no entrance |
 | 5 | MEDIUM | Missed opportunity | HUD pill snaps between 284×44 and 320×56 on error state |
-| 6 | LOW | Cohesion | No `VibeWhisperMotion` token system — spring/duration values duplicated across 5+ files |
+| 6 | LOW | Cohesion | No `VibeComposeMotion` token system — spring/duration values duplicated across 5+ files |
 | 7 | MEDIUM | Accessibility | SwiftUI `.animation()` transitions in `PreferencesWindowController` don't gate on `@Environment(\.accessibilityReduceMotion)` |
 | 8 | MEDIUM | Missed opportunity | Onboarding step indicator icon/color change has no symbol transition |
 

@@ -7,17 +7,17 @@ source "$ROOT/scripts/lib/load_env.sh"
 load_product_env "$ROOT/product.env"
 load_version_env "$ROOT/version.env"
 
-ARCH="${VIBEWHISPER_RELEASE_ARCHITECTURE:-$(uname -m)}"
-ZIP_PATH="$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.zip"
-DMG_PATH="$ROOT/dist/${VIBEWHISPER_APP_NAME}-${VIBEWHISPER_VERSION}-macos-${ARCH}.dmg"
-OUTPUT_PATH="${VIBEWHISPER_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
-DEFAULT_RELEASE_BASE_URL="https://github.com/${VIBEWHISPER_REPOSITORY}/releases/download/v${VIBEWHISPER_VERSION}"
-RELEASE_BASE_URL="${VIBEWHISPER_RELEASE_BASE_URL:-$DEFAULT_RELEASE_BASE_URL}"
+ARCH="${VIBECOMPOSE_RELEASE_ARCHITECTURE:-$(uname -m)}"
+ZIP_PATH="$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.zip"
+DMG_PATH="$ROOT/dist/${VIBECOMPOSE_APP_NAME}-${VIBECOMPOSE_VERSION}-macos-${ARCH}.dmg"
+OUTPUT_PATH="${VIBECOMPOSE_RELEASE_MANIFEST_PATH:-$ROOT/dist/release-manifest.json}"
+DEFAULT_RELEASE_BASE_URL="https://github.com/${VIBECOMPOSE_REPOSITORY}/releases/download/v${VIBECOMPOSE_VERSION}"
+RELEASE_BASE_URL="${VIBECOMPOSE_RELEASE_BASE_URL:-$DEFAULT_RELEASE_BASE_URL}"
 RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"
 
-if [[ "${VIBEWHISPER_REQUIRE_DEVELOPER_ID:-0}" == "1" \
-  && -z "${VIBEWHISPER_RELEASE_BASE_URL:-}" ]]; then
-  echo "Signed release metadata requires VIBEWHISPER_RELEASE_BASE_URL pointing to a public HTTPS artifact host." >&2
+if [[ "${VIBECOMPOSE_REQUIRE_DEVELOPER_ID:-0}" == "1" \
+  && -z "${VIBECOMPOSE_RELEASE_BASE_URL:-}" ]]; then
+  echo "Signed release metadata requires VIBECOMPOSE_RELEASE_BASE_URL pointing to a public HTTPS artifact host." >&2
   exit 1
 fi
 [[ "$RELEASE_BASE_URL" == https://* \
@@ -25,7 +25,7 @@ fi
   && "$RELEASE_BASE_URL" != *"?"* \
   && "$RELEASE_BASE_URL" != *"#"* \
   && "$RELEASE_BASE_URL" != *[[:space:]\<\>\"\'\\]* ]] || {
-  echo "VIBEWHISPER_RELEASE_BASE_URL must be a credential-free HTTPS directory URL without query or fragment." >&2
+  echo "VIBECOMPOSE_RELEASE_BASE_URL must be a credential-free HTTPS directory URL without query or fragment." >&2
   exit 1
 }
 
@@ -40,12 +40,12 @@ fi
 
 ARGS=(
   --output "$OUTPUT_PATH"
-  --app-name "$VIBEWHISPER_APP_NAME"
-  --bundle-id "$VIBEWHISPER_BUNDLE_ID"
-  --repository "$VIBEWHISPER_REPOSITORY"
-  --minimum-macos "$VIBEWHISPER_MIN_MACOS"
-  --version "$VIBEWHISPER_VERSION"
-  --build "$VIBEWHISPER_BUILD"
+  --app-name "$VIBECOMPOSE_APP_NAME"
+  --bundle-id "$VIBECOMPOSE_BUNDLE_ID"
+  --repository "$VIBECOMPOSE_REPOSITORY"
+  --minimum-macos "$VIBECOMPOSE_MIN_MACOS"
+  --version "$VIBECOMPOSE_VERSION"
+  --build "$VIBECOMPOSE_BUILD"
   --architecture "$ARCH"
   --zip "$ZIP_PATH"
   --dmg "$DMG_PATH"
@@ -53,8 +53,8 @@ ARGS=(
   --dmg-url "$RELEASE_BASE_URL/$(basename "$DMG_PATH")"
 )
 
-if [[ -n "${VIBEWHISPER_RELEASE_GENERATED_AT:-}" ]]; then
-  ARGS+=(--generated-at "$VIBEWHISPER_RELEASE_GENERATED_AT")
+if [[ -n "${VIBECOMPOSE_RELEASE_GENERATED_AT:-}" ]]; then
+  ARGS+=(--generated-at "$VIBECOMPOSE_RELEASE_GENERATED_AT")
 fi
 
 swift "$ROOT/scripts/generate_release_metadata.swift" "${ARGS[@]}"

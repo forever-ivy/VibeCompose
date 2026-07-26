@@ -1,0 +1,20 @@
+context:
+  required:
+  - voice
+  optional:
+  - styleCapsule
+
+output:
+  format: markdown
+  delivery: automaticPasteWhenVerified
+  risk: low
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 4000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: false
+  requiredSections:
+  - Yesterday|昨天
+  - Today|今天
+  - Blockers|阻塞项
