@@ -16,7 +16,6 @@
 | LaunchAgent label | `app.vibecompose.mac` |
 | Application Support | `~/Library/Application Support/VibeCompose/` |
 | ChatGPT Keychain service | `app.vibecompose.mac.ChatGPTSession` |
-| Recovery API Keychain service | `app.vibecompose.mac.OpenAICompatibleAPIKey` |
 | Environment prefix | `VIBECOMPOSE_` |
 | Release artifact prefix | `VibeCompose-<version>-macos-<arch>` |
 | Homebrew Cask | `vibecompose` |

@@ -670,6 +670,33 @@ func configStoreUsesOnlyVibeComposeApplicationSupportPath() {
 }
 
 @Test
+func configStoreMigratesLegacyProviderChoicesToPublicAlphaChatGPTRoute() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let store = ConfigStore(
+        fileManager: .default,
+        homeDirectoryURL: root
+    )
+    var legacy = AppConfig()
+    legacy.transcription.provider = .openAICompatible
+    legacy.transcription.openAIFallbackEnabled = true
+    legacy.transcription.textPolish.chatGPTAuthEnabled = false
+    legacy.transcription.textPolish.openAICompatibleEnabled = true
+    legacy.transcription.textPolish.openAIFallbackEnabled = true
+    try store.save(legacy)
+
+    let loaded = try store.load()
+
+    #expect(loaded.transcription.provider == .chatGPTManagedAuth)
+    #expect(!loaded.transcription.openAIFallbackEnabled)
+    #expect(loaded.transcription.textPolish.chatGPTAuthEnabled)
+    #expect(!loaded.transcription.textPolish.openAICompatibleEnabled)
+    #expect(!loaded.transcription.textPolish.openAIFallbackEnabled)
+}
+
+@Test
 func configStoreDoesNotImportPreVibeComposeLegacyConfig() throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -755,4 +782,3 @@ func configStoreLoadRewritesNonCanonicalConfig() throws {
     let stored = try JSONDecoder().decode(AppConfig.self, from: storedData)
     #expect(stored.transcription.hintTerms == ["alpha"])
 }
-

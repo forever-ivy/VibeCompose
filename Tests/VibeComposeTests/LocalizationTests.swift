@@ -147,3 +147,30 @@ func simplifiedChineseLocalizationCoversSkillBrowseTaxonomy() throws {
     #expect(strings["Communication"] == "沟通")
     #expect(strings["Community"] == "社区")
 }
+
+@Test
+func simplifiedChineseLocalizationCoversEveryBuiltInWritingStyle() throws {
+    let root = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let stringsURL = root
+        .appendingPathComponent("Sources/VibeCompose/Resources/zh-Hans.lproj/Localizable.strings")
+    let data = try Data(contentsOf: stringsURL)
+    let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
+    let strings = try #require(propertyList as? [String: String])
+
+    for capsule in StyleCapsuleRegistry.builtIn {
+        #expect(strings[capsule.name] != nil, "Missing localized name: \(capsule.name)")
+        #expect(
+            strings[capsule.summary] != nil,
+            "Missing localized summary: \(capsule.name)"
+        )
+        for example in capsule.examples {
+            #expect(
+                strings[example] != nil,
+                "Missing localized example: \(capsule.name)"
+            )
+        }
+    }
+}

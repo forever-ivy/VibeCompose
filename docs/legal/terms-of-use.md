@@ -1,18 +1,25 @@
 # VibeCompose Terms of Use
 
-> Effective for the private alpha: July 13, 2026
+> Effective for the public Alpha: July 28, 2026
 >
-> Last updated: July 14, 2026
+> Last updated: July 28, 2026
 
 ## 1. Alpha Software
 
-VibeCompose is pre-release macOS software. Features, third-party routes, file formats, and availability may change or stop working. The private alpha is provided for evaluation and product validation, not for safety-critical, regulated, emergency, or production-SLA use.
+VibeCompose is pre-release macOS software. Features, third-party routes, file
+formats, and availability may change or stop working. The public Alpha is
+provided for evaluation and community validation, not for safety-critical,
+regulated, emergency, or production-SLA use.
 
 ## 2. Third-Party Services
 
-The default route depends on a ChatGPT account and undocumented upstream behavior. The advanced recovery route depends on the endpoint and credential you provide. You are responsible for having permission to use those services and for complying with their terms.
+The current route depends on a ChatGPT account and undocumented upstream
+behavior. You are responsible for having permission to use ChatGPT and for
+complying with its terms.
 
-VibeCompose is independent and is not affiliated with, sponsored by, or endorsed by OpenAI. VibeCompose does not sell or guarantee third-party model capacity, availability, account eligibility, or service levels.
+VibeCompose is independent and is not affiliated with, sponsored by, or endorsed by OpenAI.
+It does not guarantee ChatGPT capacity, availability, account eligibility, or
+service levels.
 
 ## 3. Acceptable Use
 
@@ -35,7 +42,10 @@ permissions and output.
 
 ## 4. Accounts and Credentials
 
-You are responsible for your Mac, ChatGPT account, API credentials, and connected endpoints. Do not share support archives or screenshots that contain credentials or sensitive content. VibeCompose may require reconnection when a session expires or upstream authentication changes.
+You are responsible for your Mac and ChatGPT account. Do not share support
+archives or screenshots that contain credentials or sensitive content.
+VibeCompose may require reconnection when a session expires or upstream
+authentication changes.
 
 ## 5. Software License and Product Identity
 
@@ -61,8 +71,10 @@ To the maximum extent permitted by law, the VibeCompose project and its contribu
 
 ## 9. Suspension and Changes
 
-Access to an official hosted, update, or support component may be limited to protect users, respond to abuse, comply with law, or mitigate a security or upstream incident. Material changes will be dated and summarized in release notes.
+Update or support behavior may be limited to protect users, respond to abuse,
+comply with law, or mitigate a security or upstream incident. Material changes
+will be dated and summarized in release notes.
 
 ## 10. Contact
 
-Private-alpha questions should use the authorized repository issue tracker.
+Community questions should use the repository issue tracker.

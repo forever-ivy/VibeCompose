@@ -214,7 +214,7 @@ BODY_BYTES=1066
 1. Managed auth 只允许精确的 `https://chatgpt.com` 固定路径。
 2. 禁止 HTTP、自定义端口、userinfo 和跨 origin redirect。
 3. 自定义 endpoint 必须使用独立 API key。
-4. ChatGPT account token 绝不能复用于 OpenAI-compatible 或用户自定义 endpoint。
+4. ChatGPT account token 只能发送到经过固定策略校验的 `chatgpt.com` 端点。
 5. 配置加载和保存时集中验证 URL。
 
 ---

@@ -31,7 +31,7 @@ ChatGPT through the default browser, no API key, no local model setup, press
 
 ## Core Value Proposition
 
-- You already pay for ChatGPT.
+- Use the ChatGPT account you already work with.
 - Install VibeCompose.
 - Press `F5`.
 - Speak.
@@ -52,7 +52,6 @@ ChatGPT through the default browser, no API key, no local model setup, press
 
 - hidden `transcription.hintTerms` for terminology preservation
 - packaged benchmark workflow for cold / warm regression checks
-- advanced recovery route for OpenAI-compatible APIs
 
 ### Excluded
 

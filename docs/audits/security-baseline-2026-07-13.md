@@ -24,8 +24,8 @@
 - 诊断默认保留 14 天、最多 1,000 条；
 - 已知密码管理器、Keychain 和 Passwords 默认不落历史和恢复音频；
 - Retry 有有效期，启动时清理孤儿文件；
-- OpenAI-Compatible Recovery API Key 使用独立 macOS Keychain 项，不再读取 shell 环境变量或写入 `config.json`；
-- Settings 提供“删除全部数据并退出登录”，同时删除 ChatGPT 会话和 Recovery API Key。
+- Public Alpha 只暴露 ChatGPT OAuth 路径，Provider 选择和 API Key 配置不进入首版界面；
+- Settings 提供“删除全部数据并退出登录”，同时删除 ChatGPT 会话和遗留凭据。
 
 后续可靠性加固又关闭了四个实现级缺口：
 
@@ -60,7 +60,7 @@ Managed ASR、Recovery ASR 与 AI Polish 分 route 熔断；half-open 探测取�
 | OW-AUD-003 Recovery 路径逃逸 | 关闭 | 记录只持久化 UUID；文件名由 UUID 派生；Recovery 根目录、JSONL index、Audio 目录与音频文件均检查 symlink；同时检查普通文件、包含关系、25 MB 与 RIFF/WAVE 头；启动时把遗留音频权限收紧为 `0600` | 增加更大规模损坏 JSONL/path fuzz 作为持续门禁 |
 | OW-AUD-004 refresh 竞态/注销复活 | 关闭 | `RefreshFlight` 合并并发 refresh；generation 与原 refresh token 双重提交校验；Sign out 取消 flight 并递增 generation | 可进一步迁移到 actor，减少锁式状态管理复杂度 |
 | OW-AUD-005 录音上限/大文件内存 | 关闭 | `AudioRecorder` 使用 deadline task 硬停止；`ChatGPTTranscriber` 通过 `O_NOFOLLOW` + `fstat` 在读取内容前拒绝空文件、非普通文件和超过 25 MB 的文件，并对 device/inode/size 二次校验；multipart 以 64 KB 分块写入 `0600` 临时文件并用 `URLSession.upload(fromFile:)` 发送 | 真实慢磁盘、网络取消和系统低磁盘空间仍纳入安装版压力测试，但不再存在整段音频与 multipart 同时驻留内存的原始路径 |
-| OW-AUD-006 成功音频与全文持久化 | 关闭 | 成功路径不再写 Recovery；raw ASR 默认关闭；History/Recovery/Diagnostics 按时间与数量轮转；敏感 App 排除；Delete All Data；中英文隐私政策已披露最终文本、失败音频和诊断默认留存 | 公开收费前补齐永久商业隐私联系人 |
+| OW-AUD-006 成功音频与全文持久化 | 关闭 | 成功路径不再写 Recovery；raw ASR 默认关闭；History/Recovery/Diagnostics 按时间与数量轮转；敏感 App 排除；Delete All Data；中英文隐私政策已披露最终文本、失败音频和诊断默认留存 | 在公开发布前补齐长期社区隐私联系人 |
 | OW-AUD-007 OAuth callback 生命周期 | 关闭 | 校验 method/path/state；重复 query 返回 400 且不会结束合法等待；timeout/cancel 会停止 listener 并释放 continuation | 仍需真实浏览器关闭、网络切换和端口冲突验收 |
 | OW-AUD-008 发布完整性 | 部分关闭 | 严格 env parser；Hardened Runtime；Developer ID/Team ID 强校验；notarytool/stapler 路径；Gatekeeper fail-closed；安装 staging/旧版备份/失败恢复；ZIP/DMG SHA-256 与 release manifest；Cask 默认全零 checksum fail-closed；Sparkle 2.9.4 已固定、嵌入、签名并接入菜单/设置；支持外部私钥或 Keychain 生成签名 appcast，并用内置公钥对 ZIP 做 CryptoKit 实际验签；本地 ad-hoc 构建仅为无 Team ID 框架加载临时关闭 library validation，商业 gate 明确拒绝该 entitlement | 当前证书已撤销，尚无真实 Developer ID + notarization/staple 产物；生产 feed/公钥/私钥未配置，尚无真实签名 appcast、自动更新和回滚实机证据 |
 | OW-AUD-009 技术字面量归一化 | 关闭 | `TechnicalLiteralTokenizer` 保护 URL、邮箱、POSIX/Windows 路径、文件名、版本、IP、UUID、hash、CLI flag、环境变量、inline/fenced code 和代码符号；本地处理使用 private-use token，AI Polish 使用显式 model-safe token；token 缺失或重复即回退；Settings 支持简体、繁体、原样及自动/全角/半角/原样标点 | 扩充真实混输语料和边缘文件名 corpus，保持 round-trip 门禁 |
@@ -70,7 +70,7 @@ Managed ASR、Recovery ASR 与 AI Polish 分 route 熔断；half-open 探测取�
 | OW-AUD-013 配置 URL 崩溃 | 关闭 | 可配置 endpoint 经 `validatedUserOwnedURL` 返回可理解错误；Managed URL 为编译时常量 | 对全部高风险文本字段统一失焦/提交校验 |
 | OW-AUD-014 Settings stale index | 关闭 | Terminology 条目持久化稳定 UUID；独立 Manager 的选择、编辑、启停和删除均按 ID 定位；旧配置迁移补齐稳定 ID；导入和 Quick Add 在写入前执行重复与语义冲突检测 | 继续保留 ID 迁移、删除后编辑和冲突分类回归测试 |
 | OW-AUD-015 失败清理不完整 | 关闭 | Recorder 初始化写入失败和启动失败会删除 partial WAV；上传成功、失败或取消均删除 multipart；`shutdown()` 同步删除处理中自有音频；下次启动只清理严格 UUID 命名的 `vibecompose-*.wav` 与 `vibecompose-upload-*.multipart`，跳过目录和 lookalike，删除 symlink 本身而不触碰目标 | 继续做真实磁盘满、SIGKILL 后重启和长时间压力测试 |
-| OW-AUD-016 死配置/预检偏差 | 部分关闭 | Advanced Recovery 的 endpoint、model、Keychain API Key、连接测试、第三方费用提示、切回 ChatGPT 与 Runtime Preflight 已接入同一运行链路；旧 `openAIAuthTokenEnv` 可解码但不会重新编码 | 继续审计其余公开配置，为每个设置建立行为契约和安装版交互证据 |
+| OW-AUD-016 死配置/预检偏差 | 关闭 | Public Alpha Provider Policy 在加载时统一迁移到 ChatGPT 路径；首版设置不再暴露 Provider 选择 | 为每个公开设置保持行为契约和安装版交互证据 |
 | OW-AUD-017 测试可能假绿 | 部分关闭 | 高风险边界已有纯单元测试，仓库提供安装版 smoke 与 visual acceptance | TCC、焦点、热键、多应用真实操作仍必须使用 `/Applications/VibeCompose.app` 验收，不能只引用单元测试 |
 
 ## 3. 当前隐私默认值
@@ -110,7 +110,7 @@ excludeSensitiveApps = true
 
 1. 取消当前录音/处理或清理 Pending Retry；
 2. Sign out，并删除 Keychain 中的 ChatGPT session；
-3. 删除 Keychain 中的 OpenAI-Compatible Recovery API Key；
+3. 删除 Keychain 中的遗留 Provider 凭据；
 4. 验证删除目标确实是 VibeCompose Application Support 目录；
 5. 拒绝通过 symlink 删除；
 6. 删除整个 `~/Library/Application Support/VibeCompose/`；

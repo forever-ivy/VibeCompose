@@ -331,7 +331,7 @@
 "Provider safety policy is unavailable because this build has incomplete configuration." = "此版本的服务安全策略配置不完整，暂时无法使用远程安全策略。";
 "Provider safety policy is unavailable because this build has an invalid policy URL." = "此版本的服务安全策略地址无效，暂时无法使用远程安全策略。";
 "Provider safety policy is unavailable because this build has an invalid signing key." = "此版本的服务安全策略签名公钥无效，暂时无法使用远程安全策略。";
-"%@ is temporarily disabled by a signed VibeCompose safety policy (incident %@). No audio or transcript was sent. Use the OpenAI-Compatible Recovery route or try again later." = "签名 VibeCompose 安全策略已暂时停用“%@”（事件 %@）。本次没有发送音频或转写文本。请改用 OpenAI 兼容恢复路径，或稍后再试。";
+"%@ is temporarily disabled by a signed VibeCompose safety policy (incident %@). No audio or transcript was sent. Reconnect ChatGPT or try again later." = "签名 VibeCompose 安全策略已暂时停用“%@”（事件 %@）。本次没有发送音频或转写文本。请重新连接 ChatGPT，或稍后再试。";
 "The provider safety policy server returned an invalid response." = "服务安全策略服务器返回了无效响应。";
 "The provider safety policy response exceeded the allowed size." = "服务安全策略响应超过允许的大小。";
 "The provider safety policy envelope is invalid." = "服务安全策略封装格式无效。";
@@ -777,6 +777,9 @@
 "Domain Packs" = "领域术语包";
 "Domain Packs add deterministic spelling guidance. Personal corrections win over Skill terms, personal terms, and Domain Packs." = "领域术语包提供确定性的拼写引导。个人纠正规则优先于 Skill 词条、个人普通词条和领域术语包。";
 "English Business" = "英文商务";
+"Academic Writing" = "学术写作";
+"Executive Summary" = "执行摘要";
+"Code Documentation" = "代码文档";
 "Enter a name and a readable style summary." = "请输入名称和可读的风格摘要。";
 "Export Writing Style" = "导出写作风格";
 "Exported %@." = "已导出 %@";
@@ -944,7 +947,7 @@
 "This Skill requires selected text, but access is not allowed. Allow selected text for this Skill or choose another Skill." = "此 Skill 需要所选文本，但尚未获得访问权限。请允许此 Skill 访问所选文本，或选择其他 Skill。";
 "This Skill requires selected text, but the selection is too large. Select a smaller range and try again." = "此 Skill 需要所选文本，但当前选择范围过大。请选择较小的范围后重试。";
 "This Skill requires selected text. Select text in the target app and press the dictation shortcut again, or choose another Skill." = "此 Skill 需要所选文本。请在目标应用中选择文本并再次按下听写快捷键，或选择其他 Skill。";
-"This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Writing Styles, installed Community Skills, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone." = "此操作会从这台 Mac 删除转写、失败录音、诊断、产品指标、术语、自定义写作风格、已安装的 Community Skill、设置、已保存的 ChatGPT 会话以及 OpenAI-Compatible API 密钥，且无法撤销。";
+"This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Writing Styles, installed Community Skills, settings, and the saved ChatGPT session from this Mac. This action cannot be undone." = "此操作会从这台 Mac 删除转写、失败录音、诊断、产品指标、术语、自定义写作风格、已安装的 Community Skill、设置以及已保存的 ChatGPT 会话，且无法撤销。";
 " · needs selection" = " · 需要所选文本";
 "%@ · %@" = "%@ · %@";
 "%@ · %@ · %@" = "%@ · %@ · %@";
@@ -1540,6 +1543,9 @@
 "Use precise technical language, explicit constraints, compact headings, and implementation-oriented bullets. Preserve identifiers and avoid marketing language, vague adjectives, and unsupported claims." = "使用精确的技术语言、明确约束、紧凑标题与面向实现的要点。保留标识符，避免营销用语、含糊形容词与未经支持的断言。";
 "Write clear international business English with short paragraphs, neutral confidence, explicit next steps, and moderate politeness. Avoid idioms, exaggerated claims, and culture-specific slang." = "使用清晰的国际商务英文：短段落、中性自信、明确下一步、适度礼貌。避免习语、夸张表述与文化特定俚语。";
 "Use a warm, natural, conversational tone with varied sentence length. Keep the message compact, avoid corporate phrasing, and do not add emojis or sign-offs unless requested." = "使用温暖、自然、对话式语气，句长有变化。信息保持紧凑，避免公司套话；除非要求，不要添加表情符号或落款。";
+"Use formal academic prose: third person where appropriate, precise hedged claims (\"suggests\", \"indicates\", \"demonstrates\"), passive voice when the actor is less important than the action, and explicit logical connectors. Avoid contractions, colloquialisms, and unsupported assertions." = "采用正式的学术文体：适当使用第三人称，以严谨且有所保留的措辞表达论断（如“表明”“显示”“证明”）；当行为主体不如行为本身重要时使用被动语态，并明确使用逻辑连接词。避免省略式表达、口语化用语和缺乏依据的断言。";
+"Lead with the bottom line (BLUF). Use short declarative sentences, plain language, and explicit numbers. Keep each paragraph to a single idea. End with a clear recommended action or decision needed. Avoid jargon, qualifications, and background that executives do not need to act." = "开门见山给出结论（BLUF）。使用简短的陈述句、直白的语言和明确的数字。每段只表达一个核心观点。以明确的建议行动或待决事项收尾。避免术语、限定说明以及不影响高管决策的背景信息。";
+"Write in third person, present tense, imperative voice for function descriptions (\"Returns\", \"Throws\", \"Inserts\"). Be precise about types, nullability, side effects, and error conditions. Follow JSDoc / docstring conventions: one summary sentence, then @param / @returns / @throws as needed. Avoid vague adjectives and marketing language." = "使用第三人称、现在时和祈使语气编写函数说明（“返回”“抛出”“插入”）。准确说明类型、可空性、副作用和错误条件。遵循 JSDoc / docstring 规范：先写一句摘要，再按需添加 @param / @returns / @throws。避免含糊的形容词和营销语言。";
 
 /* Built-in Writing Style examples (styled / after) */
 "Could you please review the attached proposal by Friday and share any concerns before we circulate it more widely?" = "能否请您在周五前审阅附件方案，并在我们更广泛传阅前分享任何顾虑？";
@@ -1547,6 +1553,9 @@
 "Retry only on HTTP 429/503 with exponential backoff (base 250ms, cap 4s, max 5 attempts). Do not retry non-idempotent POST." = "仅在 HTTP 429/503 时重试，使用指数退避（基数 250ms，上限 4s，最多 5 次）。不要重试非幂等 POST。";
 "Thank you for the update. Next step: please confirm the delivery date so we can schedule the customer review." = "感谢更新。下一步：请确认交付日期，以便我们安排客户评审。";
 "Hey — running a bit late, should be there in ten. Grab a table if you get there first?" = "嗨——我稍微晚一点，大概十分钟到。你先到的话帮占个位子？";
+"The results indicate that response latency increases significantly under high concurrency, suggesting that the synchronisation strategy warrants further investigation." = "结果表明，在高并发条件下响应延迟显著增加，这说明同步策略值得进一步研究。";
+"Deployment is blocked by a single authentication bug. Fix ships Friday; no user impact expected. Decision needed: approve the Friday release window." = "部署被一个身份验证 Bug 阻塞。修复将于周五发布，预计不会影响用户。待决事项：批准周五的发布窗口。";
+"Returns the normalised transcript with terminology corrections applied. Throws `TerminologyError.conflictingEntries` if two packs define the same canonical form with different casings." = "返回已应用术语修正的规范化转写结果。如果两个术语包以不同的大小写定义同一个规范形式，则抛出 `TerminologyError.conflictingEntries`。";
 
 /* Built-in Writing Style examples (original / before) */
 "Styled" = "风格化后";

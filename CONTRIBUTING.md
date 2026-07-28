@@ -1,5 +1,27 @@
 # Contributing to VibeCompose
 
+Thank you for helping build this independent, unofficial community project.
+Contributions are accepted under the repository's MIT License.
+
+## Start Here
+
+```bash
+git clone https://github.com/forever-ivy/vibecompose.git
+cd vibecompose
+./scripts/build_and_run.sh
+```
+
+This one command packages, installs, and launches
+`/Applications/VibeCompose.app`. Run the full pre-submit gate with:
+
+```bash
+./scripts/check.sh
+```
+
+Source builds require macOS 13 or later and Xcode Command Line Tools. If no
+Apple development identity is available, prefix local commands with
+`VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1`.
+
 ## Development Flow
 
 1. Run `./scripts/check.sh` before submitting changes.
@@ -13,11 +35,47 @@
 
 - Keep the app macOS-native and keyboard-first.
 - Preserve the single-trigger `F5` start/stop workflow.
+- Keep the Public Alpha UI on the single ChatGPT OAuth provider path.
 - Paste only when a current editable target is verified; otherwise preserve the transcript in the clipboard.
 - Treat tokens, audio, transcripts, and recovery files as sensitive data.
-- Never send managed credentials to user-configurable endpoints.
 - Keep undocumented upstream dependencies explicit in product copy and error handling.
 - Do not add a second product identity, legacy brand alias, or compatibility path without an approved migration requirement.
+
+## OAuth and Network Changes
+
+The current login flow is OAuth 2.0 Authorization Code with PKCE and a
+loopback callback. Before changing authentication or ChatGPT requests, read
+[ChatGPT OAuth](docs/engineering/chatgpt-oauth.md) and
+[Privacy data flow](docs/engineering/privacy-data-flow.md).
+
+- Never commit or print access tokens, refresh tokens, ID tokens, cookies, or
+  authorization headers.
+- Keep managed requests pinned to approved HTTPS `chatgpt.com` paths.
+- Preserve callback state, PKCE, timeout, duplicate-parameter, redirect, and
+  session-generation checks.
+- Update the README, privacy policy, tests, and installed-app acceptance when
+  request contents or retention behavior changes.
+
+## Issues and Pull Requests
+
+- Search existing issues before opening a duplicate.
+- Include the macOS version, VibeCompose version, installed app path,
+  permission state, minimal reproduction, expected result, and actual result.
+- Keep pull requests focused and explain the user-visible behavior and
+  verification performed.
+- Add tests for behavior changes and documentation for new user-visible data
+  flow.
+- Do not attach ChatGPT tokens, cookies, API credentials, recordings,
+  transcripts, private documents, or raw crash reports.
+- Report vulnerabilities through [SECURITY.md](SECURITY.md), not a public
+  issue.
+
+## Contributing Skills
+
+Community Skills are declarative instructions and must not contain executable
+code, scripts, network actions, or hidden data access. Start from
+[`examples/skills/`](examples/skills/) and follow the
+[Community Skill contribution guide](docs/engineering/community-skill-contribution-guide.md).
 
 ## Git Commit Messages
 

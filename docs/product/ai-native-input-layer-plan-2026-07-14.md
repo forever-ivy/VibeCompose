@@ -1447,7 +1447,7 @@ macOS Alpha 已落地九个 Settings 页面：
    - Product Metrics；
    - Delete All Data。
 9. **Advanced**
-   - OpenAI-Compatible Recovery；
+   - ChatGPT OAuth 连接状态；
    - Diagnostics Export；
    - Updates；
    - Licenses。

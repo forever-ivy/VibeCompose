@@ -12,7 +12,7 @@ VibeCompose's default account route depends on upstream ChatGPT behavior that is
 | --- | --- | --- |
 | 401 or non-Cloudflare 403 | authentication change | refresh once, then require reconnect |
 | Cloudflare 403 | upstream challenge | bounded automatic attempts, preserve failed audio, expose Retry |
-| 404 or incompatible schema | upstream contract change | stop treating the capability as healthy; require app update or recovery route |
+| 404 or incompatible schema | upstream contract change | stop treating the capability as healthy; require an app update |
 | 429 | capacity/rate limit | stop dense retry; communicate retry timing when available |
 | network/5xx | transient outage | bounded retry only; preserve recoverable work |
 | repeated cross-user wrong result or credential concern | security incident | disable affected release path and issue a security update |
@@ -23,13 +23,8 @@ VibeCompose's default account route depends on upstream ChatGPT behavior that is
 2. Keep the failed recording only when the user has enabled failed-audio recovery.
 3. Reconnect ChatGPT after an authentication failure.
 4. Use clipboard-only output when automatic paste cannot be proven safe.
-5. Advanced users may save their own API key in Keychain, configure an HTTPS
-   OpenAI-compatible endpoint/model, run the synthetic-silence connection
-   test, acknowledge possible provider charges, and switch transcription ASR
-   to that route.
-6. Switch back to the ChatGPT account route when the incident ends.
-7. Delete the Recovery key, failed audio, or all local data when recovery is
-   no longer needed.
+5. Wait for upstream recovery or install a verified VibeCompose update.
+6. Delete failed audio or all local data when Recovery is no longer needed.
 
 ## Operator Response
 

@@ -27,4 +27,7 @@ pnpm verify   # build + catalog path check + content contract
 
 ## Scope (honest boundaries)
 
-This site is marketing + a browseable Skill directory. Skills are declarative instructions only; packages are hosted on GitHub and imported locally in the macOS app. There is no account system, remote registry, pricing, or claimed signed production download.
+This site is the project homepage and a browseable Skill directory. Skills are
+declarative instructions only; packages are hosted on GitHub and imported
+locally in the macOS app. There is no account system, remote registry, or
+claimed signed production download.

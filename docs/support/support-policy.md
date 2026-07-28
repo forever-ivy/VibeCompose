@@ -1,20 +1,20 @@
 # VibeCompose Support Policy
 
-> Private-alpha baseline: July 13, 2026
+> Public Alpha baseline: July 28, 2026
 
 ## Supported Alpha Environment
 
 - Apple silicon Mac;
 - macOS 13 or later;
 - `/Applications/VibeCompose.app`;
-- the current private-alpha version;
-- default ChatGPT account route or the documented OpenAI-compatible recovery route.
+- the current public Alpha version;
+- the ChatGPT account route connected through browser OAuth.
 
 Intel builds, virtual machines, modified bundles, unsigned redistributions, beta macOS releases, and managed enterprise environments are best-effort until explicitly added to the compatibility matrix.
 
 ## Support Channel
 
-Authorized private-alpha testers should use the repository issue tracker.
+Community users should use the repository issue tracker.
 
 Security vulnerabilities should follow the repository `SECURITY.md` process rather than a public bug report.
 
@@ -23,7 +23,7 @@ Security vulnerabilities should follow the repository `SECURITY.md` process rath
 1. VibeCompose version and macOS version.
 2. Whether the app is installed at `/Applications/VibeCompose.app`.
 3. Microphone and Accessibility status.
-4. Default ChatGPT route or advanced recovery route.
+4. ChatGPT connection state.
 5. Exact reproduction steps and the smallest non-sensitive error.
 6. A redacted support archive generated from VibeCompose support diagnostics export, when requested.
 
@@ -31,7 +31,7 @@ Never attach access tokens, refresh tokens, cookies, API keys, raw crash reports
 
 ## Priority Targets
 
-These are private-alpha response targets, not a service-level guarantee:
+These are community project triage targets, not a service-level guarantee:
 
 | Priority | Example | Initial response target |
 | --- | --- | --- |
@@ -52,4 +52,4 @@ VibeCompose support covers the VibeCompose app, its documented installation flow
 
 ## Lifecycle
 
-Private alpha builds may require upgrading to the latest build before support continues. Minimum supported versions, security-update windows, and end-of-life periods must be published before 1.0.
+Public Alpha builds may require upgrading to the latest build before support continues. Minimum supported versions, security-update windows, and end-of-life periods must be published before 1.0.

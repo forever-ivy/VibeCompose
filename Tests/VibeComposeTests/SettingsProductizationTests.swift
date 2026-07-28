@@ -688,31 +688,31 @@ func settingsSourceKeepsTheMacOSSidebarAndAutosavingContract() throws {
             "VibeCompose still cannot confirm microphone access."
         )
     )
-    #expect(source.contains("SecureField("))
-    #expect(source.contains("Save API Key"))
-    #expect(source.contains("Remove API Key"))
-    #expect(source.contains("OpenAICompatibleConnectionTester("))
-    #expect(!source.contains("generated 0.1-second silent WAV"))
-    #expect(source.contains("Import Your Own API?"))
-    #expect(source.contains("Use My API"))
-    #expect(source.contains("Compatible Fallback"))
+    // Public Alpha exposes only the ChatGPT account route. The compatible
+    // provider implementation may remain compiled, but it has no Settings
+    // entry point, confirmation alert, or configuration sheet.
+    #expect(!source.contains("isPresented: $showsAdvancedRecovery"))
+    #expect(!source.contains(".sheet(isPresented: $showsOwnAPIConfigurationSheet)"))
+    #expect(source.contains("Public Alpha exposes one route"))
     #expect(source.contains("advancedRecognitionCard"))
     #expect(source.contains("advancedPolishCard"))
-    #expect(source.contains("advancedAPIAccessRow"))
-    #expect(source.contains("ownAPIConfigurationSheet"))
-    #expect(source.contains("OwnAPIConfigurationTab"))
-    #expect(source.contains("ownAPIRecognitionPane"))
-    #expect(source.contains("ownAPIPolishPane"))
-    #expect(source.contains("setPolishCompatibleFallback"))
+    #expect(
+        source.contains(
+            """
+            case .advanced:
+                        VStack(alignment: .leading, spacing: VibeComposeMetrics.space20) {
+                            advancedRecognitionCard
+                            advancedPolishCard
+                        }
+            """
+        )
+    )
     #expect(!source.contains("ProductModelCatalog.customModelTag"))
     #expect(source.contains("detectAvailableModels"))
     #expect(source.contains("ChatGPTAccountModelCatalog"))
     #expect(source.contains("availableAccountPolishModels"))
     #expect(source.contains("refreshAccountPolishModels"))
-    #expect(source.contains("Configure…"))
     #expect(source.contains("ProductModelCatalog"))
-    #expect(source.contains("openAIFallbackEnabled"))
-    #expect(source.contains("openAICompatibleEnabled"))
     #expect(!source.contains("advancedProductRouteCard"))
     #expect(!source.contains("AI Polish remains on the ChatGPT-authenticated route"))
     #expect(!source.contains("ASR environment variable"))

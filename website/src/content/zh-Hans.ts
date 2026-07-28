@@ -29,8 +29,8 @@ export const zhHans: Dictionary = {
   badges: {
     alpha: "Alpha",
     openSource: "开源",
-    noTelemetry: "零遥测",
-    local: "本地优先",
+    noTelemetry: "无项目服务器",
+    local: "本地控制",
   },
   hero: {
     eyebrow: "macOS · 语音优先写作",
@@ -39,14 +39,14 @@ export const zhHans: Dictionary = {
       "一个快捷键 · 想到什么就说 · 声明式 Skill 把每句话塑造成干净、有结构的文字——你的机器上不运行任何代码",
     primaryCta: "获取 macOS 版",
     secondaryCta: "探索 Skills",
-    note: "0.1.0 Alpha · macOS 13+ · MIT",
+    note: "0.1.0 Alpha · 非官方社区项目 · macOS 13+ · MIT",
   },
   workflow: {
     title: "三步搞定",
     steps: [
       {
         title: "按键说话",
-        desc: "F5——或你指定的任意快捷键 · 自然地讲 · 音频不离开你的 Mac",
+        desc: "F5——或你指定的任意快捷键 · 音频直接发送到 ChatGPT 转写",
       },
       {
         title: "Skill 塑形",
@@ -92,12 +92,12 @@ export const zhHans: Dictionary = {
     title: "你的文字始终在你手中",
     points: [
       {
-        title: "零遥测",
-        desc: "不收集分析数据 · 不追踪使用行为 · 不向外发送任何信息",
+        title: "无项目服务器",
+        desc: "没有 VibeCompose 账户或中转服务 · 本地指标默认关闭且不会自动上传",
       },
       {
         title: "本地优先存储",
-        desc: "历史保存在你的 Mac · 服务限额来自上游，不是我们",
+        desc: "历史保存在你的 Mac · 音频和可选润色请求直接发送到 ChatGPT",
       },
       {
         title: "发送前先审阅",
@@ -108,7 +108,7 @@ export const zhHans: Dictionary = {
   openSource: {
     eyebrow: "开源",
     title: "MIT，从头到尾",
-    body: "应用与 Skill 同处一个公开仓库 · 读每一行代码 · 提 issue · 贡献代码",
+    body: "独立且非官方 · 应用与 Skill 同处一个公开仓库 · 读每一行代码 · 提 issue · 贡献代码",
     cta: "在 GitHub 查看",
     license: "MIT 许可证",
   },

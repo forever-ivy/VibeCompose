@@ -961,8 +961,10 @@ struct ConfigStore {
 
         let data = try Data(contentsOf: configURL)
         let decoded = try JSONDecoder().decode(AppConfig.self, from: data)
-        let config = LegacyProductIdentity
-            .canonicalizingBuiltInSkillReferences(in: decoded)
+        let config = PublicAlphaProviderPolicy.apply(
+            to: LegacyProductIdentity
+                .canonicalizingBuiltInSkillReferences(in: decoded)
+        )
         // Normalize/migrate missing keys by re-encoding, but skip the write when
         // the on-disk document is already canonical. Unconditional rewrite made
         // every launch touch config.json (mtime, backup noise, SSD wear).
@@ -989,5 +991,20 @@ struct ConfigStore {
             [.posixPermissions: NSNumber(value: Int16(0o600))],
             ofItemAtPath: configURL.path
         )
+    }
+}
+
+/// Public Alpha deliberately exposes one provider path. Keep the compatible
+/// implementation available for development and tests, but migrate any older
+/// on-disk selection back to the ChatGPT account route at launch.
+enum PublicAlphaProviderPolicy {
+    static func apply(to config: AppConfig) -> AppConfig {
+        var config = config
+        config.transcription.provider = .chatGPTManagedAuth
+        config.transcription.openAIFallbackEnabled = false
+        config.transcription.textPolish.chatGPTAuthEnabled = true
+        config.transcription.textPolish.openAICompatibleEnabled = false
+        config.transcription.textPolish.openAIFallbackEnabled = false
+        return config
     }
 }

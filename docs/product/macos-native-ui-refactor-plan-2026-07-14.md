@@ -71,7 +71,7 @@ Window / Unified Toolbar
 | Input & Output | 听写、转写、标点、AI 转换、Paste & Clipboard |
 | Context & Privacy | 当前可用 Context、权限、Style、Terminology 摘要、敏感应用、留存与删除 |
 | Appearance & Feedback | Refined HUD、AI Activity Glow、Hidden、声音与通知 |
-| Advanced | OpenAI-Compatible 恢复、已配置时的 Provider Safety / 更新与诊断 |
+| Advanced | ChatGPT 托管模型状态、Provider Safety / 更新与诊断 |
 
 兼容性深链接保持有效：
 

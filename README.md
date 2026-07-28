@@ -2,177 +2,184 @@
 
 [简体中文](README.zh-CN.md)
 
-**Voice-first writing for macOS.** One hotkey. Speak your mind. Get text that's ready to send — shaped by declarative Skills that never run code on your machine.
+**Open-source voice-first writing for macOS.** Press `F5`, speak, and turn the
+result into a transcript, reply, email, bug report, or another structured
+format with declarative Skills.
 
-VibeCompose is MIT-licensed, native, and local-first. Press `F5` to record, press again to stop. Your words land in the active field — or stay safe in the clipboard when auto-paste can't be verified.
+> [!IMPORTANT]
+> VibeCompose is an independent, unofficial community project. It is not
+> affiliated with, sponsored by, or endorsed by OpenAI. The current Alpha uses
+> undocumented ChatGPT web endpoints after you sign in with your own ChatGPT
+> account. Those endpoints can change or stop working without notice.
 
-## Why VibeCompose
+## Public Alpha Scope
 
-Most voice tools stop at transcription. VibeCompose goes further: a **Skill Runtime** transforms raw speech into emails, commit messages, bug reports, code prompts, or any structured format — using plain-text instructions, not executable scripts.
+The first public release intentionally has one provider path:
 
-- **One key, many outputs** — Same `F5` workflow regardless of whether you need a raw transcript, a polished reply, or a structured task
-- **Declarative, not executable** — Skills are prompt files. They can't access your filesystem, run shell commands, or make network requests
-- **Context-aware** — Selected text, clipboard, writing styles, and terminology feed into Skill resolution without manual setup
-- **Privacy-first** — Zero telemetry, local history, no account system, no remote Skill store
+1. connect a ChatGPT account in the default browser;
+2. record audio locally;
+3. send the recording to ChatGPT for transcription;
+4. optionally send the transcript and resolved Skill instructions to ChatGPT
+   for polishing;
+5. preview, paste, or copy the result.
 
-## Current Status
+There is no VibeCompose account or VibeCompose-operated transcription server.
+Provider selection and API-key setup are not part of the first-release UI.
 
-**macOS Alpha · v0.1.0** — Actively developed. Not production-signed yet.
+## Features
 
-What's already working:
+- Native AppKit + SwiftUI menu bar app for macOS 13+
+- One-key start/stop dictation with configurable shortcuts (`F5` by default)
+- Browser OAuth login with session storage in macOS Keychain
+- Transcription, terminology alignment, optional AI Polish, and safe delivery
+- 21 reviewed built-in Skills plus local declarative Community Skills
+- Skill Switcher, editable Preview, redacted run receipts, and safe Undo
+- Selected-text context with per-Skill permissions and sensitive-app blocking
+- Writing Styles, personal terminology, and built-in Domain Packs
+- Conservative paste verification with clipboard fallback
+- Bounded local history, failed-recording recovery, and Delete All Data
+- English and Simplified Chinese UI
 
-- Native AppKit + SwiftUI menu bar app with English and Simplified Chinese UI
-- Configurable global hotkey (default `F5`) with conflict detection and atomic rollback
-- Three visual feedback modes: Status Bar, Edge Glow, and Hidden — with Reduce Motion, Increase Contrast, and VoiceOver support
-- Browser-based ChatGPT connection with Keychain-backed session storage
-- Transcription → terminology alignment → optional AI Polish pipeline with an Auto mode that skips short dictation to reduce latency
-- **21 reviewed built-in Skills** covering dictation, reply, email, developer tasks, meetings, product, support, translation, and context workflows
-- Global Skill Switcher, Skill Library (Installed / Discover / Created), editable Preview, redacted Skill Run receipts, safe Undo, and Creator/Test Bench
-- Selected-text context with per-Skill permissions, sensitive-app blocking, local Diff Preview, and target verification before replacement
-- Five built-in Writing Styles plus custom style creation, per-Skill assignment, and export
-- Layered terminology: personal corrections → Skill-local terms → Domain Packs (Backend Engineering, Medical, Kubernetes)
-- `.vibecomposeskill` package import with file validation, SHA-256 verification, multi-version support, rollback, and Skill Inspector
-- Conservative paste: clipboard fallback, retry-to-clipboard, verified insertion
-- Bounded local history, failed-audio recovery, privacy controls, and performance benchmarking
-- Sensitive-app exclusions and Delete All Data
-- Redacted support-diagnostics ZIP export
-- OpenAI-Compatible transcription as an advanced recovery route with Keychain API key and connection testing
-- Signed provider-safety policy enforcement for managed transcription and AI Polish incidents
-- Sparkle updates, pinned dependency notices, and SHA-256 license verification
-
-## Product Boundary
-
-The default ChatGPT account route depends on undocumented upstream behavior. It is **not** a stable public API, an OpenAI partnership, or an enterprise SLA.
-
-The current Alpha closes all original managed-endpoint, recovery-path, auth-refresh, and unsafe-context-paste findings. Sparkle 2.9.4 and the signed provider capability-policy client are integrated. Signed public distribution is gated by Developer ID signing, notarization, production hosting, and final acceptance testing. See the [security baseline](docs/audits/security-baseline-2026-07-13.md).
+Skills are instructions, not executables: they cannot run shell commands,
+access the filesystem, or initiate network requests.
 
 ## Requirements
 
-- macOS 13+
-- A usable ChatGPT account (default route)
-- Microphone permission (recording)
-- Accessibility permission (auto-paste; without it, transcripts stay in the clipboard)
+- macOS 13 or later
+- a ChatGPT account that can use the required upstream capabilities
+- Xcode Command Line Tools for source builds
+- Microphone permission
+- Accessibility permission for automatic paste; without it, output remains in
+  the clipboard
 
-## Quick Start
+## One-command Build, Install, and Run
 
 ```bash
-swift build --package-path .
-swift test --package-path .
+git clone https://github.com/forever-ivy/vibecompose.git
+cd vibecompose
+./scripts/build_and_run.sh
+```
+
+The script packages the app, installs it at `/Applications/VibeCompose.app`,
+and launches the installed copy. For normal development checks:
+
+```bash
 ./scripts/check.sh
-./scripts/package_app.sh
-./scripts/install_app.sh
-open -n /Applications/VibeCompose.app
 ```
 
-For local debugging without a valid Apple signing identity:
+If no Apple development identity is available:
 
 ```bash
-VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/check.sh
-VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/package_app.sh
+VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/build_and_run.sh
 ```
 
-Ad-hoc signing is for local validation only. It may prevent macOS from showing a stable Accessibility permission row.
+Ad-hoc signatures are suitable for local development, but macOS may require
+Microphone and Accessibility permissions to be granted again after rebuilding.
+Always verify permissions against `/Applications/VibeCompose.app`, not
+`dist/VibeCompose.app`.
 
-> **Important:** Always use `/Applications/VibeCompose.app` for permission and interaction verification. Do not launch `dist/VibeCompose.app` as the live app.
+## OAuth Login
 
-### Accessibility Structure Precheck
+1. Open **VibeCompose → Settings → General**.
+2. Choose **Use Browser Login**.
+3. Complete the OpenAI authorization page in the default browser.
+4. The browser returns to a loopback callback on this Mac.
+5. Confirm that Settings shows **ChatGPT — Ready**.
 
-```bash
-VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 ./scripts/accessibility_acceptance.sh --install
+The login uses OAuth 2.0 Authorization Code with PKCE. VibeCompose stores the
+resulting session in macOS Keychain under
+`app.vibecompose.mac.ChatGPTSession`; it does not store account passwords.
+See [ChatGPT OAuth](docs/engineering/chatgpt-oauth.md).
+
+## Privacy Data Flow
+
+```mermaid
+flowchart LR
+    A["Microphone"] --> B["Temporary WAV on this Mac"]
+    B --> C["ChatGPT transcription endpoint"]
+    C --> D["Transcript in VibeCompose memory"]
+    D -->|optional| E["ChatGPT polish endpoint"]
+    D --> F["Local preview / history"]
+    E --> F
+    F --> G["Verified paste or clipboard"]
 ```
 
-Checks all nine Settings panes, four Onboarding steps, History, Terminology, and Quick Add for non-empty SwiftUI accessibility trees and named actionable controls.
+- Audio processing is remote: recorded audio is sent directly from the app to
+  ChatGPT over HTTPS.
+- Successful temporary recordings are deleted after processing. Failed audio
+  is retained only when Recovery is enabled, with bounded retention.
+- AI Polish may send the transcript, resolved Skill prompt, terminology,
+  assigned Writing Style summary, and explicitly authorized selected text.
+- ChatGPT tokens stay in Keychain. VibeCompose does not operate an intermediary
+  account, analytics, synchronization, or transcription service.
+- Local product metrics are off by default and are never uploaded
+  automatically.
 
-### Interaction Acceptance
-
-```bash
-VIBECOMPOSE_ALLOW_ADHOC_SIGNING=1 \
-  ./scripts/interaction_acceptance.sh --install settings account
-./scripts/interaction_acceptance.sh --restore
-```
+Read the complete [privacy data flow](docs/engineering/privacy-data-flow.md)
+and [Privacy Policy](docs/legal/privacy-policy.md).
 
 ## Runtime Data
 
-Local application data lives at:
+Application data is stored under:
 
 ```text
 ~/Library/Application Support/VibeCompose/
 ```
 
-### Privacy Defaults
-
 | Data | Default |
 | --- | --- |
-| Transcript history | On · 30 days / 500 records max |
-| Raw ASR text | Off · Only final text retained unless explicitly enabled |
-| Successful recordings | Deleted after processing · Never enters Recovery |
-| Failed recordings | On for retry · 24 hours / 10 records max |
-| Local diagnostics | On · 14 days / 1,000 records max |
-| Product metrics | Off · When enabled: 30 days / 5,000 events max |
-| Sensitive apps | Password managers and Keychain excluded from history and recovery |
-| Retry files | Temporary · Time-limited · Cleaned on next launch |
+| Transcript history | On · 30 days / 500 records |
+| Raw ASR text | Off |
+| Successful recordings | Deleted after processing |
+| Failed recordings | On for Retry · 24 hours / 10 records |
+| Local diagnostics | On · 14 days / 1,000 records |
+| Local product metrics | Off |
 
-Diagnostics contain only timing, byte counts, provider labels, and error categories — never audio, transcript text, clipboard contents, or tokens. Local files are created with owner-only permissions.
+Use **Settings → Context & Privacy → Delete All Data** to remove local app
+data and the saved ChatGPT session.
 
-### Keychain Storage
+## Contributing
 
-- ChatGPT session: `app.vibecompose.mac.ChatGPTSession`
-- Recovery API key: `app.vibecompose.mac.OpenAICompatibleAPIKey` (never read from `OPENAI_API_KEY` or written to `config.json`)
-
-### Data Management
-
-- **Settings → Context & Privacy → Export Product Metrics** — Aggregate JSON without individual timestamps
-- **Settings → Advanced → Export Diagnostics** — Redacted ZIP excluding audio, transcripts, credentials, and personal data
-- **Settings → Context & Privacy → Delete All Data** — Removes everything and returns to signed-out defaults
-
-## Website
-
-The marketing site and Skill catalog live in [`website/`](website/). Static Next.js (App Router) export for GitHub Pages with full bilingual routes (`/zh-Hans`, `/en`).
+Issues, bug reproductions, documentation, translations, Skills, tests, and
+code contributions are welcome.
 
 ```bash
-cd website
-pnpm install
-pnpm dev          # local preview
-pnpm build        # static export → website/out
-pnpm verify       # build + catalog check + content contract
+git checkout -b fix/short-description
+./scripts/check.sh
 ```
 
-The Skill catalog is generated at build time from [`Sources/VibeCompose/Resources/BuiltInSkills`](Sources/VibeCompose/Resources/BuiltInSkills). No remote Skill registry, no account system.
+Do not include ChatGPT tokens, cookies, recordings, transcripts, private
+documents, or raw crash reports in issues or pull requests. Read
+[CONTRIBUTING.md](CONTRIBUTING.md), the
+[Community Skill contribution guide](docs/engineering/community-skill-contribution-guide.md),
+and [SECURITY.md](SECURITY.md) before submitting sensitive reports.
 
 ## Repository Layout
 
 ```text
 Sources/VibeCompose/          macOS application source
 Tests/VibeComposeTests/       unit and integration tests
-scripts/                      build, package, install, benchmark, and acceptance tools
-website/                      Next.js marketing site + Skill catalog (static export)
-examples/skills/              reviewed declarative Community Skill template
-packaging/homebrew/           Homebrew Cask metadata
-docs/product/                 PRD, Community Skills, brand, and product plans
-docs/audits/                  security and logic audits
-docs/research/                UI and competitive research
-docs/engineering/             architecture, release, and acceptance docs
-docs/design/                  visual specifications
+scripts/                      build, package, install, and acceptance tools
+website/                      static project site and Skill catalog
+examples/skills/              Community Skill template
+docs/                         product, engineering, privacy, and release docs
 ```
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
 - [Architecture](docs/engineering/architecture.md)
+- [ChatGPT OAuth](docs/engineering/chatgpt-oauth.md)
+- [Privacy data flow](docs/engineering/privacy-data-flow.md)
 - [Skill Runtime](docs/engineering/skill-runtime.md)
-- [Context and Preview](docs/engineering/context-and-preview.md)
-- [Community Skill SDK](docs/engineering/community-skill-sdk.md)
-- [Registry and Actions boundary](docs/engineering/registry-and-actions-boundary.md)
 - [Release process](docs/engineering/release.md)
-- [Security audit](docs/audits/security-audit-2026-07-13.md)
-- [Security baseline](docs/audits/security-baseline-2026-07-13.md)
 - [Privacy Policy](docs/legal/privacy-policy.md)
 - [Terms of Use](docs/legal/terms-of-use.md)
-- [Support Policy](docs/support/support-policy.md)
-- [Security reporting](SECURITY.md)
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
-PermissionFlow, Sparkle, and Sparkle's bundled components retain their own licenses. Pinned dependency metadata and full notices are in [`Sources/VibeCompose/Resources/Legal`](Sources/VibeCompose/Resources/Legal) and available via **Settings → Advanced → View Third-Party Licenses**.
+PermissionFlow, Sparkle, and their bundled components retain their own
+licenses. Notices are available in
+[`Sources/VibeCompose/Resources/Legal`](Sources/VibeCompose/Resources/Legal).

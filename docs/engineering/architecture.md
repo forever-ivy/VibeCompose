@@ -110,7 +110,7 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - enforces `maxDurationSeconds` while recording;
   - deletes cancelled temporary recordings.
 - `ChatGPTTranscriber`
-  - executes the managed ChatGPT or user-owned OpenAI-compatible transcription route;
+  - executes the ChatGPT transcription route selected by the Public Alpha provider policy;
   - records timing and response-category metrics;
   - opens source audio with `O_NOFOLLOW`, validates regular-file metadata and the 25 MB limit before reading content, then re-checks device/inode/size;
   - builds a private `0600` multipart file in 64 KB chunks and uploads it with `URLSession.upload(fromFile:)`;
@@ -228,27 +228,11 @@ The long-term target remains a dedicated `DictationSession` model rather than co
   - applies timeout/cancellation cleanup to the local listener.
 - `ChatGPTSessionStore`
   - persists the managed session in macOS Keychain under `app.vibecompose.mac.ChatGPTSession`.
-- `KeychainOpenAICompatibleCredentialStore`
-  - persists the user-owned Recovery API key in a separate generic-password
-    item under `app.vibecompose.mac.OpenAICompatibleAPIKey`;
-  - trims and bounds the credential, uses
-    `AfterFirstUnlockThisDeviceOnly`, and never writes the key or an
-    environment-variable name into `config.json`.
-- `OpenAICompatibleConnectionTester`
-  - validates the user-owned HTTPS endpoint and model;
-  - sends only a generated 0.1-second silent WAV with the Keychain credential;
-  - never reads user audio or transcript text and redacts credentials from
-    provider error messages.
 - `ManagedEndpointPolicy`
   - fixes managed transcription and responses endpoints to approved `https://chatgpt.com` paths;
-  - rejects credentials, query strings, fragments, non-HTTPS schemes, and unapproved ports;
-  - validates user-owned endpoints separately.
+  - rejects credentials, query strings, fragments, non-HTTPS schemes, and unapproved ports.
 - `SecureHTTPClient`
   - uses an ephemeral session and rejects HTTP redirects.
-
-Managed credentials and user-owned API credentials are separate trust domains.
-The advanced OpenAI-compatible endpoint never receives the managed ChatGPT
-token. The shell environment is not a Recovery credential source.
 
 ### Signed provider capability policy
 
@@ -332,8 +316,8 @@ Privacy behavior:
 
 The system temporary directory is also treated as owned-but-transient storage. Startup cleanup removes only strict UUID-shaped `vibecompose-<UUID>.wav` and `vibecompose-upload-<UUID>.multipart` artifacts, ignores lookalikes/directories, and unlinks a matching symlink without following its target. Normal application termination calls coordinator shutdown to cancel active work and synchronously remove owned processing audio.
 
-`AppCoordinator.deleteAllUserData()` deletes the ChatGPT session and Recovery
-API key from their separate Keychain items, then
+`AppCoordinator.deleteAllUserData()` deletes the ChatGPT session and any
+legacy credential items, then
 `StorageCleanupService.deleteAllData()` validates the
 application-support boundary, refuses symbolic-link deletion, removes the
 complete local data root, recreates a secure empty directory, and saves a
@@ -379,13 +363,7 @@ The current Settings window exposes:
 - terminology entry points;
 - paste behavior;
 - Privacy & Data;
-- Advanced Recovery endpoint/model editing, Keychain API-key save/remove,
-  synthetic-silence connection testing, explicit paid-API confirmation, and
-  one-click return to the ChatGPT account route.
-
-Advanced Recovery changes dictation ASR only. AI Polish remains on the
-ChatGPT-authenticated Responses route and continues to require a usable
-ChatGPT session.
+- ChatGPT-managed recognition and polish model status.
 
 History and Terminology now use separate native management windows. History supports filtering, details, copy/retry, audio actions, deletion, and automatic refresh. Terminology uses stable entry identifiers and supports search, sorting, editing, enable/disable, deletion, CSV import/export, import conflict preview, and a global Quick Add panel.
 
@@ -460,8 +438,7 @@ changing HUD geometry.
 
 Settings, Onboarding, History, Terminology, and Quick Add self-capture launches
 enable `SnapshotPrivacyMode` before loading runtime state. The capture process
-uses `AppConfig()` defaults, an empty in-memory ChatGPT session store, an empty
-in-memory OpenAI-Compatible credential store, and empty history/recovery/
+uses `AppConfig()` defaults, an empty in-memory ChatGPT session store, and empty history/recovery/
 terminology/Style Capsule/Community Skill collections. It also disables
 persistence, permission requests,
 support export, update mutations, and normal hotkey/runtime startup so

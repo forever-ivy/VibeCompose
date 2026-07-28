@@ -55,7 +55,9 @@
 - Do not end an VibeCompose closeout with `pkill -x VibeCompose`, quit, or close. `scripts/install_app.sh` may stop the old app before replacing `/Applications/VibeCompose.app`, and visual demo scripts may stop transient overlay-demo processes, but final closeout must restore the normal installed runtime.
 - Keep `.notDetermined` permission paths as their own regression surface.
 - Keep the private ChatGPT backend dependency explicit in docs and UX; do not describe it as a stable public API.
-- Keep `OpenAI-Compatible` positioned as advanced recovery, not the default public story.
+- Keep the Public Alpha UI and public documentation on the single ChatGPT OAuth
+  provider path. Do not expose the internal OpenAI-compatible recovery
+  implementation in first-release product surfaces.
 
 ## Known State
 

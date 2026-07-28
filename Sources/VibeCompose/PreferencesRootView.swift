@@ -666,15 +666,6 @@ struct PreferencesView: View {
     }
 
     private var chatGPTAccountStatus: SetupStatus {
-        if config.transcription.provider == .openAICompatible {
-            return SetupStatus(
-                title: L10n.text("Advanced recovery route selected"),
-                subtitle: L10n.text(
-                    "Dictation ASR uses your compatible API. AI Polish still requires a connected ChatGPT account."
-                )
-            )
-        }
-
         if let issue = runtimeIssues.first(where: {
             switch $0 {
             case .chatGPTLoginRequired, .chatGPTSessionExpired, .chatGPTSessionUnavailable:
@@ -913,22 +904,7 @@ struct PreferencesView: View {
         } message: {
             Text(
                 L10n.text(
-                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Writing Styles, installed Community Skills, settings, the saved ChatGPT session, and the OpenAI-Compatible API key from this Mac. This action cannot be undone."
-                )
-            )
-        }
-        .alert(
-            L10n.text("Import Your Own API?"),
-            isPresented: $showsAdvancedRecovery
-        ) {
-            Button(L10n.text("Cancel"), role: .cancel) {}
-            Button(L10n.text("Use My API")) {
-                activateImportOwnAPI()
-            }
-        } message: {
-            Text(
-                L10n.text(
-                    "Future dictation audio will be sent to the configured endpoint with your Keychain API key. Your API provider may charge for transcription."
+                    "This removes transcripts, failed recordings, diagnostics, product metrics, terminology, custom Writing Styles, installed Community Skills, settings, and the saved ChatGPT session from this Mac. This action cannot be undone."
                 )
             )
         }
@@ -936,9 +912,6 @@ struct PreferencesView: View {
             ThirdPartyLicensesView(
                 documents: thirdPartyLicenseDocuments
             )
-        }
-        .sheet(isPresented: $showsOwnAPIConfigurationSheet) {
-            ownAPIConfigurationSheet
         }
     }
 
@@ -1287,7 +1260,6 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: VibeComposeMetrics.space20) {
                 advancedRecognitionCard
                 advancedPolishCard
-                advancedAPIAccessRow
             }
         }
     }
@@ -2778,119 +2750,45 @@ struct PreferencesView: View {
 
     private var advancedRecognitionCard: some View {
         settingsCard(title: "Recognition", style: .grouped) {
-            advancedSourceTabBar(
-                selection: Binding(
-                    get: {
-                        usesOwnDictationAPI
-                            ? AdvancedAPISource.ownAPI
-                            : AdvancedAPISource.account
-                    },
-                    set: { selectDictationSource($0) }
+            SettingsRow(title: L10n.text("Model")) {
+                // Public Alpha exposes one route: ChatGPT manages ASR.
+                modelPicker(
+                    selection: .constant(accountDictationModelLabel),
+                    presets: [accountDictationModelLabel],
+                    isEnabled: false
                 )
-            )
-        } content: {
-            VStack(alignment: .leading, spacing: 0) {
-                SettingsRow(title: L10n.text("Model")) {
-                    if usesOwnDictationAPI {
-                        modelPicker(
-                            selection: Binding(
-                                get: { config.transcription.openAIModel },
-                                set: { newValue in
-                                    config.transcription.openAIModel = newValue
-                                    recoveryModelDraft = newValue
-                                }
-                            ),
-                            presets: availableDictationModels,
-                            isEnabled: true
-                        )
-                    } else {
-                        // Account ASR is managed by ChatGPT — model is not selectable.
-                        modelPicker(
-                            selection: .constant(accountDictationModelLabel),
-                            presets: [accountDictationModelLabel],
-                            isEnabled: false
-                        )
-                    }
-                }
-
-                Divider().opacity(0.55)
-
-                SettingsRow(title: L10n.text("Compatible Fallback")) {
-                    Toggle(
-                        "",
-                        isOn: Binding(
-                            get: {
-                                config.transcription.openAIFallbackEnabled
-                            },
-                            set: { setCompatibleFallback($0) }
-                        )
-                    )
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-                    .disabled(usesOwnDictationAPI)
-                }
             }
         }
     }
 
     private var advancedPolishCard: some View {
         settingsCard(title: "Polish", style: .grouped) {
-            advancedSourceTabBar(
-                selection: Binding(
-                    get: {
-                        usesOwnPolishAPI
-                            ? AdvancedAPISource.ownAPI
-                            : AdvancedAPISource.account
-                    },
-                    set: { selectPolishSource($0) }
-                )
-            )
-        } content: {
             VStack(alignment: .leading, spacing: 0) {
                 SettingsRow(title: L10n.text("Model")) {
-                    if usesOwnPolishAPI {
+                    HStack(spacing: 8) {
                         modelPicker(
                             selection: Binding(
                                 get: {
                                     config.transcription.textPolish
-                                        .openAICompatibleModel
+                                        .chatGPTResponseModel
                                 },
                                 set: { newValue in
                                     config.transcription.textPolish
-                                        .openAICompatibleModel = newValue
+                                        .chatGPTResponseModel = newValue
                                 }
                             ),
-                            presets: availablePolishModels,
-                            isEnabled: true
+                            presets: availableAccountPolishModels,
+                            isEnabled: !isLoadingAccountPolishModels
                         )
-                    } else {
-                        HStack(spacing: 8) {
-                            modelPicker(
-                                selection: Binding(
-                                    get: {
-                                        config.transcription.textPolish
-                                            .chatGPTResponseModel
-                                    },
-                                    set: { newValue in
-                                        config.transcription.textPolish
-                                            .chatGPTResponseModel = newValue
-                                    }
-                                ),
-                                presets: availableAccountPolishModels,
-                                isEnabled: !isLoadingAccountPolishModels
-                            )
-                            if isLoadingAccountPolishModels {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                        if isLoadingAccountPolishModels {
+                            ProgressView()
+                                .controlSize(.small)
                         }
                     }
                 }
 
                 // Errors/fallback reasons only — never “Loaded N account models.”
-                if !usesOwnPolishAPI,
-                   accountPolishModelsMessageIsError,
+                if accountPolishModelsMessageIsError,
                    let accountPolishModelsMessage
                 {
                     Text(accountPolishModelsMessage)
@@ -2899,25 +2797,6 @@ struct PreferencesView: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .padding(.top, 6)
-                }
-
-                Divider().opacity(0.55)
-
-                SettingsRow(title: L10n.text("Compatible Fallback")) {
-                    Toggle(
-                        "",
-                        isOn: Binding(
-                            get: {
-                                config.transcription.textPolish
-                                    .openAIFallbackEnabled
-                            },
-                            set: { setPolishCompatibleFallback($0) }
-                        )
-                    )
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-                    .disabled(usesOwnPolishAPI)
                 }
             }
         }
@@ -4207,26 +4086,7 @@ struct PreferencesView: View {
 
             SettingsRow(title: L10n.text("Connection")) {
                 HStack(spacing: VibeComposeMetrics.space8) {
-                    if config.transcription.textPolish.openAICompatibleEnabled {
-                        if recoveryAPIKeyStored {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color(nsColor: VibeComposePalette.success))
-                            Text(
-                                config.transcription.textPolish
-                                    .openAICompatibleModel
-                            )
-                            .font(VibeComposeTypography.callout(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        } else {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(Color(nsColor: VibeComposePalette.amber))
-                            Text(L10n.text("Own API"))
-                                .font(VibeComposeTypography.caption())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    } else if authSnapshot.state == .ready {
+                    if authSnapshot.state == .ready {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(Color(nsColor: VibeComposePalette.success))
                         Text(config.transcription.textPolish.chatGPTResponseModel)
@@ -4583,37 +4443,16 @@ struct PreferencesView: View {
 
     private func testTextPolishSelection() {
         sonnerToasts.loading(L10n.text("Testing connection…"))
-        let openAIKeyAvailable =
-            (try? polishCredentialStore.hasAPIKey()) ?? false
-        let polish = config.transcription.textPolish
-        let selected = TextPolishProviderSelector().selectProvider(
-            config: polish,
-            chatGPTAuthAvailable: authSnapshot.state == .ready,
-            openAICompatibleKeyAvailable: openAIKeyAvailable
-        )
-        if let selected {
-            let model: String
-            switch selected.id {
-            case .chatGPTAuth:
-                model = polish.chatGPTResponseModel
-            case .openAICompatible:
-                model = polish.openAICompatibleModel
-            }
+        if authSnapshot.state == .ready {
+            let model = config.transcription.textPolish.chatGPTResponseModel
             let title = L10n.format(
                 "Ready: %@ / %@.",
-                selected.id.title,
+                TextPolishProviderID.chatGPTAuth.title,
                 model
             )
             textPolishMessage = title
             textPolishMessageIsError = false
             sonnerToasts.success(title)
-        } else if polish.openAICompatibleEnabled {
-            let title = L10n.text(
-                "OpenAI-Compatible API key is not ready. Save a key first."
-            )
-            textPolishMessage = title
-            textPolishMessageIsError = true
-            sonnerToasts.error(title)
         } else {
             let title = L10n.text(
                 "ChatGPT Auth is not ready. Connect ChatGPT first."
@@ -4680,7 +4519,7 @@ struct PreferencesView: View {
                     connectViaBrowser()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isConnectingBrowserLogin || config.transcription.provider == .openAICompatible)
+                .disabled(isConnectingBrowserLogin)
 
                 Button(L10n.text("Refresh Session")) {
                     Task {
@@ -4691,7 +4530,6 @@ struct PreferencesView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .disabled(config.transcription.provider == .openAICompatible)
 
                 Button(L10n.text("Sign out")) {
                     do {
@@ -5255,7 +5093,6 @@ struct PreferencesView: View {
                 }
             }
             .buttonStyle(.bordered)
-            .disabled(config.transcription.provider == .openAICompatible)
 
             if authSnapshot.state == .ready || authSnapshot.state == .expired {
                 Button(L10n.text("Sign out")) {

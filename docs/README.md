@@ -2,7 +2,7 @@
 
 ## Product
 
-- [Community Skills core next-step plan](product/community-skills-core-next-step-plan-2026-07-15.md) — makes Community Skills the primary product loop, adds switching/editable preview/Creator V2, and records the completed removal of old access tiers and activation design
+- [Community Skills roadmap](product/community-skills-core-next-step-plan-2026-07-15.md) — makes Community Skills the primary open-source product loop
 - [Community Skills Pilot runbook](product/community-pilot-runbook-2026-07-17.md) — privacy-preserving 30–50 participant, four-week Phase 4 protocol and evidence gates
 - [Community Skills Pilot launch kit](product/community-pilot-launch-kit-2026-07-18.md) — recruitment/consent copy, 15 launch tasks, enum-only evidence templates, and privacy-bounded aggregation commands
 - [Community Skill contribution guide](engineering/community-skill-contribution-guide.md) — author and reviewer quality gate for curated local Pilot content
@@ -22,6 +22,8 @@
 ## Engineering and Design
 
 - [Architecture](engineering/architecture.md)
+- [ChatGPT OAuth](engineering/chatgpt-oauth.md)
+- [Privacy data flow](engineering/privacy-data-flow.md)
 - [Release process](engineering/release.md)
 - [Release evidence and readiness schemas](../release/README.md)
 - [Updater decision](engineering/updater.md)

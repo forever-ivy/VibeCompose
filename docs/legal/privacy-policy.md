@@ -1,8 +1,8 @@
 # VibeCompose Privacy Policy
 
-> Effective for the private alpha: July 13, 2026
+> Effective for the public Alpha: July 28, 2026
 >
-> Last updated: July 14, 2026
+> Last updated: July 28, 2026
 >
 > Product status: pre-release macOS alpha
 
@@ -12,7 +12,9 @@ This policy describes the current VibeCompose macOS application. VibeCompose doe
 
 ### Audio and transcription requests
 
-When you start dictation, VibeCompose records a short audio clip on your Mac. On the default route, the clip and transcription instructions are sent to the ChatGPT service using the ChatGPT session you connected in VibeCompose. If you select the advanced OpenAI-compatible recovery route, the clip is sent to the HTTPS endpoint you configured using your own credential.
+When you start dictation, VibeCompose records a short audio clip on your Mac.
+The clip and transcription instructions are sent directly to the ChatGPT
+service using the ChatGPT session you connected in VibeCompose.
 
 When AI Polish or a non-Direct Skill runs through the ChatGPT route, the
 request may also include the current transcript, the resolved declarative
@@ -22,12 +24,10 @@ selection. VibeCompose does not send the complete Skill Registry, full App
 Rules, unrelated installed package files, Writing Style creation source
 samples, the whole screen, or an entire document through this path.
 
-The Advanced Settings connection test sends only a generated 0.1-second
-silent WAV, the configured model, and your Recovery credential. It does not
-read or send your recordings, transcripts, or terminology. Your configured
-provider may still charge for that request.
-
-VibeCompose is an independent project and is not affiliated with, sponsored by, or endorsed by OpenAI. Third-party processing is governed by the terms and privacy policy of the service you choose:
+VibeCompose is an independent community project and is not affiliated with,
+sponsored by, or endorsed by OpenAI. The integration relies on undocumented
+ChatGPT web behavior that may change. Third-party processing is governed by
+OpenAI's terms and privacy policy:
 
 - OpenAI Privacy Policy: `https://openai.com/policies/privacy-policy/`
 - OpenAI Terms of Use: `https://openai.com/policies/terms-of-use/`
@@ -53,12 +53,9 @@ Known password managers, Keychain Access, and macOS Passwords are excluded from 
 ### Keychain credentials
 
 The ChatGPT session connected in VibeCompose is stored in macOS Keychain under
-`app.vibecompose.mac.ChatGPTSession`. An optional OpenAI-Compatible Recovery
-API key is stored separately under
-`app.vibecompose.mac.OpenAICompatibleAPIKey`. VibeCompose does not read that
-key from `OPENAI_API_KEY` and does not intentionally write access tokens,
-refresh tokens, API keys, cookies, or authorization headers to `config.json`,
-transcript history, diagnostics, screenshots, or logs.
+`app.vibecompose.mac.ChatGPTSession`. VibeCompose does not intentionally write
+access tokens, refresh tokens, ID tokens, cookies, or authorization headers to
+`config.json`, transcript history, diagnostics, screenshots, or logs.
 
 ## 2. Diagnostics and Support Archives
 
@@ -74,6 +71,7 @@ category, audio-duration bucket, processing-latency bucket, delivery category,
 and failure category. They do not contain audio, transcript or clipboard text,
 app names, bundle identifiers, file paths, account details, or a persistent
 user/install identifier. VibeCompose does not upload them automatically.
+Local product metrics are not uploaded automatically.
 When metrics are enabled, you may use **Settings → Context & Privacy → Export Product
 Metrics** to create an aggregate JSON report for manual review or sharing. The
 report contains count maps only and omits individual event timestamps.
@@ -89,9 +87,9 @@ When you choose **Settings → Advanced → Export Diagnostics**, VibeCompose cr
 
 The archive excludes audio, transcripts, clipboard text, account email,
 selected text, terminology text, Writing Style summaries/examples/source
-samples, Community Skill prompts/files/package names, custom endpoint URLs,
-credentials, raw crash-report bodies, history, Recovery metadata, and
-`config.json`. It is not uploaded automatically.
+samples, Community Skill prompts/files/package names, credentials, raw
+crash-report bodies, history, Recovery metadata, and `config.json`. It is not
+uploaded automatically.
 
 ## 3. Clipboard and Accessibility
 
@@ -111,11 +109,9 @@ You can:
   version, or uninstall it;
 - delete individual history or Recovery records;
 - sign out of ChatGPT;
-- remove the OpenAI-Compatible Recovery key without deleting other data;
 - use **Delete All Data** to remove local settings, terminology, custom Style
   Capsules, installed Community Skills, history, failed recordings,
-  diagnostics, product metrics, Retry files, the saved ChatGPT session, and the
-  Recovery API key.
+  diagnostics, product metrics, Retry files, and the saved ChatGPT session.
 
 Deleting local VibeCompose data does not delete information already sent to or retained by a third-party service. Use that service's account and privacy controls for third-party data.
 
@@ -125,12 +121,11 @@ VibeCompose does not currently sell personal information, serve advertising, or 
 
 ## 6. Security
 
-VibeCompose uses separate macOS Keychain items for the connected ChatGPT
-session and optional Recovery API key, and uses owner-only local file
-permissions where supported, bounded retention, HTTPS endpoint validation,
-redirect rejection, and conservative paste behavior. No security
-measure can guarantee absolute security. Keep macOS updated and do not share
-diagnostic archives without reviewing them.
+VibeCompose uses macOS Keychain for the connected ChatGPT session and uses
+owner-only local file permissions where supported, bounded retention, managed
+HTTPS endpoint validation, redirect rejection, and conservative paste
+behavior. No security measure can guarantee absolute security. Keep macOS
+updated and do not share diagnostic archives without reviewing them.
 
 ## 7. Children
 
@@ -142,4 +137,6 @@ Material changes will be dated in this document and summarized in release notes.
 
 ## 9. Contact
 
-Private-alpha participants should use the authorized VibeCompose GitHub issue tracker. Do not attach audio, transcripts, credentials, raw crash reports, or unrelated personal information.
+Community members should use the VibeCompose GitHub issue tracker. Do not
+attach audio, transcripts, credentials, raw crash reports, or unrelated
+personal information.

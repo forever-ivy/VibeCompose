@@ -3,7 +3,7 @@
 > 日期：2026-07-24  
 > 状态：规划稿，待产品所有者批准后开工  
 > 范围：静态营销官网 + GitHub 托管的 Skill 目录展示  
-> 非范围：远程 Registry、账号体系、付费门禁、Pilot 研究后台、App 内联网安装  
+> 非范围：远程 Registry、账号体系、Pilot 研究后台、App 内联网安装
 > 相关文档：[品牌身份](brand-identity.md)、[品牌 clearance](brand-clearance-2026-07-14.md)、[Community Skills 核心计划](community-skills-core-next-step-plan-2026-07-15.md)、[Community Skill 贡献指南](../engineering/community-skill-contribution-guide.md)、[隐私政策](../legal/privacy-policy.md)、现有落地页 `docs/index.html`
 
 ---
@@ -32,10 +32,9 @@ Next.js（静态导出）
 | 首页节奏 | Hero → 兼容 → 能力块 → 隐私 → 跨端 → 证言 → CTA | 采用节奏；**跨端改成「macOS 原生」**；证言在 Alpha 期用场景卡代替名人背书 |
 | 主 CTA | Download for free | 改为 **Download Alpha / View on GitHub**（无签名 Stable 前不写「正式版下载」） |
 | 多平台 | Mac / Win / iOS / Android | **只承诺 macOS 13+**，其他平台明确「未提供」 |
-| Pricing | 有独立页 | **不做定价页**（当前阶段去商业化） |
 | Manifesto | 强态度品牌页 | 可选 Phase 2；Phase 1 用首页叙事段覆盖 |
 | Skills / 社区 | 无 | **VibeCompose 差异化中枢**：`/skills` 策展目录 → GitHub |
-| 后端 | 商业产品栈 | **无后端**；GitHub Pages / Cloudflare Pages |
+| 后端 | 完整服务端 | **无后端**；GitHub Pages / Cloudflare Pages |
 
 **硬约束（不可违背）：**
 
@@ -65,7 +64,6 @@ Next.js（静态导出）
 
 - 远程 Registry、自动更新社区包、签名索引 API  
 - 用户登录、评论、评分、排行榜、关注作者  
-- 订阅 / Pricing / 学生优惠 / Affiliate  
 - Windows / iOS / Android 下载  
 - 在线 Demo 录音（浏览器麦克风 + 云转写）  
 - CMS、Headless 后台  
@@ -90,7 +88,7 @@ Typeless 首页结构 → VibeCompose Phase 1 对应：
 | 8 | Testimonials | Use-case cards（Phase 1） | Alpha 无真实公开证言时用场景卡；有用户原话且获授权后再换 |
 | 9 | Final CTA | Final CTA | 源码 / Alpha 下载 / 浏览 Skills |
 | 10 | Ask ChatGPT / Claude | 可选「用 AI 帮你判断是否适合」 | Phase 2；优先级低 |
-| — | Pricing / Manifesto / About | About 精简；无 Pricing；Manifesto 可选 | 见信息架构 |
+| — | Manifesto / About | About 精简；Manifesto 可选 | 见信息架构 |
 
 **视觉气质（学结构，不抄皮）：**
 
@@ -1040,7 +1038,7 @@ export function MarqueeRow({ items }: { items: string[] }) {
 1. 静态 `out/` 可本地 `npx serve` 完整点击。  
 2. 每个 Skill 卡片 GitHub 链打开正确目录。  
 3. 契约脚本绿。  
-4. 无定价、无假下载、无 Registry 承诺。  
+4. 无假下载、无 Registry 承诺。
 5. Lighthouse 无障碍与性能无严重项（人工抽检）。  
 
 ### Phase 2 — 打磨（按需）
@@ -1107,7 +1105,7 @@ export function MarqueeRow({ items }: { items: string[] }) {
 ### A. Typeless 对照速查
 
 - 学：首屏口号力度、区块节奏、重复 CTA、隐私独立段、多列 Footer  
-- 不学：多端下载、Pricing、夸张 wpm、证言墙（暂无）、商业增长插件  
+- 不学：多端下载、夸张 wpm、证言墙（暂无）
 
 ### B. 关键现有资产
 
@@ -1120,7 +1118,7 @@ export function MarqueeRow({ items }: { items: string[] }) {
 
 ### C. 一页范围声明（可贴进 README）
 
-> VibeCompose 官网是 MIT 项目的静态宣传与 Skill 目录。Skill 包托管在 GitHub，于 macOS App 内本地导入。不提供账号、付费、远程 Registry 或跨平台客户端。产品处于 Alpha，默认转写路径依赖用户自己的 ChatGPT 会话与上游可用性。
+> VibeCompose 官网是 MIT 项目的静态宣传与 Skill 目录。Skill 包托管在 GitHub，于 macOS App 内本地导入。不提供账号、远程 Registry 或跨平台客户端。产品处于 Alpha，默认转写路径依赖用户自己的 ChatGPT 会话与上游可用性。
 
 ---
 

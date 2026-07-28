@@ -1300,7 +1300,7 @@ private struct OnboardingBrandWallpaper: View {
     @ViewBuilder
     private func floralBackdrop(size: CGSize) -> some View {
         let videoURL = Self.resourceURL(
-            name: "OnboardingCodexWallpaper",
+            name: "OnboardingAuroraWallpaper",
             ext: "mp4"
         )
         let stillImage = Self.loadStillImage()
@@ -1389,7 +1389,7 @@ private struct OnboardingBrandWallpaper: View {
     }
 
     private static func loadStillImage() -> NSImage? {
-        if let url = resourceURL(name: "OnboardingCodexWallpaper", ext: "png"),
+        if let url = resourceURL(name: "OnboardingAuroraWallpaper", ext: "png"),
            let image = NSImage(contentsOf: url)
         {
             return image
@@ -2218,4 +2218,3 @@ private struct OnboardingStepIllustration: View {
         .accessibilityHidden(true)
     }
 }
-

@@ -1,20 +1,20 @@
 # VibeCompose 支持政策
 
-> 私有 Alpha 基线日期：2026 年 7 月 13 日
+> Public Alpha 基线日期：2026 年 7 月 28 日
 
 ## Alpha 支持环境
 
 - Apple 芯片 Mac；
 - macOS 13 或更高版本；
 - 安装路径 `/Applications/VibeCompose.app`；
-- 当前私有 Alpha 版本；
-- 默认 ChatGPT 账户路径或文档所述 OpenAI-Compatible 恢复路径。
+- 当前 Public Alpha 版本；
+- 通过浏览器 OAuth 连接的 ChatGPT 账户路径。
 
 Intel 构建、虚拟机、被修改的 App、未签名再分发版本、macOS Beta 和企业受管环境，在纳入兼容矩阵前仅提供尽力支持。
 
 ## 支持渠道
 
-获授权的私有 Alpha 测试者应使用仓库 Issue Tracker。
+社区用户应使用仓库 Issue Tracker。
 
 安全漏洞应遵循仓库 `SECURITY.md`，不要使用公开 Bug Issue。
 
@@ -23,7 +23,7 @@ Intel 构建、虚拟机、被修改的 App、未签名再分发版本、macOS B
 1. VibeCompose 版本和 macOS 版本；
 2. 是否安装在 `/Applications/VibeCompose.app`；
 3. 麦克风和辅助功能状态；
-4. 使用默认 ChatGPT 路径还是高级恢复路径；
+4. ChatGPT 连接状态；
 5. 精确复现步骤和最小化、非敏感错误；
 6. 在支持人员要求时，通过 **设置 → 高级 → 导出诊断** 生成脱敏支持归档。
 
@@ -31,7 +31,7 @@ Intel 构建、虚拟机、被修改的 App、未签名再分发版本、macOS B
 
 ## 优先级目标
 
-以下是私有 Alpha 响应目标，不构成服务等级保证：
+以下是社区项目的分流目标，不构成服务等级保证：
 
 | 优先级 | 示例 | 首次响应目标 |
 | --- | --- | --- |
@@ -52,4 +52,4 @@ Intel 构建、虚拟机、被修改的 App、未签名再分发版本、macOS B
 
 ## 生命周期
 
-私有 Alpha 可能要求升级到最新构建后继续支持。1.0 前必须公布最低支持版本、安全更新窗口和停止支持周期。
+Public Alpha 可能要求升级到最新构建后继续支持。1.0 前必须公布最低支持版本、安全更新窗口和停止支持周期。

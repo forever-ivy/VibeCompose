@@ -29,8 +29,8 @@ export const en: Dictionary = {
   badges: {
     alpha: "Alpha",
     openSource: "Open source",
-    noTelemetry: "Zero telemetry",
-    local: "Local-first",
+    noTelemetry: "No project server",
+    local: "Local controls",
   },
   hero: {
     eyebrow: "macOS · Voice-first writing",
@@ -39,14 +39,14 @@ export const en: Dictionary = {
       "One hotkey · Speak your mind · A declarative Skill shapes every result into clean, structured text — no code runs on your machine",
     primaryCta: "Get VibeCompose for macOS",
     secondaryCta: "Explore Skills",
-    note: "0.1.0 Alpha · macOS 13+ · MIT",
+    note: "0.1.0 Alpha · Unofficial community project · macOS 13+ · MIT",
   },
   workflow: {
     title: "Three steps. That's it",
     steps: [
       {
         title: "Press and speak",
-        desc: "F5 — or any shortcut you choose · Talk naturally · Audio never leaves your Mac",
+        desc: "F5 — or any shortcut you choose · Audio is sent directly to ChatGPT for transcription",
       },
       {
         title: "A Skill shapes it",
@@ -92,12 +92,12 @@ export const en: Dictionary = {
     title: "Your words never leave your control",
     points: [
       {
-        title: "Zero telemetry",
-        desc: "No analytics collected · No usage tracked · No data phoned home",
+        title: "No project server",
+        desc: "No VibeCompose account or relay · Local metrics are off by default and never auto-uploaded",
       },
       {
         title: "Local-first storage",
-        desc: "History lives on your Mac · Provider limits are upstream, not ours",
+        desc: "History lives on your Mac · Audio and optional polish requests go directly to ChatGPT",
       },
       {
         title: "Review before delivery",
@@ -108,7 +108,7 @@ export const en: Dictionary = {
   openSource: {
     eyebrow: "Open source",
     title: "MIT from top to bottom",
-    body: "App and Skills share one public repo · Read every line · File issues · Ship contributions",
+    body: "Independent and unofficial · App and Skills share one public repo · Read every line · File issues · Ship contributions",
     cta: "View on GitHub",
     license: "MIT License",
   },
