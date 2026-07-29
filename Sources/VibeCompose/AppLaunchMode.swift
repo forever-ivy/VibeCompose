@@ -581,23 +581,42 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
-    static func settingsSnapshotLanguage(
+    static func snapshotLanguage(
         environment: [String: String],
         arguments: [String] = []
     ) -> AppLanguage? {
         if let value = environment[
+            "VIBECOMPOSE_SNAPSHOT_LANGUAGE"
+        ], let language = parseSnapshotLanguage(value) {
+            return language
+        }
+        if let value = environment[
             "VIBECOMPOSE_SETTINGS_SNAPSHOT_LANGUAGE"
-        ], let language = snapshotLanguage(value) {
+        ], let language = parseSnapshotLanguage(value) {
             return language
         }
         for (index, argument) in arguments.enumerated() {
+            if argument == "--snapshot-language",
+               index + 1 < arguments.count
+            {
+                return parseSnapshotLanguage(arguments[index + 1])
+            }
+            if argument.hasPrefix("--snapshot-language=") {
+                return parseSnapshotLanguage(
+                    String(
+                        argument.dropFirst(
+                            "--snapshot-language=".count
+                        )
+                    )
+                )
+            }
             if argument == "--settings-snapshot-language",
                index + 1 < arguments.count
             {
-                return snapshotLanguage(arguments[index + 1])
+                return parseSnapshotLanguage(arguments[index + 1])
             }
             if argument.hasPrefix("--settings-snapshot-language=") {
-                return snapshotLanguage(
+                return parseSnapshotLanguage(
                     String(
                         argument.dropFirst(
                             "--settings-snapshot-language=".count
@@ -607,6 +626,16 @@ enum AppLaunchMode: Equatable {
             }
         }
         return nil
+    }
+
+    static func settingsSnapshotLanguage(
+        environment: [String: String],
+        arguments: [String] = []
+    ) -> AppLanguage? {
+        snapshotLanguage(
+            environment: environment,
+            arguments: arguments
+        )
     }
 
     private static func requestedSettingsPane(arguments: [String]) -> String? {
@@ -627,7 +656,7 @@ enum AppLaunchMode: Equatable {
         return nil
     }
 
-    private static func snapshotLanguage(
+    private static func parseSnapshotLanguage(
         _ rawValue: String
     ) -> AppLanguage? {
         switch rawValue.trimmingCharacters(

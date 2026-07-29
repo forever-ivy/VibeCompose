@@ -1,5 +1,9 @@
 # VibeCompose
 
+<p align="center">
+  <img src="website/public/logo-256.png" alt="VibeCompose logo" width="144">
+</p>
+
 [简体中文](README.zh-CN.md)
 
 ![Version](https://img.shields.io/badge/version-0.1.0--alpha-orange)
@@ -180,19 +184,38 @@ not store account passwords. See
 
 ### Experience tour with annotated screenshots
 
-> [!NOTE]
-> The Introduction includes an installed-app Onboarding screenshot. The
-> remaining surfaces below describe the implemented interface and will receive
-> dedicated screenshots before public release.
+The Onboarding screenshot in the Introduction shows the first-run flow, the
+`F5` start/stop interaction, and the Refined HUD. The screens below cover the
+next actions a new user is most likely to need.
 
-| Surface | Screenshot | What you see / how to use it |
-| --- | --- | --- |
-| Onboarding (5 steps) | [Introduction screenshot](docs/assets/readme/usage-overview-en.png) | Welcome shows the core shortcut workflow; Skills explains output shaping and per-app rules; Connect offers the "Use Browser Login" button; Microphone shows permission state and guidance; Practice walks you through one dictation with your shortcut. |
-| Menu bar menu | Not provided | Click the menu bar icon: current Skill submenu (Recent / Search and Choose… / Set as Global Default), start/stop dictation, Retry last dictation, Undo Last Verified Insertion, Skill Library…, History…, Quick Add… (⌃⌥Space), Terminology…, Settings… (⌘,), Quit (⌘Q). |
-| Dictation (Refined HUD) | Not provided | A compact capsule at the top center of the display: timer and cancel control while recording, inline cancel while processing, and distinct Inserted / Paste Sent / Copied / Error states; ordinary errors stay visible for at least 5 seconds. |
-| Skill Switcher and Skill Library | Not provided | The global Skill Switcher changes the active Skill quickly; the Skill Library has Installed / Discover / Created sections with Skill details, versions, and run receipts. |
-| Preview and Diff Preview | Not provided | Shows the Skill ID and version, validation state, source / final result / line-word Diff, context category, and Copy, Replace Selection, Paste to Target, and Cancel actions; opening Preview does not trigger another provider request. |
-| Settings window | Not provided | A native two-column sidebar layout covering account and permission state, dictation and AI Polish, default Skill plus application rules, Context and Privacy, Style Capsules, terminology and Domain Packs, Community Skill management, History/Recovery entry points, paste behavior, and update state; changes persist immediately. |
+#### Choose a Skill for the next dictation
+
+![VibeCompose Skill Switcher in English](docs/assets/readme/skill-switcher-en.png)
+
+Search or browse the installed Skills, then press `Return` to use one for the
+next recording or `⌘↩` to make it the global default.
+
+#### Browse the Skill Library
+
+![VibeCompose Skill Library Discover view in English](docs/assets/readme/skill-library-en.png)
+
+The Discover view explains each built-in Skill with a concrete example. Open
+**Install** to import and manage Community Skills.
+
+#### Review before replacing selected text
+
+![VibeCompose selection-rewrite Preview in English](docs/assets/readme/preview-en.png)
+
+Preview lets you edit the final result, expand the Diff, copy it, or replace
+the original selection only after VibeCompose re-validates the target.
+
+#### Configure VibeCompose
+
+![VibeCompose Settings window in English](docs/assets/readme/settings-en.png)
+
+Settings keeps the default Skill, shortcuts, account and permission state,
+input/output behavior, appearance, privacy, and advanced options in one native
+window. Changes persist immediately.
 
 ### 5.1 Everyday dictation and the shortcut
 

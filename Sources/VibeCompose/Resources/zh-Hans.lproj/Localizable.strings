@@ -667,6 +667,9 @@
 "The result was copied for manual paste." = "结果已复制，请手动粘贴。";
 "The original selection changed, so VibeCompose did not replace it." = "原始选区已发生变化，因此 VibeCompose 没有替换它。";
 "Keep the same tone, shorten it, and preserve the release date and API version." = "保持相同语气，缩短内容，并保留发布日期和 API 版本。";
+"We are planning to ship the macOS release on July 14, 2026. Please make sure API v2 remains compatible, and do not remove the existing security review gate." = "我们计划在 2026 年 7 月 14 日发布 macOS 版本。请确保 API v2 保持兼容，并保留现有的安全评审门禁。";
+"Ship the macOS release on July 14, 2026." = "在 2026 年 7 月 14 日发布 macOS 版本。";
+"Preserve API v2 compatibility and keep the existing security review gate." = "保持 API v2 兼容，并保留现有的安全评审门禁。";
 
 /* Remaining runtime and recovery errors */
 "Browser login sent the callback parameter %@ more than once." = "浏览器登录回调重复发送了参数 %@。";

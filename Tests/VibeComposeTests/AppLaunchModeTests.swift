@@ -600,6 +600,35 @@ func settingsSnapshotOutputAcceptsEnvironmentAndLaunchServicesArgument() {
     }
 
     @Test
+    func snapshotLanguageSupportsAllPrivateSnapshotSurfaces() {
+        #expect(
+            AppLaunchMode.snapshotLanguage(
+                environment: [
+                    "VIBECOMPOSE_SNAPSHOT_LANGUAGE": "zh-Hans",
+                ]
+            ) == .simplifiedChinese
+        )
+        #expect(
+            AppLaunchMode.snapshotLanguage(
+                environment: [:],
+                arguments: ["--snapshot-language=en"]
+            ) == .english
+        )
+        #expect(
+            AppLaunchMode.snapshotLanguage(
+                environment: [:],
+                arguments: ["--snapshot-language", "system"]
+            ) == .system
+        )
+        #expect(
+            AppLaunchMode.snapshotLanguage(
+                environment: [:],
+                arguments: ["--snapshot-language=unsupported"]
+            ) == nil
+        )
+    }
+
+    @Test
     func benchmarkModeHasPriorityWhenExplicitlyEnabled() {
         #expect(AppLaunchMode.resolve(environment: ["VIBECOMPOSE_BENCHMARK": "1"]) == .benchmark)
         #expect(

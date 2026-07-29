@@ -372,6 +372,7 @@ final class AppCoordinator {
                 environment: ProcessInfo.processInfo.environment,
                 arguments: ProcessInfo.processInfo.arguments
             )
+            applySnapshotLanguageOverrideIfNeeded()
 
             if let launchBlocker = AppInstallLocation.launchBlocker() {
                 NSSound.beep()
@@ -438,14 +439,7 @@ final class AppCoordinator {
                  .skillSwitcher:
                 if snapshotPrivacyMode.isEnabled {
                     config = AppConfig()
-                    if let snapshotLanguage = AppLaunchMode
-                        .settingsSnapshotLanguage(
-                            environment: ProcessInfo.processInfo.environment,
-                            arguments: ProcessInfo.processInfo.arguments
-                        )
-                    {
-                        config.appLanguage = snapshotLanguage
-                    }
+                    applySnapshotLanguageOverrideIfNeeded()
                     L10n.setLanguage(config.appLanguage)
                     statusMenu?.reloadLocalization()
                 } else {
@@ -581,12 +575,14 @@ final class AppCoordinator {
                     }
                 }
             case .previewDemo:
+                applySnapshotLanguageOverrideIfNeeded()
                 runPreviewDemo()
                 return
             case .overlayDemo:
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
                     : ((try? configStore.load()) ?? config)
+                applySnapshotLanguageOverrideIfNeeded()
                 L10n.setLanguage(config.appLanguage)
                 applyVisualFeedbackLaunchOverride()
                 applyActiveDictationHotkey(
@@ -601,6 +597,7 @@ final class AppCoordinator {
                 config = snapshotPrivacyMode.isEnabled
                     ? AppConfig()
                     : ((try? configStore.load()) ?? config)
+                applySnapshotLanguageOverrideIfNeeded()
                 L10n.setLanguage(config.appLanguage)
                 applyVisualFeedbackLaunchOverride()
                 applyActiveDictationHotkey(
@@ -635,6 +632,19 @@ final class AppCoordinator {
             notifier.notify(title: L10n.text("VibeCompose launch failed"), body: error.localizedDescription)
             statusMenu?.update(state: .error, detail: error.localizedDescription)
         }
+    }
+
+    private func applySnapshotLanguageOverrideIfNeeded() {
+        guard snapshotPrivacyMode.isEnabled,
+              let language = AppLaunchMode.snapshotLanguage(
+                environment: ProcessInfo.processInfo.environment,
+                arguments: ProcessInfo.processInfo.arguments
+              )
+        else {
+            return
+        }
+        config.appLanguage = language
+        L10n.setLanguage(language)
     }
 
     private var activeDictationHotkey: HotkeyBinding {
@@ -3818,28 +3828,25 @@ final class AppCoordinator {
 
         switch scenario {
         case .replace:
-            selectedText =
-                """
-                We are planning to ship the macOS release on July 14, 2026. Please make sure API v2 remains compatible, and do not remove the existing security review gate.
-                """
-            resultText =
-                """
-                Ship the macOS release on July 14, 2026.
-
-                Preserve API v2 compatibility and keep the existing security review gate.
-                """
+            selectedText = L10n.text(
+                "We are planning to ship the macOS release on July 14, 2026. Please make sure API v2 remains compatible, and do not remove the existing security review gate."
+            )
+            resultText = L10n.text(
+                "Ship the macOS release on July 14, 2026."
+            ) + "\n\n" + L10n.text(
+                "Preserve API v2 compatibility and keep the existing security review gate."
+            )
             initialValidationIssueCodes = []
             fallbackMessage = nil
             allowsSelectionReplacement = true
             contextCapabilities = [.selection]
         case .paste:
             selectedText = nil
-            resultText =
-                """
-                Ship the macOS release on July 14, 2026.
-
-                Preserve API v2 compatibility and keep the existing security review gate.
-                """
+            resultText = L10n.text(
+                "Ship the macOS release on July 14, 2026."
+            ) + "\n\n" + L10n.text(
+                "Preserve API v2 compatibility and keep the existing security review gate."
+            )
             initialValidationIssueCodes = []
             fallbackMessage = nil
             allowsSelectionReplacement = false

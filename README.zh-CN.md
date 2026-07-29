@@ -1,5 +1,9 @@
 # VibeCompose
 
+<p align="center">
+  <img src="website/public/logo-256.png" alt="VibeCompose 项目 logo" width="144">
+</p>
+
 [English](README.md)
 
 ![Version](https://img.shields.io/badge/version-0.1.0--alpha-orange)
@@ -157,18 +161,36 @@ Keychain 的 `app.vibecompose.mac.ChatGPTSession`。详见
 
 ### 使用体验导览与截图说明
 
-> [!NOTE]
-> 项目简介已加入安装版应用的引导截图。下表其余界面均依据仓库中已实现的
-> 功能描述实际内容与操作方式，专属截图将在公开发布前继续补充。
+项目简介中的欢迎页截图已经展示了首次启动流程、`F5` 开始/停止操作和 Refined
+HUD。下面继续展示新用户最常用的四个界面。
 
-| 界面 | 截图 | 你会看到什么 / 如何操作 |
-| --- | --- | --- |
-| 引导（五步） | [项目简介截图](docs/assets/readme/usage-overview-zh-cn.png) | Welcome 展示核心快捷键工作流；Skills 说明输出形式与按应用规则；Connect 提供“使用浏览器登录”按钮；Microphone 显示权限状态与引导；Practice 引导你按一次快捷键完成练习。 |
-| 菜单栏菜单 | 未提供 | 点击菜单栏图标：当前 Skill 子菜单（Recent / Search and Choose… / Set as Global Default）、开始/停止听写、Retry last dictation、Undo Last Verified Insertion、Skill Library…、History…、Quick Add…（⌃⌥Space）、Terminology…、Settings…（⌘,）、Quit（⌘Q）。 |
-| 听写过程（Refined HUD） | 未提供 | 屏幕顶部中央出现紧凑胶囊：录音时显示计时与取消按钮；处理中可取消；完成时明确区分 Inserted / Paste Sent / Copied；普通错误至少停留 5 秒。 |
-| Skill Switcher 与 Skill Library | 未提供 | 全局 Skill Switcher 快速切换当前 Skill；Skill Library 分 Installed / Discover / Created 三个分区，可查看 Skill 详情、版本与运行回执。 |
-| Preview 与 Diff Preview | 未提供 | 显示 Skill ID 与版本、校验状态、源文本 / 最终结果 / 行词级 Diff、上下文类别，以及 Copy、Replace Selection、Paste to Target、Cancel 按钮；打开 Preview 不会再次发起网络请求。 |
-| 设置窗口 | 未提供 | 原生双栏侧边栏布局，包含账户与权限、听写与 AI Polish、默认 Skill 与应用规则、上下文与隐私、Style Capsule、术语与 Domain Pack、Community Skill 管理、History / Recovery 入口、粘贴行为与更新状态；修改即时保存。 |
+#### 为下一次听写选择 Skill
+
+![VibeCompose 中文 Skill 切换器](docs/assets/readme/skill-switcher-zh-cn.png)
+
+搜索或浏览已安装的 Skill，按 `Return` 仅用于下一次录音，按 `⌘↩` 设为全局
+默认。
+
+#### 浏览 Skill 资料库
+
+![VibeCompose 中文 Skill 资料库发现页](docs/assets/readme/skill-library-zh-cn.png)
+
+“发现”页用具体示例说明每个内置 Skill；进入“安装”可导入和管理 Community
+Skill。
+
+#### 替换选中文字前确认结果
+
+![VibeCompose 中文选区改写预览](docs/assets/readme/preview-zh-cn.png)
+
+Preview 中可以编辑最终结果、展开对比、复制文本，或在 VibeCompose 重新校验
+目标后替换原选区。
+
+#### 配置 VibeCompose
+
+![VibeCompose 中文设置窗口](docs/assets/readme/settings-zh-cn.png)
+
+设置窗口集中管理默认 Skill、快捷键、账户与权限、输入输出、外观、隐私和高级
+选项，修改后立即保存。
 
 ### 5.1 每日听写与快捷键
 
