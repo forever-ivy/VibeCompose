@@ -316,6 +316,48 @@ deterministic local checks on the package — they never call a provider.
 and symlinks are rejected. See the full
 [Community Skill SDK](docs/engineering/community-skill-sdk.md).
 
+**Use AI to draft a Skill:** if you do not want to start from blank files, copy
+the Prompt below into ChatGPT and replace the bracketed placeholders:
+
+```text
+You are a VibeCompose Community Skill designer. Based on my requirements,
+generate a declarative Skill draft that can be imported into VibeCompose.
+
+My requirements:
+- Skill name: [for example, Technical Plan]
+- Use case: [when I will use it]
+- Input: [what I usually dictate]
+- Desired output: [the format I want]
+- Tone and terminology: [for example, concise and professional; preserve
+  English technical terms]
+
+Output the complete contents of these files, using each filename as a heading:
+1. `skill.yaml`
+2. `prompt.md`
+3. `validators.json` (only if needed)
+4. `examples.jsonl` (at least two normal cases and one boundary case)
+5. `terminology.csv` (only if fixed terms are needed)
+
+Requirements:
+- Use the Community Skill v1 format, with a unique reverse-domain ID and a
+  semantic version;
+- Declare only the voice, selection, and styleCapsule permissions required;
+- Specify the output format, delivery policy, risk level, required sections,
+  and maximum length;
+- In `prompt.md`, define technical literals to preserve, content not to invent,
+  and boundary cases;
+- Use declarative text only: no scripts, Shell, tool calls, MCP, network
+  requests, credentials, hidden instructions, or filesystem operations;
+- Do not use real personal data, and keep all YAML, JSON, JSONL, CSV, and
+  Markdown syntax valid;
+- End with a pre-install checklist and identify every field I must review.
+```
+
+Save the generated files in one `.vibecomposeskill` directory, review its
+permissions, output policy, and contents, then import it through
+**Settings → AI Polish → Local Community Skills → Import Skill…**. AI output is
+a draft; it does not replace local validation or human review.
+
 ### 5.5 Writing Styles: make output sound like you
 
 - Use the five built-in Writing Styles from the Style Capsule section in

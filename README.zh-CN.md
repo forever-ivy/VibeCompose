@@ -275,6 +275,42 @@ cp -R \
 1 MiB），且只允许声明式内容——任何可执行文件、脚本、符号链接都会被拒绝。
 完整规范见 [Community Skill SDK](docs/engineering/community-skill-sdk.md)。
 
+**用 AI 生成 Skill 草稿：**不想从零开始写文件时，可以把下面的 Prompt 复制给
+ChatGPT，并替换方括号里的内容：
+
+```text
+你是 VibeCompose Community Skill 设计助手。请根据我的需求，生成一个可导入
+VibeCompose 的声明式 Skill 草稿。
+
+我的需求：
+- Skill 名称：[例如：技术方案整理]
+- 使用场景：[我什么时候会使用它]
+- 输入内容：[我通常会口述什么]
+- 期望输出：[希望得到什么格式的结果]
+- 语气和术语：[例如：简洁、专业，保留英文技术名词]
+
+请严格输出以下文件的完整内容，并使用对应文件名作为标题：
+1. `skill.yaml`
+2. `prompt.md`
+3. `validators.json`（如果确实需要）
+4. `examples.jsonl`（至少两个正常例子和一个边界例子）
+5. `terminology.csv`（如果需求包含固定术语）
+
+要求：
+- 使用 Community Skill v1 格式，生成唯一的反向域名 ID 和语义化版本号；
+- 只声明完成任务所需的 voice、selection、styleCapsule 权限；
+- 明确输出格式、交付方式、风险等级、必需章节和最大长度；
+- 在 prompt 中说明要保留的技术字面量、不能臆造的内容和边界情况；
+- 只能使用声明式文本，不能包含脚本、Shell、工具调用、MCP、网络请求、凭据、
+  文件系统操作或隐藏指令；
+- 不要使用真实个人信息，并确保所有 JSON、JSONL、CSV 和 YAML 语法有效；
+- 最后给出一份安装前检查清单，并指出哪些字段需要我人工确认。
+```
+
+把生成的文件保存到同一个 `.vibecomposeskill` 目录，检查权限、输出策略和内容后，
+再通过 **设置 → AI Polish → Local Community Skills → Import Skill…** 导入。AI 生成
+的结果只是草稿，不能跳过本地检查和人工审核。
+
 ### 5.5 Writing Style：让输出像你的风格
 
 - 在设置的 Style Capsule 区域使用 5 个内置 Writing Style，或粘贴样例文本创建
