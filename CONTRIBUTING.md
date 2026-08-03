@@ -3,6 +3,8 @@
 Thank you for helping build this independent, unofficial community project.
 Contributions are accepted under the repository's MIT License.
 
+By participating, you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Start Here
 
 ```bash

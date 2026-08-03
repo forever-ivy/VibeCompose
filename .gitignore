@@ -40,3 +40,11 @@ __pycache__/
 
 # Local Claude worktrees.
 /.claude/worktrees/
+
+# Vendored third-party AI dev skills — synced locally from upstream, not
+# redistributed here. See docs/dev-skills.md and skills-lock.json for sources.
+/.agents/
+/.claude/skills/
+
+# Internal competitor UI research — not for public distribution.
+/docs/research/typeless-onboarding/
