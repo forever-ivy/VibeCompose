@@ -1,179 +1,187 @@
 {
   "version": 1,
+  "repositories": {
+    "emilkowalski/skills": {
+      "revision": "da80201b64de7d608a6dc5f723797ce6c65b692b"
+    },
+    "rshankras/claude-code-apple-skills": {
+      "revision": "9ffb83138209057875698dd11c1720c657c47a92"
+    }
+  },
   "skills": {
     "animation-vocabulary": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/animation-vocabulary/SKILL.md",
-      "computedHash": "39319fc9a33c15be08666b3685f58666f042ff36bb902b7814c0834a5ba99df4"
+      "computedHash": "d718b48fe3c7898804d588f050a2e266d82c9f5ef51da256c8cb8b5951527757"
     },
     "app-store": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/app-store/SKILL.md",
-      "computedHash": "94b9933884db8219f81541398da62f9b6cba4e82875fd368a983352df1cbfae1"
+      "computedHash": "86a48d18514186af1a2213b7e03e94f8ea68e0c06c9efccbbe699aa8c3d1f2b8"
     },
     "apple-design": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/apple-design/SKILL.md",
-      "computedHash": "8b94db67cb9edaad5f1501010804caa610131f1d2dfda0a27664b2e858deade3"
+      "computedHash": "11840b24a11d7f94f39c6aaab074750ae4e4de4ef54ee4b1dd97e16ebd485e61"
     },
     "apple-intelligence": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/apple-intelligence/SKILL.md",
-      "computedHash": "ff7c9c86f4d145eceeefa54194ff54d85ff3d09bd63f5a0e7e344457ceba5eeb"
+      "computedHash": "2668a67371ea0b87652679850c8206f1e9851905ab9b83dc1c9189586a718053"
     },
     "core-ml": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/core-ml/SKILL.md",
-      "computedHash": "27025506d4623d6681848902ea66311e86f968c4f48d9176888ea02d7b622ac7"
+      "computedHash": "d12d9afd65b3eef575ae252c56ec914475bc7d98a415f88207c8398c3f7eb3ba"
     },
     "design": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/design/SKILL.md",
-      "computedHash": "62d484a166f9f43c9a8ba6515a5217b60139b4100f41b66e4e60fbf13036c337"
+      "computedHash": "e9665a0455ef9c21fddd1c68f13c19144a3952641eb0d454f2b4a67d40f0a9bf"
     },
     "emil-design-eng": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/emil-design-eng/SKILL.md",
-      "computedHash": "8bdf9e4e6de7a4969147bf4828a4ad2c5aacd9fba4b690b250a85e0467ca387d"
+      "computedHash": "e71de849347050c2c573c1cf24d742d5a13459557ecffa6e562f08006f46b5b7"
     },
     "find-animation-opportunities": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/find-animation-opportunities/SKILL.md",
-      "computedHash": "15dc983ce2cd00489fcdc4a92e2752d47e1620f7619038b00eb84c2b97d50597"
+      "computedHash": "91c1243164057fbf824088d12faea937878a757a7ac653e8288b775e8b27b882"
     },
     "foundation": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/foundation/SKILL.md",
-      "computedHash": "876037e88196fe46b76848661029225ab6160dcc8247d14fabc569aa82062787"
+      "computedHash": "7bcc17160774cae8fe2f85165edea5b6fe5336272a75f040431a26d56e5e4ee8"
     },
     "generators": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/generators/SKILL.md",
-      "computedHash": "eeeea50fd66d7790e7256ee791fee1e46198a06ffec47a8ec50e4d43c36530f8"
+      "computedHash": "8041fdbaed7835a56e8b99742de7972b6591c158c995555e5313e5d0d5d6e559"
     },
     "growth": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/growth/SKILL.md",
-      "computedHash": "590a05babad11b64fdff6507aa751b21b0f56ead2d534b9963347c926171f3e2"
+      "computedHash": "66121d4b7f09897e40b0fd7a014f8b2ea26075c673388c68084069848ab0c5e4"
     },
     "improve-animations": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/improve-animations/SKILL.md",
-      "computedHash": "32f23d860467841f5b07cef198fb53efc70f2adaaa6144cf1a3434d782aed246"
+      "computedHash": "68f17bbc4671593d2f43dba26a679243e2153ba5f26965fb7d59df52842534ff"
     },
     "ios-development": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/ios/SKILL.md",
-      "computedHash": "353e5f7545b45954c8c372fa0116a409a84df39409cd61a05c66c4c5d20b5da1"
+      "computedHash": "8612883b75889ae32ce1f38ce021835c2540354a97ec0cc2cbcd10b0653edd10"
     },
     "legal": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/legal/SKILL.md",
-      "computedHash": "3453a50e4a09491bceed0b6fe7168dc34f4fb1fbf4d3fe064be95fd14377204f"
+      "computedHash": "8bb6a7aa36b396240d83aac45a41ca12f4c395639004d88adce8b02577ab4587"
     },
     "macos-development": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/macos/SKILL.md",
-      "computedHash": "294b31742ef3f87e13859714c402081845eaebd52e4691c716f5ed38c4013936"
+      "computedHash": "9b460c772e7732086a75dfc44f753f33410afcdcb5471d8c8ba7d5528ab19300"
     },
     "mapkit": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/mapkit/SKILL.md",
-      "computedHash": "c5b795129a4cb2813f74a2886e30fc527e81a8aa1cd5cb9f3b7cdcc8445e19b6"
+      "computedHash": "139afd7cf139a6533346fac5749ff5f7b96ad813534b51c3373cde7b825ec225"
     },
     "monetization": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/monetization/SKILL.md",
-      "computedHash": "a25af15d781e8613fbe44cacdfb96e65e7413922ba376744a930115040862453"
+      "computedHash": "3121977286b61663cfb3a8f663e424bec609888bce7fafa5a1755c7b3974c959"
     },
     "performance": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/performance/SKILL.md",
-      "computedHash": "007e0653b7c686824c7bc79f03740cb5f60deeb5dc45b6116e246d6e0b6e6eb6"
+      "computedHash": "169a0e4911679d02dd240a85412ad4e21499e689d98f6342a480ba278430aa7f"
     },
     "product-development": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/product/SKILL.md",
-      "computedHash": "7f13d991825b115970338ebde2ccf44ab22c17f910455e1bf8d75f7e7011793b"
+      "computedHash": "a016527571f6915e9129d836fcd557845ae4209a99dd2a0651a77bce78177e48"
     },
     "release-review": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/release-review/SKILL.md",
-      "computedHash": "3927bd41c8c51352d0db11ffb254c334e0e1ab45d4ec6fbb0d922bffc1a52f46"
+      "computedHash": "c7d205e5d93b03fddc88a94bec02e9a8676994c3b9b52dade1d5ea328d66e238"
     },
     "review-animations": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
       "skillPath": "skills/review-animations/SKILL.md",
-      "computedHash": "c92905bff59c3007d07c2638a2a83d5d71c901feef108cce1da0bf3c7cafd579"
+      "computedHash": "61cf8ac0c4c8e1f63385298c546b16c65ca9aec34abddcd04e821c16712d671d"
     },
     "security": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/security/SKILL.md",
-      "computedHash": "6fd7e1ec0ae0453571bd925281b3dd66e1ab839c57496946d05f27d31d40ca81"
+      "computedHash": "df0f27304171e1ccdfdd50dcd9c0a8b9966cb64dd0e11c08b716eaedb6ee03b0"
     },
     "shared": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/shared/SKILL.md",
-      "computedHash": "f281e852067b4ac3708cdb8a930e15fe57b5b346b4911f9239ec6c8353c22ca6"
+      "computedHash": "ab53f423832a4832ee2536a0202d4425c0bc918edcc0e15fb3ad60644b228edc"
     },
     "swift-development": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/swift/SKILL.md",
-      "computedHash": "bbd9c2447b65fc955e99881020ba62c6e4c8ddd5cf385d96d7164802e7032926"
+      "computedHash": "be0da076b01ae1e7fb6598da29518252b4b8b5a5d5252bde456391309b5767e6"
     },
     "swiftdata": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/swiftdata/SKILL.md",
-      "computedHash": "59fd3c9a73402a008e1f17a12a5d683d3b333dcebf32c78c7d7464801ca1b927"
+      "computedHash": "249ed19f40cb7e58c2410dc96a040a4ae5dfa5148c9547b4b0ab40a2072732c7"
     },
     "swiftui": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/swiftui/SKILL.md",
-      "computedHash": "f1bf194d84c51d8cf0840727815cc74e7e9771b3ba0ac31552dc991fb2a3afc2"
+      "computedHash": "a78b1b2ed3a4724eae6476e94045fe0732198690037e650d4a9592e18758e3b4"
     },
     "testing": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/testing/SKILL.md",
-      "computedHash": "a031deb1cd8ae5551c2573936d2208c383379262d8d4bc36f01b6e3e8077ce05"
+      "computedHash": "8954bf4f3446f4b47eebfbb71b3aef61001f2ac52597fc1bba42d3edd0c830bb"
     },
     "visionos": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/visionos/SKILL.md",
-      "computedHash": "128917f03b7a9eceecbb2fb70555a3b749aa00f898b1063ef952f8bd13f9fa4d"
+      "computedHash": "b852915bd305465357d17cbceb381d8ebe71b4bde35b4f5708245d8c7869db08"
     },
     "watchOS": {
       "source": "rshankras/claude-code-apple-skills",
       "sourceType": "github",
       "skillPath": "skills/watchos/SKILL.md",
-      "computedHash": "63e9cc634d55b1c44320ffa3f2265cdde890a91d08f676fa3473e2c413d04884"
+      "computedHash": "347376d31d4b72b7e637f666cc1ef16efefddd0f960cd1eaad6a78aa5d99f1b8"
     }
   }
 }

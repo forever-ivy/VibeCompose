@@ -13,8 +13,8 @@ repository**; both `.agents/` and `.claude/skills/` are git-ignored.
 ## Sources and licenses
 
 `skills-lock.json` (tracked at the repo root) is the machine-readable manifest
-recording the exact upstream source, path, and content hash of every synced
-skill. The upstream repositories are:
+recording the pinned upstream revision, source path, and content hash of every
+synced skill. The upstream repositories are:
 
 | Upstream | License |
 | --- | --- |
@@ -28,7 +28,14 @@ License.
 ## Restoring the skills locally
 
 The skills are optional. You only need them if you want the AI agents to use the
-same skill set the maintainers use. To restore them, clone each upstream
-repository and place the skill directories under `.agents/skills/`, then symlink
-the ones you want into `.claude/skills/`. Consult `skills-lock.json` for the
-exact `skillPath` of each entry.
+same skill set the maintainers use. From the repository root, run:
+
+```bash
+./scripts/sync_dev_skills.sh
+```
+
+The script clones the two upstream repositories into a temporary directory,
+verifies each `SKILL.md` against `skills-lock.json`, restores the directories
+under `.agents/skills/`, and creates the local `.claude/skills/` symlinks. It
+requires `git`, Python 3, and network access. The restored paths remain ignored
+and are never part of the VibeCompose source distribution.
