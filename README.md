@@ -34,6 +34,7 @@ using, only after it is proven safe.
 - [8. FAQ](#8-faq)
 - [9. Contributing](#9-contributing)
 - [10. License](#10-license)
+- [11. Acknowledgements](#11-acknowledgements)
 
 ## 1. Introduction
 
@@ -486,3 +487,8 @@ MIT. See [LICENSE](LICENSE).
 PermissionFlow, Sparkle, and their bundled components retain their own
 licenses. Notices are available in
 [`Sources/VibeCompose/Resources/Legal`](Sources/VibeCompose/Resources/Legal).
+
+## 11. Acknowledgements
+
+Thanks to the [linuxdo](https://linux.do/) community for discussion, sharing,
+and feedback.

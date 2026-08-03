@@ -32,6 +32,7 @@
 - [8. 常见问题](#8-常见问题)
 - [9. 贡献指南](#9-贡献指南)
 - [10. 许可证](#10-许可证)
+- [11. 致谢](#11-致谢)
 
 ## 1. 项目简介
 
@@ -417,3 +418,7 @@ MIT，见 [LICENSE](LICENSE)。
 
 PermissionFlow、Sparkle 及其组件保留各自许可证，相关声明位于
 [`Sources/VibeCompose/Resources/Legal`](Sources/VibeCompose/Resources/Legal)。
+
+## 11. 致谢
+
+感谢 [linuxdo](https://linux.do/) 社区的交流、分享与反馈。
