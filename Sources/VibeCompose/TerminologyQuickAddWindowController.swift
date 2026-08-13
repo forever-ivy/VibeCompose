@@ -100,9 +100,12 @@ final class TerminologyQuickAddWindowController: NSWindowController, NSWindowDel
             .currentVisualAcceptance
         )
         let hostingController = NSHostingController(rootView: view)
-        let window = NSPanel(
+        // Borderless floating panel wearing the shared floating-glass chrome
+        // (Liquid Glass on macOS 26), matching the Skill Switcher shell —
+        // the titled utility-window frame predates the visual system.
+        let window = TerminologyQuickAddPanel(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 390),
-            styleMask: [.titled, .closable, .utilityWindow],
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -112,10 +115,31 @@ final class TerminologyQuickAddWindowController: NSWindowController, NSWindowDel
         window.isRestorable = false
         window.identifier = NSUserInterfaceItemIdentifier("VibeCompose.TerminologyQuickAdd")
         window.level = .floating
+        window.isFloatingPanel = true
+        window.backgroundColor = .clear
+        // SwiftUI chrome owns elevation; a window shadow would double-cast.
+        window.hasShadow = false
+        window.isOpaque = false
+        window.isMovable = true
+        window.isMovableByWindowBackground = true
         window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.tabbingMode = .disallowed
         window.contentViewController = hostingController
+        // Match the continuous glass radius on the AppKit host so the square
+        // NSView bounds never show past the SwiftUI corner.
+        let corner = VibeComposeFloatingChrome.panelCornerRadius
+        hostingController.view.wantsLayer = true
+        hostingController.view.layer?.cornerRadius = corner
+        hostingController.view.layer?.cornerCurve = .continuous
+        hostingController.view.layer?.masksToBounds = true
+        if let contentView = window.contentView {
+            contentView.wantsLayer = true
+            contentView.layer?.cornerRadius = corner
+            contentView.layer?.cornerCurve = .continuous
+            contentView.layer?.masksToBounds = true
+            contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        }
         AccessibilityDisplayOptionsOverride.currentVisualAcceptance
             .applyAppearance(to: window)
         window.center()
@@ -162,6 +186,45 @@ final class TerminologyQuickAddWindowController: NSWindowController, NSWindowDel
 
     func writeSnapshot(to url: URL) throws {
         try ProductSurfaceSnapshot.write(window: window, to: url)
+    }
+}
+
+// MARK: - Panel
+
+/// Borderless floating panel: key so the text fields take focus, draggable by
+/// the glass background, Esc dismisses (deferring to IME composition first).
+private final class TerminologyQuickAddPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if TransientPanelKeyRouting.inputMethodHasMarkedText(in: self) {
+            return super.performKeyEquivalent(with: event)
+        }
+        let modifiers = event.modifierFlags.intersection(
+            .deviceIndependentFlagsMask
+        )
+        if event.type == .keyDown,
+           modifiers.isEmpty,
+           event.keyCode == 53
+        {
+            close()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// Text fields swallow Esc as `cancelOperation:`. Dismiss only when the IME
+    /// is not composing — otherwise Esc must clear marked text first.
+    override func cancelOperation(_ sender: Any?) {
+        guard TransientPanelKeyRouting.shouldDismissOnCancelOperation(
+            hasMarkedText: TransientPanelKeyRouting.inputMethodHasMarkedText(
+                in: self
+            )
+        ) else {
+            return
+        }
+        close()
     }
 }
 
@@ -213,6 +276,9 @@ private struct TerminologyQuickAddView: View {
                 .textFieldStyle(.roundedBorder)
             }
             .formStyle(.grouped)
+            // Rows keep their solid cards; the scroll background yields to the
+            // floating-glass shell (grouped content never nests its own glass).
+            .scrollContentBackground(.hidden)
 
             if let message {
                 Text(message)
@@ -232,7 +298,19 @@ private struct TerminologyQuickAddView: View {
         }
         .padding(24)
         .frame(width: 520, height: 390)
-        .background(Color(nsColor: .windowBackgroundColor))
+        // Shared floating-glass shell: Liquid Glass on macOS 26, hudWindow
+        // material earlier, solid plate under Reduce Transparency.
+        .vibeComposeFloatingGlass(
+            cornerRadius: VibeComposeFloatingChrome.panelCornerRadius
+        )
+        // Final clip: hosting NSView layers can still sample outside the
+        // glass shape without an explicit continuous mask at the leaf.
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: VibeComposeFloatingChrome.panelCornerRadius,
+                style: .continuous
+            )
+        )
     }
 
     private func save() {

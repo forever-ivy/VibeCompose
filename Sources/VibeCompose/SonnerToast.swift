@@ -146,17 +146,7 @@ struct SonnerToastHost: View {
 private struct SonnerToastBanner: View {
     let item: SonnerToastItem
 
-    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-
     var body: some View {
-        let increaseContrast = colorSchemeContrast == .increased
-        let hairlineWidth = increaseContrast
-            ? VibeComposeFloatingChrome.increaseContrastHairlineWidth
-            : VibeComposeFloatingChrome.standardHairlineWidth
-        let hairlineOpacity = increaseContrast
-            ? VibeComposeFloatingChrome.increaseContrastHairlineAlpha
-            : 0.55
-
         HStack(alignment: .center, spacing: VibeComposeMetrics.space10) {
             leadingGlyph
             VStack(alignment: .leading, spacing: 2) {
@@ -178,20 +168,15 @@ private struct SonnerToastBanner: View {
         .padding(.horizontal, VibeComposeMetrics.space16)
         .padding(.vertical, VibeComposeMetrics.space12)
         .frame(maxWidth: 420, alignment: .leading)
-        .background {
-            toastBackground
-        }
-        .overlay {
-            RoundedRectangle(
+        // Floating chrome family: Liquid Glass on macOS 26, hudWindow material
+        // earlier, solid plate under Reduce Transparency — the shared shell
+        // owns hairline, contrast, and elevation.
+        .vibeComposeFloatingGlass(
+            in: RoundedRectangle(
                 cornerRadius: VibeComposeMetrics.radiusL,
                 style: .continuous
             )
-            .stroke(
-                Color(nsColor: VibeComposePalette.hairline).opacity(hairlineOpacity),
-                lineWidth: hairlineWidth
-            )
-        }
-        .shadow(color: Color.black.opacity(0.14), radius: 18, x: 0, y: 8)
+        )
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isStaticText)
         .accessibilityLabel(accessibilityLabel)
@@ -220,14 +205,6 @@ private struct SonnerToastBanner: View {
                 .foregroundStyle(Color(nsColor: VibeComposePalette.brandBlue))
                 .symbolRenderingMode(.hierarchical)
         }
-    }
-
-    private var toastBackground: some View {
-        RoundedRectangle(
-            cornerRadius: VibeComposeMetrics.radiusL,
-            style: .continuous
-        )
-        .fill(Color(nsColor: VibeComposePalette.elevatedSurface))
     }
 
     private var accessibilityLabel: String {
