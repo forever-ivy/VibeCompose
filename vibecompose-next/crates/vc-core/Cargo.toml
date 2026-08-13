@@ -1,0 +1,22 @@
+[package]
+name = "vc-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VibeCompose platform-independent core: dictation pipeline, skill runtime, terminology, config"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+fancy-regex.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+async-trait = "0.1"
+
+[dev-dependencies]
+pretty_assertions = "1"
+tokio = { workspace = true }
+tempfile = "3"
+serde_json.workspace = true

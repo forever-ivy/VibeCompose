@@ -1,0 +1,30 @@
+context:
+  required:
+  - voice
+  optional:
+  - selection
+  - styleCapsule
+
+output:
+  format: plainText
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 8000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: false
+  forbiddenPhrases:
+  - guaranteed resolution
+  - guarantee a resolution
+  - will definitely be resolved
+  - guaranteed refund
+  - guarantee a refund
+  - will definitely fix
+  - definitely be fixed
+  - 保证解决
+  - 一定会解决
+  - 保证退款
+  - 肯定会解决
+  - 一定能解决

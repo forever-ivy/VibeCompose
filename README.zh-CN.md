@@ -20,6 +20,13 @@
 > 背书关系。当前 Alpha 在你使用自己的 ChatGPT 账户登录后，依赖 ChatGPT 未
 > 公开的网页端接口。这些接口可能随时变化或停止工作。
 
+> [!NOTE]
+> **Windows / Linux（测试版）**：跨平台实现（Tauri v2 = Rust 核心 +
+> TypeScript UI，原生 Fluent / Adwaita 外观）位于
+> [`vibecompose-next/`](vibecompose-next/README.md)，移植的是本应用的行为
+> 契约——相同的 Skill 包、配置格式与信任边界；macOS 发行版仍由本 Swift
+> 包构建。
+
 ## 目录
 
 - [1. 项目简介](#1-项目简介)

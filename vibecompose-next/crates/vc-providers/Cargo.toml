@@ -1,0 +1,24 @@
+[package]
+name = "vc-providers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VibeCompose providers: managed ChatGPT session, OpenAI-compatible transcription/polish"
+
+[dependencies]
+vc-core = { path = "../vc-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+tracing.workspace = true
+async-trait = "0.1"
+sha2.workspace = true
+base64 = "0.22"
+rand = "0.9"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"

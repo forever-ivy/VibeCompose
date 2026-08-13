@@ -1,0 +1,20 @@
+context:
+  required:
+  - voice
+  optional:
+  - styleCapsule
+
+resources:
+  terminology:
+  - terminology.csv
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 12000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: true

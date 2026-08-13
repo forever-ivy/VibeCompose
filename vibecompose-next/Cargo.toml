@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vc-core",
+    "crates/vc-providers",
+    "crates/vc-audio",
+    "crates/vc-inject",
+    "apps/desktop/src-tauri",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/forever-ivy/VibeCompose"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+fancy-regex = "0.14"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "process"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "stream", "rustls-tls"], default-features = false }
+tracing = "0.1"

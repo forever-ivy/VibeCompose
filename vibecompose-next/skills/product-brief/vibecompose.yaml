@@ -1,0 +1,25 @@
+context:
+  required:
+  - voice
+  optional:
+  - selection
+  - styleCapsule
+
+output:
+  format: markdown
+  delivery: previewThenPaste
+  risk: medium
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 8000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: true
+  requiredSections:
+  - Problem|问题
+  - Target Users|Users|目标用户
+  - Goals|目标
+  - Non-goals|非目标
+  - Proposed Scope|Scope|建议范围|范围
+  - Risks|风险
+  - Success Criteria|成功标准|验收指标

@@ -1,0 +1,14 @@
+context:
+  required:
+  - voice
+
+output:
+  format: plainText
+  delivery: automaticPasteWhenVerified
+  risk: low
+
+validators:
+  requireNonEmpty: true
+  maximumCharacters: 12000
+  preserveTechnicalLiterals: true
+  requireClosedMarkdownFences: false

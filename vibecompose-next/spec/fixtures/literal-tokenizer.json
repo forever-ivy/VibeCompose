@@ -1,0 +1,29 @@
+{
+  "description": "TechnicalLiteralTokenizer golden cases: every listed literal must be protected (masked and restored exactly once). Both implementations must protect at least these literals for each input.",
+  "cases": [
+    {
+      "text": "部署 https://api.example.com/v2 时先跑 ./scripts/check.sh，版本是 1.2.3。",
+      "mustProtect": ["https://api.example.com/v2", "./scripts/check.sh", "1.2.3"]
+    },
+    {
+      "text": "运行 cargo build --release，设置 $HOME 并邮件 dev@example.com",
+      "mustProtect": ["--release", "$HOME", "dev@example.com"]
+    },
+    {
+      "text": "调用 `foo.bar()` 和 std::mem::swap 再看 config.json 文件",
+      "mustProtect": ["`foo.bar()`", "config.json"]
+    },
+    {
+      "text": "服务器 10.0.0.1:8080 的 UUID 是 4A3F24AB-1193-485A-AEF0-AC3F462E42A6",
+      "mustProtect": ["10.0.0.1:8080", "4A3F24AB-1193-485A-AEF0-AC3F462E42A6"]
+    },
+    {
+      "text": "今天天气不错完全没有技术词",
+      "mustProtect": []
+    }
+  ],
+  "restoreRules": {
+    "requireExactlyOnce": true,
+    "onMissingOrDuplicatedToken": "reject and fall back to normalized transcript"
+  }
+}

@@ -22,6 +22,13 @@ using, only after it is proven safe.
 > undocumented ChatGPT web endpoints after you sign in with your own ChatGPT
 > account. Those endpoints can change or stop working without notice.
 
+> [!NOTE]
+> **Windows / Linux (beta):** a cross-platform implementation (Tauri v2 =
+> Rust core + TypeScript UI, native Fluent / Adwaita look) lives in
+> [`vibecompose-next/`](vibecompose-next/README.md). It ports this app's
+> behavior contract — same Skill packages, same config schema, same trust
+> boundary — while macOS keeps shipping from this Swift package.
+
 ## Contents
 
 - [1. Introduction](#1-introduction)

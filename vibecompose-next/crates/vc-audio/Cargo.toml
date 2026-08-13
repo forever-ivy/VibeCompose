@@ -1,0 +1,16 @@
+[package]
+name = "vc-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VibeCompose audio capture: cross-platform recording to mono PCM WAV"
+
+[dependencies]
+vc-core = { path = "../vc-core" }
+thiserror.workspace = true
+tracing.workspace = true
+cpal = "0.16"
+hound = "3"
+
+[dev-dependencies]
+tempfile = "3"

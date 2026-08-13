@@ -1,0 +1,40 @@
+{
+  "description": "SkillResolver golden cases: manual → application rule → global default → direct fallback.",
+  "registrySkillIds": [
+    "app.vibecompose.skill.direct",
+    "app.vibecompose.skill.email",
+    "app.vibecompose.skill.reply"
+  ],
+  "config": {
+    "defaultSkillId": "app.vibecompose.skill.email",
+    "enabledSkillIds": [
+      "app.vibecompose.skill.direct",
+      "app.vibecompose.skill.email",
+      "app.vibecompose.skill.reply"
+    ],
+    "applicationRules": [
+      {
+        "applicationId": "com.tencent.xinwechat",
+        "skillId": "app.vibecompose.skill.reply",
+        "isEnabled": true
+      }
+    ]
+  },
+  "cases": [
+    {
+      "manualSkillId": "app.vibecompose.skill.reply",
+      "expect": { "skillId": "app.vibecompose.skill.reply", "source": "manual" }
+    },
+    {
+      "launchAppId": "com.tencent.xinWeChat",
+      "expect": { "skillId": "app.vibecompose.skill.reply", "source": "applicationRule" }
+    },
+    {
+      "expect": { "skillId": "app.vibecompose.skill.email", "source": "globalDefault" }
+    },
+    {
+      "overrideEnabledSkillIds": ["app.vibecompose.skill.direct"],
+      "expect": { "skillId": "app.vibecompose.skill.direct", "source": "directFallback" }
+    }
+  ]
+}

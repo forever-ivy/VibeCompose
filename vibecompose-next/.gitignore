@@ -1,0 +1,11 @@
+# Rust
+/target/
+
+# Frontend
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/.playwright-cli/
+*.tsbuildinfo
+
+# Local tooling artifacts
+.DS_Store

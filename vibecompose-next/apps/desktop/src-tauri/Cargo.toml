@@ -1,0 +1,31 @@
+[package]
+name = "vibecompose-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "VibeCompose: press a shortcut, speak, get skill-shaped text pasted at the cursor"
+
+[lib]
+name = "vibecompose_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+vc-core = { path = "../../../crates/vc-core" }
+vc-providers = { path = "../../../crates/vc-providers" }
+vc-audio = { path = "../../../crates/vc-audio" }
+vc-inject = { path = "../../../crates/vc-inject" }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-opener = "2"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+dirs = "6"
+uuid.workspace = true
+async-trait = "0.1"

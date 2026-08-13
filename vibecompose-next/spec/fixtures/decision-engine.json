@@ -1,0 +1,18 @@
+{
+  "description": "TextPolishDecisionEngine golden cases. Both implementations (Swift TextPolishDecisionEngine, Rust vc_core::polish) must produce these reasons. mode=direct, polishMode=automaticWhenKeyAvailable, providerAvailable=true unless overridden.",
+  "cases": [
+    { "text": "你好呀", "audioDurationMs": 2000, "expect": { "shouldPolish": false, "reason": "skip_short_direct" } },
+    { "text": "周三开会不对改成周四", "audioDurationMs": 3000, "expect": { "shouldPolish": true, "reason": "run_self_correction" } },
+    { "text": "帮我翻译成英文这段话", "audioDurationMs": 3000, "expect": { "shouldPolish": true, "reason": "run_translation" } },
+    { "text": "给客户写一封邮件说明进度", "audioDurationMs": 3000, "expect": { "shouldPolish": true, "reason": "run_email" } },
+    { "text": "整理成步骤第一先部署第二再验证", "audioDurationMs": 5000, "expect": { "shouldPolish": true, "reason": "run_agent_plan" } },
+    { "text": "很长的一段话", "audioDurationMs": 25000, "expect": { "shouldPolish": true, "reason": "run_long_dictation" } },
+    { "text": "任意文本", "audioDurationMs": 1000, "polishMode": "disabled", "expect": { "shouldPolish": false, "reason": "disabled" } },
+    { "text": "任意文本", "audioDurationMs": 1000, "providerAvailable": false, "expect": { "shouldPolish": false, "reason": "provider_unavailable" } },
+    { "text": "任意文本", "audioDurationMs": 1000, "polishMode": "always", "expect": { "shouldPolish": true, "reason": "forced_always" } },
+    { "text": "x", "audioDurationMs": 0, "mode": "email", "expect": { "shouldPolish": true, "reason": "run_email" } },
+    { "text": "x", "audioDurationMs": 0, "mode": "codePrompt", "expect": { "shouldPolish": true, "reason": "run_code_prompt" } },
+    { "text": "x", "audioDurationMs": 0, "mode": "translate", "expect": { "shouldPolish": true, "reason": "run_translation" } },
+    { "text": "x", "audioDurationMs": 0, "mode": "reply", "expect": { "shouldPolish": true, "reason": "run_reply" } }
+  ]
+}

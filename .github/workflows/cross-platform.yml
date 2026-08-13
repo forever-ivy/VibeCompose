@@ -1,0 +1,82 @@
+name: cross-platform
+
+# Windows / Linux build of the Tauri implementation in vibecompose-next/.
+# The macOS product ships from the Swift package at the repository root and
+# is covered by ci.yml; the macOS matrix entry here only keeps the Rust
+# workspace compiling on the primary development platform.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vibecompose-next/**"
+      - ".github/workflows/cross-platform.yml"
+  pull_request:
+    paths:
+      - "vibecompose-next/**"
+      - ".github/workflows/cross-platform.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vibecompose-next
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libasound2-dev libxdo-dev
+      - run: cargo test --workspace --exclude vibecompose-desktop
+        working-directory: vibecompose-next
+
+  bundle:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: ""
+          - os: ubuntu-latest
+            args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: vibecompose-next
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libasound2-dev libxdo-dev
+      - name: Install frontend dependencies
+        working-directory: vibecompose-next/apps/desktop
+        run: npm ci || npm install
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: vibecompose-next/apps/desktop
+          args: ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vibecompose-${{ matrix.os }}
+          path: |
+            vibecompose-next/target/release/bundle/**/*.msi
+            vibecompose-next/target/release/bundle/**/*.exe
+            vibecompose-next/target/release/bundle/**/*.deb
+            vibecompose-next/target/release/bundle/**/*.AppImage
+          if-no-files-found: ignore

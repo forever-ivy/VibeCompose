@@ -1,0 +1,767 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #ececec;
+  --color-sidebar-plate: rgba(245, 247, 250, 0.94);
+  --color-panel-plate: rgba(240, 242, 247, 0.96);
+  --color-panel: #ffffff;
+  --color-ink: #1d1d1f;
+  --color-ink-secondary: #6e6e73;
+  --color-ink-tertiary: #aeaeb2;
+  --color-hairline: rgba(0, 0, 0, 0.08);
+  --color-accent: #0074ff;
+  --color-accent-deep: #005fd7;
+  --color-sidebar-sel: #efefef;
+  --color-success: #52cc94;
+  --color-amber: #ffb847;
+  --color-error: #ff6b70;
+  --color-ice: #7ac7ff;
+  --color-tint-blue: #0a84ff;
+  --color-tint-purple: #bf5af2;
+  --color-tint-pink: #ff375f;
+  --color-tint-orange: #ff9f0a;
+  --color-tint-green: #30d158;
+  --color-tint-teal: #64d2ff;
+  --color-tint-yellow: #ffd60a;
+  --color-tint-gray: #98989d;
+  --color-tint-brown: #ac8e68;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    "Cantarell", "Noto Sans", "PingFang SC", "Microsoft YaHei UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Ubuntu Mono", Menlo,
+    Consolas, monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 1.45;
+  user-select: none;
+  cursor: default;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+input,
+textarea {
+  user-select: text;
+  cursor: text;
+}
+
+/* ------------------------------------------------------------------ */
+/* Windows 11 Fluent                                                   */
+/* ------------------------------------------------------------------ */
+
+[data-platform="windows"] {
+  --color-canvas: #f3f3f3;
+  --color-panel: #ffffff;
+  --color-ink: #1b1b1b;
+  --color-ink-secondary: #5d5d5d;
+  --color-ink-tertiary: #8a8a8a;
+  --color-hairline: rgba(0, 0, 0, 0.0578);
+  --color-success: #0f7b0f;
+  --color-amber: #9d5d00;
+  --color-error: #c42b1c;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI",
+    "Microsoft YaHei", sans-serif;
+}
+
+[data-platform="windows"] body {
+  font-size: 14px;
+}
+
+[data-platform="windows"] *::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+[data-platform="windows"] *::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 6px;
+  border: 4px solid transparent;
+  background-clip: content-box;
+}
+
+[data-platform="windows"] .app-shell {
+  display: flex;
+  height: 100%;
+  background: var(--color-canvas);
+}
+
+[data-platform="windows"] .app-sidebar {
+  display: flex;
+  width: 224px;
+  flex-shrink: 0;
+  flex-direction: column;
+  padding: 12px 8px;
+  border-right: 1px solid var(--color-hairline);
+}
+
+[data-platform="windows"] .app-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+[data-platform="windows"] .app-header {
+  display: flex;
+  height: 56px;
+  flex-shrink: 0;
+  align-items: flex-end;
+  padding: 0 32px 8px;
+}
+
+[data-platform="windows"] .app-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+[data-platform="windows"] .app-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 32px 32px;
+}
+
+[data-platform="windows"] .nav-item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  border-radius: 4px;
+  padding: 7px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--color-ink-secondary);
+  transition: background 100ms;
+}
+[data-platform="windows"] .nav-item:hover {
+  background: rgba(0, 0, 0, 0.0373);
+}
+[data-platform="windows"] .nav-item.is-active {
+  background: rgba(0, 0, 0, 0.0373);
+  font-weight: 500;
+  color: var(--color-ink);
+}
+[data-platform="windows"] .nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+[data-platform="windows"] .nav-item.is-active .nav-icon {
+  color: var(--color-accent);
+}
+
+[data-platform="windows"] .vc-card {
+  overflow: hidden;
+  background: var(--color-panel);
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+[data-platform="windows"] .vc-input,
+[data-platform="windows"] .vc-select {
+  border: 1px solid rgba(0, 0, 0, 0.0924);
+  border-radius: 4px;
+  background: var(--color-panel);
+  padding: 5px 8px;
+  font-size: 13px;
+  color: var(--color-ink);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  outline: none;
+}
+[data-platform="windows"] .vc-input:focus,
+[data-platform="windows"] .vc-select:focus {
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}
+
+[data-platform="windows"] .vc-btn {
+  border-radius: 4px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 120ms, opacity 120ms;
+}
+[data-platform="windows"] .vc-btn-primary {
+  background: var(--color-accent);
+  color: white;
+}
+[data-platform="windows"] .vc-btn-primary:hover {
+  background: var(--color-accent-deep);
+}
+[data-platform="windows"] .vc-btn-primary:active {
+  opacity: 0.8;
+}
+[data-platform="windows"] .vc-btn-secondary {
+  border: 1px solid rgba(0, 0, 0, 0.0924);
+  background: var(--color-panel);
+  color: var(--color-ink);
+}
+[data-platform="windows"] .vc-btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.0373);
+}
+[data-platform="windows"] .vc-btn-danger {
+  border: 1px solid rgba(196, 43, 28, 0.35);
+  background: var(--color-panel);
+  color: #c42b1c;
+}
+[data-platform="windows"] .vc-btn-danger:hover {
+  background: #fde7e9;
+}
+[data-platform="windows"] .vc-chip {
+  border: 1px solid rgba(0, 0, 0, 0.0924);
+  border-radius: 4px;
+  background: var(--color-panel);
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--color-ink-secondary);
+  transition: background 100ms;
+}
+[data-platform="windows"] .vc-chip:hover {
+  background: rgba(0, 0, 0, 0.0373);
+}
+[data-platform="windows"] .vc-chip.is-on {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, white);
+  color: var(--color-accent-deep);
+  font-weight: 500;
+}
+
+[data-platform="windows"] .vc-toggle {
+  position: relative;
+  height: 20px;
+  width: 40px;
+  border: 1px solid #8a8a8a;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 150ms, border-color 150ms;
+}
+[data-platform="windows"] .vc-toggle.is-on {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+[data-platform="windows"] .vc-toggle-thumb {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  height: 12px;
+  width: 12px;
+  border-radius: 999px;
+  background: #5d5d5d;
+  transform: translateY(-50%);
+  transition: left 150ms, background 150ms;
+}
+[data-platform="windows"] .vc-toggle.is-on .vc-toggle-thumb {
+  left: 22px;
+  background: white;
+}
+
+[data-platform="windows"] .vc-banner {
+  border-radius: 4px;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+[data-platform="windows"] .vc-banner-warn {
+  border-color: rgba(157, 93, 0, 0.25);
+  background: #fff4ce;
+  color: #9d5d00;
+}
+[data-platform="windows"] .vc-banner-error {
+  border-color: rgba(196, 43, 28, 0.25);
+  background: #fde7e9;
+  color: #c42b1c;
+}
+
+[data-platform="windows"] .vc-kbd {
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--color-panel);
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-secondary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Linux — GNOME Adwaita (WebKitGTK default look)                      */
+/* ------------------------------------------------------------------ */
+
+[data-platform="linux"] {
+  --color-canvas: #fafafa;
+  --color-panel: #ffffff;
+  --color-ink: #241f31;
+  --color-ink-secondary: #5e5c64;
+  --color-ink-tertiary: #9a9996;
+  --color-hairline: rgba(0, 0, 0, 0.12);
+  --color-success: #26a269;
+  --color-amber: #c64600;
+  --color-error: #c01c28;
+  --font-sans: Cantarell, "Noto Sans", "Source Sans 3", Ubuntu, "Noto Sans CJK SC",
+    sans-serif;
+}
+
+[data-platform="linux"] body {
+  font-size: 14px;
+}
+
+[data-platform="linux"] .app-shell {
+  display: flex;
+  height: 100%;
+  background: var(--color-canvas);
+}
+
+[data-platform="linux"] .app-sidebar {
+  display: flex;
+  width: 220px;
+  flex-shrink: 0;
+  flex-direction: column;
+  padding: 12px 8px;
+  background: #ebebeb;
+  border-right: 1px solid var(--color-hairline);
+}
+
+[data-platform="linux"] .app-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+[data-platform="linux"] .app-header {
+  display: flex;
+  height: 52px;
+  flex-shrink: 0;
+  align-items: flex-end;
+  padding: 0 24px 8px;
+}
+
+[data-platform="linux"] .app-title {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+[data-platform="linux"] .app-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 24px 32px;
+}
+
+[data-platform="linux"] .nav-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 14px;
+  color: var(--color-ink);
+  transition: background 120ms;
+}
+[data-platform="linux"] .nav-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-platform="linux"] .nav-item.is-active {
+  background: rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+[data-platform="linux"] .nav-item.is-active .nav-icon {
+  color: var(--color-accent);
+}
+
+[data-platform="linux"] .vc-card {
+  overflow: hidden;
+  background: var(--color-panel);
+  border: 1px solid var(--color-hairline);
+  border-radius: 12px;
+}
+
+[data-platform="linux"] .vc-input,
+[data-platform="linux"] .vc-select {
+  border: 1px solid var(--color-hairline);
+  border-radius: 6px;
+  background: var(--color-panel);
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--color-ink);
+  outline: none;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+[data-platform="linux"] .vc-input:focus,
+[data-platform="linux"] .vc-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 28%, transparent);
+}
+
+[data-platform="linux"] .vc-btn {
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  transition: filter 120ms, background 120ms;
+}
+[data-platform="linux"] .vc-btn-primary {
+  background: var(--color-accent);
+  color: white;
+}
+[data-platform="linux"] .vc-btn-primary:hover {
+  filter: brightness(1.06);
+}
+[data-platform="linux"] .vc-btn-secondary {
+  border: 1px solid var(--color-hairline);
+  background: #e8e8e8;
+  color: var(--color-ink);
+}
+[data-platform="linux"] .vc-btn-secondary:hover {
+  background: #deddda;
+}
+[data-platform="linux"] .vc-btn-danger {
+  border: 1px solid rgba(192, 28, 40, 0.3);
+  background: #e8e8e8;
+  color: #c01c28;
+}
+[data-platform="linux"] .vc-btn-danger:hover {
+  background: #f8d7da;
+}
+[data-platform="linux"] .vc-chip {
+  border: 1px solid var(--color-hairline);
+  border-radius: 999px;
+  background: #e8e8e8;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink-secondary);
+  transition: background 120ms;
+}
+[data-platform="linux"] .vc-chip:hover {
+  background: #deddda;
+}
+[data-platform="linux"] .vc-chip.is-on {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: white;
+}
+
+[data-platform="linux"] .vc-toggle {
+  position: relative;
+  height: 26px;
+  width: 46px;
+  border-radius: 999px;
+  background: #c0bfbc;
+  transition: background 150ms;
+}
+[data-platform="linux"] .vc-toggle.is-on {
+  background: var(--color-accent);
+}
+[data-platform="linux"] .vc-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: 22px;
+  width: 22px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: left 150ms;
+}
+[data-platform="linux"] .vc-toggle.is-on .vc-toggle-thumb {
+  left: 22px;
+}
+
+[data-platform="linux"] .vc-banner {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+[data-platform="linux"] .vc-banner-warn {
+  border-color: rgba(198, 70, 0, 0.25);
+  background: #ffead1;
+  color: #5c2c00;
+}
+[data-platform="linux"] .vc-banner-error {
+  border-color: rgba(192, 28, 40, 0.25);
+  background: #f8d7da;
+  color: #611a1f;
+}
+
+[data-platform="linux"] .vc-kbd {
+  border-radius: 4px;
+  border: 1px solid var(--color-hairline);
+  background: #e8e8e8;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-ink-secondary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared chrome                                                       */
+/* ------------------------------------------------------------------ */
+
+.app-shell {
+  display: flex;
+  height: 100%;
+}
+.app-sidebar {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+}
+.app-panel {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-end;
+}
+.app-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* macOS overlay titlebar sits on the webview. Keep a traffic-light
+   inset on the sidebar even while previewing Win/Linux themes. */
+[data-host="macos"] .app-sidebar {
+  padding-top: 44px;
+}
+
+.nav-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-content-inner {
+  margin: 0 auto;
+  max-width: 720px;
+}
+
+.vc-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.vc-toggle {
+  cursor: pointer;
+  padding: 0;
+}
+
+.vc-input-search {
+  width: 100%;
+  padding-left: 32px;
+}
+
+/* ---- Platform icon language ---- */
+
+/* Windows: system icon font (Segoe Fluent Icons / MDL2), the same glyph
+   set native WinUI apps use. Rendered only when the font exists. */
+.vc-icon-font {
+  font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets";
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  font-weight: 400;
+}
+
+/* Windows SVG fallback (font missing, e.g. macOS debug host):
+   Fluent rhythm — thin geometric strokes, squared terminals. */
+[data-platform="windows"] svg.vc-icon {
+  stroke-width: 1.2;
+  stroke-linecap: butt;
+}
+
+/* Linux: Adwaita symbolic rhythm — heavier rounded strokes. */
+[data-platform="linux"] svg.vc-icon {
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-enter {
+  animation: page-in 0.18s cubic-bezier(0, 0, 0, 1);
+}
+
+@keyframes vc-bar {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.vc-bar {
+  transform-origin: center;
+  animation: vc-bar 1s ease-in-out infinite;
+}
+
+@keyframes vc-pulse-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+.vc-pulse-ring {
+  animation: vc-pulse-ring 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes vc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.vc-spin {
+  animation: vc-spin 0.9s linear infinite;
+}
+
+html[data-window="hud"] body,
+html[data-window="preview"] body,
+html[data-window="skill-switcher"] body {
+  background: var(--color-canvas);
+}
+
+.hud-root {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+}
+
+.hud-card {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 12px;
+  background: var(--color-panel);
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.hud-dot {
+  height: 8px;
+  width: 8px;
+  border-radius: 99px;
+  background: var(--color-success);
+}
+.hud-dot.is-rec {
+  background: var(--color-error);
+  animation: vc-pulse-ring 1.6s ease-out infinite;
+}
+.hud-dot.is-proc {
+  background: var(--color-amber);
+}
+
+.hud-copy {
+  min-width: 0;
+  flex: 1;
+}
+.hud-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.hud-sub {
+  font-size: 11px;
+  color: var(--color-ink-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.hud-cancel {
+  display: grid;
+  height: 24px;
+  width: 24px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--color-ink-tertiary);
+}
+.hud-cancel:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.overlay-page {
+  height: 100%;
+  padding: 16px 18px 18px;
+  background: var(--color-canvas);
+}
+
+.onboarding-root {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  background: var(--color-canvas);
+}
+.onboarding-card {
+  width: min(520px, calc(100% - 48px));
+  border: 1px solid var(--color-hairline);
+  border-radius: 12px;
+  background: var(--color-panel);
+  padding: 28px 32px 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
