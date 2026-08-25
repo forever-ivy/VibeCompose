@@ -224,6 +224,17 @@ fn build_overlay(
     decorations: bool,
     focus: bool,
 ) -> tauri::Result<WebviewWindow> {
+    // Linux is fully client-side decorated: the main window draws an
+    // Adwaita-style header bar and aux panels (preview, switcher, quick
+    // add) are chrome-free rounded dialogs with their own buttons and ESC
+    // paths. System decorations would reintroduce arbitrary WM themes —
+    // including macOS-lookalike traffic lights — breaking the
+    // per-platform design language rule.
+    let decorations = if cfg!(target_os = "linux") {
+        false
+    } else {
+        decorations
+    };
     let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App("/".into()))
         .title(title)
         .inner_size(width, height)

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "VibeCompose",
+        "width": 1020,
+        "height": 720,
+        "minWidth": 900,
+        "minHeight": 620,
+        "resizable": true,
+        "visible": true,
+        "decorations": false,
+        "backgroundColor": "#F3F3F3"
+      }
+    ]
+  }
+}
