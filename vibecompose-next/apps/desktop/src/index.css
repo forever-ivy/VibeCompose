@@ -760,9 +760,19 @@ html[data-window="glow"] #root {
 
 .hud-root {
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px;
+}
+/* Hug the canvas edge matching the configured HUD placement: the window
+   can be taller than the pill (WebKitGTK minimum-size floor), and the pill
+   must sit at the intended screen inset like the macOS panel. */
+.hud-root.is-top {
+  align-items: flex-start;
+}
+.hud-root.is-bottom {
+  align-items: flex-end;
 }
 
 /* ---- Compact status pill (macOS Refined HUD form) ----

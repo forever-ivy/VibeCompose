@@ -121,10 +121,16 @@ export default function HudOverlay() {
 
   const showStatusText = feedback?.showStatusText ?? true;
   const reduceMotion = feedback?.alwaysReduceMotion ?? false;
+  // The window canvas can be taller than the pill (WebKitGTK minimum-size
+  // floor); hug the canvas edge that matches the configured placement so
+  // the pill sits at the intended screen inset.
+  const rootClass = `hud-root ${
+    feedback?.hudPlacement === "bottom" ? "is-bottom" : "is-top"
+  }`;
 
   if (recording || processing) {
     return (
-      <div className="hud-root">
+      <div className={rootClass}>
         <StatusPill
           phase={recording ? "recording" : "processing"}
           title={recording ? skillName || "正在录音" : "处理中"}
@@ -141,7 +147,7 @@ export default function HudOverlay() {
 
   if (terminal) {
     return (
-      <div className="hud-root">
+      <div className={rootClass}>
         <StatusPill
           phase={terminal.phase}
           title={terminal.title}
@@ -153,5 +159,5 @@ export default function HudOverlay() {
 
   // Idle with no fresh terminal state: paint nothing on the transparent
   // canvas (the backend hides the window shortly after).
-  return <div className="hud-root" />;
+  return <div className={rootClass} />;
 }

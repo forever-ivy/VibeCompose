@@ -274,6 +274,11 @@ fn build_overlay(
 
 /// Positions the status pill on the configured display edge (top or bottom),
 /// mirroring the macOS `hudPlacement` setting.
+///
+/// The transparent canvas can end up taller than `HUD_HEIGHT` (WebKitGTK's
+/// WebView enforces a ~200px natural minimum on Linux), so the pill inside
+/// aligns itself to the matching canvas edge (`.hud-root.is-top/.is-bottom`)
+/// and this uses the actual window height for the bottom edge.
 fn position_hud(app: &AppHandle, window: &WebviewWindow) {
     let placement = app
         .state::<AppState>()
@@ -287,10 +292,15 @@ fn position_hud(app: &AppHandle, window: &WebviewWindow) {
     let scale = monitor.scale_factor();
     let screen_w = monitor.size().width as f64 / scale;
     let screen_h = monitor.size().height as f64 / scale;
+    let window_h = window
+        .outer_size()
+        .map(|size| size.height as f64 / scale)
+        .unwrap_or(HUD_HEIGHT)
+        .max(HUD_HEIGHT);
     let x = (screen_w - HUD_WIDTH) / 2.0;
     let y = match placement {
         HudPlacement::Top => (screen_h * 0.06).max(12.0),
-        HudPlacement::Bottom => (screen_h * 0.94 - HUD_HEIGHT).max(12.0),
+        HudPlacement::Bottom => (screen_h * 0.94 - window_h).max(12.0),
     };
     let _ = window.set_position(tauri::LogicalPosition::new(x.max(12.0), y));
 }
