@@ -102,6 +102,22 @@ export default function App() {
     };
   }, []);
 
+  // macOS parity: ESC cancels the active session. A global shortcut would
+  // swallow ESC system-wide, so cancel-on-ESC applies whenever a VibeCompose
+  // window has focus; outside the app the tray and HUD close button cancel.
+  useEffect(() => {
+    const active = session.phase === "recording" || session.phase === "processing";
+    if (!active) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        void api.cancelDictation();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [session.phase]);
+
   const macHost = HOST === "macos";
 
   if (onboarding) {
