@@ -117,8 +117,12 @@ fn show_glow(app: &AppHandle) {
             monitor.size().height,
         ));
     }
-    let _ = window.set_ignore_cursor_events(true);
     let _ = window.show();
+    // Click-through must be applied after show(): on Linux (tao/GTK) the
+    // input-shape request unwraps the underlying GdkWindow, which only
+    // exists once the window has been realized. Calling it on a
+    // never-shown window aborts the process.
+    let _ = window.set_ignore_cursor_events(true);
 }
 
 pub fn hide_glow(app: &AppHandle) {
