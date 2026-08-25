@@ -230,6 +230,13 @@ fn build_overlay(
         .min_inner_size(width, height)
         .resizable(false)
         .decorations(decorations)
+        // Undecorated feedback surfaces (the HUD pill) draw their own rounded
+        // card; the window canvas must stay transparent so the pill floats
+        // like the macOS Refined HUD instead of sitting in an opaque box.
+        // The OS shadow would trace that invisible rectangle, so drop it and
+        // let the card's CSS box-shadow provide depth.
+        .transparent(!decorations)
+        .shadow(decorations)
         .always_on_top(true)
         .skip_taskbar(true)
         .visible(false)

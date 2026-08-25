@@ -681,10 +681,17 @@ textarea {
   animation: vc-spin 0.9s linear infinite;
 }
 
-html[data-window="hud"] body,
 html[data-window="preview"] body,
 html[data-window="skill-switcher"] body {
   background: var(--color-canvas);
+}
+
+/* HUD pill window: only the rounded card paints; the window canvas stays
+   transparent so the pill floats like the macOS Refined HUD. */
+html[data-window="hud"],
+html[data-window="hud"] body,
+html[data-window="hud"] #root {
+  background: transparent !important;
 }
 
 /* Edge-glow window: fully transparent, click-through canvas. */
