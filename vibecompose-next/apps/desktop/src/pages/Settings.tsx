@@ -5,6 +5,7 @@ import {
   onLoginAvailability,
   type AccountStatus,
   type AppConfig,
+  type HotkeyBinding,
   type LoginAvailability,
   type StyleCapsule,
 } from "../ipc";
@@ -139,39 +140,33 @@ export default function SettingsPage() {
           </Row>
           <Divider />
           <Row label="听写快捷键" hint="按下开始，再按一次结束并转写">
-            <TextInput
-              width="w-36"
-              align="text-center"
-              value={formatHotkey(config.transcription.dictationHotkey)}
-              onChange={(v) =>
+            <HotkeyInput
+              binding={config.transcription.dictationHotkey}
+              required
+              onCommit={(binding) =>
                 patch((c) => {
-                  const parsed = parseHotkey(v);
-                  if (parsed) c.transcription.dictationHotkey = parsed;
+                  if (binding) c.transcription.dictationHotkey = binding;
                 })
               }
             />
           </Row>
           <Divider />
           <Row label="Skill 切换器" hint="留空表示关闭">
-            <TextInput
-              width="w-36"
-              align="text-center"
+            <HotkeyInput
+              binding={config.skillSwitcherHotkey}
               placeholder="Ctrl+Alt+S"
-              value={formatHotkey(config.skillSwitcherHotkey)}
-              onChange={(v) =>
-                patch((c) => (c.skillSwitcherHotkey = parseHotkey(v)))
+              onCommit={(binding) =>
+                patch((c) => (c.skillSwitcherHotkey = binding))
               }
             />
           </Row>
           <Divider />
           <Row label="结果预览" hint="重新打开上次听写预览">
-            <TextInput
-              width="w-36"
-              align="text-center"
+            <HotkeyInput
+              binding={config.resultPreviewHotkey}
               placeholder="Ctrl+Alt+P"
-              value={formatHotkey(config.resultPreviewHotkey)}
-              onChange={(v) =>
-                patch((c) => (c.resultPreviewHotkey = parseHotkey(v)))
+              onCommit={(binding) =>
+                patch((c) => (c.resultPreviewHotkey = binding))
               }
             />
           </Row>
@@ -1063,6 +1058,52 @@ function Row({
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  );
+}
+
+/**
+ * Hotkey fields must tolerate in-progress text like "Ctrl+" while typing:
+ * a fully controlled parse→format round-trip strips the trailing separator
+ * on every keystroke, which makes multi-part bindings impossible to enter.
+ * Keep a local draft while focused and only commit (parse + save + shortcut
+ * re-registration) on blur or Enter.
+ */
+function HotkeyInput({
+  binding,
+  placeholder,
+  required = false,
+  onCommit,
+}: {
+  binding: HotkeyBinding | null;
+  placeholder?: string;
+  required?: boolean;
+  onCommit: (binding: HotkeyBinding | null) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const formatted = formatHotkey(binding);
+  return (
+    <input
+      type="text"
+      value={draft ?? formatted}
+      placeholder={placeholder}
+      onFocus={() => setDraft(formatted)}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      onBlur={() => {
+        if (draft !== null) {
+          const parsed = parseHotkey(draft);
+          if (parsed) {
+            onCommit(parsed);
+          } else if (!required && draft.trim() === "") {
+            onCommit(null);
+          }
+        }
+        setDraft(null);
+      }}
+      className="vc-input w-36 text-center placeholder-ink-tertiary"
+    />
   );
 }
 
