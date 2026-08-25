@@ -23,6 +23,7 @@ pub mod config;
 pub mod delivery;
 pub mod history;
 pub mod literal;
+pub mod login_availability;
 pub mod pipeline;
 pub mod polish;
 pub mod recovery;
@@ -30,10 +31,18 @@ pub mod skill;
 pub mod style;
 pub mod terminology;
 pub mod transcription_prompt;
+pub mod visual_feedback;
 pub mod yamlite;
 
 pub use config::{
     AppConfig, HotkeyBindingConfig, SoundFeedbackEvent, TranscriptPunctuationPreference,
+};
+pub use login_availability::{
+    LoginAvailability, LoginAvailabilityMachine, LoginAvailabilitySnapshot, LoginFailure,
+    LoginPolicy, UnavailableReason,
+};
+pub use visual_feedback::{
+    HudPlacement, VisualFeedbackConfig, VisualFeedbackIntensity, VisualFeedbackMode,
 };
 pub use delivery::{ClipboardFallbackReason, DeliveryOutcome, OutputRoute};
 pub use pipeline::{

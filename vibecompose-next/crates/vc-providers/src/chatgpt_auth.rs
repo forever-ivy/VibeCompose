@@ -306,6 +306,35 @@ pub enum AuthError {
     Store(String),
 }
 
+impl AuthError {
+    /// Classifies this error for the platform-agnostic login-availability
+    /// state machine (`vc_core::login_availability`). Transient failures
+    /// keep the browser login retryable; infrastructure failures mark the
+    /// hosted path unavailable so the UI leads with the OpenAI-compatible
+    /// API-key fallback instead of a dead end.
+    pub fn login_failure(&self) -> vc_core::login_availability::LoginFailure {
+        use vc_core::login_availability::{exchange_detail_is_rejection, LoginFailure};
+        match self {
+            Self::Cancelled => LoginFailure::Cancelled,
+            Self::Timeout => LoginFailure::Timeout,
+            Self::UserDenied(_) => LoginFailure::UserDenied,
+            Self::StateMismatch => LoginFailure::StateMismatch,
+            Self::InvalidCallback(_) => LoginFailure::InvalidCallback,
+            Self::PortOccupied => LoginFailure::PortOccupied,
+            Self::Listener(_) => LoginFailure::ListenerFailed,
+            Self::Exchange(detail) | Self::RefreshFailed(detail) => {
+                if exchange_detail_is_rejection(detail) {
+                    LoginFailure::ExchangeRejected
+                } else {
+                    LoginFailure::Network
+                }
+            }
+            Self::Store(_) => LoginFailure::CredentialStore,
+            Self::NotLoggedIn | Self::SessionExpired => LoginFailure::SessionExpired,
+        }
+    }
+}
+
 /// Cooperative cancellation for a pending browser login: keep a clone in the
 /// UI layer and call [`CancelHandle::cancel`] to abort the wait.
 #[derive(Debug, Clone, Default)]
@@ -1281,5 +1310,65 @@ mod tests {
         let first = CallbackServer::bind(0).unwrap();
         let second = CallbackServer::bind(first.local_port());
         assert_eq!(second.err(), Some(AuthError::PortOccupied));
+    }
+
+    #[test]
+    fn auth_errors_classify_for_the_availability_machine() {
+        use vc_core::login_availability::{LoginDisposition, LoginFailure, UnavailableReason};
+
+        // Transient failures stay retryable.
+        for (error, expected) in [
+            (AuthError::Cancelled, LoginFailure::Cancelled),
+            (AuthError::Timeout, LoginFailure::Timeout),
+            (
+                AuthError::UserDenied("no".into()),
+                LoginFailure::UserDenied,
+            ),
+            (AuthError::StateMismatch, LoginFailure::StateMismatch),
+            (
+                AuthError::InvalidCallback("bad".into()),
+                LoginFailure::InvalidCallback,
+            ),
+            (AuthError::PortOccupied, LoginFailure::PortOccupied),
+            (AuthError::NotLoggedIn, LoginFailure::SessionExpired),
+            (AuthError::SessionExpired, LoginFailure::SessionExpired),
+        ] {
+            let failure = error.login_failure();
+            assert_eq!(failure, expected, "{error:?}");
+            assert_eq!(failure.disposition(), LoginDisposition::Retryable);
+        }
+
+        // Infrastructure failures mark the hosted path unavailable.
+        assert_eq!(
+            AuthError::Listener("bind blocked".into())
+                .login_failure()
+                .disposition(),
+            LoginDisposition::Unavailable(UnavailableReason::CallbackBlocked)
+        );
+        assert_eq!(
+            AuthError::Store("no secret service".into())
+                .login_failure()
+                .disposition(),
+            LoginDisposition::Unavailable(UnavailableReason::CredentialStoreUnavailable)
+        );
+
+        // Token-endpoint rejections split by detail: 4xx / OAuth client
+        // errors are platform rejections, everything else is network.
+        assert_eq!(
+            AuthError::Exchange("403: platform not allowed".into()).login_failure(),
+            LoginFailure::ExchangeRejected
+        );
+        assert_eq!(
+            AuthError::RefreshFailed("400: invalid_client".into()).login_failure(),
+            LoginFailure::ExchangeRejected
+        );
+        assert_eq!(
+            AuthError::Exchange("connection reset by peer".into()).login_failure(),
+            LoginFailure::Network
+        );
+        assert_eq!(
+            AuthError::RefreshFailed("503: overloaded".into()).login_failure(),
+            LoginFailure::Network
+        );
     }
 }

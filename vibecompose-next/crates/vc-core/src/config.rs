@@ -11,6 +11,7 @@ use crate::recovery::RecoveryRetentionPolicy;
 use crate::skill::resolver::SkillsConfig;
 use crate::style::StyleCapsuleConfig;
 use crate::terminology::TerminologyEntry;
+use crate::visual_feedback::VisualFeedbackConfig;
 
 pub const DEFAULT_MAX_RECORDING_SECONDS: u32 = 120;
 pub const DEFAULT_SAMPLE_RATE_HZ: u32 = 24_000;
@@ -457,6 +458,9 @@ pub struct AppConfig {
     pub injection: InjectionConfig,
     pub privacy: PrivacyConfig,
     pub style_capsules: StyleCapsuleConfig,
+    /// Dictation feedback surface (HUD / edge glow / hidden), key-compatible
+    /// with the Swift `visualFeedback` section.
+    pub visual_feedback: VisualFeedbackConfig,
 }
 
 impl AppConfig {
@@ -572,6 +576,34 @@ mod tests {
         assert_eq!(config.result_preview_hotkey, None);
         assert!(config.privacy.failed_audio_recovery_enabled);
         assert!(config.style_capsules.enabled);
+        assert_eq!(config.visual_feedback, VisualFeedbackConfig::default());
+    }
+
+    #[test]
+    fn visual_feedback_section_uses_macos_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"visualFeedback":{"mode":"blueSignalFrame","hudPlacement":"bottom","showStatusText":false}}"#,
+        )
+        .unwrap();
+        let config = AppConfig::load(&path).unwrap();
+        assert_eq!(
+            config.visual_feedback.mode,
+            crate::visual_feedback::VisualFeedbackMode::AiActivityGlow
+        );
+        assert_eq!(
+            config.visual_feedback.hud_placement,
+            crate::visual_feedback::HudPlacement::Bottom
+        );
+        assert!(!config.visual_feedback.show_status_text);
+
+        config.save(&path).unwrap();
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(raw["visualFeedback"]["mode"], "aiActivityGlow");
+        assert_eq!(raw["visualFeedback"]["hudPlacement"], "bottom");
     }
 
     #[test]
