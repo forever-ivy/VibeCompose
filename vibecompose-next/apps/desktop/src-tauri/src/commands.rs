@@ -93,6 +93,14 @@ pub struct ChatGptLoginEvent {
     pub message: Option<String>,
 }
 
+/// Emits the current hosted-login availability snapshot to every window.
+fn emit_login_availability(
+    app: &AppHandle,
+    snapshot: &vc_core::login_availability::LoginAvailabilitySnapshot,
+) {
+    let _ = app.emit("chatgpt-login-availability", snapshot);
+}
+
 fn emit_state(app: &AppHandle, snapshot: &SessionSnapshot) {
     let _ = app.emit("dictation-state", snapshot);
 }
@@ -121,6 +129,8 @@ pub fn save_config(
     )
     .map_err(|e| e.to_string())?;
     state.save_config(config)?;
+    // Overlays (HUD / glow) re-read appearance settings on this signal.
+    let _ = app.emit("config-changed", ());
     crate::reregister_shortcuts(&app)
 }
 
@@ -207,7 +217,23 @@ pub fn get_account_status(state: State<'_, AppState>) -> AccountStatus {
 }
 
 #[tauri::command]
+pub fn get_login_availability(
+    state: State<'_, AppState>,
+) -> vc_core::login_availability::LoginAvailabilitySnapshot {
+    state.login_snapshot()
+}
+
+#[tauri::command]
 pub fn start_chatgpt_login(app: AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+    // Policy-disabled builds never open the browser: the UI leads with the
+    // OpenAI-compatible API-key fallback instead of a dead-end attempt.
+    if !state.login_attempt_allowed() {
+        emit_login_availability(&app, &state.login_snapshot());
+        return Err(
+            "ChatGPT 登录在此平台不可用。可在设置中填写 OpenAI 兼容 API Key 继续使用听写与润色。"
+                .into(),
+        );
+    }
     if let Some(previous) = state.take_login_cancel() {
         previous.cancel();
     }
@@ -229,19 +255,34 @@ pub fn start_chatgpt_login(app: AppHandle, state: State<'_, AppState>) -> Result
                 .open_url(url, None::<String>);
         };
         let (result, _) = tokio::join!(wait, open);
+        let state = app_handle.state::<AppState>();
         let event = match result {
-            Ok(_) => ChatGptLoginEvent {
-                ok: true,
-                message: None,
-            },
-            Err(AuthError::Cancelled) => ChatGptLoginEvent {
-                ok: false,
-                message: Some("已取消登录".into()),
-            },
-            Err(error) => ChatGptLoginEvent {
-                ok: false,
-                message: Some(error.to_string()),
-            },
+            Ok(_) => {
+                emit_login_availability(&app_handle, &state.login_connected());
+                ChatGptLoginEvent {
+                    ok: true,
+                    message: None,
+                }
+            }
+            Err(AuthError::Cancelled) => {
+                let snapshot = state
+                    .login_attempt_failed(AuthError::Cancelled.login_failure(), "已取消登录");
+                emit_login_availability(&app_handle, &snapshot);
+                ChatGptLoginEvent {
+                    ok: false,
+                    message: Some("已取消登录".into()),
+                }
+            }
+            Err(error) => {
+                let message = error.to_string();
+                let snapshot =
+                    state.login_attempt_failed(error.login_failure(), message.clone());
+                emit_login_availability(&app_handle, &snapshot);
+                ChatGptLoginEvent {
+                    ok: false,
+                    message: Some(message),
+                }
+            }
         };
         let _ = app_handle.emit("chatgpt-login", event);
     });
@@ -256,15 +297,17 @@ pub fn cancel_chatgpt_login(state: State<'_, AppState>) {
 }
 
 #[tauri::command]
-pub fn disconnect_chatgpt() -> Result<(), String> {
-    ChatGptSessionStore::clear()
+pub fn disconnect_chatgpt(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    ChatGptSessionStore::clear()?;
+    emit_login_availability(&app, &state.login_disconnected());
+    Ok(())
 }
 
 #[tauri::command]
 pub fn cancel_dictation(app: AppHandle, state: State<'_, AppState>) {
     if state.sessions.cancel() {
         emit_state(&app, &state.sessions.snapshot());
-        windows::hide_hud(&app);
+        windows::hide_feedback(&app);
     }
 }
 
@@ -320,7 +363,7 @@ pub fn toggle_dictation_inner(app: &AppHandle, state: &AppState) {
     {
         emit_sound(app, &config, SoundFeedbackEvent::RecordingStarted);
         emit_state(app, &state.sessions.snapshot());
-        windows::show_hud(app);
+        windows::show_feedback(app);
         state.start_level_ticker(app.clone());
     }
 }
@@ -389,14 +432,14 @@ fn stop_and_process(app: AppHandle, state: &AppState) {
     };
     emit_sound(&app, &state.config(), SoundFeedbackEvent::RecordingStopped);
     emit_state(&app, &state.sessions.snapshot());
-    windows::show_hud(&app);
+    windows::show_feedback(&app);
 
     let audio = match handle.stop() {
         Ok(audio) => audio,
         Err(error) => {
             state.sessions.finish(session_id);
             emit_state(&app, &state.sessions.snapshot());
-            windows::hide_hud(&app);
+            windows::hide_feedback(&app);
             let _ = app.emit(
                 "dictation-error",
                 DictationErrorEvent {
@@ -497,7 +540,7 @@ fn spawn_pipeline(
 
                 let route = output_route(&plan.skill.output.delivery, plan.skill.output.risk, &config);
                 if route == OutputRoute::PreviewThenPaste {
-                    windows::hide_hud(&app_handle);
+                    windows::hide_feedback(&app_handle);
                     let _ = app_handle.emit("dictation-preview", &preview);
                     windows::show_preview(&app_handle);
                     return;
@@ -525,7 +568,7 @@ fn spawn_pipeline(
                     );
                     let _ = std::fs::remove_file(&audio.wav_path);
                 }
-                windows::hide_hud(&app_handle);
+                windows::hide_feedback(&app_handle);
                 let _ = app_handle.emit(
                     "dictation-error",
                     DictationErrorEvent {
@@ -621,7 +664,7 @@ async fn finish_delivery(
         });
     }
 
-    windows::hide_hud(app);
+    windows::hide_feedback(app);
     windows::hide_preview(app);
     let _ = app.emit(
         "dictation-result",
@@ -748,8 +791,25 @@ async fn run_pipeline(
         punctuation,
         &locale,
     );
-    let session = load_fresh_session().await?;
     let openai_key = crate::state::load_openai_key();
+    let session = match resolve_managed_session().await {
+        ManagedSessionState::Fresh(session) => Some(session),
+        ManagedSessionState::Absent => None,
+        ManagedSessionState::Unusable(detail) => {
+            if openai_key.is_some() {
+                // Graceful fallback: when the hosted ChatGPT session cannot
+                // refresh (the private backend is not a stable public API),
+                // the OpenAI-compatible key path keeps dictation usable.
+                tracing::warn!(
+                    "hosted ChatGPT session unusable, falling back to the \
+                     OpenAI-compatible provider: {detail}"
+                );
+                None
+            } else {
+                return Err(TranscriptionError::Request(detail));
+            }
+        }
+    };
 
     let replay = replay_text.map(|text| ReplayTranscriber {
         text: text.to_string(),
@@ -831,14 +891,25 @@ async fn run_pipeline(
     Ok((plan, prepared))
 }
 
-async fn load_fresh_session() -> Result<Option<ChatGptSession>, TranscriptionError> {
+/// Outcome of trying to use the stored hosted ChatGPT session.
+enum ManagedSessionState {
+    /// A fresh (possibly just refreshed) session is ready to use.
+    Fresh(ChatGptSession),
+    /// No session is stored; the key path (if configured) is primary.
+    Absent,
+    /// A session is stored but cannot be used right now (refresh failed,
+    /// backend rejected, credential store broken). Carries the detail.
+    Unusable(String),
+}
+
+async fn resolve_managed_session() -> ManagedSessionState {
     if ChatGptSessionStore::load().is_none() {
-        return Ok(None);
+        return ManagedSessionState::Absent;
     }
     match ensure_fresh_session().await {
-        Ok(session) => Ok(Some(session)),
-        Err(AuthError::NotLoggedIn) => Ok(None),
-        Err(error) => Err(TranscriptionError::Request(error.to_string())),
+        Ok(session) => ManagedSessionState::Fresh(session),
+        Err(AuthError::NotLoggedIn) => ManagedSessionState::Absent,
+        Err(error) => ManagedSessionState::Unusable(error.to_string()),
     }
 }
 
@@ -1110,7 +1181,7 @@ pub fn retry_recovery(app: AppHandle, state: State<'_, AppState>, id: String) ->
         return Err("当前有听写正在进行".into());
     };
     emit_state(&app, &state.sessions.snapshot());
-    windows::show_hud(&app);
+    windows::show_feedback(&app);
     let audio = RecordedAudio {
         wav_path: path,
         duration_ms: record.audio_duration_ms,

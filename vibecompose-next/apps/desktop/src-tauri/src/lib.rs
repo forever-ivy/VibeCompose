@@ -124,7 +124,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 if state.sessions.cancel() {
                     use tauri::Emitter;
                     let _ = app.emit("dictation-state", state.sessions.snapshot());
-                    windows::hide_hud(app);
+                    windows::hide_feedback(app);
                 }
             }
             "switcher" => windows::toggle_skill_switcher(app),
@@ -185,6 +185,7 @@ pub fn run() {
             commands::clear_history,
             commands::set_openai_api_key,
             commands::get_account_status,
+            commands::get_login_availability,
             commands::start_chatgpt_login,
             commands::cancel_chatgpt_login,
             commands::disconnect_chatgpt,

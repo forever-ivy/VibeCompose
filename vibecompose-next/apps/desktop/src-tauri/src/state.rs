@@ -7,11 +7,20 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
 use vc_core::config::AppConfig;
+use vc_core::login_availability::{
+    LoginAvailabilityMachine, LoginAvailabilitySnapshot, LoginFailure, LoginPolicy,
+};
 use vc_core::skill::registry::SkillRegistry;
 use vc_inject::{NativeInjector, PlatformInjector, SystemClipboard, TextInjector};
-use vc_providers::chatgpt_auth::CancelHandle;
+use vc_providers::chatgpt_auth::{CancelHandle, ChatGptSessionStore};
 
 use crate::session::{config_path, SessionMachine};
+
+/// Environment override for the hosted ChatGPT login path. Packagers and
+/// operators set `VIBECOMPOSE_CHATGPT_LOGIN=unavailable` on platforms where
+/// the private ChatGPT backend cannot complete the browser login, which the
+/// UI renders honestly with the API-key fallback leading.
+pub const CHATGPT_LOGIN_ENV: &str = "VIBECOMPOSE_CHATGPT_LOGIN";
 
 pub const OPENAI_KEYRING_SERVICE: &str = "app.vibecompose.desktop.OpenAIKey";
 pub const OPENAI_KEYRING_ACCOUNT: &str = "openai-compatible";
@@ -51,6 +60,7 @@ pub struct AppState {
     pub injector: Arc<TextInjector<NativeInjector, SystemClipboard>>,
     level_ticker_running: Mutex<bool>,
     login_cancel: Mutex<Option<CancelHandle>>,
+    login_availability: Mutex<LoginAvailabilityMachine>,
     pending_preview: Mutex<Option<PendingPreview>>,
     last_source: Mutex<Option<LastSource>>,
 }
@@ -62,6 +72,10 @@ impl AppState {
         for (name, error) in &failures {
             tracing::warn!("skipped bundled skill {name}: {error}");
         }
+        let policy =
+            LoginPolicy::from_env_value(std::env::var(CHATGPT_LOGIN_ENV).ok().as_deref());
+        let login_availability =
+            LoginAvailabilityMachine::new(policy, ChatGptSessionStore::load().is_some());
         Self {
             config: RwLock::new(config),
             registry: RwLock::new(Arc::new(registry)),
@@ -69,6 +83,7 @@ impl AppState {
             injector: Arc::new(vc_inject::native_injector()),
             level_ticker_running: Mutex::new(false),
             login_cancel: Mutex::new(None),
+            login_availability: Mutex::new(login_availability),
             pending_preview: Mutex::new(None),
             last_source: Mutex::new(None),
         }
@@ -129,6 +144,51 @@ impl AppState {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take()
+    }
+
+    pub fn login_snapshot(&self) -> LoginAvailabilitySnapshot {
+        self.login_availability
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .snapshot()
+    }
+
+    pub fn login_attempt_allowed(&self) -> bool {
+        self.login_availability
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .attempt_allowed()
+    }
+
+    pub fn login_connected(&self) -> LoginAvailabilitySnapshot {
+        let mut machine = self
+            .login_availability
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        machine.connected();
+        machine.snapshot()
+    }
+
+    pub fn login_disconnected(&self) -> LoginAvailabilitySnapshot {
+        let mut machine = self
+            .login_availability
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        machine.disconnected();
+        machine.snapshot()
+    }
+
+    pub fn login_attempt_failed(
+        &self,
+        failure: LoginFailure,
+        message: impl Into<String>,
+    ) -> LoginAvailabilitySnapshot {
+        let mut machine = self
+            .login_availability
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        machine.attempt_failed(failure, message);
+        machine.snapshot()
     }
 
     pub fn set_pending_preview(&self, preview: PendingPreview) {
