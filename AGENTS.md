@@ -67,3 +67,47 @@
 ## Browser Automation Constraint
 - Follow the global `~/.codex/AGENTS.md` official browser/GUI policy: Browser plugin for unauthenticated local/public rendering, Chrome plugin for signed-in/default-profile browser state, and Computer Use only for native desktop boundaries.
 - Keep only repo-specific verification surfaces here; do not copy the full global policy block into this runbook.
+
+## Cursor Cloud specific instructions
+
+Cursor Cloud agents run on a **Linux** VM. The runbook above targets the native
+**macOS** app, which CANNOT be built or run here: there is no Swift toolchain and
+the app depends on AppKit/Sparkle. Treat `scripts/check.sh`,
+`scripts/build_and_run.sh`, `scripts/package_app.sh`, and the `/Applications/VibeCompose.app`
+flow as macOS-only and out of scope on Linux.
+
+Two subprojects ARE Linux-runnable and are the working dev scope here:
+
+- **`website/`** — Next.js 15 static-export marketing + Skill catalog site. Commands
+  are in `website/README.md` (`pnpm install`, `pnpm dev`, `pnpm build`, `pnpm verify`).
+- **`vibecompose-next/`** — cross-platform Rust + Tauri v2 port. Commands are in
+  `vibecompose-next/README.md`. CI reference is `.github/workflows/cross-platform.yml`.
+
+Non-obvious environment notes (the update script + base snapshot already handle
+dependency install; these are gotchas, not setup steps):
+
+- **Rust toolchain**: the workspace pulls deps requiring the `edition2024` cargo
+  feature, so it needs a modern stable toolchain. `rustup default` was set to
+  `stable` (1.98+); the base image's older default (1.83) fails to parse the
+  dependency manifests. `cargo` is at `/usr/local/cargo` (world-writable, no sudo).
+- **Tauri Linux system libs** are preinstalled in the snapshot (same set as CI:
+  `libwebkit2gtk-4.1-dev libgtk-3-dev libappindicator3-dev librsvg2-dev patchelf
+  libasound2-dev libxdo-dev`). They are NOT in the update script.
+- **Rust tests**: run `cargo test --workspace --exclude vibecompose-desktop` from
+  `vibecompose-next/` (matches CI). The `vibecompose-desktop` crate is excluded from
+  tests but compiles with `cargo build -p vibecompose-desktop`.
+- **Running the desktop app**: use `npm run tauri dev` from
+  `vibecompose-next/apps/desktop` with `DISPLAY=:1` (an X server is available on
+  `:1`). A plain `cargo build` debug binary launched standalone shows
+  "Could not connect to 127.0.0.1:1420" because a debug build expects the Vite dev
+  server (`devUrl`); `tauri dev` starts Vite (`beforeDevCommand`) and wires it up.
+  `libEGL ... DRI3` warnings are harmless (software rendering).
+- **Website dev server** runs under `basePath` `/vibecompose`; open
+  `http://localhost:3000/vibecompose/` (redirects to `/zh-Hans/`), not `/`.
+- **`pnpm lint`** (`next lint`) is NOT configured (no ESLint config committed) and
+  triggers an interactive first-run prompt — do not use it in automation. Use
+  `pnpm build` + `pnpm verify` for website checks.
+- **`pnpm verify`**: `build` and `check:catalog` (21 skills) pass. `check:content`
+  currently FAILS due to pre-existing copy drift — it expects the literal zh phrase
+  `不承诺无限用量`, but `src/content/zh-Hans.ts` uses `不承诺无限` / `不保证无限用量`.
+  This is a repository content-contract issue, not an environment problem.
