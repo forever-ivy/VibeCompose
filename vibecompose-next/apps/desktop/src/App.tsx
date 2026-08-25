@@ -119,21 +119,15 @@ export default function App() {
   }, [session.phase]);
 
   const macHost = HOST === "macos";
-
-  if (onboarding) {
-    return (
-      <Onboarding
-        status={account}
-        availability={availability}
-        onDone={() => setOnboarding(false)}
-      />
-    );
-  }
+  // Linux draws Adwaita-style client-side decorations (the window is
+  // undecorated there, see tauri.linux.conf.json); Windows keeps the
+  // system title bar, so only drag regions + controls differ per host.
+  const linuxHost = HOST === "linux";
 
   return (
     <div className="app-shell">
       <aside
-        data-tauri-drag-region={macHost || undefined}
+        data-tauri-drag-region={macHost || linuxHost || undefined}
         className="app-sidebar"
       >
         <nav className="nav-list">
@@ -160,10 +154,11 @@ export default function App() {
 
       <main className="app-panel">
         <header
-          data-tauri-drag-region={macHost || undefined}
+          data-tauri-drag-region={macHost || linuxHost || undefined}
           className="app-header"
         >
           <h1 className="app-title">{PAGE_TITLES[page]}</h1>
+          {linuxHost && <CsdWindowControls />}
         </header>
         <div className="app-content">
           <div key={page} className="page-enter app-content-inner">
@@ -183,6 +178,56 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {onboarding && (
+        <Onboarding
+          status={account}
+          availability={availability}
+          onDone={() => setOnboarding(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** GNOME-style window controls for the undecorated Linux main window
+ *  (minimize / maximize / close, right-aligned like Adwaita header bars). */
+function CsdWindowControls() {
+  const call = (action: "minimize" | "toggleMaximize" | "close") => {
+    void import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      const win = getCurrentWindow();
+      void win[action]();
+    });
+  };
+  return (
+    <div className="csd-controls">
+      <button
+        className="csd-btn"
+        aria-label="最小化"
+        onClick={() => call("minimize")}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M3 9.5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+      </button>
+      <button
+        className="csd-btn"
+        aria-label="最大化"
+        onClick={() => call("toggleMaximize")}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <rect x="3.5" y="3.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        </svg>
+      </button>
+      <button
+        className="csd-btn"
+        aria-label="关闭窗口"
+        onClick={() => call("close")}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+      </button>
     </div>
   );
 }

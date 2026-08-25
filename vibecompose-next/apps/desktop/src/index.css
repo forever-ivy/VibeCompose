@@ -374,13 +374,40 @@ textarea {
   display: flex;
   height: 52px;
   flex-shrink: 0;
-  align-items: flex-end;
-  padding: 0 24px 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 0 24px;
 }
 
 [data-platform="linux"] .app-title {
   font-size: 20px;
   font-weight: 800;
+}
+
+/* Adwaita-style CSD window controls: the Linux main window is undecorated
+   (tauri.linux.conf.json), so the header bar draws GNOME-style circular
+   minimize / maximize / close buttons instead of whatever theme the WM
+   would apply — never macOS traffic lights. */
+.csd-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.csd-btn {
+  display: grid;
+  height: 26px;
+  width: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--color-ink);
+  transition: background 120ms;
+}
+.csd-btn:hover {
+  background: rgba(0, 0, 0, 0.16);
+}
+.csd-btn:active {
+  background: rgba(0, 0, 0, 0.24);
 }
 
 [data-platform="linux"] .app-content {
@@ -818,17 +845,65 @@ html[data-window="glow"] #root {
   background: var(--color-canvas);
 }
 
-.onboarding-root {
+/* Onboarding is a modal dialog above the app shell (macOS presents it as
+   a dedicated centered panel over the app): dimmed backdrop, centered
+   dialog, focus trapped inside. */
+.onboarding-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
   display: grid;
-  height: 100%;
   place-items: center;
-  background: var(--color-canvas);
+  background: rgba(0, 0, 0, 0.32);
+}
+@keyframes vc-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 .onboarding-card {
   width: min(520px, calc(100% - 48px));
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
   border: 1px solid var(--color-hairline);
   border-radius: 12px;
   background: var(--color-panel);
   padding: 28px 32px 24px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  outline: none;
+  animation: vc-dialog-in 160ms ease-out;
+}
+/* Fluent ContentDialog: tighter radius under the smoke layer. */
+[data-platform="windows"] .onboarding-card {
+  border-radius: 8px;
+}
+/* Adwaita dialog: larger radius, hairline border. */
+[data-platform="linux"] .onboarding-card {
+  border-radius: 12px;
+}
+
+/* Linux aux windows (preview / skill switcher / quick add) are undecorated
+   GNOME-style panels (see build_overlay): transparent window canvas with a
+   rounded, hairline-bordered surface. No WM theme chrome is drawn, so no
+   macOS-lookalike decorations can appear. Each panel closes via its own
+   buttons or ESC. */
+html[data-platform="linux"][data-window="preview"],
+html[data-platform="linux"][data-window="preview"] body,
+html[data-platform="linux"][data-window="skill-switcher"],
+html[data-platform="linux"][data-window="skill-switcher"] body,
+html[data-platform="linux"][data-window="quick-add"],
+html[data-platform="linux"][data-window="quick-add"] body {
+  background: transparent;
+}
+html[data-platform="linux"][data-window="preview"] .overlay-page,
+html[data-platform="linux"][data-window="skill-switcher"] .overlay-page,
+html[data-platform="linux"][data-window="quick-add"] .overlay-page {
+  border: 1px solid var(--color-hairline);
+  border-radius: 12px;
+  overflow: hidden;
 }

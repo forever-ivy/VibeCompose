@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   onChatgptLogin,
@@ -13,6 +13,12 @@ import {
  * platform's own design language. The connect step renders the hosted
  * ChatGPT login when it is available and leads with the OpenAI-compatible
  * API-key fallback when it is not, so setup never dead-ends.
+ *
+ * Presented as a modal dialog above the app shell — matching the macOS
+ * `OnboardingWindowController`, which shows a dedicated centered panel over
+ * the app rather than replacing it. The backdrop dims the app, focus is
+ * trapped inside the dialog, and only the dialog's own buttons dismiss it
+ * (completing or skipping onboarding).
  */
 const STEPS = [
   {
@@ -67,8 +73,38 @@ export default function Onboarding({
   const [apiKey, setApiKey] = useState("");
   const [keySaved, setKeySaved] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const current = STEPS[step];
   const last = step === STEPS.length - 1;
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.focus();
+    // Focus trap: Tab cycles inside the dialog while it is open.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const focusables = dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const lastEl = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === dialog)) {
+        event.preventDefault();
+        lastEl.focus();
+      } else if (!event.shiftKey && active === lastEl) {
+        event.preventDefault();
+        first.focus();
+      } else if (active && !dialog.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
 
   useEffect(() => {
     if (!initialAvailability) {
@@ -113,12 +149,22 @@ export default function Onboarding({
   };
 
   return (
-    <div className="onboarding-root">
-      <div className="onboarding-card">
+    <div className="onboarding-backdrop" role="presentation">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-title"
+        tabIndex={-1}
+        className="onboarding-card"
+      >
         <div className="text-[11px] font-semibold tracking-wide text-ink-tertiary uppercase">
           {step + 1} / {STEPS.length}
         </div>
-        <h1 className="mt-3 text-[22px] font-semibold tracking-tight text-ink">
+        <h1
+          id="onboarding-title"
+          className="mt-3 text-[22px] font-semibold tracking-tight text-ink"
+        >
           {current.title}
         </h1>
         <p className="mt-3 text-[13px] leading-relaxed text-ink-secondary">
