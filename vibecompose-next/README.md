@@ -6,7 +6,8 @@
 从 macOS 原生 Swift 版（仓库根）移植行为，**不移植外观**：
 
 - Windows：Fluent（Win11 设置页语言）+ 系统标题栏
-- Linux：GNOME Adwaita + 窗口管理器客户端装饰
+- Linux：GNOME Adwaita + 应用自绘客户端装饰（CSD，Adwaita 风格标题栏，
+  不随窗口管理器主题出现非本平台的窗口按钮）
 - macOS 构建仅作开发调试；发行版仍是仓库根的 SwiftUI 应用
 
 ## 工作流
@@ -111,7 +112,8 @@ cd apps/desktop && cargo tauri build
   Windows UIA 插入验证、HUD overlay、结果预览窗口、Skill 切换器
 - **M3（已完成）**：术语管理界面与 Quick Add（Ctrl+Alt+Space）、Style Capsules、
   失败录音恢复与重试、转写 prompt（语音清理/标点偏好/hint 术语）、
-  选区/剪贴板/焦点段落上下文（按 Skill 能力授权）、提示音、首启引导、诊断导出
+  选区/剪贴板/焦点段落上下文（按 Skill 能力授权）、提示音、
+  首启引导（应用上方的模态弹窗，对齐 macOS 的引导面板结构）、诊断导出
 - **M4（下一步）**：Windows/Linux 真机验收、每 Skill 上下文授权对话框（对齐
   macOS 的允许一次/总是允许/仅语音）、社区 Skill 导入安全审查、
   自动更新（tauri-plugin-updater）、签名分发
