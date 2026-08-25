@@ -101,6 +101,11 @@ fn show_glow(app: &AppHandle) {
             .resizable(false)
             .visible(false)
             .focused(false)
+            // `focused(false)` only affects creation; on X11 the window
+            // manager may still focus the window every time it is mapped.
+            // Feedback surfaces must never take keyboard focus away from
+            // the user's dictation target.
+            .focusable(false)
             .build() else {
                 return;
             };
@@ -229,6 +234,10 @@ fn build_overlay(
         .skip_taskbar(true)
         .visible(false)
         .focused(focus)
+        // Non-focus overlays (the HUD pill) must stay that way on every
+        // show, not just at creation; otherwise the WM steals focus from
+        // the dictation target when the surface reappears.
+        .focusable(focus)
         .build()?;
 
     let handle = window.clone();
