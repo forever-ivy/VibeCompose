@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   api,
+  onConfigChanged,
   onSessionState,
+  type AppConfig,
   type SessionSnapshot,
 } from "../ipc";
 import { XIcon } from "../icons";
@@ -15,9 +17,19 @@ export default function HudOverlay() {
     elapsedMs: 0,
     level: 0,
   });
+  const [feedback, setFeedback] = useState<AppConfig["visualFeedback"] | null>(
+    null,
+  );
 
   useEffect(() => {
+    const refresh = () =>
+      api
+        .getConfig()
+        .then((config) => setFeedback(config.visualFeedback))
+        .catch(() => {});
+    refresh();
     const unlisten = onSessionState(setSession);
+    const unlistenConfig = onConfigChanged(refresh);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -28,6 +40,7 @@ export default function HudOverlay() {
     window.addEventListener("keydown", onKey);
     return () => {
       unlisten.then((u) => u());
+      unlistenConfig.then((u) => u());
       window.removeEventListener("keydown", onKey);
     };
   }, []);
@@ -39,24 +52,37 @@ export default function HudOverlay() {
     seconds % 60,
   ).padStart(2, "0")}`;
 
+  const showStatusText = feedback?.showStatusText ?? true;
+  const reduceMotion = feedback?.alwaysReduceMotion ?? false;
+  const intensityScale =
+    feedback?.intensity === "subtle"
+      ? 0.72
+      : feedback?.intensity === "expressive"
+        ? 1.22
+        : 1;
+
   return (
-    <div className="hud-root">
+    <div className={`hud-root ${reduceMotion ? "vc-reduce-motion" : ""}`}>
       <div className="hud-card" data-tauri-drag-region>
         <span
           className={`hud-dot ${recording ? "is-rec" : processing ? "is-proc" : ""}`}
         />
-        <div className="hud-copy">
-          <div className="hud-title">
-            {recording ? "正在录音" : processing ? "正在处理" : "就绪"}
+        {showStatusText && (
+          <div className="hud-copy">
+            <div className="hud-title">
+              {recording ? "正在录音" : processing ? "正在处理" : "就绪"}
+            </div>
+            <div className="hud-sub">
+              {recording ? timer : processing ? "转写与润色" : "Esc 取消"}
+            </div>
           </div>
-          <div className="hud-sub">
-            {recording ? timer : processing ? "转写与润色" : "Esc 取消"}
-          </div>
-        </div>
-        {recording && <MiniWave level={session.level} />}
+        )}
+        {recording && (
+          <MiniWave level={session.level} scale={intensityScale} grow={!showStatusText} />
+        )}
         {(recording || processing) && (
           <button
-            className="hud-cancel"
+            className={`hud-cancel ${showStatusText ? "" : "ml-auto"}`}
             onClick={() => api.cancelDictation()}
             aria-label="取消"
           >
@@ -68,10 +94,20 @@ export default function HudOverlay() {
   );
 }
 
-function MiniWave({ level }: { level: number }) {
-  const energy = Math.min(1, 0.25 + level * 0.9);
+function MiniWave({
+  level,
+  scale,
+  grow,
+}: {
+  level: number;
+  scale: number;
+  grow?: boolean;
+}) {
+  const energy = Math.min(1, (0.25 + level * 0.9) * scale);
   return (
-    <div className="flex h-7 items-center gap-[3px]">
+    <div
+      className={`flex h-7 items-center gap-[3px] ${grow ? "flex-1 justify-center" : ""}`}
+    >
       {PROFILE.map((p, i) => (
         <span
           key={i}

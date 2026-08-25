@@ -2,20 +2,26 @@ import { useEffect, useState } from "react";
 import {
   api,
   onChatgptLogin,
+  onLoginAvailability,
   type AccountStatus,
   type AppConfig,
+  type LoginAvailability,
   type StyleCapsule,
 } from "../ipc";
 import { CheckIcon, GlobeIcon } from "../icons";
 
 /**
  * Settings — same information architecture as the macOS app's Settings
- * panes (General / Account / Dictation / Paste / AI Polish / Advanced /
- * Privacy), rendered in the platform's own design language.
+ * panes (General / Account / Dictation / Appearance & Feedback / Paste /
+ * AI Polish / Style Capsules / Advanced / Privacy), rendered in the
+ * platform's own design language.
  */
 export default function SettingsPage() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<AccountStatus | null>(null);
+  const [availability, setAvailability] = useState<LoginAvailability | null>(
+    null,
+  );
   const [apiKey, setApiKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -29,6 +35,7 @@ export default function SettingsPage() {
   const [appId, setAppId] = useState("");
   const [appName, setAppName] = useState("");
   const [appSkill, setAppSkill] = useState("");
+  const [hintTermDraft, setHintTermDraft] = useState("");
   const [skillOptions, setSkillOptions] = useState<{ id: string; name: string }[]>(
     [],
   );
@@ -43,16 +50,23 @@ export default function SettingsPage() {
       .catch((error) => setLoadError(String(error)));
     refreshStatus();
     refreshStyles();
+    api.getLoginAvailability().then(setAvailability).catch(() => {});
     api.listSkills().then((list) => {
       setSkillOptions(list.map((s) => ({ id: s.id, name: s.name })));
     }).catch(() => {});
-    const unlisten = onChatgptLogin((event) => {
-      setLoginBusy(false);
-      setLoginMessage(event.ok ? "登录成功" : event.message);
-      refreshStatus();
-    });
+    const unlisteners = [
+      onChatgptLogin((event) => {
+        setLoginBusy(false);
+        setLoginMessage(event.ok ? "登录成功" : event.message);
+        refreshStatus();
+      }),
+      onLoginAvailability((next) => {
+        setAvailability(next);
+        refreshStatus();
+      }),
+    ];
     return () => {
-      unlisten.then((u) => u());
+      unlisteners.forEach((p) => p.then((u) => u()));
     };
   }, []);
 
@@ -82,6 +96,7 @@ export default function SettingsPage() {
   };
 
   const polish = config.transcription.textPolish;
+  const loginUnavailable = availability?.status === "unavailable";
 
   return (
     <div className="space-y-7">
@@ -158,7 +173,7 @@ export default function SettingsPage() {
               title="ChatGPT"
               ok={!!status?.chatgptConnected}
               okText="已连接"
-              badText="未登录"
+              badText={loginUnavailable ? "不可用" : "未登录"}
             />
             <TileDivider />
             <StatusTile
@@ -175,6 +190,19 @@ export default function SettingsPage() {
               badText="需要授权"
             />
           </div>
+          {loginUnavailable && !status?.chatgptConnected && (
+            <>
+              <Divider />
+              <div className="px-4 py-3">
+                <div className="vc-banner vc-banner-warn">
+                  ChatGPT 登录在此平台暂不可用：
+                  {unavailableReasonText(availability)}
+                  。ChatGPT 托管会话依赖私有后端，并非稳定公开 API；
+                  填写下方的 OpenAI 兼容 API Key 即可获得完整的听写与润色能力。
+                </div>
+              </div>
+            </>
+          )}
           <Divider />
           <div className="flex items-center gap-3.5 px-4 py-3.5">
             <span className="grid h-[34px] w-[34px] place-items-center rounded-[9px] bg-[#10a37f] text-white">
@@ -189,7 +217,10 @@ export default function SettingsPage() {
                     ? "已打开浏览器，完成登录后会自动回来"
                     : loginMessage
                       ? loginMessage
-                      : "使用 ChatGPT 账户登录，无需 API Key"}
+                      : loginUnavailable
+                        ? availability?.detail ??
+                          "此平台的托管登录路径当前不可用"
+                        : "使用 ChatGPT 账户登录，无需 API Key"}
               </div>
             </div>
             {status?.chatgptConnected ? (
@@ -207,6 +238,25 @@ export default function SettingsPage() {
               >
                 取消登录
               </SecondaryButton>
+            ) : loginUnavailable ? (
+              availability?.canRetry ? (
+                <SecondaryButton
+                  onClick={() => {
+                    setLoginBusy(true);
+                    setLoginMessage(null);
+                    void api.startChatgptLogin().catch((err) => {
+                      setLoginBusy(false);
+                      setLoginMessage(String(err));
+                    });
+                  }}
+                >
+                  重试登录
+                </SecondaryButton>
+              ) : (
+                <span className="shrink-0 text-[11px] text-ink-tertiary">
+                  此版本未启用
+                </span>
+              )
             ) : (
               <PrimaryButton
                 onClick={() => {
@@ -229,7 +279,9 @@ export default function SettingsPage() {
               <div className="mt-[1px] text-[11px] text-ink-tertiary">
                 {status?.openaiKeyPresent
                   ? "已保存 — 清空并点保存可移除"
-                  : "可选，作为备用转写来源"}
+                  : loginUnavailable
+                    ? "推荐路径 — 支持任何 OpenAI 兼容端点"
+                    : "可选，作为备用转写来源"}
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -240,16 +292,29 @@ export default function SettingsPage() {
                 value={apiKey}
                 onChange={setApiKey}
               />
-              <SecondaryButton
-                onClick={() =>
-                  api.setOpenaiApiKey(apiKey).then(() => {
-                    setApiKey("");
-                    refreshStatus();
-                  })
-                }
-              >
-                保存
-              </SecondaryButton>
+              {loginUnavailable && !status?.openaiKeyPresent ? (
+                <PrimaryButton
+                  onClick={() =>
+                    api.setOpenaiApiKey(apiKey).then(() => {
+                      setApiKey("");
+                      refreshStatus();
+                    })
+                  }
+                >
+                  保存
+                </PrimaryButton>
+              ) : (
+                <SecondaryButton
+                  onClick={() =>
+                    api.setOpenaiApiKey(apiKey).then(() => {
+                      setApiKey("");
+                      refreshStatus();
+                    })
+                  }
+                >
+                  保存
+                </SecondaryButton>
+              )}
             </div>
           </div>
         </div>
@@ -289,6 +354,152 @@ export default function SettingsPage() {
                 { value: "halfWidth", label: "半角" },
                 { value: "preserve", label: "保留原样" },
               ]}
+            />
+          </Row>
+          <Divider />
+          <Row label="最长录音时长" hint="到达上限自动停止并转写（秒）">
+            <NumberInput
+              value={config.transcription.maxDurationSeconds}
+              min={10}
+              max={600}
+              onChange={(v) =>
+                patch((c) => (c.transcription.maxDurationSeconds = v))
+              }
+            />
+          </Row>
+          <div className="border-t border-hairline px-4 py-3">
+            <div className="text-[13px] text-ink">提示词术语</div>
+            <div className="mt-[1px] text-[11px] text-ink-tertiary">
+              随音频一起提交给转写模型，引导专有名词的拼写
+            </div>
+            {config.transcription.hintTerms.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {config.transcription.hintTerms.map((term) => (
+                  <button
+                    key={term}
+                    className="vc-chip"
+                    title="点击移除"
+                    onClick={() =>
+                      patch((c) => {
+                        c.transcription.hintTerms =
+                          c.transcription.hintTerms.filter((t) => t !== term);
+                      })
+                    }
+                  >
+                    {term} ×
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-2 flex items-center gap-2">
+              <TextInput
+                width="w-56"
+                placeholder="例如 Kubernetes"
+                value={hintTermDraft}
+                onChange={setHintTermDraft}
+              />
+              <SecondaryButton
+                onClick={() => {
+                  const term = hintTermDraft.trim();
+                  if (!term) return;
+                  patch((c) => {
+                    if (!c.transcription.hintTerms.includes(term)) {
+                      c.transcription.hintTerms.push(term);
+                    }
+                  });
+                  setHintTermDraft("");
+                }}
+              >
+                添加
+              </SecondaryButton>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 外观与反馈 — macOS: Appearance & Feedback */}
+      <section>
+        <SectionLabel>外观与反馈</SectionLabel>
+        <div className="vc-card">
+          <Row
+            label="听写反馈样式"
+            hint={feedbackModeHint(config.visualFeedback.mode)}
+          >
+            <Select
+              value={config.visualFeedback.mode}
+              onChange={(v) =>
+                patch(
+                  (c) =>
+                    (c.visualFeedback.mode =
+                      v as AppConfig["visualFeedback"]["mode"]),
+                )
+              }
+              options={[
+                { value: "refinedHUD", label: "状态条" },
+                { value: "aiActivityGlow", label: "边缘光晕" },
+                { value: "hidden", label: "关闭" },
+              ]}
+            />
+          </Row>
+          {config.visualFeedback.mode === "refinedHUD" && (
+            <>
+              <Divider />
+              <Row label="状态条位置" hint="在当前显示器的顶部或底部">
+                <Select
+                  value={config.visualFeedback.hudPlacement}
+                  onChange={(v) =>
+                    patch(
+                      (c) =>
+                        (c.visualFeedback.hudPlacement =
+                          v as AppConfig["visualFeedback"]["hudPlacement"]),
+                    )
+                  }
+                  options={[
+                    { value: "top", label: "屏幕顶部" },
+                    { value: "bottom", label: "屏幕底部" },
+                  ]}
+                />
+              </Row>
+              <Divider />
+              <Row label="显示状态文字" hint="关闭后只保留指示点与声波">
+                <Toggle
+                  checked={config.visualFeedback.showStatusText}
+                  onChange={(v) =>
+                    patch((c) => (c.visualFeedback.showStatusText = v))
+                  }
+                />
+              </Row>
+            </>
+          )}
+          {config.visualFeedback.mode !== "hidden" && (
+            <>
+              <Divider />
+              <Row label="反馈强度">
+                <Select
+                  value={config.visualFeedback.intensity}
+                  onChange={(v) =>
+                    patch(
+                      (c) =>
+                        (c.visualFeedback.intensity =
+                          v as AppConfig["visualFeedback"]["intensity"]),
+                    )
+                  }
+                  options={[
+                    { value: "subtle", label: "轻柔" },
+                    { value: "standard", label: "标准" },
+                    { value: "expressive", label: "明显" },
+                  ]}
+                />
+              </Row>
+            </>
+          )}
+          <Divider />
+          <Row label="减少动态效果" hint="停用呼吸与脉冲动画">
+            <Toggle
+              checked={config.visualFeedback.alwaysReduceMotion}
+              onChange={(v) =>
+                patch((c) => (c.visualFeedback.alwaysReduceMotion = v))
+              }
             />
           </Row>
         </div>
@@ -723,6 +934,32 @@ export default function SettingsPage() {
       </div>
     </div>
   );
+}
+
+function feedbackModeHint(mode: AppConfig["visualFeedback"]["mode"]): string {
+  switch (mode) {
+    case "refinedHUD":
+      return "安静的居中状态条：状态、计时、取消";
+    case "aiActivityGlow":
+      return "工作时在当前显示器边缘泛起柔和光晕";
+    case "hidden":
+      return "无屏幕反馈；托盘状态、提示音与 Esc 取消仍然有效";
+  }
+}
+
+function unavailableReasonText(availability: LoginAvailability | null): string {
+  switch (availability?.reason) {
+    case "platformPolicy":
+      return "此版本未启用托管登录";
+    case "callbackBlocked":
+      return "本机回调端口被系统策略拦截";
+    case "backendRejected":
+      return "登录服务拒绝了此平台的请求";
+    case "credentialStoreUnavailable":
+      return "系统凭据存储不可用，登录无法安全保存";
+    default:
+      return "托管登录路径当前不可用";
+  }
 }
 
 function defaultSkillLabel(config: AppConfig): string {

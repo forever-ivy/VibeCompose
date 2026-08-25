@@ -3,6 +3,7 @@ import {
   api,
   type AccountStatus,
   type DictationResultEvent,
+  type LoginAvailability,
   type RecoveryRecord,
   type SessionSnapshot,
   type SkillSummary,
@@ -17,10 +18,14 @@ export default function DictationPage({
   session,
   lastResult,
   lastError,
+  availability,
+  onOpenSettings,
 }: {
   session: SessionSnapshot;
   lastResult: DictationResultEvent | null;
   lastError: string | null;
+  availability?: LoginAvailability | null;
+  onOpenSettings?: () => void;
 }) {
   const [status, setStatus] = useState<AccountStatus | null>(null);
   const [defaultSkill, setDefaultSkill] = useState<SkillSummary | null>(null);
@@ -94,7 +99,21 @@ export default function DictationPage({
 
       {needsAccount && (
         <Banner tone="warn">
-          尚未配置转写账户 — 请在「设置」中登录 ChatGPT 或填写 OpenAI API Key。
+          <div className="flex items-center justify-between gap-3">
+            <span>
+              {availability?.status === "unavailable"
+                ? "ChatGPT 登录在此平台暂不可用 — 在「设置」中填写 OpenAI 兼容 API Key 即可继续听写与润色。"
+                : "尚未配置转写账户 — 请在「设置」中登录 ChatGPT 或填写 OpenAI API Key。"}
+            </span>
+            {onOpenSettings && (
+              <button
+                className="vc-btn vc-btn-secondary shrink-0"
+                onClick={onOpenSettings}
+              >
+                打开设置
+              </button>
+            )}
+          </div>
         </Banner>
       )}
       {status?.accessibilityPermissionMissing && (

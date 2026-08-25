@@ -4,10 +4,12 @@ import {
   onChatgptLogin,
   onDictationError,
   onDictationResult,
+  onLoginAvailability,
   onSessionState,
   onSoundFeedback,
   type AccountStatus,
   type DictationResultEvent,
+  type LoginAvailability,
   type SessionSnapshot,
 } from "./ipc";
 import DictationPage from "./pages/Dictation";
@@ -59,6 +61,9 @@ export default function App() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState<boolean | null>(null);
   const [account, setAccount] = useState<AccountStatus | null>(null);
+  const [availability, setAvailability] = useState<LoginAvailability | null>(
+    null,
+  );
 
   useEffect(() => {
     applyPlatform(initialPlatform());
@@ -67,6 +72,7 @@ export default function App() {
   useEffect(() => {
     void api.getOnboardingComplete().then((done) => setOnboarding(!done));
     void api.getAccountStatus().then(setAccount).catch(() => {});
+    void api.getLoginAvailability().then(setAvailability).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -86,6 +92,10 @@ export default function App() {
         void api.getAccountStatus().then(setAccount);
         if (!event.ok && event.message) setLastError(event.message);
       }),
+      onLoginAvailability((next) => {
+        setAvailability(next);
+        void api.getAccountStatus().then(setAccount).catch(() => {});
+      }),
     ];
     return () => {
       unlisteners.forEach((p) => p.then((u) => u()));
@@ -98,6 +108,7 @@ export default function App() {
     return (
       <Onboarding
         status={account}
+        availability={availability}
         onDone={() => setOnboarding(false)}
       />
     );
@@ -145,6 +156,8 @@ export default function App() {
                 session={session}
                 lastResult={lastResult}
                 lastError={lastError}
+                availability={availability}
+                onOpenSettings={() => setPage("settings")}
               />
             )}
             {page === "skills" && <SkillsPage />}

@@ -63,6 +63,25 @@ export interface AccountStatus {
   accessibilityPermissionMissing: boolean;
 }
 
+/**
+ * Hosted ChatGPT login availability. On Windows/Linux the browser OAuth
+ * path can be unavailable (operator policy, blocked loopback callback,
+ * backend rejection, missing credential store); the UI renders this state
+ * explicitly and leads with the OpenAI-compatible API-key fallback.
+ */
+export interface LoginAvailability {
+  status: "connected" | "available" | "unavailable";
+  reason:
+    | "platformPolicy"
+    | "callbackBlocked"
+    | "backendRejected"
+    | "credentialStoreUnavailable"
+    | null;
+  detail: string | null;
+  canRetry: boolean;
+  fallback: "openAiCompatible";
+}
+
 export interface TerminologyEntry {
   id: string;
   type: "term" | "correction";
@@ -187,6 +206,15 @@ export interface AppConfig {
     defaultCapsuleID: string | null;
     skillAssignments: { skillID: string; capsuleID: string }[];
   };
+  visualFeedback: {
+    mode: "refinedHUD" | "aiActivityGlow" | "hidden";
+    intensity: "subtle" | "standard" | "expressive";
+    frameTarget: string;
+    hudPlacement: "top" | "bottom";
+    showStatusText: boolean;
+    completionNotificationEnabled: boolean;
+    alwaysReduceMotion: boolean;
+  };
 }
 
 export const api = {
@@ -198,6 +226,7 @@ export const api = {
   clearHistory: () => invoke<void>("clear_history"),
   setOpenaiApiKey: (key: string) => invoke<void>("set_openai_api_key", { key }),
   getAccountStatus: () => invoke<AccountStatus>("get_account_status"),
+  getLoginAvailability: () => invoke<LoginAvailability>("get_login_availability"),
   startChatgptLogin: () => invoke<string>("start_chatgpt_login"),
   cancelChatgptLogin: () => invoke<void>("cancel_chatgpt_login"),
   disconnectChatgpt: () => invoke<void>("disconnect_chatgpt"),
@@ -273,4 +302,16 @@ export function onSoundFeedback(
   handler: (resource: string) => void,
 ): Promise<UnlistenFn> {
   return listen<string>("sound-feedback", (event) => handler(event.payload));
+}
+
+export function onLoginAvailability(
+  handler: (availability: LoginAvailability) => void,
+): Promise<UnlistenFn> {
+  return listen<LoginAvailability>("chatgpt-login-availability", (event) =>
+    handler(event.payload),
+  );
+}
+
+export function onConfigChanged(handler: () => void): Promise<UnlistenFn> {
+  return listen<void>("config-changed", () => handler());
 }

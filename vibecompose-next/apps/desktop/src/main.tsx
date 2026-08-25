@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import HudOverlay from "./overlays/Hud";
+import GlowOverlay from "./overlays/Glow";
 import PreviewOverlay from "./overlays/Preview";
 import SwitcherOverlay from "./overlays/Switcher";
 import QuickAddOverlay from "./overlays/QuickAdd";
@@ -21,6 +22,7 @@ async function overlayLabel(): Promise<string> {
 
 function OverlayRoot({ label }: { label: string }) {
   if (label === "hud") return <HudOverlay />;
+  if (label === "glow") return <GlowOverlay />;
   if (label === "preview") return <PreviewOverlay />;
   if (label === "skill-switcher") return <SwitcherOverlay />;
   if (label === "quick-add") return <QuickAddOverlay />;

@@ -687,6 +687,66 @@ html[data-window="skill-switcher"] body {
   background: var(--color-canvas);
 }
 
+/* Edge-glow window: fully transparent, click-through canvas. */
+html[data-window="glow"],
+html[data-window="glow"] body,
+html[data-window="glow"] #root {
+  background: transparent !important;
+}
+
+.glow-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.glow-frame {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 var(--glow-size, 46px) calc(var(--glow-size, 46px) / 5)
+      color-mix(in srgb, var(--glow-color, var(--color-accent)) 55%, transparent),
+    inset 0 0 calc(var(--glow-size, 46px) / 3) 2px
+      color-mix(in srgb, var(--glow-color, var(--color-accent)) 75%, transparent);
+  transition: opacity 240ms ease;
+}
+
+@keyframes vc-glow-breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  50% {
+    filter: brightness(1.35);
+    transform: scale(1.002);
+  }
+}
+.glow-frame.is-breathing {
+  animation: vc-glow-breathe 2.2s ease-in-out infinite;
+}
+
+@keyframes vc-glow-pulse {
+  0%,
+  100% {
+    filter: brightness(0.9);
+  }
+  50% {
+    filter: brightness(1.5);
+  }
+}
+.glow-frame.is-pulsing {
+  animation: vc-glow-pulse 1.1s ease-in-out infinite;
+}
+
+/* Reduce motion: freeze decorative animation inside feedback surfaces. */
+.vc-reduce-motion *,
+.vc-reduce-motion *::before,
+.vc-reduce-motion *::after {
+  animation: none !important;
+}
+
 .hud-root {
   height: 100%;
   display: grid;
