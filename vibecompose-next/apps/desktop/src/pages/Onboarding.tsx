@@ -66,6 +66,7 @@ export default function Onboarding({
   );
   const [apiKey, setApiKey] = useState("");
   const [keySaved, setKeySaved] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
   const current = STEPS[step];
   const last = step === STEPS.length - 1;
 
@@ -97,12 +98,18 @@ export default function Onboarding({
   const connected =
     !!status?.chatgptConnected || availability?.status === "connected";
 
+  /** Never fail silently: without a Secret Service / keyring the OS
+   *  credential store rejects the write, and the user needs to see why. */
   const saveKey = () => {
     if (!apiKey.trim()) return;
-    void api.setOpenaiApiKey(apiKey.trim()).then(() => {
-      setApiKey("");
-      setKeySaved(true);
-    });
+    setKeyError(null);
+    void api
+      .setOpenaiApiKey(apiKey.trim())
+      .then(() => {
+        setApiKey("");
+        setKeySaved(true);
+      })
+      .catch((error) => setKeyError(String(error)));
   };
 
   return (
@@ -211,6 +218,11 @@ export default function Onboarding({
                   保存
                 </button>
               </div>
+              {keyError && (
+                <p className="mt-2 text-[11px] leading-relaxed text-error">
+                  无法保存 API Key（系统凭据存储不可用）：{keyError}
+                </p>
+              )}
             </div>
 
             {unavailable && availability?.canRetry && (

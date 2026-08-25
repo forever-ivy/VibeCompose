@@ -23,6 +23,7 @@ export default function SettingsPage() {
     null,
   );
   const [apiKey, setApiKey] = useState("");
+  const [keyError, setKeyError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [historyCleared, setHistoryCleared] = useState(false);
@@ -42,6 +43,19 @@ export default function SettingsPage() {
 
   const refreshStatus = () => api.getAccountStatus().then(setStatus).catch(() => {});
   const refreshStyles = () => api.listStyleCapsules().then(setStyles).catch(() => {});
+
+  /** Saving must never fail silently: without a Secret Service / keyring the
+   *  OS credential store rejects the write, and the user needs to see why. */
+  const saveApiKey = () => {
+    setKeyError(null);
+    api
+      .setOpenaiApiKey(apiKey)
+      .then(() => {
+        setApiKey("");
+        refreshStatus();
+      })
+      .catch((error) => setKeyError(String(error)));
+  };
 
   useEffect(() => {
     api
@@ -293,30 +307,22 @@ export default function SettingsPage() {
                 onChange={setApiKey}
               />
               {loginUnavailable && !status?.openaiKeyPresent ? (
-                <PrimaryButton
-                  onClick={() =>
-                    api.setOpenaiApiKey(apiKey).then(() => {
-                      setApiKey("");
-                      refreshStatus();
-                    })
-                  }
-                >
-                  保存
-                </PrimaryButton>
+                <PrimaryButton onClick={saveApiKey}>保存</PrimaryButton>
               ) : (
-                <SecondaryButton
-                  onClick={() =>
-                    api.setOpenaiApiKey(apiKey).then(() => {
-                      setApiKey("");
-                      refreshStatus();
-                    })
-                  }
-                >
-                  保存
-                </SecondaryButton>
+                <SecondaryButton onClick={saveApiKey}>保存</SecondaryButton>
               )}
             </div>
           </div>
+          {keyError && (
+            <>
+              <Divider />
+              <div className="px-4 py-3">
+                <div className="vc-banner vc-banner-error">
+                  无法保存 API Key（系统凭据存储不可用）：{keyError}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
