@@ -685,29 +685,6 @@ textarea {
   animation: vc-bar 1s ease-in-out infinite;
 }
 
-@keyframes vc-pulse-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.35;
-  }
-  100% {
-    transform: scale(1.9);
-    opacity: 0;
-  }
-}
-.vc-pulse-ring {
-  animation: vc-pulse-ring 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
-}
-
-@keyframes vc-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.vc-spin {
-  animation: vc-spin 0.9s linear infinite;
-}
-
 html[data-window="preview"] body,
 html[data-window="skill-switcher"] body {
   background: var(--color-canvas);
@@ -788,55 +765,163 @@ html[data-window="glow"] #root {
   padding: 8px;
 }
 
-.hud-card {
+/* ---- Compact status pill (macOS Refined HUD form) ----
+   One small rounded box: [waveform glyph | badge] [title] [timer] [×],
+   optional hint line while recording. Structure/sizing follow the macOS
+   dictation HUD capsule (44px row, 5 bars, trailing mono timer + inline
+   cancel); the skin below is per-platform. */
+.vc-hud-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 44px;
+  max-width: 300px;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 22px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-hairline);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+  --hud-text: var(--color-ink);
+  --hud-text-muted: var(--color-ink-tertiary);
+  --hud-wave-recording: var(--color-accent);
+  --hud-wave-processing: var(--color-amber);
+}
+
+.vc-hud-row {
   display: flex;
-  width: 100%;
   align-items: center;
   gap: 10px;
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px;
-  background: var(--color-panel);
-  padding: 10px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-.hud-dot {
-  height: 8px;
-  width: 8px;
-  border-radius: 99px;
-  background: var(--color-success);
+.vc-hud-wave {
+  display: flex;
+  width: 28px;
+  height: 16px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5px;
 }
-.hud-dot.is-rec {
-  background: var(--color-error);
-  animation: vc-pulse-ring 1.6s ease-out infinite;
+.vc-hud-bar {
+  width: 2.5px;
+  border-radius: 999px;
 }
-.hud-dot.is-proc {
-  background: var(--color-amber);
+.vc-hud-wave.is-recording .vc-hud-bar {
+  background: var(--hud-wave-recording);
+}
+.vc-hud-wave.is-processing .vc-hud-bar {
+  background: var(--hud-wave-processing);
 }
 
-.hud-copy {
+.vc-hud-title {
   min-width: 0;
-  flex: 1;
-}
-.hud-title {
-  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
   font-weight: 600;
+  color: var(--hud-text);
 }
-.hud-sub {
-  font-size: 11px;
-  color: var(--color-ink-tertiary);
+
+.vc-hud-timer {
+  margin-left: auto;
+  min-width: 36px;
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--hud-text);
 }
-.hud-cancel {
+
+.vc-hud-cancel {
   display: grid;
-  height: 24px;
-  width: 24px;
+  height: 20px;
+  width: 20px;
+  flex-shrink: 0;
   place-items: center;
-  border-radius: 6px;
-  color: var(--color-ink-tertiary);
+  border-radius: 999px;
+  color: var(--hud-text-muted);
 }
-.hud-cancel:hover {
-  background: rgba(0, 0, 0, 0.06);
+.vc-hud-cancel:hover {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--hud-text);
+}
+
+.vc-hud-hint {
+  padding-left: 38px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  white-space: nowrap;
+  color: var(--hud-text-muted);
+}
+
+/* Terminal-state badge tile (macOS configureBadge): soft tinted fill. */
+.vc-hud-badge {
+  display: grid;
+  height: 22px;
+  width: 22px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid transparent;
+}
+.vc-hud-badge.is-success {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 32%, transparent);
+  color: var(--color-success);
+}
+.vc-hud-badge.is-copied {
+  background: color-mix(in srgb, var(--color-amber) 16%, transparent);
+  border-color: color-mix(in srgb, var(--color-amber) 32%, transparent);
+  color: var(--color-amber);
+}
+.vc-hud-badge.is-error {
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 32%, transparent);
+  color: var(--color-error);
+}
+.vc-hud-badge-glyph {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Linux skin: GNOME Adwaita OSD/toast — dark translucent pill. */
+[data-platform="linux"] .vc-hud-pill {
+  background: rgba(36, 36, 40, 0.95);
+  border: none;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  --hud-text: #ffffff;
+  --hud-text-muted: rgba(255, 255, 255, 0.62);
+  --hud-wave-recording: #78b4f2;
+  --hud-wave-processing: #f8c26b;
+}
+[data-platform="linux"] .vc-hud-cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+[data-platform="linux"] .vc-hud-badge.is-success {
+  background: rgba(87, 227, 137, 0.18);
+  border-color: rgba(87, 227, 137, 0.36);
+  color: #57e389;
+}
+[data-platform="linux"] .vc-hud-badge.is-copied {
+  background: rgba(248, 194, 107, 0.18);
+  border-color: rgba(248, 194, 107, 0.36);
+  color: #f8c26b;
+}
+[data-platform="linux"] .vc-hud-badge.is-error {
+  background: rgba(246, 97, 81, 0.2);
+  border-color: rgba(246, 97, 81, 0.4);
+  color: #f66151;
+}
+
+/* Windows skin: Fluent acrylic flyout — light card, 8px radius. */
+[data-platform="windows"] .vc-hud-pill {
+  border-radius: 8px;
+  background: rgba(252, 252, 252, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.0578);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
 }
 
 .overlay-page {

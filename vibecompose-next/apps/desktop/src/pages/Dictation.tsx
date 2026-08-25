@@ -8,11 +8,14 @@ import {
   type SessionSnapshot,
   type SkillSummary,
 } from "../ipc";
-import { CheckIcon, CopyIcon, MicIcon, XIcon } from "../icons";
+import { CheckIcon, CopyIcon, MicIcon } from "../icons";
+import StatusPill from "../components/StatusPill";
 
 /**
- * Dictation hero — mirrors the macOS HUD language:
- * one calm surface, a single accent, 9-bar center-weighted waveform.
+ * Dictation page. Idle shows the start affordance (mic button + hotkey
+ * hint); while a session runs the hero collapses to the same compact
+ * status pill as the floating Refined HUD — recording feedback is a small
+ * box (macOS `OverlayController` form), never a large in-window circle.
  */
 export default function DictationPage({
   session,
@@ -30,6 +33,7 @@ export default function DictationPage({
   const [status, setStatus] = useState<AccountStatus | null>(null);
   const [defaultSkill, setDefaultSkill] = useState<SkillSummary | null>(null);
   const [recovery, setRecovery] = useState<RecoveryRecord[]>([]);
+  const [hotkey, setHotkey] = useState("F5");
 
   useEffect(() => {
     api.getAccountStatus().then(setStatus).catch(() => {});
@@ -38,6 +42,15 @@ export default function DictationPage({
       .then((skills) => setDefaultSkill(skills.find((s) => s.isDefault) ?? null))
       .catch(() => {});
     api.listRecovery().then(setRecovery).catch(() => {});
+    api
+      .getConfig()
+      .then((config) => {
+        const binding = config.transcription.dictationHotkey;
+        setHotkey(
+          [...(binding.modifiers ?? []), binding.key].filter(Boolean).join("+"),
+        );
+      })
+      .catch(() => {});
   }, [session.phase]);
 
   const recording = session.phase === "recording";
@@ -51,49 +64,60 @@ export default function DictationPage({
 
   return (
     <div className="space-y-6">
-      {/* Hero: big record control, generous whitespace */}
+      {/* Hero: idle keeps the start affordance; an active session shows the
+          same compact HUD pill as the floating overlay (macOS small-box
+          form) — no large circle, no pulsing rings. */}
       <section className="flex flex-col items-center pt-14 pb-10">
-        <RecordButton
-          recording={recording}
-          processing={processing}
-          onClick={() => api.toggleDictation()}
-        />
-        <div className="mt-7 h-5 text-[13px] font-medium">
-          {recording ? (
-            <span className="tabular-nums text-ink-secondary">{timer}</span>
-          ) : processing ? (
-            <span className="text-ink-secondary">正在处理…</span>
-          ) : (
-            <span className="text-ink-secondary">
-              按 <Kbd>F5</Kbd> 开始听写
-            </span>
-          )}
-        </div>
-        <div className="mt-3 flex h-8 items-center">
-          {recording && <Waveform level={session.level} />}
-        </div>
-        <p className="mt-4 max-w-[380px] text-center text-[11px] leading-relaxed text-ink-tertiary">
-          {recording
-            ? "再按一次快捷键结束并转写"
-            : processing
-              ? "正在转写与润色"
-              : "按下快捷键说话，VibeCompose 会转写、润色并粘贴到当前应用"}
-        </p>
-        {(recording || processing) && (
-          <button
-            onClick={() => api.cancelDictation()}
-            className="vc-btn vc-btn-secondary mt-4 flex items-center gap-1.5"
-          >
-            <XIcon size={11} /> 取消
-          </button>
-        )}
-        {!recording && !processing && defaultSkill && (
-          <p className="mt-2 text-[11px] text-ink-tertiary">
-            当前 Skill：
-            <span className="font-medium text-ink-secondary">
-              {defaultSkill.name}
-            </span>
-          </p>
+        {recording || processing ? (
+          <>
+            <StatusPill
+              phase={recording ? "recording" : "processing"}
+              title={
+                recording ? (defaultSkill?.name ?? "正在录音") : "处理中"
+              }
+              timer={recording ? timer : null}
+              hint={recording ? "再按一次快捷键结束并转写" : null}
+              level={session.level}
+              onCancel={() => api.cancelDictation()}
+            />
+            <p className="mt-4 text-[11px] text-ink-tertiary">
+              {recording ? (
+                <>
+                  按 <Kbd>{hotkey}</Kbd> 结束并转写，<Kbd>Esc</Kbd> 取消
+                </>
+              ) : (
+                "正在转写与润色"
+              )}
+            </p>
+            {recording && (
+              <button
+                onClick={() => api.toggleDictation()}
+                className="vc-btn vc-btn-secondary mt-3"
+              >
+                停止并转写
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <RecordButton onClick={() => api.toggleDictation()} />
+            <div className="mt-7 h-5 text-[13px] font-medium">
+              <span className="text-ink-secondary">
+                按 <Kbd>{hotkey}</Kbd> 开始听写
+              </span>
+            </div>
+            <p className="mt-4 max-w-[380px] text-center text-[11px] leading-relaxed text-ink-tertiary">
+              按下快捷键说话，VibeCompose 会转写、润色并粘贴到当前应用
+            </p>
+            {defaultSkill && (
+              <p className="mt-2 text-[11px] text-ink-tertiary">
+                当前 Skill：
+                <span className="font-medium text-ink-secondary">
+                  {defaultSkill.name}
+                </span>
+              </p>
+            )}
+          </>
         )}
       </section>
 
@@ -133,70 +157,21 @@ export default function DictationPage({
   );
 }
 
-function RecordButton({
-  recording,
-  processing,
-  onClick,
-}: {
-  recording: boolean;
-  processing: boolean;
-  onClick: () => void;
-}) {
+/** Idle start affordance only — active sessions render the compact pill. */
+function RecordButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className="group relative grid h-[88px] w-[88px] place-items-center rounded-full transition-transform duration-150 active:scale-95"
       style={{
-        background: recording ? "var(--color-error)" : "var(--color-accent)",
-        boxShadow: recording
-          ? "0 10px 28px rgba(255,107,112,0.35), inset 0 1px 0 rgba(255,255,255,0.25)"
-          : "0 10px 28px rgba(0,116,255,0.32), inset 0 1px 0 rgba(255,255,255,0.25)",
+        background: "var(--color-accent)",
+        boxShadow:
+          "0 10px 28px rgba(0,116,255,0.32), inset 0 1px 0 rgba(255,255,255,0.25)",
       }}
-      aria-label={recording ? "停止录音" : "开始录音"}
+      aria-label="开始录音"
     >
-      {recording && (
-        <>
-          <span className="vc-pulse-ring absolute inset-0 rounded-full bg-error" />
-          <span
-            className="vc-pulse-ring absolute inset-0 rounded-full bg-error"
-            style={{ animationDelay: "0.55s" }}
-          />
-        </>
-      )}
-      {processing ? (
-        <span className="vc-spin block h-7 w-7 rounded-full border-[2.5px] border-white/30 border-t-white" />
-      ) : recording ? (
-        <span className="block h-[26px] w-[26px] rounded-[7px] bg-white" />
-      ) : (
-        <MicIcon size={34} className="text-white" />
-      )}
+      <MicIcon size={34} className="text-white" />
     </button>
-  );
-}
-
-/** 9 compact bars, center tallest, ice-blue core — the HUD's signature. */
-const PROFILE = [0.22, 0.34, 0.48, 0.72, 1.0, 0.74, 0.5, 0.34, 0.22];
-
-function Waveform({ level }: { level: number }) {
-  const energy = Math.min(1, 0.25 + level * 0.9);
-  return (
-    <div className="flex h-8 items-center gap-[3px]">
-      {PROFILE.map((p, i) => {
-        const center = i >= 3 && i <= 5;
-        return (
-          <span
-            key={i}
-            className="vc-bar w-[3px] rounded-full"
-            style={{
-              height: `${Math.max(6, p * 30 * energy)}px`,
-              background: center ? "var(--color-ice)" : "rgba(120,140,160,0.45)",
-              animationDelay: `${i * 90}ms`,
-              animationDuration: `${900 + (i % 3) * 140}ms`,
-            }}
-          />
-        );
-      })}
-    </div>
   );
 }
 

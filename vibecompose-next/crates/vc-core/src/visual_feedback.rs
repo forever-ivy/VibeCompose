@@ -143,6 +143,22 @@ impl<'de> Deserialize<'de> for VisualFeedbackIntensity {
     }
 }
 
+/// How long a delivered-result state stays on the feedback surface before
+/// auto-hiding, matching macOS `FeedbackSurfaceController.resultDisplayDuration`
+/// (0.9s inserted / 1.5s paste-sent / 2s copied).
+pub fn result_display_millis(outcome: &crate::delivery::DeliveryOutcome) -> u64 {
+    use crate::delivery::DeliveryOutcome;
+    match outcome {
+        DeliveryOutcome::InsertedAndVerified => 900,
+        DeliveryOutcome::PasteDispatchedClipboardRetained => 1500,
+        DeliveryOutcome::CopiedToClipboard(_) => 2000,
+    }
+}
+
+/// Error display window before auto-hide, matching macOS
+/// `FeedbackSurfaceController.showError`'s 5-second schedule.
+pub const ERROR_DISPLAY_MILLIS: u64 = 5000;
+
 /// The `visualFeedback` section of `config.json`, key-compatible with the
 /// Swift `VisualFeedbackConfig`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -259,5 +275,25 @@ mod tests {
         assert_eq!(VisualFeedbackIntensity::Subtle.amplitude_scale(), 0.72);
         assert_eq!(VisualFeedbackIntensity::Standard.amplitude_scale(), 1.0);
         assert_eq!(VisualFeedbackIntensity::Expressive.amplitude_scale(), 1.22);
+    }
+
+    #[test]
+    fn terminal_display_durations_match_the_macos_feedback_controller() {
+        use crate::delivery::{ClipboardFallbackReason, DeliveryOutcome};
+        assert_eq!(
+            result_display_millis(&DeliveryOutcome::InsertedAndVerified),
+            900
+        );
+        assert_eq!(
+            result_display_millis(&DeliveryOutcome::PasteDispatchedClipboardRetained),
+            1500
+        );
+        assert_eq!(
+            result_display_millis(&DeliveryOutcome::CopiedToClipboard(
+                ClipboardFallbackReason::NoEditableTarget
+            )),
+            2000
+        );
+        assert_eq!(ERROR_DISPLAY_MILLIS, 5000);
     }
 }

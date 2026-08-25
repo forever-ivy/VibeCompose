@@ -105,6 +105,20 @@ fn emit_state(app: &AppHandle, snapshot: &SessionSnapshot) {
     let _ = app.emit("dictation-state", snapshot);
 }
 
+/// macOS parity: the feedback surface keeps terminal states (done / copied /
+/// error) briefly visible before hiding — `FeedbackSurfaceController`'s
+/// auto-hide schedule. Skipped when a new session took over in the meantime
+/// (its surface must stay up).
+fn hide_feedback_after(app: &AppHandle, delay_ms: u64) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        if app.state::<AppState>().sessions.is_idle() {
+            windows::hide_feedback(&app);
+        }
+    });
+}
+
 fn emit_sound(app: &AppHandle, config: &AppConfig, event: SoundFeedbackEvent) {
     if config.transcription.feedback_sounds_enabled {
         let _ = app.emit("sound-feedback", event.resource_name());
@@ -439,7 +453,6 @@ fn stop_and_process(app: AppHandle, state: &AppState) {
         Err(error) => {
             state.sessions.finish(session_id);
             emit_state(&app, &state.sessions.snapshot());
-            windows::hide_feedback(&app);
             let _ = app.emit(
                 "dictation-error",
                 DictationErrorEvent {
@@ -448,6 +461,7 @@ fn stop_and_process(app: AppHandle, state: &AppState) {
                     retryable: false,
                 },
             );
+            hide_feedback_after(&app, vc_core::visual_feedback::ERROR_DISPLAY_MILLIS);
             return;
         }
     };
@@ -568,7 +582,6 @@ fn spawn_pipeline(
                     );
                     let _ = std::fs::remove_file(&audio.wav_path);
                 }
-                windows::hide_feedback(&app_handle);
                 let _ = app_handle.emit(
                     "dictation-error",
                     DictationErrorEvent {
@@ -576,6 +589,10 @@ fn spawn_pipeline(
                         message: error.to_string(),
                         retryable: true,
                     },
+                );
+                hide_feedback_after(
+                    &app_handle,
+                    vc_core::visual_feedback::ERROR_DISPLAY_MILLIS,
                 );
             }
         }
@@ -664,7 +681,6 @@ async fn finish_delivery(
         });
     }
 
-    windows::hide_feedback(app);
     windows::hide_preview(app);
     let _ = app.emit(
         "dictation-result",
@@ -680,6 +696,8 @@ async fn finish_delivery(
             duration_ms: preview.duration_ms,
         },
     );
+    // The HUD renders the result state; hide it after the macOS delay.
+    hide_feedback_after(app, vc_core::visual_feedback::result_display_millis(&outcome));
     let _ = state;
 }
 

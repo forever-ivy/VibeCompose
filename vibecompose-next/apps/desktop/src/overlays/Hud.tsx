@@ -1,14 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   api,
   onConfigChanged,
+  onDictationError,
+  onDictationResult,
   onSessionState,
   type AppConfig,
   type SessionSnapshot,
 } from "../ipc";
-import { XIcon } from "../icons";
+import StatusPill, { type PillPhase } from "../components/StatusPill";
 
-const PROFILE = [0.22, 0.34, 0.48, 0.72, 1.0, 0.74, 0.5, 0.34, 0.22];
+/**
+ * Refined HUD overlay window — the small floating box, matching the macOS
+ * Refined HUD (`OverlayController`): a compact capsule with waveform +
+ * title + timer + inline ×, shown top/bottom-center of the display on a
+ * transparent, always-on-top, unfocusable window. Terminal states (done /
+ * copied / error) stay briefly visible before the backend hides the
+ * window, mirroring `FeedbackSurfaceController`'s auto-hide delays.
+ */
+
+/** macOS FeedbackSurfaceController display durations (ms). */
+const TERMINAL_DISPLAY_MS: Record<string, number> = {
+  inserted_verified: 900,
+  paste_dispatched: 1500,
+  clipboard: 2000,
+  error: 5000,
+};
+
+type Terminal = { phase: PillPhase; title: string } | null;
 
 export default function HudOverlay() {
   const [session, setSession] = useState<SessionSnapshot>({
@@ -20,16 +39,64 @@ export default function HudOverlay() {
   const [feedback, setFeedback] = useState<AppConfig["visualFeedback"] | null>(
     null,
   );
+  const [hotkey, setHotkey] = useState("F5");
+  const [skillName, setSkillName] = useState("");
+  const [terminal, setTerminal] = useState<Terminal>(null);
+  const expireTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showTerminal = (phase: PillPhase, title: string, key: string) => {
+    if (expireTimer.current) clearTimeout(expireTimer.current);
+    setTerminal({ phase, title });
+    // Blank the (transparent) window once the display window has passed so
+    // a stale result can never flash when the HUD is next shown.
+    expireTimer.current = setTimeout(
+      () => setTerminal(null),
+      (TERMINAL_DISPLAY_MS[key] ?? 2000) + 600,
+    );
+  };
 
   useEffect(() => {
     const refresh = () =>
       api
         .getConfig()
-        .then((config) => setFeedback(config.visualFeedback))
+        .then((config) => {
+          setFeedback(config.visualFeedback);
+          const binding = config.transcription.dictationHotkey;
+          setHotkey(
+            [...(binding.modifiers ?? []), binding.key]
+              .filter(Boolean)
+              .join("+"),
+          );
+        })
+        .catch(() => {});
+    const refreshSkill = () =>
+      api
+        .listSkills()
+        .then((skills) =>
+          setSkillName(skills.find((s) => s.isDefault)?.name ?? ""),
+        )
         .catch(() => {});
     refresh();
-    const unlisten = onSessionState(setSession);
-    const unlistenConfig = onConfigChanged(refresh);
+    refreshSkill();
+    const unlisteners = [
+      onSessionState((snapshot) => {
+        setSession(snapshot);
+        if (snapshot.phase !== "idle") setTerminal(null);
+      }),
+      onDictationResult((result) => {
+        const copied = result.outcome === "clipboard";
+        showTerminal(
+          copied ? "copied" : "success",
+          copied ? "已复制" : "已完成",
+          result.outcome,
+        );
+      }),
+      onDictationError(() => showTerminal("error", "错误", "error")),
+      onConfigChanged(() => {
+        refresh();
+        refreshSkill();
+      }),
+    ];
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -39,9 +106,9 @@ export default function HudOverlay() {
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      unlisten.then((u) => u());
-      unlistenConfig.then((u) => u());
+      unlisteners.forEach((p) => p.then((u) => u()));
       window.removeEventListener("keydown", onKey);
+      if (expireTimer.current) clearTimeout(expireTimer.current);
     };
   }, []);
 
@@ -54,72 +121,37 @@ export default function HudOverlay() {
 
   const showStatusText = feedback?.showStatusText ?? true;
   const reduceMotion = feedback?.alwaysReduceMotion ?? false;
-  const intensityScale =
-    feedback?.intensity === "subtle"
-      ? 0.72
-      : feedback?.intensity === "expressive"
-        ? 1.22
-        : 1;
 
-  return (
-    <div className={`hud-root ${reduceMotion ? "vc-reduce-motion" : ""}`}>
-      <div className="hud-card" data-tauri-drag-region>
-        <span
-          className={`hud-dot ${recording ? "is-rec" : processing ? "is-proc" : ""}`}
+  if (recording || processing) {
+    return (
+      <div className="hud-root">
+        <StatusPill
+          phase={recording ? "recording" : "processing"}
+          title={recording ? skillName || "正在录音" : "处理中"}
+          timer={recording ? timer : null}
+          hint={recording ? `再按一次 ${hotkey} 结束并转写` : null}
+          level={session.level}
+          showStatusText={showStatusText}
+          reduceMotion={reduceMotion}
+          onCancel={() => api.cancelDictation()}
         />
-        {showStatusText && (
-          <div className="hud-copy">
-            <div className="hud-title">
-              {recording ? "正在录音" : processing ? "正在处理" : "就绪"}
-            </div>
-            <div className="hud-sub">
-              {recording ? timer : processing ? "转写与润色" : "Esc 取消"}
-            </div>
-          </div>
-        )}
-        {recording && (
-          <MiniWave level={session.level} scale={intensityScale} grow={!showStatusText} />
-        )}
-        {(recording || processing) && (
-          <button
-            className={`hud-cancel ${showStatusText ? "" : "ml-auto"}`}
-            onClick={() => api.cancelDictation()}
-            aria-label="取消"
-          >
-            <XIcon size={12} />
-          </button>
-        )}
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-function MiniWave({
-  level,
-  scale,
-  grow,
-}: {
-  level: number;
-  scale: number;
-  grow?: boolean;
-}) {
-  const energy = Math.min(1, (0.25 + level * 0.9) * scale);
-  return (
-    <div
-      className={`flex h-7 items-center gap-[3px] ${grow ? "flex-1 justify-center" : ""}`}
-    >
-      {PROFILE.map((p, i) => (
-        <span
-          key={i}
-          className="vc-bar w-[3px] rounded-full"
-          style={{
-            height: `${Math.max(5, p * 26 * energy)}px`,
-            background:
-              i >= 3 && i <= 5 ? "var(--color-ice)" : "rgba(120,140,160,0.45)",
-            animationDelay: `${i * 90}ms`,
-          }}
+  if (terminal) {
+    return (
+      <div className="hud-root">
+        <StatusPill
+          phase={terminal.phase}
+          title={terminal.title}
+          reduceMotion={reduceMotion}
         />
-      ))}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  // Idle with no fresh terminal state: paint nothing on the transparent
+  // canvas (the backend hides the window shortly after).
+  return <div className="hud-root" />;
 }

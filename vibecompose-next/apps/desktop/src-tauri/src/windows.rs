@@ -23,8 +23,12 @@ pub const PREVIEW_LABEL: &str = "preview";
 pub const SWITCHER_LABEL: &str = "skill-switcher";
 pub const QUICK_ADD_LABEL: &str = "quick-add";
 
-const HUD_WIDTH: f64 = 340.0;
-const HUD_HEIGHT: f64 = 96.0;
+// Compact-box canvas for the Refined HUD, sized to the macOS dictation
+// capsule (`OverlayStylePreset.dictationHUD`: <=~300pt wide, 44pt row plus
+// the recording hint line). The window stays transparent; the pill inside
+// hugs its content, so the canvas only needs room for the pill + shadow.
+const HUD_WIDTH: f64 = 320.0;
+const HUD_HEIGHT: f64 = 76.0;
 
 /// Shows the configured dictation feedback surface for the active session.
 pub fn show_feedback(app: &AppHandle) {
