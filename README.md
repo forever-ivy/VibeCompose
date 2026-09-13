@@ -1,3 +1,5 @@
+
+
 # VibeCompose
 
 <p align="center">
@@ -131,6 +133,8 @@ not part of the first-release UI.
 ### Requirements
 
 - macOS 13 or later
+- Apple silicon Mac for the supported Alpha environment; Intel Macs are
+  best-effort
 - a ChatGPT account that can use the required upstream capabilities
 - Xcode Command Line Tools for source builds
 - Microphone permission
